@@ -1,0 +1,69 @@
+# ---------- 依赖 ----------
+node_modules/
+.pnpm-store/
+
+# ---------- 构建产物 ----------
+dist/
+build/
+out/
+*.tsbuildinfo
+.vite/
+.turbo/
+
+# ---------- 前端（apps/、packages/）----------
+# Vite / 框架缓存与本地覆盖
+*.local
+.eslintcache
+.stylelintcache
+coverage/
+
+# ---------- Python（services/api）----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+uv.lock.bak
+
+# ---------- 环境变量 / 密钥 ----------
+.env
+.env.*
+!.env.example
+
+# ---------- 日志 ----------
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ---------- 编辑器 / IDE ----------
+.idea/
+.vscode/*
+*.swp
+*.swo
+Thumbs.db
+.DS_Store
+
+# ---------- 本仓库特有 ----------
+# Obsidian 笔记库（不入库）
+.obsidian/
+
+# Claude Code 本地配置
+.claude/settings.local.json
+
+# 临时目录
+temp/
+
+# OpenSpec 本地状态（如后续有生成物再调整）
+openspec/.cache/
