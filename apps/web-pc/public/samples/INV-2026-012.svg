@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="960" viewBox="0 0 720 960">
+  <rect width="720" height="960" fill="#fdfdfb"/>
+  <rect x="24" y="24" width="672" height="912" fill="none" stroke="#1f1f1f" stroke-width="2"/>
+  <rect x="48" y="48" width="624" height="90" fill="#f0f5ff"/>
+  <text x="360" y="90" font-family="Tahoma, sans-serif" font-size="26" font-weight="bold" text-anchor="middle" fill="#1f1f1f">INVOICE / ใบแจ้งหนี้ / 发票</text>
+  <text x="360" y="120" font-family="Tahoma, sans-serif" font-size="16" text-anchor="middle" fill="#555">SaiFlow Mock Original Document</text>
+  <text x="60" y="220" font-family="Tahoma, sans-serif" font-size="20" fill="#1f1f1f">Document No.: INV-2026-012</text>
+  <text x="60" y="260" font-family="Tahoma, sans-serif" font-size="20" fill="#1f1f1f">Date: 2026-09-xx</text>
+  <line x1="60" y1="300" x2="660" y2="300" stroke="#bbb" stroke-width="1"/>
+  <line x1="60" y1="340" x2="340" y2="340" stroke="#999" stroke-width="1"/>
+  <line x1="60" y1="380" x2="450" y2="380" stroke="#999" stroke-width="1"/>
+  <line x1="60" y1="420" x2="560" y2="420" stroke="#999" stroke-width="1"/>
+  <line x1="60" y1="460" x2="340" y2="460" stroke="#999" stroke-width="1"/>
+  <line x1="60" y1="500" x2="450" y2="500" stroke="#999" stroke-width="1"/>
+  <line x1="60" y1="540" x2="560" y2="540" stroke="#999" stroke-width="1"/>
+  <line x1="60" y1="580" x2="340" y2="580" stroke="#999" stroke-width="1"/>
+  <line x1="60" y1="620" x2="450" y2="620" stroke="#999" stroke-width="1"/>
+  <line x1="60" y1="700" x2="660" y2="700" stroke="#bbb" stroke-width="1"/>
+  <text x="60" y="740" font-family="Tahoma, sans-serif" font-size="14" fill="#888">(ตัวอย่างเอกสารจำลอง / 占位原图，非真实单据)</text>
+</svg>

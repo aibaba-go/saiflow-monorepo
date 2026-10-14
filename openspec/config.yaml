@@ -1,0 +1,51 @@
+schema: spec-driven
+
+# 项目上下文：AI 创建产物时会读取此段。
+context: |
+  SaiFlow — 面向泰国 SME 制造企业的纸质单据 OCR 数字化录入系统（“We turn paper into process.”）。
+
+  技术栈：
+  - 后端：Python >=3.12 + FastAPI（services/api），Cloud Run 部署；Cloud SQL PostgreSQL、私有 GCS、Firestore、Cloud Functions、Secret Manager。
+  - 前端：React + Ant Design，两个应用 apps/web-pc 与 apps/line-mini；共享库 packages/*。
+  - 工具链：pnpm workspace 管理 JS（apps/*、packages/*）；services/ 为独立 Python 工具链，不在 pnpm glob 内。
+
+  文档分层：
+  - 过程（变更提案 / delta spec / 任务）在 openspec/；成果（产品级持久文档）在 docs/。
+  - docs/ 统一为 SaiFlow 唯一文档根（00/01/10/20/30/40），旧 saiflow-docs 已废弃，内容已完成迁移。
+  - 术语唯一来源：docs/10-product/Glossary.md。
+  - 人类 AI 入口见 AGENTS.md 与 AI-WORKFLOW.md。
+
+  通用规则：
+  - 复用 OpenSpec 官方 skill，只做叠加约束，不重造流程。
+  - 一切产物只写 openspec/changes/<change>/，禁止另建全局过程目录。
+  - V1.0 只实现 P0，禁止范围蔓延。
+  - 禁止臆造需求；缺口记为 open question。
+
+# 每类产物的额外规则。
+rules:
+  proposal:
+    - 变更名使用 kebab-case。
+    - 必须引用 docs/10-product 或 docs/20-requirements 中对应的产品诉求来源。
+    - 需列出“非目标（Non-goals）”。
+  spec:
+    - 每条需求至少 1 条 Gherkin 验收标准（Given/When/Then）。
+    - 术语使用 docs/10-product/Glossary.md 的精确名称。
+    - 需求原子化、可测，使用 SHALL/SHOULD/MAY。
+  design:
+    - 设计必须可追溯到 proposal/spec，不得引入未被要求的行为。
+    - 涉及权衡的架构决策需记录 ADR。
+    - 数值/单位/容差必须明确。
+  tasks:
+    - 任务粒度不超过 1 天，每个任务可独立验证。
+    - 不得包含超出变更范围的 P1/P2 工作。
+
+# apply / archive 等操作的指导。
+operations:
+  apply:
+    guidance:
+      - 仅改动 apps/、packages/、services/；不得修改 openspec/ 规划产物与 docs/。
+      - 每个提交引用 <change>；完成后运行 lint/build/test。
+  archive:
+    guidance:
+      - 归档前确认全部验收标准通过。
+      - 归档后如需，将成果同步回 docs/（通常是 docs/10-product、docs/30-design）并更新版本历史。

@@ -1,0 +1,10 @@
+# JS/TS 工作区定义。
+# 仅覆盖 apps/* 与 packages/*；services/（Python）不在 glob 内，pnpm 永不扫描，
+# 从而保证各自默认命令互不干扰。
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# 允许运行安装脚本的依赖（vite 需要 esbuild 二进制）
+onlyBuiltDependencies:
+  - esbuild

@@ -1,0 +1,12 @@
+{
+  "name": "saiflow",
+  "private": true,
+  "description": "SaiFlow monorepo — 前端（apps/、packages/，pnpm workspace）+ 后端（services/，Python，独立工具链）",
+  "scripts": {
+    "dev:web-pc": "pnpm --filter @saiflow/web-pc dev",
+    "dev:line-mini": "pnpm --filter @saiflow/line-mini dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test"
+  }
+}
