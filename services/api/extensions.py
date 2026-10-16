@@ -1,0 +1,67 @@
+"""Flask 扩展实例（避免循环导入）。"""
+from __future__ import annotations
+
+import atexit
+import logging
+
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import event, text
+
+db = SQLAlchemy()
+
+
+def configure_schema(app: Flask) -> None:
+    """PostgreSQL schema 适配：确保 PGSCHEMA 存在，每个新连接自动设置 search_path。
+
+    本地（公网 IP）与 Cloud Run（Unix 套接字）同一代码路径；
+    非 PostgreSQL 连接（如测试用 SQLite）直接跳过。
+    """
+    uri = str(app.config.get("SQLALCHEMY_DATABASE_URI", ""))
+    if not uri.startswith("postgresql"):
+        return
+    schema = app.config.get("PGSCHEMA") or ""
+    if not schema:
+        return
+    if not schema.replace("_", "").isalnum():
+        raise RuntimeError(f"PGSCHEMA 非法标识符: {schema!r}")
+    with app.app_context():
+        engine = db.engine
+
+        @event.listens_for(engine, "connect")
+        def _set_search_path(dbapi_conn, _record):
+            cur = dbapi_conn.cursor()
+            cur.execute(f"SET SESSION search_path TO {schema}")
+            cur.close()
+
+        with engine.begin() as conn:
+            conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
+
+
+def init_textin(app: Flask) -> None:
+    """装配 TextIn 配置与客户端（唯一 OCR 厂商，PRD §12）。
+
+    未配置凭据时不创建 client，OCR 任务会进入 FAILED(能力不可用)；
+    其余路由不受影响。
+    """
+    from textin.client import TextInClient
+    from textin.config import build_textin_settings
+
+    logger = logging.getLogger(__name__)
+
+    settings = build_textin_settings(app.config)
+    app.extensions["textin_settings"] = settings
+
+    if settings.has_credentials():
+        client = TextInClient(settings)
+        app.extensions["textin_client"] = client
+
+        def _close_client():
+            try:
+                client.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+        atexit.register(_close_client)
+    else:
+        logger.warning("TEXTIN_APP_ID / TEXTIN_SECRET_CODE 未配置；OCR 任务将失败。")
