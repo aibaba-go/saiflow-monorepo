@@ -13,6 +13,8 @@ __pycache__/
 
 # 运行时数据（TextIn 抽取记录 + 原始上传文件）
 uploads/
+tests/
+storage/
 temp/
 .pytest_cache/
 .venv/
