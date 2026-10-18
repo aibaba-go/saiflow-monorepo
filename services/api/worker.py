@@ -65,14 +65,16 @@ class OcrWorker:
 
         while not self._stop.is_set():
             try:
+                # 取到任务 ID 即结束轮询事务，避免处理期间长时间 idle in transaction 占锁
                 with self.app.app_context():
                     job = (
                         OcrJob.query.filter_by(status="QUEUED")
                         .order_by(OcrJob.created_at.asc())
                         .first()
                     )
-                    if job is not None:
-                        self._process(job.id)
+                    job_id = job.id if job is not None else None
+                if job_id is not None:
+                    self._process(job_id)
             except Exception:  # noqa: BLE001 worker 永不退出
                 logger.exception("OCR worker 轮询异常")
             self._stop.wait(self.poll_seconds)

@@ -22,6 +22,44 @@ from middleware import register_security
 from worker import start_worker
 
 
+_ADD_COLUMNS = [
+    ("result_versions", "structured", "JSON"),
+    ("users", "phone", "VARCHAR(32) NOT NULL DEFAULT ''"),
+    ("users", "email", "VARCHAR(254) NOT NULL DEFAULT ''"),
+    ("users", "registered_at", "TIMESTAMP"),
+    ("users", "avatar_path", "VARCHAR(255) NOT NULL DEFAULT ''"),
+    ("ocr_jobs", "completed_at", "TIMESTAMP"),
+]
+
+
+def _patch_columns() -> None:
+    # 空跑的 ALTER 也要拿 ACCESS EXCLUSIVE 锁，会被任一未结束事务挡死启动：先查缺失项，再以 lock_timeout 兜底
+    with db.engine.begin() as conn:
+        cols = {
+            (r[0], r[1]): r[2]
+            for r in conn.execute(text(
+                "SELECT table_name, column_name, data_type FROM information_schema.columns"
+                " WHERE table_schema = current_schema()"
+            ))
+        }
+    stmts = [
+        f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {ddl}"
+        for table, col, ddl in _ADD_COLUMNS
+        if (table, col) not in cols
+    ]
+    if cols.get(("users", "avatar_url"), "text") != "text":
+        stmts.append("ALTER TABLE users ALTER COLUMN avatar_url TYPE TEXT")
+    if ("users", "registered_at") not in cols:
+        # 注册信息录入上线前的既有正式账号视为已注册，避免老用户被强制补录
+        stmts.append("UPDATE users SET registered_at = created_at WHERE line_provider <> 'guest'")
+    if not stmts:
+        return
+    with db.engine.begin() as conn:
+        conn.execute(text("SET LOCAL lock_timeout = '15s'"))
+        for stmt in stmts:
+            conn.execute(text(stmt))
+
+
 def create_app(config_overrides: dict | None = None) -> Flask:
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -56,24 +94,7 @@ def create_app(config_overrides: dict | None = None) -> Flask:
     with app.app_context():
         db.create_all()
         if db.engine.dialect.name == "postgresql":
-            # create_all 不会给已存在的表补列
-            with db.engine.begin() as conn:
-                conn.execute(text("ALTER TABLE result_versions ADD COLUMN IF NOT EXISTS structured JSON"))
-                had_registered_at = conn.execute(text(
-                    "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema()"
-                    " AND table_name = 'users' AND column_name = 'registered_at'"
-                )).first() is not None
-                conn.execute(text("ALTER TABLE users ALTER COLUMN avatar_url TYPE TEXT"))
-                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(32) NOT NULL DEFAULT ''"))
-                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(254) NOT NULL DEFAULT ''"))
-                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS registered_at TIMESTAMP"))
-                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_path VARCHAR(255) NOT NULL DEFAULT ''"))
-                conn.execute(text("ALTER TABLE ocr_jobs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP"))
-                if not had_registered_at:
-                    # 注册信息录入上线前的既有正式账号视为已注册，避免老用户被强制补录
-                    conn.execute(text(
-                        "UPDATE users SET registered_at = created_at WHERE line_provider <> 'guest'"
-                    ))
+            _patch_columns()
 
     if app.config.get("OCR_WORKER_ENABLED", True):
         start_worker(app)
