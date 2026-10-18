@@ -3,8 +3,8 @@ doc_id: EPIC-04
 title: "EPIC-04 — 多渠道录入与归档"
 type: epic
 status: active
-version: 1.1.0
-updated: 2026-10-07
+version: 1.2.2
+updated: 2026-10-18
 owner: Product Engineering
 priority: P0
 source: "PRD-001 §4.4"
@@ -39,6 +39,7 @@ related: [DM-Document, DM-ArchiveRecord, API-5, API-6]
 | FR-ENTRY-012 | 将自定义字段映射到企业管理系统 | P1（V2.0） | §4.4 | FR-ENTRY-010 | AC-FR-ENTRY-012-01 |
 | FR-ENTRY-013 | 将数据导出为 JSON / CSV / Excel 以供下游集成 | P1（V2.0） | §3.1 | FR-ENTRY-002 | AC-FR-ENTRY-013-01 |
 | FR-ENTRY-014 | 归档至云端文件夹（双重存储、自动命名、分类） | P2（V3.0） | §4.4 | FR-ENTRY-005 | AC-FR-ENTRY-014-01 |
+| FR-ENTRY-015 | 在核验确认后的最终结果页提供结果查看与 Excel（XLSX）导出 | P0 | 界面调整 2026-10-17 | FR-VERIFY-016 | AC-FR-ENTRY-015-01 |
 
 ## 3. 规则
 
@@ -58,6 +59,17 @@ related: [DM-Document, DM-ArchiveRecord, API-5, API-6]
 ### 3.4 ERP 对接（FR-ENTRY-010..012，V2.0）
 - 可按 ERP 版本配置字段映射表；未映射字段会被忽略而非丢失。
 - 同步失败将排队重试；通知用户（异常提醒，V2.0）。
+
+### 3.5 最终结果页导出（FR-ENTRY-015）
+- 最终结果页同时提供结构化结果只读查看与 Excel 导出。
+- 导出以当前核验确认后的结构化结果为数据源，全部内容写入**同一个工作表**（`Result`），版式以产品样例 `sample-format.xlsx` 为准：
+  - 首行为文档标题（用户语言，如 "Document information" / "ข้อมูลเอกสาร"），合并 A–B 列，16 号加粗居中；其下直接列出顶层字段。
+  - 嵌套对象各成一个字段区块：空一行 + 区块标题（10 号加粗）+ 「字段名｜值」两列；表格区块：空一行 + 区块标题 + 表头 + 数据行。区块顺序与解析结果页一致。
+  - 字段名与表头：浅蓝底（#E8EDFF）、主题蓝（#4A66F7）加粗、居中；字段值左对齐；表格中含长文本（>20 字符或多行）的列左对齐，其余列居中；所有数据单元格带细边框（#E3E8F0）并自动换行。
+  - 字体 Microsoft YaHei；A 列宽 ≥25、B 列宽 ≥50，其余列按内容自适应；行高 22.5，多行内容按行数增高。
+  - 显示名规则与结果页相同（`_` 转空格、层级以 ` / ` 连接、单词首字母大写）；空值输出为空白单元格。
+- OCR 部分成功时，在工作表末尾注明缺失页。
+- 所有单元格按文本写入以保留前导零；以 `=`、`+`、`-`、`@` 开头的用户可编辑文本须做公式注入防护。
 
 ## 4. 代表性验收标准（P0）
 
@@ -83,16 +95,25 @@ Feature: EPIC-04 录入与归档
     Given 一份已核验文档
     When 任意文档被归档
     Then 原始对象和结构化归档工件仅写入私有 GCS，且浏览器不获得 GCS 凭据
+
+  Scenario: AC-FR-ENTRY-015-01 最终结果页导出
+    Given 一份已确认且包含已编辑数量的文档
+    When 用户在最终结果页点击 "Export Excel"
+    Then 生成仅含一个工作表的 XLSX，字段区块与表格区块的顺序、标题与列名与解析结果页一致
+    And 导出内容反映当前已确认的结构化结果
 ```
 
 ## 5. 可追溯性
 | FR ID | 验证方式 | 设计引用 |
 |-------|----------|----------|
-| FR-ENTRY-001..014 | AC-FR-ENTRY-* | `DM-ArchiveRecord`、`DM-ExportJob`、`API-5`、`API-6` |
+| FR-ENTRY-001..015 | AC-FR-ENTRY-* | `DM-ArchiveRecord`、`DM-ExportJob`、`API-5`、`API-6` |
 
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.2.2 | 2026-10-18 | Product Engineering | FR-ENTRY-015：XLSX 样式按产品样例 sample-format.xlsx 细化（标题合并、字体、对齐、列宽、行高） |
+| 1.2.1 | 2026-10-18 | Product Engineering | FR-ENTRY-015：XLSX 导出改为单工作表，版式与解析结果页一致；更新 AC-FR-ENTRY-015-01 |
+| 1.2.0 | 2026-10-17 | Product Engineering | 新增最终结果页结构化查看与 XLSX 导出（含公式注入防护） |
 | 1.1.0 | 2026-10-07 | Product Engineering | 统一为私有 GCS 归档，移除本地优先和云端选择加入假设 |
 | 1.0.1 | 2026-10-02 | Product Engineering | 将人类可读内容与验收场景翻译为简体中文 |
 | 1.0.0 | 2026-09-10 | Product Engineering | 根据 PRD 第 4.4 节生成初始录入/归档需求 |

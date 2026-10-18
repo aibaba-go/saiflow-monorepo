@@ -1,10 +1,19 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { ApiError, importFromUrl, listJobs, type JobSummary, type Workspace } from '../api';
 import { messageText } from '../i18n';
 import { useT } from '../i18nVue';
-import { currentWorkspace, navigate, quotaForWorkspace, refreshQuota, workspaces } from '../store';
+import {
+  currentWorkspace,
+  isAuthenticated,
+  navigate,
+  quotaForWorkspace,
+  refreshQuota,
+  setWorkspace,
+  workspaces,
+} from '../store';
 import { uploadFile } from '../upload';
+import BrandLoading from '../components/BrandLoading.vue';
 import JobListItem from '../components/JobListItem.vue';
 
 const { t: tt } = useT();
@@ -26,7 +35,7 @@ async function loadRecent() {
   loading.value = true;
   errorMsg.value = '';
   try {
-    const data = await listJobs({ page: 1, page_size: 10 });
+    const data = await listJobs({ page: 1, page_size: 10, workspace: currentWorkspace.value ?? undefined });
     recentJobs.value = data.items;
   } catch (e) {
     errorMsg.value = e instanceof ApiError ? messageText(e.messageKey) : tt('common.unknownError');
@@ -39,6 +48,9 @@ onMounted(() => {
   loadRecent();
   refreshQuota(); // 任务列表之外再刷新一次免费额度
 });
+
+// 个人/企业数据隔离：切换空间即重新拉取该空间的任务
+watch(() => currentWorkspace.value?.enterprise_id ?? null, loadRecent);
 
 function workspaceLabel(): string {
   const ws = currentWorkspace.value;
@@ -59,17 +71,20 @@ function toggleWsMenu() {
 }
 
 function selectWorkspace(ws: Workspace) {
-  currentWorkspace.value = ws;
+  setWorkspace(ws);
   wsMenuOpen.value = false;
-  refreshQuota();
 }
 
 // 配额横幅（PRD v1.4 §22.2：Kinder · N / 1,000 free scans left）
 const quotaView = computed(() => quotaForWorkspace());
 const quotaPct = computed(() => {
   const q = quotaView.value;
-  if (!q || q.free_tasks.total <= 0) return 0;
-  return Math.min(100, Math.round((q.free_tasks.remaining / q.free_tasks.total) * 100));
+  if (!q) return 0;
+  const { remaining, total } = q.plan.is_paid
+    ? { remaining: q.paid_pages.remaining, total: q.paid_pages.monthly_total }
+    : q.free_tasks;
+  if (total <= 0) return 0;
+  return Math.min(100, Math.round((remaining / total) * 100));
 });
 
 // 任务空间跟随文件：以公司身份上传的文件，后续 job/结果都归公司空间
@@ -86,7 +101,9 @@ async function onPicked(target: HTMLInputElement | null) {
   uploadPct.value = 0;
   errorMsg.value = '';
   try {
-    const ready = await uploadFile(file, workspacePayload());
+    const ready = await uploadFile(file, workspacePayload(), 'OCR_TASK', (percent) => {
+      uploadPct.value = percent;
+    });
     navigate('confirm', { fileId: ready.id });
   } catch (e) {
     errorMsg.value = e instanceof ApiError ? messageText(e.messageKey) : tt('common.unknownError');
@@ -115,10 +132,9 @@ async function submitUrl() {
 }
 
 function openJob(job: JobSummary) {
-  const running = ['QUEUED', 'PREPROCESSING', 'PROCESSING', 'POSTPROCESSING', 'CANCEL_REQUESTED'].includes(
-    job.status,
-  );
-  navigate(running ? 'processing' : 'result', { jobId: job.id });
+  const route =
+    job.stage === 'OCR_PROCESSING' ? 'processing' : job.stage === 'COMPLETED' ? 'final' : 'result';
+  navigate(route, { jobId: job.id });
 }
 
 // 隐藏 input 由卡片点击触发
@@ -177,8 +193,8 @@ function pick(kind: 'camera' | 'photos' | 'files') {
         </div>
       </div>
 
-      <!-- 配额横幅：Kinder · N / 1,000 free scans left + 进度条 + Plans 入口 -->
-      <div v-if="quotaView" class="quota-card">
+      <!-- 配额横幅：Free · N / 1,000 free scans left（付费套餐按每月页数）+ 进度条 + Plans 入口 -->
+      <div v-if="quotaView && isAuthenticated" class="quota-card">
         <div class="quota-icon">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4A66F7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
@@ -187,7 +203,9 @@ function pick(kind: 'camera' | 'photos' | 'files') {
         </div>
         <div class="quota-body">
           <div class="quota-text">
-            {{ tt('home.quotaLeft', { plan: quotaView.plan.name, left: quotaView.free_tasks.remaining, total: quotaView.free_tasks.total }) }}
+            {{ quotaView.plan.is_paid
+              ? tt('home.quotaLeftPaid', { plan: quotaView.plan.name, left: quotaView.paid_pages.remaining.toLocaleString('en-US'), total: quotaView.paid_pages.monthly_total.toLocaleString('en-US') })
+              : tt('home.quotaLeft', { plan: tt('plans.freePlan'), left: quotaView.free_tasks.remaining, total: quotaView.free_tasks.total }) }}
           </div>
           <div class="quota-track">
             <div class="quota-fill" :style="{ width: quotaPct + '%' }" />
@@ -251,17 +269,27 @@ function pick(kind: 'camera' | 'photos' | 'files') {
           :placeholder="tt('home.urlPlaceholder')"
           @keyup.enter="submitUrl"
         />
-        <button class="url-submit" :disabled="urlBusy || !urlValue.trim()" @click="submitUrl">
-          {{ urlBusy ? tt('common.loading') : tt('home.urlSubmit') }}
+        <button class="url-submit" :class="{ busy: urlBusy }" :disabled="urlBusy || !urlValue.trim()" @click="submitUrl">
+          <BrandLoading v-if="urlBusy" variant="button" :label="tt('common.loading')" />
+          <template v-else>{{ tt('home.urlSubmit') }}</template>
         </button>
       </div>
 
-      <p v-if="uploading" class="status-line">{{ tt('home.uploading', { pct: uploadPct }) }}</p>
+      <div v-if="uploading" class="upload-status">
+        <div class="status-line">
+          <BrandLoading variant="inline" :label="tt('home.uploading', { pct: uploadPct })" :announce="false" />
+        </div>
+        <div class="upload-track" role="progressbar" :aria-label="tt('home.uploading', { pct: uploadPct })" :aria-valuenow="uploadPct" aria-valuemin="0" aria-valuemax="100">
+          <div class="upload-fill" :style="{ width: uploadPct + '%' }" />
+        </div>
+      </div>
       <p v-else-if="errorMsg" class="status-line error">{{ errorMsg }}</p>
 
       <!-- 最近任务 -->
       <div class="section-title">{{ tt('home.recent') }}</div>
-      <div v-if="loading" class="status-line">{{ tt('common.loading') }}</div>
+      <div v-if="loading" class="status-line">
+        <BrandLoading variant="inline" :label="tt('common.loading')" />
+      </div>
       <div v-else-if="recentJobs.length === 0" class="status-line">{{ tt('history.empty') }}</div>
       <div v-else class="task-list">
         <JobListItem v-for="job in recentJobs" :key="job.id" :job="job" @open="openJob" />
@@ -539,6 +567,7 @@ function pick(kind: 'camera' | 'photos' | 'files') {
 
 .url-input {
   flex: 1;
+  min-width: 0;
   height: 44px;
   border-radius: 12px;
   border: 1px solid var(--border);
@@ -553,6 +582,7 @@ function pick(kind: 'camera' | 'photos' | 'files') {
 }
 
 .url-submit {
+  flex-shrink: 0;
   height: 44px;
   padding: 0 18px;
   border-radius: 12px;
@@ -560,6 +590,11 @@ function pick(kind: 'camera' | 'photos' | 'files') {
   color: #fff;
   font-size: 12px;
   font-weight: 700;
+}
+
+.url-submit.busy {
+  width: 140px;
+  padding: 0 8px;
 }
 
 .url-submit:disabled {
@@ -575,6 +610,21 @@ function pick(kind: 'camera' | 'photos' | 'files') {
 
 .status-line.error {
   color: var(--danger);
+}
+
+.upload-track {
+  margin-top: 8px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--primary-light);
+  overflow: hidden;
+}
+
+.upload-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+  transition: width 0.12s linear;
 }
 
 .section-title {

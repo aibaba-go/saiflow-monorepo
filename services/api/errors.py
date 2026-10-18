@@ -78,8 +78,8 @@ def account_disabled() -> ApiError:
     return ApiError(403, "ACCOUNT_DISABLED", "auth.account_disabled")
 
 
-def permission_denied() -> ApiError:
-    return ApiError(403, "PERMISSION_DENIED", "error.permission_denied")
+def permission_denied(message_key: str = "error.permission_denied") -> ApiError:
+    return ApiError(403, "PERMISSION_DENIED", message_key)
 
 
 def csrf_invalid() -> ApiError:

@@ -1,13 +1,21 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { getMyCompanies, logout, type Workspace } from '../api';
+import BrandLoading from '../components/BrandLoading.vue';
+import ChangeEmailDialog from '../components/ChangeEmailDialog.vue';
+import EditProfileDialog from '../components/EditProfileDialog.vue';
+import FormDialog from '../components/FormDialog.vue';
 import { getLocale, setLocale, type Locale } from '../i18n';
 import { useT } from '../i18nVue';
-import { currentWorkspace, navigate, signOutLocally, user, workspaces } from '../store';
+import { currentWorkspace, navigate, setWorkspace, signOutLocally, user, workspaces } from '../store';
 
 const { t, locale } = useT();
 
 const loggingOut = ref(false);
+const confirmingLogout = ref(false);
+const guest = computed(() => !!user.value?.is_guest);
+const editingProfile = ref(false);
+const changingEmail = ref(false);
 
 const enterpriseList = computed(() => workspaces.value.filter((w) => w.workspace_type === 'ENTERPRISE'));
 const personalWorkspace = computed(
@@ -17,6 +25,7 @@ const personalWorkspace = computed(
 const pendingCount = ref(0);
 
 onMounted(async () => {
+  if (guest.value) return;
   try {
     const data = await getMyCompanies();
     pendingCount.value = data.items.filter(
@@ -33,11 +42,15 @@ function isCurrentWs(ws: Workspace): boolean {
 }
 
 function switchWorkspace(ws: Workspace) {
-  currentWorkspace.value = ws;
+  setWorkspace(ws);
 }
 
 function switchLanguage(l: Locale) {
   setLocale(l);
+}
+
+function startAuth(): void {
+  navigate('auth', { from: 'my' });
 }
 
 async function doLogout() {
@@ -48,6 +61,7 @@ async function doLogout() {
   } finally {
     signOutLocally();
     loggingOut.value = false;
+    confirmingLogout.value = false;
   }
 }
 </script>
@@ -59,8 +73,13 @@ async function doLogout() {
     </header>
 
     <div class="content">
-      <!-- 资料卡 -->
-      <div class="profile-card">
+      <!-- 资料卡：已登录可点击修改昵称/头像 -->
+      <component
+        :is="guest ? 'div' : 'button'"
+        class="profile-card"
+        :class="{ editable: !guest }"
+        @click="!guest && (editingProfile = true)"
+      >
         <div class="avatar">
           <img v-if="user?.avatar_url" :src="user.avatar_url" :alt="user?.display_name" />
           <svg v-else width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#596170" stroke-width="2" stroke-linecap="round">
@@ -69,13 +88,33 @@ async function doLogout() {
           </svg>
         </div>
         <div class="profile-main">
-          <div class="profile-name">{{ user?.display_name || '—' }}</div>
-          <div class="line-connected">
+          <div class="profile-name">{{ guest ? t('my.guest') : user?.display_name || '—' }}</div>
+          <div v-if="guest" class="guest-hint">{{ t('my.guestHint') }}</div>
+          <div v-else class="line-connected">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1F9E6B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
               <path d="M20 6L9 17l-5-5" />
             </svg>
             {{ t('my.lineConnected') }}
           </div>
+        </div>
+        <span v-if="!guest" class="profile-edit">
+          {{ t('profile.edit') }}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </span>
+      </component>
+
+      <!-- 账号信息：手机号来自 LINE 不可改；邮箱凭验证码更换 -->
+      <div v-if="!guest" class="account-card">
+        <div class="account-row">
+          <span class="row-label">{{ t('profile.phone') }}</span>
+          <span class="account-value">{{ user?.phone || t('profile.phoneMissing') }}</span>
+        </div>
+        <div class="account-row">
+          <span class="row-label">{{ t('profile.email') }}</span>
+          <span class="account-value" :class="{ muted: !user?.email }">{{ user?.email || t('profile.emailNotSet') }}</span>
+          <button class="account-action" @click="changingEmail = true">{{ t('profile.changeEmail') }}</button>
         </div>
       </div>
 
@@ -96,8 +135,8 @@ async function doLogout() {
         </svg>
       </button>
 
-      <!-- 公司 -->
-      <div class="company-card">
+      <!-- 公司（游客不可加入/管理公司，登录后开放） -->
+      <div v-if="!guest" class="company-card">
         <div class="company-head">
           <div class="company-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4A66F7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -144,11 +183,24 @@ async function doLogout() {
         </button>
       </div>
 
-      <!-- 登出 -->
-      <button class="logout-btn" :disabled="loggingOut" @click="doLogout">
-        {{ loggingOut ? t('my.loggingOut') : t('my.logout') }}
+      <!-- 游客：登录/注册入口；已登录：登出 -->
+      <button v-if="guest" class="login-btn" @click="startAuth">{{ t('my.loginOrRegister') }}</button>
+      <button v-else class="logout-btn" :disabled="loggingOut" @click="confirmingLogout = true">
+        {{ t('my.logout') }}
       </button>
     </div>
+
+    <EditProfileDialog v-if="editingProfile" @close="editingProfile = false" />
+    <ChangeEmailDialog v-if="changingEmail" @close="changingEmail = false" />
+    <FormDialog v-if="confirmingLogout" :title="t('my.logoutConfirmTitle')" :subtitle="t('my.logoutConfirmBody')">
+      <div class="fd-actions" :class="{ 'logout-busy': loggingOut }">
+        <button class="fd-btn secondary" :disabled="loggingOut" @click="confirmingLogout = false">{{ t('common.cancel') }}</button>
+        <button class="fd-btn danger" :disabled="loggingOut" @click="doLogout">
+          <BrandLoading v-if="loggingOut" variant="button" :label="t('my.loggingOut')" />
+          <template v-else>{{ t('my.logout') }}</template>
+        </button>
+      </div>
+    </FormDialog>
   </div>
 </template>
 
@@ -206,6 +258,83 @@ async function doLogout() {
 
 .profile-main {
   min-width: 0;
+  flex: 1;
+  text-align: left;
+}
+
+.profile-card.editable {
+  width: 100%;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.profile-card.editable:active {
+  background: var(--bg);
+}
+
+.profile-edit {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.profile-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 2px 16px;
+}
+
+.account-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+}
+
+.account-row + .account-row {
+  border-top: 1px solid var(--border);
+}
+
+.account-row .row-label {
+  flex-shrink: 0;
+}
+
+.account-value {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  font-size: 12px;
+  color: var(--icon);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-value.muted {
+  color: var(--text-secondary);
+}
+
+.account-action {
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .profile-name {
@@ -219,6 +348,13 @@ async function doLogout() {
   gap: 5px;
   font-size: 10px;
   color: var(--success);
+  margin-top: 4px;
+}
+
+.guest-hint {
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--text-secondary);
   margin-top: 4px;
 }
 
@@ -366,6 +502,16 @@ async function doLogout() {
   font-weight: 700;
 }
 
+.login-btn {
+  height: 48px;
+  border-radius: 14px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 6px;
+}
+
 .logout-btn {
   height: 48px;
   border-radius: 14px;
@@ -379,5 +525,19 @@ async function doLogout() {
 
 .logout-btn:disabled {
   opacity: 0.6;
+}
+
+.fd-actions.logout-busy .fd-btn {
+  min-width: 0;
+}
+
+@media (max-width: 360px) {
+  .fd-actions.logout-busy {
+    flex-direction: column;
+  }
+
+  .fd-actions.logout-busy .fd-btn {
+    flex: none;
+  }
 }
 </style>

@@ -3,8 +3,8 @@ doc_id: NFR-000
 title: "SaiFlow — 非功能需求"
 type: nfr
 status: active
-version: 1.1.0
-updated: 2026-10-07
+version: 1.1.1
+updated: 2026-10-18
 owner: Product Engineering
 source: "PRD-001 §5"
 ---
@@ -60,7 +60,7 @@ source: "PRD-001 §5"
 | NFR-USAB-001 | 低操作门槛 | 新文员在接受 ≤ 5 分钟指引后完成上传→核验→导出 | P0 |
 | NFR-USAB-002 | 零基础快速上手 | 首次运行向导；合理默认值；无需 IT 设置 | P0 |
 | NFR-USAB-003 | 本地化交互 | 完整 UI 提供泰语（默认）、英语、中文 | P0 |
-| NFR-USAB-004 | 清晰的错误与状态反馈 | 每项操作均有可见状态；错误经过本地化且可操作 | P0 |
+| NFR-USAB-004 | 清晰的错误与状态反馈 | 每项操作均有可见状态；错误经过本地化且可操作。LINE Mini App 的启动、页面、局部请求及按钮等待统一使用 SaiFlow F＋圆点标志、saiflow 字标、扫描光线与环绕光点；保留上传百分比、OCR 阶段及本地化操作文字，完成或失败后停止等待；套餐审核状态不作为网络加载。尊重 `prefers-reduced-motion`，等待状态提供可访问文字，不反复播报上传百分比；窄屏与泰语文案不遮挡输入或操作（AC-NFR-USAB-004-01/02/03） | P0 |
 | NFR-USAB-005 | 简单直观的流程 | 从上传到结果的核心流程 ≤ 3 步 | P0 |
 
 ## 5. 可靠性与可用性（`NFR-REL`）
@@ -111,6 +111,7 @@ source: "PRD-001 §5"
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.1.1 | 2026-10-18 | Product Engineering | 补充 NFR-USAB-004：LINE Mini App 统一品牌等待反馈，保留操作文案、上传进度与 OCR 阶段，支持减少动态效果；套餐审核不作为网络加载 |
 | 1.1.0 | 2026-10-07 | Product Engineering | 新增 TextIn、Firestore 原始载荷、Cloud Functions 转换延迟、幂等性与云端可靠性约束 |
 | 1.0.1 | 2026-10-02 | Product Engineering | 将人类可读内容翻译为简体中文 |
 | 1.0.0 | 2026-09-10 | Product Engineering | 根据 PRD 第 5 节生成初始 NFR（性能、兼容性、安全、易用性） |

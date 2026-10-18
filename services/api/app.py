@@ -59,6 +59,21 @@ def create_app(config_overrides: dict | None = None) -> Flask:
             # create_all 不会给已存在的表补列
             with db.engine.begin() as conn:
                 conn.execute(text("ALTER TABLE result_versions ADD COLUMN IF NOT EXISTS structured JSON"))
+                had_registered_at = conn.execute(text(
+                    "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema()"
+                    " AND table_name = 'users' AND column_name = 'registered_at'"
+                )).first() is not None
+                conn.execute(text("ALTER TABLE users ALTER COLUMN avatar_url TYPE TEXT"))
+                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(32) NOT NULL DEFAULT ''"))
+                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(254) NOT NULL DEFAULT ''"))
+                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS registered_at TIMESTAMP"))
+                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_path VARCHAR(255) NOT NULL DEFAULT ''"))
+                conn.execute(text("ALTER TABLE ocr_jobs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP"))
+                if not had_registered_at:
+                    # 注册信息录入上线前的既有正式账号视为已注册，避免老用户被强制补录
+                    conn.execute(text(
+                        "UPDATE users SET registered_at = created_at WHERE line_provider <> 'guest'"
+                    ))
 
     if app.config.get("OCR_WORKER_ENABLED", True):
         start_worker(app)

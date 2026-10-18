@@ -4,7 +4,7 @@
 - `local`（默认，开发/测试）：字节落本地盘，storage_path 存绝对路径；
 - `firebase`（生产）：firebase_admin Storage，storage_path 存对象名
   （`files/<id>.<ext>`、`exports/<id>.<fmt>`、`audit/<job_id>.json`、
-  `previews/<file_id>/page_<n>.png`）。
+  `previews/<file_id>/page_<n>.png`、`avatars/<user_id>/<name>.<ext>`）。
 
 下载/预览一律经后端代理（send_file(BytesIO) + 会话鉴权），不生成任何匿名或签名 URL。
 firebase_admin 惰性初始化：只有真正读写对象时才初始化，本地开发与测试无需 GCP 凭证。
@@ -12,6 +12,7 @@ firebase_admin 惰性初始化：只有真正读写对象时才初始化，本�
 from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 
 from flask import current_app
@@ -24,16 +25,20 @@ _DIR_KEY = {
     "exports": "EXPORT_STORAGE_DIR",
     "audit": "OCR_STORAGE_DIR",
     "previews": "FILE_STORAGE_DIR",
+    "avatars": "FILE_STORAGE_DIR",
 }
-_LOCAL_PREFIX = {"previews": "_previews"}
+_LOCAL_PREFIX = {"previews": "_previews", "avatars": "_avatars"}
 _FIRE_PREFIX = {
     "files": "files",
     "exports": "exports",
     "audit": "audit",
     "previews": "previews",
+    "avatars": "avatars",
 }
 
 _FB: dict = {"bucket": None, "failed": False}
+# 开发服务器多线程：结果页并发请求预览/导出时只允许初始化一次
+_FB_LOCK = threading.Lock()
 
 
 def backend() -> str:
@@ -90,26 +95,31 @@ def delete(storage_path: str) -> None:
 
 
 def _bucket():
-    if _FB["failed"]:
-        raise RuntimeError("firebase storage unavailable")
-    if _FB["bucket"] is None:
-        try:
-            import firebase_admin
-            from firebase_admin import credentials, storage
+    if _FB["bucket"] is not None:
+        return _FB["bucket"]
+    with _FB_LOCK:
+        if _FB["failed"]:
+            raise RuntimeError("firebase storage unavailable")
+        if _FB["bucket"] is None:
+            try:
+                import firebase_admin
+                from firebase_admin import credentials, storage
 
-            cred = credentials.ApplicationDefault()
-            firebase_admin.initialize_app(
-                cred,
-                {
-                    "projectId": current_app.config.get(
-                        "GOOGLE_CLOUD_PROJECT", "saiflow-509205"
-                    ),
-                    "storageBucket": current_app.config["FIREBASE_STORAGE_BUCKET"],
-                },
-            )
-            _FB["bucket"] = storage.bucket()
-        except Exception as e:  # noqa: BLE001
-            _FB["failed"] = True
-            logger.exception("firebase storage init failed")
-            raise RuntimeError("firebase storage unavailable") from e
+                try:
+                    app = firebase_admin.get_app()
+                except ValueError:
+                    app = firebase_admin.initialize_app(
+                        credentials.ApplicationDefault(),
+                        {
+                            "projectId": current_app.config.get(
+                                "GOOGLE_CLOUD_PROJECT", "saiflow-509205"
+                            ),
+                            "storageBucket": current_app.config["FIREBASE_STORAGE_BUCKET"],
+                        },
+                    )
+                _FB["bucket"] = storage.bucket(app=app)
+            except Exception as e:  # noqa: BLE001
+                _FB["failed"] = True
+                logger.exception("firebase storage init failed")
+                raise RuntimeError("firebase storage unavailable") from e
     return _FB["bucket"]

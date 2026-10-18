@@ -3,8 +3,8 @@ doc_id: EPIC-02
 title: "EPIC-02 — 多类型文档 OCR 识别"
 type: epic
 status: active
-version: 1.1.0
-updated: 2026-10-07
+version: 1.3.0
+updated: 2026-10-18
 owner: Product Engineering
 priority: P0
 source: "PRD-001 §4.2"
@@ -102,6 +102,10 @@ related: [DM-Document, DM-LineItem, DM-ExtractedField, DM-ExtractionPayload, DM-
 - 转换必须以 `document_id` 与原始载荷版本作为幂等键；重试只能更新同一转换结果，不能重复插入字段或行项目。
 - Dataflow 仅用于经批准的批量回填、重处理或高吞吐场景；其输出必须遵守相同的模板版本、幂等和审计规则。
 
+### 4.6 取消任务（FR-OCR-020）
+- 处理页点击「Cancel task」先弹出确认框（「Keep processing」/「Cancel task」），确认后才调用 `POST /api/v1/ocr/jobs/{id}/cancel`；任务在弹框期间结束则确认框自动关闭。
+- 已取消的任务显示为「OCR 处理失败」，可在结果页 Retry 重新识别。
+
 ## 5. 代表性验收标准（P0）
 
 ```gherkin
@@ -142,6 +146,22 @@ Feature: EPIC-02 OCR 识别
     Given document_id 对应的 Firestore 原始 JSON 已成功转换一次
     When Cloud Functions 对同一载荷版本重试
     Then Cloud SQL 中仅保留一组该文档的字段和行项目，且转换状态保持成功
+
+  Scenario: AC-FR-OCR-020-02 失败任务可读原因与重试
+    Given 一个 status=FAILED 且 error_code=TEXTIN_ERROR_40003 的 OCR 任务
+    When 用户从 History 打开该任务
+    Then 系统显示本地化的失败原因与 Retry 操作，而非 404
+    When 用户点击 Retry
+    Then 系统创建新的 QUEUED 任务（parent_job_id 指向原任务）并进入处理页
+
+  Scenario: AC-FR-OCR-020-03 取消任务需确认
+    Given 一个处理中的 OCR 任务，用户位于处理页
+    When 用户点击 "Cancel task"
+    Then 系统弹出确认框，此时任务未被取消
+    When 用户点击 "Keep processing"
+    Then 确认框关闭，任务继续处理
+    When 用户再次点击 "Cancel task" 并在确认框中确认
+    Then 系统取消该任务
 ```
 
 ## 6. 可追溯性
@@ -157,6 +177,8 @@ Feature: EPIC-02 OCR 识别
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.3.0 | 2026-10-18 | Product Engineering | 取消任务前需确认（AC-FR-OCR-020-03） |
+| 1.2.0 | 2026-10-17 | Product Engineering | 新增失败任务可读原因与重试验收场景（厂商余额不足等失败不再显示 404） |
 | 1.1.0 | 2026-10-07 | Product Engineering | 新增 TextIn 调用、Firestore 原始 JSON、Cloud Functions 转换及幂等重试需求 |
 | 1.0.1 | 2026-10-02 | Product Engineering | 将人类可读内容与验收场景翻译为简体中文 |
 | 1.0.0 | 2026-09-10 | Product Engineering | 根据 PRD 第 4.2 节生成初始 OCR 识别需求 |

@@ -9,13 +9,13 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from flask import Blueprint, current_app, request
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, func, or_, select
 
 from auth import audit, current_user
 from errors import invalid_argument, not_found, ok, state_conflict
 from extensions import db
 from fileaccess import get_file_for_user
-from models import File, Membership, OcrJob
+from models import File, Membership, OcrJob, User
 import quota
 from workspace import resolve_workspace
 
@@ -41,6 +41,29 @@ def _get_job_for_user(job_id: str, user) -> OcrJob:
     if job.workspace_type == "ENTERPRISE" and job.enterprise_id in _active_enterprise_ids(user.id):
         return job
     raise not_found()
+
+
+def _registered(user: User | None) -> bool:
+    return user is not None and not user.is_guest and user.registered_at is not None
+
+
+_STAGES = {"OCR_PROCESSING", "OCR_FAILED", "VERIFYING", "VERIFIED", "COMPLETED"}
+_SUCCESS = ("SUCCEEDED", "PARTIAL_SUCCESS")
+
+
+def _stage_condition(stage: str):
+    """与 OcrJob.stage() 一致的 SQL 条件，供分页前在库内按阶段筛选。"""
+    if stage == "OCR_FAILED":
+        return OcrJob.status.in_(("FAILED", "CANCELLED"))
+    if stage == "OCR_PROCESSING":
+        return OcrJob.status.notin_(TERMINAL)
+    succeeded = OcrJob.status.in_(_SUCCESS)
+    if stage == "VERIFYING":
+        return and_(succeeded, OcrJob.review_status != "CONFIRMED")
+    confirmed = and_(succeeded, OcrJob.review_status == "CONFIRMED")
+    if stage == "COMPLETED":
+        return and_(confirmed, OcrJob.completed_at.isnot(None))
+    return and_(confirmed, OcrJob.completed_at.is_(None))
 
 
 def _summary(job: OcrJob) -> dict:
@@ -206,6 +229,23 @@ def list_jobs():
             )
         else:
             raise invalid_argument(field_errors=[{"field": "workspace_type", "reason": "invalid"}])
+
+    stage = q.get("stage")
+    if stage:
+        stage = stage.strip().upper()
+        if stage not in _STAGES:
+            raise invalid_argument(field_errors=[{"field": "stage", "reason": "invalid"}])
+        query = query.filter(_stage_condition(stage))
+
+    keyword = (q.get("q") or "").strip()
+    if keyword:
+        query = query.filter(
+            OcrJob.file_id.in_(
+                select(File.id).where(
+                    func.lower(File.original_name).contains(keyword.lower(), autoescape=True)
+                )
+            )
+        )
 
     page = q.get("page", default=1, type=int)
     page_size = q.get("page_size", default=20, type=int)

@@ -1,26 +1,17 @@
 <script setup lang="ts">
+import type { JobStage } from '../api';
 import { useT } from '../i18nVue';
 
 const { t } = useT();
 
 defineProps<{
-  status: string;
+  stage: JobStage;
 }>();
-
-const SUCCESS = new Set(['SUCCEEDED']);
-const PROCESSING = new Set(['QUEUED', 'PREPROCESSING', 'PROCESSING', 'POSTPROCESSING', 'CANCEL_REQUESTED']);
 </script>
 
 <template>
-  <span
-    class="chip"
-    :class="{
-      success: SUCCESS.has(status),
-      processing: PROCESSING.has(status),
-      failed: status === 'FAILED' || status === 'CANCELLED',
-    }"
-  >
-    {{ t(`job.status.${status}`) }}
+  <span class="chip" :class="stage.toLowerCase()">
+    {{ t(`job.stage.${stage}`) }}
   </span>
 </template>
 
@@ -35,18 +26,24 @@ const PROCESSING = new Set(['QUEUED', 'PREPROCESSING', 'PROCESSING', 'POSTPROCES
   white-space: nowrap;
 }
 
-.chip.success {
-  background: var(--success-bg);
-  color: var(--success);
-}
-
-.chip.processing {
+.chip.ocr_processing {
   background: var(--processing-bg);
   color: var(--processing);
 }
 
-.chip.failed {
+.chip.ocr_failed {
   background: #fdeaea;
   color: var(--danger);
+}
+
+.chip.verifying,
+.chip.verified {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+.chip.completed {
+  background: var(--success-bg);
+  color: var(--success);
 }
 </style>

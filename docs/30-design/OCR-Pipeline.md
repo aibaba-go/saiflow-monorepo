@@ -3,8 +3,8 @@ doc_id: DES-004
 title: "SaiFlow — OCR 与提取流水线"
 type: design
 status: active
-version: 1.1.0
-updated: 2026-10-07
+version: 1.1.1
+updated: 2026-10-18
 owner: Product Engineering
 source: "EPIC-01, EPIC-02, EPIC-08"
 related: [DM-ExtractionPayload, DM-ConversionJob, DM-DocumentTemplate, DM-ExtractedField, DM-LineItem, NFR-PERF, NFR-I18N]
@@ -45,6 +45,10 @@ flowchart LR
 | **标准化** | 日期（含佛历）、数字、THB 货币 | FR-OCR-016、NFR-I18N-002 |
 | **置信度与校验** | 每字段评分、必填检查、金额重算 | FR-OCR-012、013、015 |
 | **关系投影** | 幂等写入 `DM-Document`、`DM-ExtractedField`、`DM-LineItem` 至 Cloud SQL | FR-OCR-019/020 |
+
+### 接收阶段的客户端进度（FR-UPLOAD-010）
+
+LINE Mini App 的上传为预检、内容传输、完成确认三段。内容传输使用 `XMLHttpRequest.upload.onprogress` 获取已发送字节比例；预检和后端存储、校验期间按文件大小与耗时估算，进度不回退且最多到 95%。完成确认成功才报告 100%；成功或失败都清除估算定时器。请求仍使用同源会话 Cookie、CSRF 请求头和统一 API 错误处理。
 
 ## 2. 输入、输出与存储边界
 
@@ -144,6 +148,7 @@ interface ConversionService {
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.1.1 | 2026-10-18 | Product Engineering | 补充接收阶段上传进度：实际字节反馈与文件大小估算，完成确认后才报告 100%（FR-UPLOAD-010） |
 | 1.1.0 | 2026-10-07 | Product Engineering | 改为 TextIn → Firestore → Cloud Functions → Cloud SQL 的模板化转换流水线 |
 | 1.0.1 | 2026-10-02 | Product Engineering | 将人类可读内容翻译为简体中文 |
 | 1.0.0 | 2026-09-10 | Product Engineering | 初始 OCR/提取流水线设计 |

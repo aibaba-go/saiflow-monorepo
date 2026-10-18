@@ -12,8 +12,9 @@ import {
 } from '../api';
 import { messageText } from '../i18n';
 import { useT } from '../i18nVue';
-import { currentWorkspace, goTab, refreshSession, workspaces } from '../store';
+import { currentWorkspace, goTab, refreshSession, setWorkspace, workspaces } from '../store';
 import { uploadFile } from '../upload';
+import BrandLoading from '../components/BrandLoading.vue';
 import PageHeader from '../components/PageHeader.vue';
 
 const { t } = useT();
@@ -96,7 +97,7 @@ async function doUnbind(c: MyCompany) {
     // 若当前正以该公司身份工作，切回个人空间
     const ws = currentWorkspace.value;
     if (ws && ws.workspace_type === 'ENTERPRISE' && ws.enterprise_id === c.id) {
-      currentWorkspace.value = workspaces.value.find((w) => w.workspace_type === 'PERSONAL') ?? null;
+      setWorkspace(workspaces.value.find((w) => w.workspace_type === 'PERSONAL') ?? null);
     }
   } catch (e) {
     errorMsg.value = e instanceof ApiError ? messageText(e.messageKey) : t('common.unknownError');
@@ -204,7 +205,7 @@ async function submit() {
 
     <div class="content">
       <p v-if="errorMsg" class="error-banner">{{ errorMsg }}</p>
-      <p v-if="loading" class="hint">{{ t('common.loading') }}</p>
+      <BrandLoading v-if="loading" variant="page" :label="t('common.loading')" />
 
       <template v-else>
         <!-- 按编号绑定 -->
@@ -219,7 +220,8 @@ async function submit() {
               @keyup.enter="doBind"
             />
             <button class="bind-btn" :disabled="bindBusy" @click="doBind">
-              {{ t('company.bind') }}
+              <BrandLoading v-if="bindBusy" variant="button" :label="t('company.bind')" />
+              <template v-else>{{ t('company.bind') }}</template>
             </button>
           </div>
           <p v-if="bindMsg" class="success-line">{{ bindMsg }}</p>
@@ -296,7 +298,8 @@ async function submit() {
             <span>{{ t('company.certPhoto') }}</span>
             <div class="cert-row">
               <button class="mini-btn" :disabled="certUploading" @click="pickCert">
-                {{ certUploading ? t('company.certUploading') : certFileId ? t('company.certChange') : t('company.certPick') }}
+                <BrandLoading v-if="certUploading" variant="button" :label="t('company.certUploading')" />
+                <template v-else>{{ certFileId ? t('company.certChange') : t('company.certPick') }}</template>
               </button>
               <img v-if="certFileId" class="cert-thumb" :src="filePagePreviewUrl(certFileId, 1)" alt="cert" />
             </div>
@@ -305,7 +308,8 @@ async function submit() {
           <div class="form-actions">
             <button class="ghost-btn" @click="cancelForm">{{ t('common.cancel') }}</button>
             <button class="primary-cta" :disabled="submitting" @click="submit">
-              {{ submitting ? t('company.submitting') : editing ? t('company.save') : t('company.submit') }}
+              <BrandLoading v-if="submitting" variant="button" :label="t('company.submitting')" />
+              <template v-else>{{ editing ? t('company.save') : t('company.submit') }}</template>
             </button>
           </div>
         </section>
@@ -396,6 +400,7 @@ async function submit() {
 
 .bind-row input {
   flex: 1;
+  min-width: 0;
   height: 40px;
   border-radius: 10px;
   border: 1px solid var(--border);
@@ -411,13 +416,17 @@ async function submit() {
 }
 
 .bind-btn {
-  height: 40px;
-  padding: 0 18px;
+  flex-shrink: 0;
+  min-width: 0;
+  max-width: 58%;
+  min-height: 40px;
+  padding: 4px 6px;
   border-radius: 10px;
   background: var(--primary);
   color: #fff;
   font-size: 12px;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .bind-btn:disabled {
@@ -579,6 +588,19 @@ async function submit() {
   gap: 10px;
 }
 
+.cert-row .mini-btn {
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
+  min-height: 30px;
+  padding: 3px 6px;
+  overflow-wrap: anywhere;
+}
+
+.cert-row .cert-thumb {
+  flex-shrink: 0;
+}
+
 .form-actions {
   display: flex;
   gap: 8px;
@@ -597,12 +619,15 @@ async function submit() {
 
 .primary-cta {
   flex: 1;
-  height: 44px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 4px 6px;
   border-radius: 12px;
   background: var(--primary);
   color: #fff;
   font-size: 13px;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .primary-cta:disabled {

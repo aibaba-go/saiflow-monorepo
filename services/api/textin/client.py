@@ -253,14 +253,30 @@ class TextInClient:
         self._client.close()
 
     @staticmethod
+    def _decode_gbk_payload(resp: httpx.Response) -> dict[str, Any] | None:
+        """TextIn 的部分错误响应以 GBK 编码返回，httpx 按 UTF-8 解析会失败。"""
+        try:
+            payload = json.loads(resp.content.decode("gbk"))
+        except (UnicodeDecodeError, ValueError):
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    @staticmethod
     def _parse(resp: httpx.Response) -> dict[str, Any]:
         try:
             payload = resp.json()
         except ValueError as e:
-            raise TextInAPIError(-1, f"非 JSON 响应: {resp.text[:200]}") from e
+            payload = TextInClient._decode_gbk_payload(resp)
+            if payload is None:
+                raise TextInAPIError(-1, f"非 JSON 响应: {resp.text[:200]}") from e
         code = payload.get("code", -1)
         if code != 200:
-            raise TextInAPIError(code, payload.get("message", "unknown"))
+            message = payload.get("message", "unknown")
+            if isinstance(message, str) and "\ufffd" in message:
+                restored = TextInClient._decode_gbk_payload(resp)
+                if isinstance(restored, dict) and isinstance(restored.get("message"), str):
+                    message = restored["message"]
+            raise TextInAPIError(code, message)
         # 把 data 提升到顶层，方便前端统一访问
         if "data" in payload and isinstance(payload["data"], dict):
             return {"code": code, **payload["data"], "message": payload.get("message", "")}

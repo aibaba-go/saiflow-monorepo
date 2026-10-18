@@ -3,12 +3,12 @@ doc_id: EPIC-03
 title: "EPIC-03 — 数据人工核验与修改"
 type: epic
 status: active
-version: 1.1.0
-updated: 2026-10-06
+version: 1.5.5
+updated: 2026-10-18
 owner: Product Engineering
 priority: P0
 source: "PRD-001 §3.1 场景 3, §4.3"
-related: [DM-Document, DM-ExtractedField, DM-ChangeLog, DM-ReviewRecord, API-4]
+related: [DM-Document, DM-ExtractedField, DM-ChangeLog, DM-ReviewRecord, DM-ResultVersion, API-4]
 ---
 
 # EPIC-03 — 数据人工核验与修改
@@ -37,6 +37,10 @@ related: [DM-Document, DM-ExtractedField, DM-ChangeLog, DM-ReviewRecord, API-4]
 | FR-VERIFY-011 | 对配置为一级或二级复核的已核验数据创建对应级别的待复核记录 | P0 | §3.1 场景 3 | FR-VERIFY-006, FR-VERIFY-010 | AC-FR-VERIFY-011-01 |
 | FR-VERIFY-012 | 仅在最终所需复核级别通过后允许数据正式进入业务流程 | P0 | §3.1 场景 3, §4.3 | FR-VERIFY-011 | AC-FR-VERIFY-012-01/02 |
 | FR-VERIFY-013 | 记录每次复核决定、复核级别、复核人、时间与意见 | P0 | §3.1 场景 3 | FR-VERIFY-011 | AC-FR-VERIFY-013-01 |
+| FR-VERIFY-014 | 核验结果页仅保留原图预览与结构化数据，原图位于表格上方并支持点击放大/缩小 | P0 | 界面调整 2026-10-17 | FR-VERIFY-001 | AC-FR-VERIFY-014-01 |
+| FR-VERIFY-015 | 允许直接编辑结构化字段与表格单元格，并以新结果版本保存 | P0 | 界面调整 2026-10-17 | FR-VERIFY-002 | AC-FR-VERIFY-015-01/02 |
+| FR-VERIFY-016 | LINE Mini App 结果页 Continue 在确认前检查认证、注册完成状态与任务所属工作空间的订阅；仅已注册且已开通付费套餐的用户可显式确认、锁定结果后进入最终结果页 | P0 | 界面调整 2026-10-17/18 | FR-VERIFY-006, FR-SYS-011, FR-SYS-012 | AC-FR-VERIFY-016-01/02 |
+| FR-VERIFY-017 | 在任务列表与结果页按流程阶段（OCR 处理中 / OCR 处理失败 / 数据验证中 / 数据已验证 / 最终完成）展示任务状态，并支持按阶段筛选历史任务，历史列表每页 20 条滚动分页加载 | P0 | 界面调整 2026-10-18 | FR-VERIFY-016 | AC-FR-VERIFY-017-01/02/03 |
 
 ## 3. 规则
 
@@ -58,6 +62,36 @@ related: [DM-Document, DM-ExtractedField, DM-ChangeLog, DM-ReviewRecord, API-4]
 
 ### 3.3 校验门控（FR-VERIFY-009）
 以下情况会阻止确认：任一必填字段为空；任一 `needs_review = true` 的字段未被处理；`amount_mismatch = true` 且未解决。
+
+### 3.4 结果工作台与确认流转（FR-VERIFY-014..016）
+- 结果工作台仅呈现原图预览与结构化字段/表格，不再提供原始 JSON 分页；原图位于表格数据上方，点击可切换放大/缩小。
+- 结构化字段与表格单元格可直接编辑。每次保存生成新的 `DM-ResultVersion`，旧版本保留为历史快照，原始识别结果不被覆盖。
+- 电话号码等标量数组叶字段（含表格单元格）按原顺序逐项提供独立输入框，以原字段路径追加数组索引（`path + [index]`）发出 `string` 编辑事件，仅替换对应元素；保留数组类型、顺序、长度与所有未编辑元素，不合并为逗号或换行分隔字符串。单一字符串电话号码仍可直接编辑；确认锁定后上述字段均只读。此为 FR-VERIFY-002/015 的可编辑性修复，不改变确认、认证或订阅流程。
+- LINE Mini App 结果页（`ResultPage`）点击 `Continue` 时，必须在提交确认之前检查认证、注册完成状态与**任务所属工作空间**的订阅（`FR-SYS-011/012`）：游客或未完成注册者→登录/注册页（`auth`）；已注册 Free/NONE→订阅计划检查页（`plans`，默认 `Kinder`）；无已开通付费套餐的 PENDING→套餐升级处理中页（`plan-pending`）。上述分支均不提交 `confirm: true`，未确认任务保持可编辑。
+- 重定向前，仅在结构化内容存在未保存变更时，以现有 PATCH 结果操作的 `confirm: false` 保存新结果版本；无变更不保存。此保存不锁定结果、不记录 `completed_at`。
+- 已注册且订阅 ACTIVE（含已有付费套餐且另有更高档升级申请处理中）的用户，才可在结果页显式继续、通过 §3.3 校验后提交 `confirm: true`；确认成功后结果只读并进入最终结果页。
+- 登录/注册、游客数据归集或套餐可用性恢复后，重新检查该任务所属工作空间的订阅：ACTIVE 的未完成任务（含历史 `VERIFIED`）返回结果页，须用户再次显式继续，不自动确认；只有已经 `COMPLETED` 的任务可直接进入最终结果页。NONE/PENDING 仍按上述分流，提交升级申请及提示后的首页流转见 `FR-SYS-012`。
+
+### 3.5 任务流程阶段（FR-VERIFY-017）
+任务摘要（`GET /api/v1/ocr/jobs`、`GET /api/v1/ocr/jobs/{id}`）返回服务端推导的 `stage`，前端状态标签与历史筛选均以其为准：
+
+| stage | 显示 | 推导条件 |
+|-------|------|----------|
+| `OCR_PROCESSING` | OCR 处理中 | OCR 任务处于排队/预处理/识别/后处理/取消中 |
+| `OCR_FAILED` | OCR 处理失败 | OCR 任务 `FAILED` 或 `CANCELLED` |
+| `VERIFYING` | 数据验证中 | OCR 成功（含部分成功）且结果尚未确认 |
+| `VERIFIED` | 数据已验证 | 历史已确认结果，`completed_at` 为空；保留兼容 |
+| `COMPLETED` | 最终完成 | 结果已确认且 `completed_at` 已记录 |
+
+- `ocr_jobs.completed_at` 仅在显式完成时记录，不随之后登录/注册、游客数据归集或套餐开通而自动变化；本次 LINE 客户端流转调整不批量转换历史数据，也不改变服务端阶段推导契约。
+- 游客、未完成注册者以及无已开通付费套餐的 Free/NONE 或 PENDING 用户点击 `Continue` 时不提交确认；未确认任务（含重定向前以 `confirm: false` 保存变更的任务）保持「数据验证中」，不锁定、不记录 `completed_at`。
+- 已注册且任务所属工作空间订阅 ACTIVE 的用户在结果页显式确认成功后，任务直接进入「最终完成」，不经过「数据已验证」；另有更高档升级申请处理中不影响此资格。
+- 历史「数据已验证」任务仍可展示与筛选；登录/注册或套餐开通后不自动完成，只有已注册付费用户在结果页再次显式点击「继续」，才记录 `completed_at` 并进入「最终完成」。
+- 历史页筛选项固定为：全部 / OCR 处理中 / OCR 处理失败 / 数据验证中 / 数据已验证 / 最终完成。筛选项超出一行宽度时自动换行，所有筛选项必须完整可见。
+- 历史页分页加载：每页 20 条，按创建时间倒序；列表滚动至底部时自动加载下一页，加载中显示「加载更多…」，全部加载完毕（且超过一页）时显示「没有更多记录」。
+- 阶段筛选（`stage`）与文件名搜索（`q`，不区分大小写的包含匹配）均在服务端分页之前执行，保证每页结果完整；切换筛选、修改关键字（300 ms 防抖）或切换工作空间时从第 1 页重新加载。
+- 打开任务（历史页与首页最近任务）：OCR 处理中→处理进度页；最终完成→最终结果页；其余阶段→结果页。
+- 最终结果页仅显示任务阶段标签，不再重复显示 `Confirmed` 标签；结果保持只读，原图与 Excel 导出功能不变。
 
 ## 4. 代表性验收标准（P0）
 
@@ -100,16 +134,106 @@ Feature: EPIC-03 核验与修改
     Given 一级复核人员通过一份待复核文档
     When 保存复核决定
     Then 创建 DM-ReviewRecord，包含复核级别、复核人、时间、决定和意见
+
+  Scenario: AC-FR-VERIFY-014-01 原图与表格布局
+    Given 一份已完成识别的文档
+    When 打开核验结果页
+    Then 页面仅显示原图预览与结构化字段/表格，且原图位于表格数据上方
+    And 点击原图可在放大与缩小之间切换
+
+  Scenario: AC-FR-VERIFY-015-01 结构化编辑生成新版本
+    Given 当前结果版本为 1，某个表格单元格数量为 120
+    When 用户将该单元格改为 135 并保存
+    Then 系统生成版本 2，且版本 1 仍可作为历史快照读取
+
+  Scenario: AC-FR-VERIFY-015-02 标量数组逐项编辑并保留数组
+    Given LINE Mini App 核验结果尚未确认，当前版本为 1，seller.tel = ["065-205-8258", "065-205-8259"]
+    When 用户打开核验结果页
+    Then 两个号码各自显示独立可编辑输入框，表格单元格中的标量数组亦逐项可编辑，单一字符串号码仍可直接编辑
+    When 用户仅将第一个号码改为 "065-205-8268" 并保存
+    Then 编辑事件以原路径追加索引 0 和 string 值发出，系统生成版本 2，seller.tel = ["065-205-8268", "065-205-8259"]
+    And 数组类型、顺序、长度及未编辑的第二个元素保持不变，不合并为逗号或换行字符串，版本 1 保留原数组快照
+    When 用户仅将第二个号码改为 "065-205-8269" 并保存
+    Then 编辑事件以原路径追加索引 1 和 string 值发出，系统生成版本 3，seller.tel = ["065-205-8268", "065-205-8269"]
+    And 数组类型、顺序、长度及本次未编辑的第一个元素保持不变，版本 1 和版本 2 的快照不被覆盖
+    When 用户按现有确认流程成功确认并锁定结果
+    Then 两个号码及其他结构化字段与表格单元格均为只读
+
+  Scenario: AC-FR-VERIFY-016-01 已注册付费用户显式确认
+    Given 用户已登录并完成注册，任务所属工作空间订阅为 ACTIVE，且所有必填字段均有效
+    When 用户在 LINE Mini App 结果页点击 "Continue"
+    Then 客户端先检查认证、注册完成状态与该任务工作空间订阅，再提交 confirm: true
+    And 确认成功后结果被锁定、记录 completed_at，任务为 COMPLETED 并进入最终结果页
+
+  Scenario: AC-FR-VERIFY-016-02 游客确认前重定向与草稿保存
+    Given 用户处于游客会话，任务为 VERIFYING，且有未保存的结构化编辑
+    When 用户在 LINE Mini App 结果页点击 "Continue"
+    Then 仅以 PATCH confirm: false 保存变更为新结果版本，再进入登录/注册页（auth），不提交 confirm: true
+    And 任务保持 VERIFYING、结果仍可编辑，completed_at 为空
+    Given 游客没有未保存的结构化变更
+    When 用户点击 "Continue"
+    Then 进入 auth，不发送结果保存或确认请求
+
+  Scenario: AC-FR-VERIFY-017-01 流程阶段展示
+    Given 用户的任务分别处于 OCR 识别中、OCR 失败、OCR 识别成功未确认
+    When 用户打开历史页
+    Then 各任务分别显示 "OCR 处理中"、"OCR 处理失败"、"数据验证中"
+    Given 用户为游客、未完成注册者，或任务工作空间为 Free/NONE、无已开通付费套餐的 PENDING，且任务为 VERIFYING
+    When 用户在结果页点击 "Continue"
+    Then 不提交确认，任务仍为 "数据验证中"，completed_at 为空
+    When 用户随后完成登录/注册、游客数据归集或套餐开通
+    Then 任务不自动变为 "最终完成"
+    Given 已注册且任务工作空间订阅 ACTIVE 的用户在结果页显式继续并确认成功
+    Then 该任务直接显示 "最终完成"
+    Given 一个历史 "数据已验证" 的任务，completed_at 为空，用户未完成注册或该任务工作空间未开通付费套餐
+    When 用户点击 "Continue"
+    Then 按认证与订阅检查进入 auth、plans 或 plan-pending，不提交确认，任务仍为 VERIFIED
+    Given 该历史任务由已注册且任务工作空间订阅 ACTIVE 的用户在结果页显式点击 "继续"
+    Then 确认成功后记录 completed_at，任务变为 "最终完成"，不批量转换其他历史任务
+
+  Scenario: AC-FR-VERIFY-017-02 按阶段筛选
+    Given 用户位于历史页
+    When 用户选择某一阶段筛选
+    Then 仅显示该阶段的任务
+    And 筛选项始终包含 "数据已验证"
+
+  Scenario: AC-FR-VERIFY-017-03 历史分页加载
+    Given 用户当前工作空间有 45 条任务
+    When 用户打开历史页
+    Then 首次仅显示最新的 20 条任务，且所有筛选项完整可见
+    When 用户将列表滚动至底部
+    Then 自动加载并追加第 21–40 条任务
+    When 用户再次滚动至底部
+    Then 追加剩余 5 条，并显示 "没有更多记录"
+
+  Scenario: AC-FR-VERIFY-017-04 按阶段打开任务
+    Given 用户在历史页或首页最近任务中看到不同阶段的任务
+    When 用户点击 "最终完成" 的任务
+    Then 直接进入该任务的最终结果页，不再显示需要 Continue 确认的结果页
+    And 最终结果页仅显示任务阶段标签，不再重复显示 Confirmed 标签，结果保持只读且可导出
+    When 用户点击 "OCR 处理中" 的任务
+    Then 进入处理进度页
+    When 用户点击其余阶段的任务
+    Then 进入结果页
 ```
 
 ## 5. 可追溯性
 | FR ID | 验证方式 | 设计引用 |
 |-------|----------|----------|
-| FR-VERIFY-001..013 | AC-FR-VERIFY-* | `DM-ExtractedField`、`DM-ChangeLog`、`DM-ReviewRecord`、`DM-ReviewPolicy`、`API-4` |
+| FR-VERIFY-001..017 | AC-FR-VERIFY-* | `DM-ExtractedField`、`DM-ChangeLog`、`DM-ReviewRecord`、`DM-ReviewPolicy`、`API-4` |
 
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.5.5 | 2026-10-18 | Product Engineering | FR-VERIFY-017：最终结果页移除重复 Confirmed 标签，保留任务阶段、只读结果与导出；同步 AC-FR-VERIFY-017-04 |
+| 1.5.4 | 2026-10-18 | Product Engineering | FR-VERIFY-002/015 修复说明：电话号码等标量数组逐项编辑并保留数组与历史快照；新增 AC-FR-VERIFY-015-02，不改变确认、认证或订阅流程 |
+| 1.5.3 | 2026-10-18 | Product Engineering | FR-VERIFY-016/017：LINE Continue 改为确认前认证与工作空间订阅检查，仅保存未保存变更（confirm: false）；已注册付费用户显式确认，恢复未完成任务返回结果页；保留历史 VERIFIED、不批量转换；同步 AC |
+| 1.5.2 | 2026-10-18 | Product Engineering | FR-VERIFY-017：点击「最终完成」任务直接进入最终结果页；新增 AC-FR-VERIFY-017-04 |
+| 1.5.1 | 2026-10-18 | Product Engineering | FR-VERIFY-017 修正：阶段按确认时的注册状态持久化（`completed_at`），注册后不自动转为最终完成；历史筛选始终包含「数据已验证」；更新 AC-FR-VERIFY-017-01/02 |
+| 1.5.0 | 2026-10-18 | Product Engineering | FR-VERIFY-017 扩展：历史筛选项换行完整显示；历史列表每页 20 条滚动分页，阶段筛选与文件名搜索在服务端执行；新增 AC-FR-VERIFY-017-03 |
+| 1.4.0 | 2026-10-18 | Product Engineering | 新增 FR-VERIFY-017：任务按流程阶段（OCR 处理中/失败、数据验证中、数据已验证、最终完成）展示与筛选；新增 AC-FR-VERIFY-017-01/02 |
+| 1.3.0 | 2026-10-17 | Product Engineering | 确认后流转改为按订阅状态分流（FR-SYS-012） |
+| 1.2.0 | 2026-10-17 | Product Engineering | 新增原图置顶与缩放、结构化结果版本化编辑、确认后的登录/订阅/最终页流转 |
 | 1.1.0 | 2026-10-06 | Product Engineering | 新增可配置 0/1/2 级复核、最终复核门控与复核日志；明确不支持 Workflow Engine |
 | 1.0.1 | 2026-10-02 | Product Engineering | 将人类可读内容与验收场景翻译为简体中文 |
 | 1.0.0 | 2026-09-10 | Product Engineering | 根据 PRD 第 4.3 节生成初始核验需求 |

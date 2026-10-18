@@ -3,11 +3,11 @@ doc_id: DES-002
 title: "SaiFlow — 数据模型"
 type: data-model
 status: active
-version: 1.3.0
-updated: 2026-10-07
+version: 1.5.4
+updated: 2026-10-18
 owner: Product Engineering
 source: "EPIC-02, EPIC-03, EPIC-04, EPIC-06, EPIC-07, EPIC-08"
-related: [DM-Document, DM-ExtractionPayload, DM-ConversionJob, DM-DocumentTemplate, DM-ExtractedField, DM-LineItem, DM-ReviewRecord]
+related: [DM-Document, DM-ExtractionPayload, DM-ConversionJob, DM-DocumentTemplate, DM-ExtractedField, DM-LineItem, DM-ReviewRecord, DM-ResultVersion]
 ---
 
 # SaiFlow — 数据模型
@@ -241,10 +241,33 @@ erDiagram
 
 | 实体 | 关键字段 |
 |------|----------|
-| `DM-User` | id、username、password_hash、status(active/locked)、prefs(json)、created_at |
+| `DM-User` | id、username、password_hash、status(active/locked)、line_provider(line/guest)、display_name（取自 LINE，可改）、avatar_url（text：仅外部 https 头像 URL，如 LINE）、avatar_path（Firebase Storage 头像对象名 `avatars/<user_id>/<name>.<ext>`，优先于 avatar_url；图片不入库）、phone（取自 LINE，只读）、email（取自 LINE 或注册时录入，经验证码更换）、registered_at（null = 未完成注册信息录入）、prefs(json)、created_at |
+| `DM-EmailVerificationCode` | id、user_id、email（目标新邮箱）、code_hash（sha256）、expires_at（10 分钟）、consumed_at、created_at |
 | `DM-Role` | id、name(clerk/finance/warehouse/reviewer/viewer/admin)、permissions(json) |
 | `DM-OperationLog` | id、user_id、action、target_type、target_id、result、timestamp |
 | `DM-Settings` | key、value(json)、scope(system/user)、updated_by、updated_at |
+
+> `line_provider = guest` 表示游客试用会话，不是正式角色；登录/注册后其名下全部关联记录（含配额消耗/返还流水）改挂正式用户，游客的首登赠送流水、会话、验证码与 `users` 行在同一事务内删除。
+
+### 2.14 `DM-ResultVersion`（结果版本快照）
+
+**用途：** 保存一次识别任务的结构化结果快照，供核验编辑、最终结果查看与 Excel 导出（FR-VERIFY-015、FR-ENTRY-015）。
+
+| 字段 | 类型 | 必填 | 约束 | 说明 |
+|------|------|:----:|------|------|
+| id | uuid | Y | PK | |
+| job_id | uuid | Y | FK→识别任务 | 同一任务内版本唯一 |
+| version | integer | Y | ≥ 1；`(job_id, version)` 唯一 | 乐观并发版本号 |
+| is_current | boolean | Y | 每任务仅一条为 true | 当前版本标记 |
+| structured | json | N | ≤ 2 MB | Prompt 模式结构化字段/表格 |
+| created_by_user_id | uuid | N | FK→User | 游客编辑时可为游客用户 |
+| created_at | timestamptz | Y | | |
+
+> 每次结构化结果保存都会新增一个 `DM-ResultVersion`，旧版本 `is_current = false` 但保留为历史快照；逐页任务的页面结果按版本归属保存，编辑不覆盖原始识别输出。
+
+**结构化数组编辑（FR-VERIFY-002/015）：** `structured` 中电话号码等标量数组叶字段（含表格单元格）保留 JSON 数组类型。数组元素按原字段路径追加索引（`path + [index]`）接收 `string` 编辑值，仅替换对应元素；数组顺序、长度及所有未编辑元素保持不变，不转成逗号或换行分隔字符串，不修改旧版本快照。单一字符串电话号码仍按标量字段编辑，确认锁定后只读；本修复不改变确认、认证或订阅流程。
+
+**LINE 客户端确认前流转（FR-VERIFY-016/017、FR-SYS-011/012）：** 结果页 `Continue` 先检查认证、注册完成状态与任务所属工作空间的订阅。游客或未完成注册者进入 `auth`；已注册 Free/NONE 用户进入 `plans`；无已开通付费套餐的 PENDING 用户进入 `plan-pending`，均不提交确认。重定向前仅在结构化内容有未保存变更时，以现有 PATCH 结果操作的 `confirm: false` 保存新版本；无变更不保存，不锁定结果、不记录 `ocr_jobs.completed_at`，未确认任务保持 `VERIFYING`。仅已注册且订阅 ACTIVE 的用户（含另有更高档升级申请处理中）可在结果页显式提交 `confirm: true`，成功后进入最终结果页。登录/注册或套餐可用性恢复后，ACTIVE 的未完成任务须返回结果页等待显式确认，只有已为 `COMPLETED` 的任务可直接进入最终结果页。历史 `VERIFIED` 表示已确认但 `completed_at` 为空，继续兼容且不批量转换；仅已注册付费用户可在结果页显式继续完成。此规则限定 LINE 客户端流转，不新增服务端授权规则或改变 API 契约。
 
 ## 3. 枚举
 
@@ -282,6 +305,12 @@ erDiagram
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.5.4 | 2026-10-18 | Product Engineering | FR-VERIFY-002/015 修复说明：structured 标量数组按索引编辑，保留数组、顺序、长度及未编辑元素，不转为拼接字符串或覆盖旧快照 |
+| 1.5.3 | 2026-10-18 | Product Engineering | 补充 LINE 客户端确认前认证/工作空间订阅检查、仅变更草稿保存与显式完成规则；恢复未完成任务返回结果页，保留历史 VERIFIED；不新增服务端授权或改变 API 契约（FR-VERIFY-016/017、FR-SYS-011/012） |
+| 1.5.2 | 2026-10-18 | Product Engineering | 游客归集后删除游客 `users` 行，配额流水随任务改挂正式用户（FR-SYS-010） |
+| 1.5.1 | 2026-10-18 | Product Engineering | DM-User 新增 avatar_path：上传头像存 Firebase Storage，avatar_url 仅存外部 https URL |
+| 1.5.0 | 2026-10-17 | Product Engineering | DM-User 新增 phone、email、registered_at，avatar_url 改为 text；新增 DM-EmailVerificationCode（FR-SYS-014/015/016） |
+| 1.4.0 | 2026-10-17 | Product Engineering | 新增结果版本快照实体与游客会话字段，明确游客数据归集 |
 | 1.3.0 | 2026-10-07 | Product Engineering | 新增 Firestore 原始载荷、转换任务、文档模板和 JSON 映射实体及状态 |
 | 1.2.0 | 2026-10-06 | Product Engineering | 新增固定层级复核策略/记录实体及复核状态；不引入 Workflow Engine 数据模型 |
 | 1.1.1 | 2026-10-02 | Product Engineering | 将人类可读内容翻译为简体中文 |

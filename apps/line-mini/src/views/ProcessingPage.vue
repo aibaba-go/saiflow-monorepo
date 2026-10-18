@@ -4,6 +4,8 @@ import { ApiError, cancelJob, getFile, getJob, type JobSummary } from '../api';
 import { messageText } from '../i18n';
 import { useT } from '../i18nVue';
 import { goTab, navigate } from '../store';
+import BrandLoading from '../components/BrandLoading.vue';
+import FormDialog from '../components/FormDialog.vue';
 import PageHeader from '../components/PageHeader.vue';
 
 const { t } = useT();
@@ -16,6 +18,7 @@ const job = ref<JobSummary | null>(null);
 const filePageCount = ref<number | null>(null);
 const errorMsg = ref('');
 const cancelling = ref(false);
+const confirmingCancel = ref(false);
 let timer: ReturnType<typeof setTimeout> | null = null;
 
 const RUNNING = ['QUEUED', 'PREPROCESSING', 'PROCESSING', 'POSTPROCESSING', 'CANCEL_REQUESTED'];
@@ -68,6 +71,7 @@ async function cancel() {
     errorMsg.value = e instanceof ApiError ? messageText(e.messageKey) : t('common.unknownError');
   } finally {
     cancelling.value = false;
+    confirmingCancel.value = false;
   }
 }
 </script>
@@ -78,8 +82,11 @@ async function cancel() {
 
     <div class="content">
       <div class="status-card" v-if="job">
-        <div class="spinner" :class="{ done: !RUNNING.includes(job.status) }" />
-        <div class="status-title">{{ t('processing.recognizing') }}</div>
+        <BrandLoading v-if="RUNNING.includes(job.status)" :label="t('processing.recognizing')" />
+        <template v-else>
+          <div class="done-mark" />
+          <div class="status-title">{{ t('processing.recognizing') }}</div>
+        </template>
         <div class="status-sub">{{ job.file_name }} · {{ t('processing.pagesAll', { n: job.page_count ?? filePageCount ?? 0 }) }}</div>
 
         <div class="steps">
@@ -100,20 +107,41 @@ async function cancel() {
       </div>
 
       <div v-else-if="errorMsg" class="info-box error">{{ errorMsg }}</div>
-      <div v-else class="status-card"><div class="spinner" /></div>
+      <div v-else class="status-card"><BrandLoading :label="t('common.loading')" /></div>
 
       <div class="info-box">{{ t('processing.info') }}</div>
 
       <p v-if="errorMsg && job" class="status-error">{{ errorMsg }}</p>
 
       <button class="home-btn" @click="goTab('scan')">{{ t('processing.backHome') }}</button>
-      <button v-if="job && RUNNING.includes(job.status)" class="cancel-btn" :disabled="cancelling" @click="cancel">
+      <button
+        v-if="job && RUNNING.includes(job.status)"
+        class="cancel-btn"
+        :disabled="cancelling"
+        @click="confirmingCancel = true"
+      >
         {{ t('processing.cancelTask') }}
       </button>
       <button v-else-if="job" class="cancel-btn" @click="navigate('result', { jobId: job.id })">
         {{ t('common.done') }}
       </button>
     </div>
+
+    <FormDialog
+      v-if="confirmingCancel && job && RUNNING.includes(job.status)"
+      :title="t('processing.cancelConfirm')"
+      :subtitle="t('processing.cancelConfirmBody')"
+    >
+      <div class="fd-actions">
+        <button class="fd-btn secondary" :disabled="cancelling" @click="confirmingCancel = false">
+          {{ t('processing.keepRunning') }}
+        </button>
+        <button class="fd-btn danger" :disabled="cancelling" @click="cancel">
+          <BrandLoading v-if="cancelling" variant="button" :label="t('processing.cancelTask')" />
+          <template v-else>{{ t('processing.cancelTask') }}</template>
+        </button>
+      </div>
+    </FormDialog>
   </div>
 </template>
 
@@ -142,25 +170,11 @@ async function cancel() {
   gap: 8px;
 }
 
-.spinner {
+.done-mark {
   width: 32px;
   height: 32px;
-  border: 3.5px solid var(--primary-light);
-  border-top-color: var(--primary);
+  border: 3.5px solid var(--success);
   border-radius: 50%;
-  animation: spin 0.9s linear infinite;
-}
-
-.spinner.done {
-  animation: none;
-  border-color: var(--success);
-  border-top-color: var(--success);
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .status-title {
@@ -288,5 +302,9 @@ async function cancel() {
 
 .cancel-btn:disabled {
   opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .step-pulse { animation: none; }
 }
 </style>

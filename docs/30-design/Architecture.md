@@ -3,8 +3,8 @@ doc_id: DES-001
 title: "SaiFlow — 系统架构"
 type: design
 status: active
-version: 2.2.0
-updated: 2026-10-12
+version: 2.2.1
+updated: 2026-10-18
 owner: Product Engineering
 source: "PRD-001 §3.1, §4, §5; ADR-001"
 related: [DM-Document, DM-ExtractionPayload, DM-ConversionJob, OCR-Pipeline, API-Spec, NFR-SEC, ADR-001]
@@ -98,6 +98,13 @@ graph TB
 | **Secret Manager**            | 数据库凭据、TextIn 密钥和仅部署使用的配置                           | NFR-SEC-003                             |
 | **Cloud Logging / Audit**     | 运行遥测、转换失败和应用审计事件导出                                 | NFR-SEC-004/005                         |
 
+### 3.1 LINE Mini App 品牌等待设计
+
+- **共享呈现：** 按已确认方案复用 `BrandLoading.vue`，`variant` 支持 `splash`（启动）、`page`（页面/OCR 等待）、`inline`（局部请求）、`button`（按钮等待），`label` 接收本地化操作文案；统一 F＋圆点标志与 `saiflow` 字标。
+- **动效与无障碍：** `scan` 扫描光线、`halo` 光环、`orbit` 环绕光点按布局适配，标志本身不旋转；`prefers-reduced-motion` 下关闭动画并隐藏扫描光线，保留可访问状态文字，不持续播报上传百分比，兼容窄屏与泰语文案。
+- **状态边界：** 保留原有操作文案、上传百分比/进度条及 OCR 步骤；完成或失败后停止对应等待。组件仅呈现既有等待状态，不改变请求、认证、套餐分流、确认、防重复提交或禁用规则；套餐 `PENDING` 为审核状态，不作为网络加载。
+- **追溯：** 横切约束见 [NFR-USAB-004](../20-requirements/non-functional/NFR.md)，验收复用 [AC-NFR-USAB-004-01/02/03](../40-acceptance/Acceptance-Criteria.md)，不另定义需求或验收场景。
+
 ## 4. 端到端数据流
 
 ```text
@@ -157,6 +164,7 @@ Browser upload → FastAPI format/size validation → private GCS original objec
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.2.1 | 2026-10-18 | Product Engineering | 新增 §3.1 LINE Mini App 品牌等待设计：共享 BrandLoading.vue 四种 variant 与 label、品牌动效及 reduced-motion；映射 NFR-USAB-004 与已有 AC，不改变业务流程 |
 | 2.2.0 | 2026-10-12 | Product Engineering | 新增“0. 技术基线”章节，汇总前后端、数据库、云服务、外部服务与工程工具链；明确版本号以配置文件为唯一事实来源 |
 | 2.1.0 | 2026-10-07 | Product Engineering | 新增 TextIn、Firestore、Cloud Functions 模板转换与可选 Dataflow 架构 |
 | 2.0.1 | 2026-10-02 | Product Engineering | 将人类可读内容翻译为简体中文 |

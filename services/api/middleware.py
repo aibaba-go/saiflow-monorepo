@@ -16,8 +16,12 @@ from errors import csrf_invalid, not_found
 
 VERSIONED_API = re.compile(r"^/api/(v\d+)/")
 KNOWN_VERSIONS = {"v1"}
-# 唯一免登录白名单（PRD §14.1：精确匹配，不做前缀/方法通配）
-ANONYMOUS_EXACT = {("POST", "/api/v1/auth/line")}
+# 免登录白名单（PRD §14.1：精确匹配，不做前缀/方法通配）
+# auth/guest 为试用会话：游客可上传/核验，登录后其数据归并入真实账号。
+ANONYMOUS_EXACT = {
+    ("POST", "/api/v1/auth/line"),
+    ("POST", "/api/v1/auth/guest"),
+}
 # 非版本化运维端点（非业务接口）
 OPS_EXACT = {"/api/health"}
 
