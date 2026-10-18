@@ -5,31 +5,53 @@ import { getLocale, messageText, t } from '../i18n';
 import { useT } from '../i18nVue';
 import { initLiff, redirectToLineLogin } from '../liff';
 import { signInWithDevId, signInWithLine } from '../store';
+import BrandLoading from '../components/BrandLoading.vue';
 
 const { t: tt } = useT();
 
-// LINE 暂不可用：免登录启用时保留 dev 登录兜底入口（自动登录失败的落点）
+// LINE 暂不可用：启用开发者登录入口（仍由用户手动点击，不再自动登录）
 const skipLogin = import.meta.env.VITE_AUTO_DEV_LOGIN === 'true';
+// vite dev 或构建期 VITE_DEV_BYPASS=true：Login/Register with LINE 直接使用开发身份，跳过 LINE 验证
+const devBypass = skipLogin && (import.meta.env.DEV || import.meta.env.VITE_DEV_BYPASS === 'true');
+const defaultDevId = (import.meta.env.VITE_DEV_LOGIN_ID || 'demo-user').trim();
 
 const props = defineProps<{
   notice?: string;
+  embedded?: boolean;
+  canBack?: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: 'logged-in'): void;
+  (e: 'back'): void;
 }>();
 
-const errorMsg = ref(props.notice ? '' : '');
-if (props.notice) {
-  // 启动失败原因（如会话过期）以通用错误展示
-  errorMsg.value = props.notice;
+type AuthMode = 'login' | 'register';
+const mode = ref<AuthMode>('login');
+
+function switchMode(next: AuthMode): void {
+  mode.value = next;
+  errorMsg.value = '';
 }
 
+// 启动失败原因（如会话过期）以通用错误展示
+const errorMsg = ref(props.notice ?? '');
+
 const lineLoading = ref(false);
-const devId = ref('');
+const devId = ref(defaultDevId);
 const devLoading = ref(false);
 
 async function loginWithLine() {
+  if (devBypass) {
+    lineLoading.value = true;
+    try {
+      // 开发环境「注册」模拟一个全新 LINE 账号（资料随机），以走注册信息录入弹框
+      await loginWithDev(mode.value === 'register' ? `reg-${Math.random().toString(36).slice(2, 10)}` : undefined);
+    } finally {
+      lineLoading.value = false;
+    }
+    return;
+  }
   errorMsg.value = '';
   lineLoading.value = true;
   try {
@@ -52,8 +74,8 @@ async function loginWithLine() {
   }
 }
 
-async function loginWithDev() {
-  const id = devId.value.trim();
+async function loginWithDev(overrideId?: string) {
+  const id = overrideId || devId.value.trim() || defaultDevId;
   if (!id || devLoading.value) return;
   errorMsg.value = '';
   devLoading.value = true;
@@ -69,7 +91,16 @@ async function loginWithDev() {
 </script>
 
 <template>
-  <div class="login">
+  <div class="login" :class="{ embedded }">
+    <div v-if="canBack" class="auth-top">
+      <button class="back-btn" @click="emit('back')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+          <path d="M15 18l-6-6 6-6" />
+        </svg>
+        <span>{{ tt('common.back') }}</span>
+      </button>
+    </div>
+
     <div class="login-logo">
       <svg width="48" height="48" viewBox="0 0 40 40" fill="none">
         <rect width="40" height="40" rx="10" fill="#4A66F7" />
@@ -81,18 +112,34 @@ async function loginWithDev() {
     <div class="login-name">saiflow</div>
     <div class="login-tagline">Scan. Verify. Export.</div>
 
+    <div class="auth-tabs">
+      <button :class="{ active: mode === 'login' }" @click="switchMode('login')">
+        {{ tt('auth.tabLogin') }}
+      </button>
+      <button :class="{ active: mode === 'register' }" @click="switchMode('register')">
+        {{ tt('auth.tabRegister') }}
+      </button>
+    </div>
+    <p class="auth-subtitle">
+      {{ mode === 'login' ? tt('auth.loginHint') : tt('auth.registerHint') }}
+    </p>
+
     <button class="line-btn" :disabled="lineLoading" @click="loginWithLine">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff">
-        <path
-          d="M12 3C6.48 3 2 6.64 2 11.13c0 4.03 3.55 7.4 8.35 8.04.33.07.77.22.88.5.1.26.07.66.03.92l-.14.86c-.04.26-.2 1.01.88.55 1.08-.46 5.84-3.44 7.97-5.89C20.44 14.4 22 12.9 22 11.13 22 6.64 17.52 3 12 3z"
-        />
-      </svg>
-      <span>{{ lineLoading ? tt('common.loading') : tt('login.withLine') }}</span>
+      <BrandLoading v-if="lineLoading" variant="button" :label="tt('common.loading')" />
+      <template v-else>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff">
+          <path
+            d="M12 3C6.48 3 2 6.64 2 11.13c0 4.03 3.55 7.4 8.35 8.04.33.07.77.22.88.5.1.26.07.66.03.92l-.14.86c-.04.26-.2 1.01.88.55 1.08-.46 5.84-3.44 7.97-5.89C20.44 14.4 22 12.9 22 11.13 22 6.64 17.52 3 12 3z"
+          />
+        </svg>
+        <span>{{ mode === 'login' ? tt('login.withLine') : tt('auth.registerWithLine') }}</span>
+      </template>
     </button>
 
+    <p v-if="mode === 'register'" class="auth-note">{{ tt('auth.registerNote') }}</p>
     <p v-if="errorMsg" class="login-error">{{ errorMsg }}</p>
 
-    <!-- 开发兜底：仅在 vite 开发模式显示，后端仍需 AUTH_DEV_MODE=1 -->
+    <!-- 开发兜底：仅在配置开启时显示，后端仍需 AUTH_DEV_MODE=1 -->
     <div v-if="skipLogin" class="dev-box">
       <div class="dev-title">{{ tt('login.devTitle') }}</div>
       <div class="dev-hint">{{ tt('login.devHint') }}</div>
@@ -101,10 +148,11 @@ async function loginWithDev() {
           v-model="devId"
           class="dev-input"
           :placeholder="tt('login.devPlaceholder')"
-          @keyup.enter="loginWithDev"
+          @keyup.enter="loginWithDev()"
         />
-        <button class="dev-btn" :disabled="devLoading || !devId.trim()" @click="loginWithDev">
-          {{ tt('login.devSubmit') }}
+        <button class="dev-btn" :class="{ busy: devLoading }" :disabled="devLoading" @click="loginWithDev()">
+          <BrandLoading v-if="devLoading" variant="button" :label="tt('common.loading')" />
+          <template v-else>{{ tt('login.devSubmit') }}</template>
         </button>
       </div>
     </div>
@@ -113,6 +161,7 @@ async function loginWithDev() {
 
 <style scoped>
 .login {
+  position: relative;
   width: 100%;
   max-width: 430px;
   min-height: 100dvh;
@@ -126,6 +175,74 @@ async function loginWithDev() {
   gap: 10px;
 }
 
+/* 登录注册作为应用内页面：铺满手机壳，不重复整屏高度 */
+.login.embedded {
+  flex: 1;
+  min-height: 100%;
+  max-width: none;
+  padding: 24px 28px;
+}
+
+.auth-top {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+}
+
+.back-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+  padding: 0 12px 0 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.auth-tabs {
+  display: flex;
+  width: 100%;
+  max-width: 320px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.auth-tabs button {
+  flex: 1;
+  height: 34px;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.auth-tabs button.active {
+  background: #fff;
+  color: var(--primary);
+}
+
+.auth-subtitle {
+  margin: 2px 0 8px;
+  max-width: 320px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.5;
+  opacity: 0.85;
+}
+
+.auth-note {
+  margin: 0;
+  max-width: 320px;
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.5;
+  opacity: 0.75;
+}
+
 .login-name {
   font-size: 28px;
   font-weight: 700;
@@ -135,7 +252,7 @@ async function loginWithDev() {
 .login-tagline {
   font-size: 12px;
   opacity: 0.85;
-  margin-bottom: 42px;
+  margin-bottom: 18px;
 }
 
 .line-btn {
@@ -168,7 +285,7 @@ async function loginWithDev() {
 }
 
 .dev-box {
-  margin-top: 40px;
+  margin-top: 24px;
   width: 100%;
   max-width: 320px;
   background: rgba(255, 255, 255, 0.12);
@@ -195,6 +312,7 @@ async function loginWithDev() {
 
 .dev-input {
   flex: 1;
+  min-width: 0;
   height: 38px;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.4);
@@ -206,6 +324,7 @@ async function loginWithDev() {
 }
 
 .dev-btn {
+  flex-shrink: 0;
   height: 38px;
   padding: 0 16px;
   border-radius: 10px;
@@ -213,6 +332,13 @@ async function loginWithDev() {
   color: var(--primary);
   font-size: 12px;
   font-weight: 700;
+}
+
+.dev-btn.busy {
+  width: 136px;
+  height: auto;
+  min-height: 38px;
+  padding: 4px 8px;
 }
 
 .dev-btn:disabled {

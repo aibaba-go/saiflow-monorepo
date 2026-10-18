@@ -3,8 +3,8 @@ doc_id: REQ-INDEX
 title: "SaiFlow — 需求索引与可追溯性矩阵"
 type: index
 status: active
-version: 1.2.0
-updated: 2026-10-07
+version: 1.3.4
+updated: 2026-10-18
 owner: Product Engineering
 ---
 
@@ -75,6 +75,10 @@ owner: Product Engineering
 | FR-VERIFY-011 | 创建待复核记录 | P0 | §3.1 | VERIFY-006/010 | AC-FR-VERIFY-011-01 | DM-ReviewRecord | active |
 | FR-VERIFY-012 | 最终复核门控业务录入 | P0 | §3.1/§4.3 | VERIFY-011 | AC-FR-VERIFY-012-01/02 | DM-Document | active |
 | FR-VERIFY-013 | 复核日志 | P0 | §3.1 | VERIFY-011 | AC-FR-VERIFY-013-01 | DM-ReviewRecord | active |
+| FR-VERIFY-014 | 原图置顶与缩放 | P0 | 界面调整 2026-10-17 | VERIFY-001 | AC-FR-VERIFY-014-01 | OriginalPreview | active |
+| FR-VERIFY-015 | 结构化结果版本化编辑 | P0 | 界面调整 2026-10-17 | VERIFY-002 | AC-FR-VERIFY-015-01 | DM-ResultVersion | active |
+| FR-VERIFY-016 | LINE 确认前认证与工作空间订阅检查；已注册付费用户显式确认后进入最终页，恢复未完成任务返回结果页 | P0 | 界面调整 2026-10-17/18 | VERIFY-006/SYS-011/SYS-012 | AC-FR-VERIFY-016-01/02 | DM-ResultVersion | active |
+| FR-VERIFY-017 | 任务流程阶段展示、历史筛选与分页加载 | P0 | 界面调整 2026-10-18 | VERIFY-016 | AC-FR-VERIFY-017-01/02/03 | DM-OcrJob | active |
 | FR-ENTRY-001 | 生成 Excel 模板 | P0 | §4.4 | VERIFY-006 | AC-FR-ENTRY-001-01 | DM-ExportJob | active |
 | FR-ENTRY-002 | 一键填充 Excel | P0 | §4.4 | ENTRY-001 | AC-FR-ENTRY-002-01 | API-5 | active |
 | FR-ENTRY-003 | 批量导出 | P0 | §4.4 | ENTRY-002 | AC-FR-ENTRY-003-01 | API-5 | active |
@@ -89,6 +93,7 @@ owner: Product Engineering
 | FR-ENTRY-012 | 管理系统字段映射 | P1 | §4.4 | ENTRY-010 | AC-FR-ENTRY-012-01 | API-6 | planned |
 | FR-ENTRY-013 | JSON/CSV/Excel 导出 | P1 | §3.1 | ENTRY-002 | AC-FR-ENTRY-013-01 | API-5 | planned |
 | FR-ENTRY-014 | 云端文件夹归档 | P2 | §4.4 | ENTRY-005 | AC-FR-ENTRY-014-01 | API-6 | planned |
+| FR-ENTRY-015 | 最终结果页查看与 XLSX 导出 | P0 | 界面调整 2026-10-17 | VERIFY-016 | AC-FR-ENTRY-015-01 | DM-ExportJob | active |
 | FR-MGMT-001 | 分类 | P0 | §4.5 | ENTRY-005 | AC-FR-MGMT-001-01 | DM-ArchiveRecord | active |
 | FR-MGMT-002 | 按编号搜索 | P1 | §4.5 | MGMT-001 | AC-FR-MGMT-002-01 | API-7 | planned |
 | FR-MGMT-003 | 按日期搜索 | P1 | §4.5 | MGMT-001 | AC-FR-MGMT-003-01 | API-7 | planned |
@@ -99,7 +104,7 @@ owner: Product Engineering
 | FR-MGMT-008 | 关键词搜索 | P2 | §4.5 | OCR-002 | AC-FR-MGMT-008-01 | API-7 | planned |
 | FR-MGMT-009 | 重复检测 | P1 | §4.5 | OCR-002 | AC-FR-MGMT-009-01 | DM-Document | planned |
 | FR-MGMT-010 | 去重 | P2 | §4.5 | MGMT-009 | AC-FR-MGMT-010-01 | DM-Document | planned |
-| FR-SYS-001 | 注册/登录 | P0 | §4.6 | — | AC-FR-SYS-001-01/02 | DM-User, API-8 | active |
+| FR-SYS-001 | 注册/登录 | P0 | §4.6 | — | AC-FR-SYS-001-01/02/03 | DM-User, API-8 | active |
 | FR-SYS-002 | RBAC 权限 | P0 | §4.6 | SYS-001 | AC-FR-SYS-002-01 | DM-Role | active |
 | FR-SYS-003 | 操作日志 | P0 | §4.6/§5.3 | SYS-001 | AC-FR-SYS-003-01 | DM-OperationLog | active |
 | FR-SYS-004 | 语言切换 | P0 | §4.6 | — | AC-FR-SYS-004-01 | NFR-I18N-003 | active |
@@ -108,6 +113,10 @@ owner: Product Engineering
 | FR-SYS-007 | 账户锁定 | P1 | §5.3 | SYS-001 | AC-FR-SYS-007-01 | DM-User | planned |
 | FR-SYS-008 | 用户偏好 | P1 | §4.6 | SYS-001 | AC-FR-SYS-008-01 | DM-Settings | planned |
 | FR-SYS-009 | 配置复核与报表权限 | P0 | §1.2/§4.6 | SYS-002 | AC-FR-SYS-009-01 | DM-Role | active |
+| FR-SYS-010 | 游客试用与数据归集 | P0 | 用户流程调整 2026-10-17 | SYS-001 | AC-FR-SYS-010-01/02 | DM-User | active |
+| FR-SYS-011 | LINE 确认前登录/注册；认证后按任务工作空间订阅恢复，不自动确认 | P0 | 用户流程调整 2026-10-17/18 | SYS-001/SYS-010 | AC-FR-SYS-011-01 | API-8 | active |
+| FR-SYS-012 | LINE 确认前工作空间订阅分流：Free/NONE→plans，未开通付费的 PENDING→plan-pending，ACTIVE→显式确认；恢复未完成任务返回结果页 | P0 | 用户流程调整 2026-10-17/18 | SYS-011 | AC-FR-SYS-012-01/02/03 | DM-ResultVersion, API-8 | active |
+| FR-SYS-017 | 工作空间保持、个人/企业隔离与企业成员共享（含企业单独套餐） | P0 | 用户流程调整 2026-10-18 | SYS-002/SYS-012 | AC-FR-SYS-017-01/02/03 | DM-Application, API-8 | active |
 | FR-REPORT-001 | 管理层访问运营报表 | P1 | §3.1/§4.7 | SYS-002 | AC-FR-REPORT-001-01 | API-9（待设计） | in-review |
 | FR-REPORT-002 | 展示已配置运营指标 | P1 | §1.2/§4.7 | REPORT-001/OQ-5 | AC-FR-REPORT-002-01 | DM-ReportDefinition（待设计） | in-review |
 | FR-REPORT-003 | 报表授权范围限制 | P1 | §4.7 | SYS-002 | AC-FR-REPORT-003-01 | API-9（待设计） | in-review |
@@ -142,8 +151,8 @@ owner: Product Engineering
 | 指标 | 数量 |
 |------|------|
 | Epics | 8 |
-| 功能需求 | 80 |
-| — P0 | 49 |
+| 功能需求 | 86 |
+| — P0 | 55 |
 | — P1 | 26 |
 | — P2 | 5 |
 | NFR 项目 | 46 |
@@ -158,6 +167,11 @@ owner: Product Engineering
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.3.4 | 2026-10-18 | Product Engineering | 对齐 FR-VERIFY-016、FR-SYS-011 的 LINE 确认前认证与任务恢复描述；补列既有 FR-SYS-012 工作空间订阅分流及验收引用 |
+| 1.3.3 | 2026-10-18 | Product Engineering | FR-VERIFY-017 扩展历史分页加载，新增 AC-FR-VERIFY-017-03 |
+| 1.3.2 | 2026-10-18 | Product Engineering | 新增 FR-VERIFY-017（任务流程阶段展示与历史筛选） |
+| 1.3.1 | 2026-10-18 | Product Engineering | 新增 FR-SYS-017（工作空间保持、个人/企业数据与套餐隔离、企业成员共享） |
+| 1.3.0 | 2026-10-17 | Product Engineering | 新增原图置顶、结构化版本化编辑、最终页导出、游客试用与登录后订阅检查需求 |
 | 1.2.0 | 2026-10-07 | Product Engineering | 新增 TextIn、Firestore、Cloud Functions 转换需求及 EPIC-08 文档格式模板配置 |
 | 1.1.0 | 2026-10-06 | Product Engineering | 新增 EPIC-07 运营报表及 FR-REPORT-001..004；新增 FR-VERIFY-010..013 固定层级复核需求 |
 | 1.0.1 | 2026-10-02 | Product Engineering | 将人类可读内容翻译为简体中文 |

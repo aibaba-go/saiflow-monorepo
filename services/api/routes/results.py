@@ -3,11 +3,15 @@
 GET 返回当前 ResultVersion：structured 为 TextIn Prompt 模式结构化 JSON
 （旧版逐页结果折算为 {fields, tables}），pages 为旧版逐页数据。
 PATCH 携带 expected_version 做乐观并发校验，命中冲突返回 409 VERSION_CONFLICT。
+TextIn Prompt 任务没有 PageResult，编辑时直接提交完整 structured；
+旧版逐页任务仍支持按单元格编辑。
 每次有内容修改都会生成新 ResultVersion（旧版本 is_current=False，历史可追溯）。
 """
 from __future__ import annotations
 
 import copy
+import json
+from datetime import datetime, timezone
 
 from flask import Blueprint, request
 
@@ -21,11 +25,25 @@ from errors import (
 )
 from extensions import db
 from models import PageResult, ResultVersion
-from routes.ocr import TERMINAL, _get_job_for_user
+from routes.ocr import TERMINAL, _get_job_for_user, _registered
+from textin.adapter import _count_structure
 
 results_bp = Blueprint("results", __name__)
 
 MAX_EDIT_TEXT = 4000
+MAX_STRUCTURED_BYTES = 2_000_000
+
+
+def _normalize_structured(value):
+    if not isinstance(value, (dict, list)):
+        raise invalid_argument(field_errors=[{"field": "structured", "reason": "invalid"}])
+    try:
+        encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    except (TypeError, ValueError):
+        raise invalid_argument(field_errors=[{"field": "structured", "reason": "invalid"}])
+    if len(encoded.encode("utf-8")) > MAX_STRUCTURED_BYTES:
+        raise invalid_argument(field_errors=[{"field": "structured", "reason": "too_large"}])
+    return copy.deepcopy(value)
 
 
 def _current_version(job_id: str) -> ResultVersion | None:
@@ -114,6 +132,19 @@ def update_results(job_id: str):
         raise invalid_argument(field_errors=[{"field": "edits", "reason": "invalid"}])
     confirm = bool(body.get("confirm"))
 
+    normalized_structured = None
+    structured_changed = False
+    raw_structured = body.get("structured")
+    if raw_structured is not None:
+        if edits:
+            raise invalid_argument(
+                field_errors=[
+                    {"field": "edits", "reason": "mutually_exclusive_with_structured"}
+                ]
+            )
+        normalized_structured = _normalize_structured(raw_structured)
+        structured_changed = normalized_structured != version.structured
+
     field_errors: list[dict] = []
     normalized: list[dict] = []
     for i, e in enumerate(edits):
@@ -140,7 +171,21 @@ def update_results(job_id: str):
 
     pages = _pages_payload(version)
 
-    if normalized:
+    if structured_changed:
+        new_version = ResultVersion(
+            job_id=job.id,
+            version=version.version + 1,
+            is_current=True,
+            created_by_user_id=user.id,
+            structured=normalized_structured,
+        )
+        version.is_current = False
+        db.session.add(new_version)
+        db.session.flush()
+        version = new_version
+        job.table_count, job.field_count = _count_structure(normalized_structured)
+
+    elif normalized:
         page_map = {p["page_number"]: p for p in pages}
         not_found_errors: list[dict] = []
         for e in normalized:
@@ -179,7 +224,7 @@ def update_results(job_id: str):
             version=version.version + 1,
             is_current=True,
             created_by_user_id=user.id,
-            structured=version.structured,
+            structured=copy.deepcopy(version.structured),
         )
         version.is_current = False
         db.session.add(new_version)
@@ -198,7 +243,9 @@ def update_results(job_id: str):
 
     if confirm:
         job.review_status = "CONFIRMED"
-        if not normalized:
+        if job.completed_at is None and _registered(user):
+            job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        if not normalized and not structured_changed:
             # 仅确认：内容未变，直接把当前版本所有单元格置为 CONFIRMED
             rows = PageResult.query.filter_by(result_version_id=version.id).all()
             for r in rows:
@@ -217,7 +264,7 @@ def update_results(job_id: str):
                     new_tables.append(t)
                 if changed:
                     r.tables = new_tables  # JSON 列需整体赋值才会标脏
-    elif normalized and job.review_status != "CONFIRMED":
+    elif (normalized or structured_changed) and job.review_status != "CONFIRMED":
         job.review_status = "EDITED"
 
     db.session.commit()
@@ -225,6 +272,11 @@ def update_results(job_id: str):
         "result.review",
         "ocr_job",
         job.id,
-        {"version": version.version, "edits": len(normalized), "confirm": confirm},
+        {
+            "version": version.version,
+            "edits": len(normalized),
+            "structured_changed": structured_changed,
+            "confirm": confirm,
+        },
     )
     return ok(_result_payload(job, version))

@@ -67,10 +67,11 @@ interface RequestOptions {
   contentType?: string;
   headers?: Record<string, string>;
   idempotencyKey?: string;
+  onUploadProgress?: (fraction: number) => void;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', json, rawBody, contentType, headers = {}, idempotencyKey } = options;
+  const { method = 'GET', json, rawBody, contentType, headers = {}, idempotencyKey, onUploadProgress } = options;
 
   const h: Record<string, string> = { ...headers };
   const isWrite = method !== 'GET' && method !== 'HEAD';
@@ -89,7 +90,36 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     body = rawBody;
   }
 
-  const res = await fetch(`${API_BASE}${path}`, { method, headers: h, body, credentials: 'same-origin' });
+  let res: Response;
+  try {
+    if (onUploadProgress && rawBody instanceof Blob) {
+      res = await new Promise<Response>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open(method, `${API_BASE}${path}`);
+        Object.entries(h).forEach(([key, value]) => xhr.setRequestHeader(key, value));
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) onUploadProgress(event.loaded / event.total);
+        };
+        xhr.onload = () => resolve(new Response(xhr.responseText, {
+          status: xhr.status,
+          statusText: xhr.statusText,
+        }));
+        xhr.onerror = () => reject(new Error('Upload failed'));
+        xhr.onabort = () => reject(new Error('Upload aborted'));
+        xhr.send(rawBody);
+      });
+    } else {
+      res = await fetch(`${API_BASE}${path}`, { method, headers: h, body, credentials: 'same-origin' });
+    }
+  } catch {
+    throw new ApiError(0, {
+      code: 'NETWORK_ERROR',
+      message_key: 'error.network',
+      request_id: '',
+      retryable: true,
+      field_errors: [],
+    });
+  }
 
   if (res.status === 401) {
     emitUnauthorized();
@@ -137,6 +167,14 @@ export interface User {
   display_name: string;
   avatar_url: string;
   language: 'th' | 'en';
+  status: string;
+  /** 游客会话：可试用上传/核验，确认前需登录或注册 */
+  is_guest: boolean;
+  /** 来自 LINE，用户不可修改 */
+  phone: string;
+  email: string;
+  /** 已完成注册信息录入（FR-SYS-014） */
+  registered: boolean;
   created_at: string;
 }
 
@@ -179,6 +217,9 @@ export type JobStatus =
 
 export type ReviewStatus = 'UNREVIEWED' | 'EDITED' | 'CONFIRMED';
 
+/** 流程阶段（服务端推导）；VERIFIED 仅出现在未注册用户的已确认任务 */
+export type JobStage = 'OCR_PROCESSING' | 'OCR_FAILED' | 'VERIFYING' | 'VERIFIED' | 'COMPLETED';
+
 export interface JobSummary {
   id: string;
   file_id: string;
@@ -186,12 +227,14 @@ export interface JobSummary {
   workspace_type: string;
   enterprise_id: number | null;
   status: JobStatus;
+  stage: JobStage;
   progress: number;
   review_status: ReviewStatus;
   page_count: number;
   table_count: number;
   field_count: number;
   error_code: string | null;
+  error_message: string;
   parent_job_id: string | null;
   idempotency_key: string | null;
   created_at: string;
@@ -276,7 +319,6 @@ export interface Plan {
   quota_pages_per_month: number;
   seats: number;
   features: string[];
-  is_default: boolean;
 }
 
 export interface QuotaWorkspace {
@@ -304,6 +346,28 @@ export interface PlansPayload {
   items: Plan[];
 }
 
+export interface PlanApplicationBrief {
+  plan_code: string | null;
+  plan_name: string | null;
+  application_id: number | null;
+  submitted_at: string | null;
+}
+
+/** ACTIVE 时 plan_* 为已开通套餐；pending 为处理中的升级申请；订阅按工作空间计 */
+export interface Subscription extends PlanApplicationBrief {
+  status: 'NONE' | 'PENDING' | 'ACTIVE';
+  pending: PlanApplicationBrief | null;
+  workspace_type: 'PERSONAL' | 'ENTERPRISE';
+  enterprise_id: number | null;
+  /** 企业空间仅 OWNER 可申请升级 */
+  can_manage: boolean;
+}
+
+/** 企业空间传 enterprise_id；缺省/为空即个人空间 */
+export interface WorkspaceRef {
+  enterprise_id: number | null;
+}
+
 export interface CompanyDetail {
   id: number;
   code: string;
@@ -329,6 +393,10 @@ export interface CompanyInput {
 
 // ---------- 认证 ----------
 
+export function createGuestSession(language: 'th' | 'en'): Promise<AuthPayload> {
+  return request<AuthPayload>('/auth/guest', { method: 'POST', json: { language } });
+}
+
 export function loginWithLine(idToken: string, language: 'th' | 'en'): Promise<AuthPayload> {
   return request<AuthPayload>('/auth/line', { method: 'POST', json: { id_token: idToken, language } });
 }
@@ -340,6 +408,27 @@ export function loginWithDevId(devId: string, language: 'th' | 'en'): Promise<Au
 
 export function fetchSession(): Promise<AuthPayload> {
   return request<AuthPayload>('/auth/session');
+}
+
+export function completeRegistration(input: {
+  display_name: string;
+  avatar_url: string;
+  email: string;
+  code: string;
+}): Promise<User> {
+  return request<User>('/me/registration', { method: 'POST', json: input });
+}
+
+export function updateProfile(input: { display_name?: string; avatar_url?: string }): Promise<User> {
+  return request<User>('/me', { method: 'PATCH', json: input });
+}
+
+export function sendEmailCode(email: string): Promise<{ sent: boolean; cooldown_seconds: number }> {
+  return request('/me/email/code', { method: 'POST', json: { email } });
+}
+
+export function changeEmail(email: string, code: string): Promise<User> {
+  return request<User>('/me/email', { method: 'POST', json: { email, code } });
 }
 
 export async function logout(): Promise<void> {
@@ -364,11 +453,17 @@ export function createUpload(
   });
 }
 
-export function uploadContent(uploadId: string, data: Blob, contentType: string): Promise<void> {
+export function uploadContent(
+  uploadId: string,
+  data: Blob,
+  contentType: string,
+  onUploadProgress?: (fraction: number) => void,
+): Promise<void> {
   return request(`/uploads/${uploadId}/content`, {
     method: 'PUT',
     rawBody: data,
     contentType,
+    onUploadProgress,
   });
 }
 
@@ -420,11 +515,30 @@ export function createJob(input: CreateJobInput): Promise<JobSummary> {
   });
 }
 
-export function listJobs(query: { status?: string; page?: number; page_size?: number } = {}): Promise<JobList> {
+export function listJobs(
+  query: {
+    status?: string;
+    stage?: JobStage;
+    q?: string;
+    page?: number;
+    page_size?: number;
+    workspace?: WorkspaceRef;
+  } = {},
+): Promise<JobList> {
   const qs = new URLSearchParams();
   if (query.status) qs.set('status', query.status);
+  if (query.stage) qs.set('stage', query.stage);
+  if (query.q) qs.set('q', query.q);
   if (query.page) qs.set('page', String(query.page));
   if (query.page_size) qs.set('page_size', String(query.page_size));
+  if (query.workspace) {
+    if (query.workspace.enterprise_id != null) {
+      qs.set('workspace_type', 'ENTERPRISE');
+      qs.set('enterprise_id', String(query.workspace.enterprise_id));
+    } else {
+      qs.set('workspace_type', 'PERSONAL');
+    }
+  }
   const suffix = qs.toString() ? `?${qs.toString()}` : '';
   return request<JobList>(`/ocr/jobs${suffix}`);
 }
@@ -451,18 +565,14 @@ export function getJobResults(jobId: string): Promise<JobResults> {
   return request<JobResults>(`/ocr/jobs/${jobId}/results`);
 }
 
-export interface CellEdit {
-  page_number: number;
-  table_id: string;
-  row_index: number;
-  column_index: number;
-  current_text: string;
+export interface ResultsUpdateInput {
+  expected_version: number;
+  /** Prompt 模式完整结构化结果（字段 + 表格）；与逐页 cell edits 二选一 */
+  structured?: unknown;
+  confirm?: boolean;
 }
 
-export function reviewCells(
-  jobId: string,
-  input: { expected_version: number; edits?: CellEdit[]; confirm?: boolean },
-): Promise<JobResults> {
+export function updateJobResults(jobId: string, input: ResultsUpdateInput): Promise<JobResults> {
   return request<JobResults>(`/ocr/jobs/${jobId}/results`, { method: 'PATCH', json: input });
 }
 
@@ -519,4 +629,18 @@ export function fetchPlans(): Promise<PlansPayload> {
 
 export function fetchQuota(): Promise<QuotaPayload> {
   return request<QuotaPayload>('/me/quota');
+}
+
+export function fetchSubscription(ws?: WorkspaceRef): Promise<Subscription> {
+  const qs = ws?.enterprise_id != null ? `?workspace_type=ENTERPRISE&enterprise_id=${ws.enterprise_id}` : '';
+  return request<Subscription>(`/me/subscription${qs}`);
+}
+
+export function submitPlanApplication(planCode: string, ws?: WorkspaceRef): Promise<Subscription> {
+  const workspace =
+    ws?.enterprise_id != null ? { workspace_type: 'ENTERPRISE', enterprise_id: ws.enterprise_id } : {};
+  return request<Subscription>('/me/plan-applications', {
+    method: 'POST',
+    json: { plan_code: planCode, ...workspace },
+  });
 }

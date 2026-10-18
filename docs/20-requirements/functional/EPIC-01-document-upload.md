@@ -3,8 +3,8 @@ doc_id: EPIC-01
 title: "EPIC-01 — 文档上传与预处理"
 type: epic
 status: active
-version: 1.0.1
-updated: 2026-10-02
+version: 1.0.2
+updated: 2026-10-18
 owner: Product Engineering
 priority: P0
 source: "PRD-001 §4.1"
@@ -33,7 +33,7 @@ related: [DM-Document, API-1]
 | FR-UPLOAD-007 | 对上传图像应用去阴影 | P1 | §4.1 | FR-UPLOAD-001 | AC-FR-UPLOAD-007-01 |
 | FR-UPLOAD-008 | 对上传图像应用降噪 | P1 | §4.1 | FR-UPLOAD-001 | AC-FR-UPLOAD-008-01 |
 | FR-UPLOAD-009 | 按文档内容边界自动裁剪 | P0 | §4.1 | FR-UPLOAD-006 | AC-FR-UPLOAD-009-01 |
-| FR-UPLOAD-010 | 在队列中显示每个文件的上传/处理状态 | P0 | §4.1 | FR-UPLOAD-005 | AC-FR-UPLOAD-010-01 |
+| FR-UPLOAD-010 | 在队列中显示每个文件的上传/处理状态；LINE Mini App 显示按文件大小与传输估算的上传百分比及进度条 | P0 | §4.1；用户反馈 2026-10-18 | FR-UPLOAD-005 | AC-FR-UPLOAD-010-01 |
 | FR-UPLOAD-011 | 原样保留原始文件（双重存储输入） | P0 | §4.1,§4.4 | — | AC-FR-UPLOAD-011-01 |
 | FR-UPLOAD-012 | 当图像质量低于可读性阈值时发出警告 | P1 | §5.4 | FR-UPLOAD-006 | AC-FR-UPLOAD-012-01 |
 
@@ -47,6 +47,11 @@ related: [DM-Document, API-1]
 ### FR-UPLOAD-006/009 — 矫正与裁剪
 - 检测文档四边形；通过透视变换生成矩形页面。
 - 目标输出分辨率为等效 ≥ **300 DPI**；不得超出源图像细节进行放大。
+
+### FR-UPLOAD-010 — 上传状态反馈
+- LINE Mini App 选择相机、相册或本地文件后，显示从 0% 到 100% 的百分比与进度条。
+- 按文件大小估算预检、存储与校验期间的进度，并结合实际已上传字节比例更新；显示值不回退，后端确认文件可用前最多为 95%。
+- 后端确认成功后进度为 100% 并进入上传确认页；失败时停止进度、显示本地化错误并允许重新选择文件，每次上传从 0% 开始。
 
 ### FR-UPLOAD-011 — 原件保留
 - 上传的原始字节以只读方式存储；预处理写入**派生**图像，绝不覆盖原件（支持 `dual storage`、EPIC-04）。
@@ -78,6 +83,13 @@ Feature: EPIC-01 文档上传
     Given 一张倾斜的 Delivery Note 照片
     When 运行预处理
     Then 输出图像 SHALL 被校正倾斜，且文档边缘与轴对齐
+
+  Scenario: AC-FR-UPLOAD-010-01 上传进度反馈
+    Given 文员在 LINE Mini App 选择支持的相机照片、相册图片或本地文件
+    When 文件处于上传预检、传输或后端校验阶段
+    Then 百分比与进度条按文件大小估算和已上传字节持续更新且不回退
+    And 后端确认文件可用前不超过 95%，成功后为 100% 并进入上传确认页
+    And 上传失败后停止进度、显示本地化错误并恢复选择入口，再次选择时从 0% 开始
 ```
 
 ## 5. 可追溯性
@@ -91,5 +103,6 @@ Feature: EPIC-01 文档上传
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.0.2 | 2026-10-18 | Product Engineering | 明确 FR-UPLOAD-010 与 AC-FR-UPLOAD-010-01：上传百分比和进度条结合文件大小估算与实际传输，成功确认前不显示 100% |
 | 1.0.1 | 2026-10-02 | Product Engineering | 将人类可读内容与验收场景翻译为简体中文 |
 | 1.0.0 | 2026-09-10 | Product Engineering | 根据 PRD 第 4.1 节生成初始上传/预处理需求 |

@@ -5,6 +5,7 @@ import { messageText } from '../i18n';
 import { useT } from '../i18nVue';
 import { navigate } from '../store';
 import { newIdempotencyKey } from '../upload';
+import BrandLoading from '../components/BrandLoading.vue';
 import PageHeader from '../components/PageHeader.vue';
 
 const { t } = useT();
@@ -63,10 +64,11 @@ async function start() {
         </div>
 
         <button class="primary-btn" :disabled="starting || !file" @click="start">
-          {{ starting ? t('common.loading') : t('confirm.start') }}
+          <BrandLoading v-if="starting" variant="button" :label="t('common.loading')" />
+          <template v-else>{{ t('confirm.start') }}</template>
         </button>
       </template>
-      <p v-else class="status-loading">{{ t('common.loading') }}</p>
+      <BrandLoading v-else variant="page" :label="t('common.loading')" />
     </div>
   </div>
 </template>
@@ -143,7 +145,6 @@ async function start() {
   opacity: 0.6;
 }
 
-.status-loading,
 .status-error {
   text-align: center;
   font-size: 12px;

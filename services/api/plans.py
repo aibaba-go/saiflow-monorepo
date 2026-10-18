@@ -10,8 +10,8 @@ from __future__ import annotations
 FIRST_LOGIN_BONUS_TASKS = 1000
 FIRST_ENTERPRISE_VERIFIED_BONUS_TASKS = 1000
 
-# 默认套餐（未购买付费套餐时的工作空间档位）
-DEFAULT_PLAN_CODE = "KINDER"
+# 未开通任何付费套餐时的档位（仅享赠送免费额度），不在可购买目录中
+FREE_PLAN: dict = {"code": "FREE", "name": "Free"}
 
 PLAN_CATALOG: list[dict] = [
     {
@@ -25,7 +25,6 @@ PLAN_CATALOG: list[dict] = [
         "quota_pages_per_month": 1000,
         "seats": 1,
         "features": ["OCR + Excel export", "TH / EN documents"],
-        "is_default": True,
     },
     {
         "code": "STARTER",
@@ -38,7 +37,6 @@ PLAN_CATALOG: list[dict] = [
         "quota_pages_per_month": 5000,
         "seats": 2,
         "features": ["Approval flow", "Email notifications"],
-        "is_default": False,
     },
     {
         "code": "INTERMEDIATE",
@@ -51,7 +49,6 @@ PLAN_CATALOG: list[dict] = [
         "quota_pages_per_month": 10000,
         "seats": 5,
         "features": ["LINE/SMS notifications", "Integration"],
-        "is_default": False,
     },
     {
         "code": "ADVANCE",
@@ -64,7 +61,6 @@ PLAN_CATALOG: list[dict] = [
         "quota_pages_per_month": 100000,
         "seats": 10,
         "features": ["Custom dashboard", "API apps"],
-        "is_default": False,
     },
 ]
 

@@ -3,8 +3,8 @@ doc_id: AC-000
 title: "SaiFlow — 汇总验收标准（V1.0 / P0）"
 type: acceptance
 status: active
-version: 1.2.0
-updated: 2026-10-07
+version: 1.8.12
+updated: 2026-10-18
 owner: QA
 verified_requirements: [FR-UPLOAD, FR-OCR, FR-VERIFY, FR-ENTRY, FR-MGMT, FR-SYS, FR-TEMPLATE]
 ---
@@ -53,6 +53,13 @@ Feature: FR-UPLOAD 文档接收
     Given 一张倾斜的文档照片
     When 运行预处理
     Then 输出图像被校正倾斜，边缘与轴对齐，耗时不超过 1 s（p95）
+
+  Scenario: AC-FR-UPLOAD-010-01 上传进度反馈
+    Given 文员在 LINE Mini App 选择支持的相机照片、相册图片或本地文件
+    When 文件处于上传预检、传输或后端校验阶段
+    Then 百分比与进度条按文件大小估算和已上传字节持续更新且不回退
+    And 后端确认文件可用前不超过 95%，成功后为 100% 并进入上传确认页
+    And 上传失败后停止进度、显示本地化错误并恢复选择入口，再次选择时从 0% 开始
 
   Scenario: AC-FR-UPLOAD-011-01 保留原件
     Given 已上传的原始文件
@@ -125,6 +132,22 @@ Feature: FR-OCR 多类型识别
     Given 同一 document_id 和 payload_version 的转换已经成功
     When Cloud Functions 再次接收该 Firestore 事件
     Then Cloud SQL 不新增重复字段或行项目
+
+  Scenario: AC-FR-OCR-020-02 失败任务可读原因与重试
+    Given 一个 status=FAILED 且 error_code=TEXTIN_ERROR_40003 的 OCR 任务
+    When 用户从 History 打开该任务
+    Then 显示本地化的失败原因与 Retry 操作，而非 404
+    When 用户点击 Retry
+    Then 创建新的 QUEUED 任务并进入处理页
+
+  Scenario: AC-FR-OCR-020-03 取消任务需确认
+    Given 一个 status 为 QUEUED 或 RUNNING 的 OCR 任务处理页
+    When 用户点击 Cancel task
+    Then 系统显示确认对话框，说明识别将停止、任务标记为失败且可稍后重新执行
+    When 用户选择 Keep processing
+    Then 对话框关闭，任务继续处理
+    When 用户在对话框中确认 Cancel task
+    Then 任务被取消并标记为失败
 ```
 
 ## 3. EPIC-03 — 核验
@@ -176,6 +199,87 @@ Feature: FR-VERIFY Human-in-the-loop
     Given 复核人员通过一份待复核文档
     When 保存复核决定
     Then DM-ReviewRecord 包含 review_level、reviewer_id、reviewed_at、decision 和 comment
+
+  Scenario: AC-FR-VERIFY-014-01 原图与表格布局
+    Given 一份已完成识别的文档
+    When 打开核验结果页
+    Then 页面仅显示原图预览与结构化字段/表格，且原图位于表格数据上方
+    And 点击原图可在放大与缩小之间切换
+
+  Scenario: AC-FR-VERIFY-015-01 结构化编辑生成新版本
+    Given 当前结果版本为 1，某个表格单元格数量为 120
+    When 用户将该单元格改为 135 并保存
+    Then 系统生成版本 2，且版本 1 仍可作为历史快照读取
+
+  Scenario: AC-FR-VERIFY-015-02 标量数组逐项编辑并保留数组
+    Given LINE Mini App 核验结果尚未确认，当前版本为 1，seller.tel = ["065-205-8258", "065-205-8259"]
+    When 用户打开核验结果页
+    Then 两个号码各自显示独立可编辑输入框，表格单元格中的标量数组亦逐项可编辑，单一字符串号码仍可直接编辑
+    When 用户仅将第一个号码改为 "065-205-8268" 并保存
+    Then 编辑事件以原路径追加索引 0 和 string 值发出，系统生成版本 2，seller.tel = ["065-205-8268", "065-205-8259"]
+    And 数组类型、顺序、长度及未编辑的第二个元素保持不变，不合并为逗号或换行字符串，版本 1 保留原数组快照
+    When 用户仅将第二个号码改为 "065-205-8269" 并保存
+    Then 编辑事件以原路径追加索引 1 和 string 值发出，系统生成版本 3，seller.tel = ["065-205-8268", "065-205-8269"]
+    And 数组类型、顺序、长度及本次未编辑的第一个元素保持不变，版本 1 和版本 2 的快照不被覆盖
+    When 用户按现有确认流程成功确认并锁定结果
+    Then 两个号码及其他结构化字段与表格单元格均为只读
+
+  Scenario: AC-FR-VERIFY-016-01 已注册付费用户显式确认
+    Given 用户已登录并完成注册，任务所属工作空间订阅为 ACTIVE，且所有必填字段均有效
+    When 用户在 LINE Mini App 结果页点击 "Continue"
+    Then 客户端先检查认证、注册完成状态与该任务工作空间订阅，再提交 confirm: true
+    And 确认成功后结果被锁定、记录 completed_at，任务为 COMPLETED 并进入最终结果页
+
+  Scenario: AC-FR-VERIFY-016-02 游客确认前重定向与草稿保存
+    Given 用户处于游客会话，任务为 VERIFYING，且有未保存的结构化编辑
+    When 用户在 LINE Mini App 结果页点击 "Continue"
+    Then 仅以 PATCH confirm: false 保存变更为新结果版本，再进入登录/注册页（auth），不提交 confirm: true
+    And 任务保持 VERIFYING、结果仍可编辑，completed_at 为空
+    Given 游客没有未保存的结构化变更
+    When 用户点击 "Continue"
+    Then 进入 auth，不发送结果保存或确认请求
+
+  Scenario: AC-FR-VERIFY-017-01 流程阶段展示
+    Given 用户的任务分别处于 OCR 识别中、OCR 失败、OCR 识别成功未确认
+    When 用户打开历史页
+    Then 各任务分别显示 "OCR 处理中"、"OCR 处理失败"、"数据验证中"
+    Given 用户为游客、未完成注册者，或任务工作空间为 Free/NONE、无已开通付费套餐的 PENDING，且任务为 VERIFYING
+    When 用户在结果页点击 "Continue"
+    Then 不提交确认，任务仍为 "数据验证中"，completed_at 为空
+    When 用户随后完成登录/注册、游客数据归集或套餐开通
+    Then 任务不自动变为 "最终完成"
+    Given 已注册且任务工作空间订阅 ACTIVE 的用户在结果页显式继续并确认成功
+    Then 该任务直接显示 "最终完成"
+    Given 一个历史 "数据已验证" 的任务，completed_at 为空，用户未完成注册或该任务工作空间未开通付费套餐
+    When 用户点击 "Continue"
+    Then 按认证与订阅检查进入 auth、plans 或 plan-pending，不提交确认，任务仍为 VERIFIED
+    Given 该历史任务由已注册且任务工作空间订阅 ACTIVE 的用户在结果页显式点击 "继续"
+    Then 确认成功后记录 completed_at，任务变为 "最终完成"，不批量转换其他历史任务
+
+  Scenario: AC-FR-VERIFY-017-02 按阶段筛选
+    Given 用户位于历史页
+    When 用户选择某一阶段筛选
+    Then 仅显示该阶段的任务
+    And 筛选项始终包含 "数据已验证"
+
+  Scenario: AC-FR-VERIFY-017-03 历史分页加载
+    Given 用户当前工作空间有 45 条任务
+    When 用户打开历史页
+    Then 首次仅显示最新的 20 条任务，且所有筛选项完整可见
+    When 用户将列表滚动至底部
+    Then 自动加载并追加第 21–40 条任务
+    When 用户再次滚动至底部
+    Then 追加剩余 5 条，并显示 "没有更多记录"
+
+  Scenario: AC-FR-VERIFY-017-04 按阶段打开任务
+    Given 用户在历史页或首页最近任务中看到不同阶段的任务
+    When 用户点击 "最终完成" 的任务
+    Then 直接进入该任务的最终结果页，不再显示需要 Continue 确认的结果页
+    And 最终结果页仅显示任务阶段标签，不再重复显示 Confirmed 标签，结果保持只读且可导出
+    When 用户点击 "OCR 处理中" 的任务
+    Then 进入处理进度页
+    When 用户点击其余阶段的任务
+    Then 进入结果页
 ```
 
 ## 4. EPIC-04 — 录入与归档
@@ -217,6 +321,12 @@ Feature: FR-ENTRY 导出与归档
     Given 一份已核验文档
     When 任意文档被归档
     Then 原始对象和结构化归档工件仅写入私有 GCS，且浏览器不获得 GCS 凭据
+
+  Scenario: AC-FR-ENTRY-015-01 最终结果页导出
+    Given 一份已确认且包含已编辑数量的文档
+    When 用户在最终结果页点击 "Export Excel"
+    Then 生成仅含一个工作表的 XLSX，字段区块与表格区块的顺序、标题与列名与解析结果页一致
+    And 导出内容反映当前已确认的结构化结果
 ```
 
 ## 5. EPIC-05 — 管理（P0 子集）
@@ -250,6 +360,15 @@ Feature: FR-SYS 身份与配置
     When 用户登录
     Then 拒绝访问并记录该次尝试
 
+  Scenario: AC-FR-SYS-001-03 登出需确认
+    Given 已登录用户在个人中心
+    When 用户点击 "Sign out"
+    Then 系统弹出登出确认框
+    When 用户点击取消
+    Then 确认框关闭，用户仍保持登录
+    When 用户再次点击 "Sign out" 并在确认框中确认
+    Then 会话被撤销并回到登录页
+
   Scenario: AC-FR-SYS-002-01 权限强制执行
     Given 角色为 "viewer" 的用户
     When 用户尝试导出
@@ -269,6 +388,145 @@ Feature: FR-SYS 身份与配置
     Given 管理员正在编辑角色 "reviewer"
     When 管理员授予 review 权限并保存
     Then 该角色用户可执行待复核数据的复核决定
+
+  Scenario: AC-FR-SYS-010-01 游客试用
+    Given 匿名访客首次进入应用
+    When 访客上传文档并完成识别与核验
+    Then 访客仅能访问自己的任务与结果，且不获得管理、报表或配置权限
+
+  Scenario: AC-FR-SYS-010-02 游客数据归集
+    Given 游客已完成上传与识别
+    When 游客登录或注册为正式用户
+    Then 其文档、任务、结果版本、导出记录与配额消耗流水归集至该正式用户
+    And 游客账户及其会话被删除，游客的首登赠送不叠加到正式用户
+
+  Scenario: AC-FR-SYS-011-01 确认前登录或注册与任务恢复
+    Given 用户为游客或尚未完成注册信息录入，任务尚未最终完成
+    When 用户在 LINE Mini App 结果页点击 "Continue"
+    Then 在提交确认前进入 auth，用户可登录或注册，不提交 confirm: true
+    When 用户完成登录或注册，系统归集游客数据并读取该任务工作空间的订阅
+    Then NONE 进入 plans，PENDING 且无已开通付费套餐进入 plan-pending
+    And ACTIVE 返回该未完成任务的结果页（result）等待用户显式继续，不自动确认或进入最终结果页
+    Given 恢复的任务已为 COMPLETED 且该任务工作空间订阅 ACTIVE
+    Then 可直接进入最终结果页
+
+  Scenario: AC-FR-SYS-012-01 Free/NONE 确认前提交套餐升级申请
+    Given 用户已登录并完成注册，未确认任务所属工作空间为 Free/NONE 且没有套餐升级申请，即使其他工作空间已开通付费套餐
+    When 用户在结果页点击 "Continue"
+    Then 不提交 confirm: true，进入订阅计划检查页（plans），默认选中 `Kinder`，按钮显示 "Upgrade to Kinder"
+    And 重定向前仅有未保存变更时以 PATCH confirm: false 保存，无变更不保存；结果不锁定、任务保持 VERIFYING、completed_at 为空
+    When 用户选择套餐并点击按钮，在套餐升级确认框中确认申请
+    Then 系统创建状态为 SUBMITTED 的 PLAN_UPGRADE 申请，并提示“您的申请已经收到，我们会尽快联系您”
+    And 用户确认提示后返回首页，任务仍未确认且未最终完成
+
+  Scenario: AC-FR-SYS-012-02 无已开通付费套餐的 PENDING
+    Given 用户已登录并完成注册，未确认任务所属工作空间无已开通付费套餐且存在处理中的套餐升级申请（PENDING）
+    When 用户在结果页点击 "Continue"
+    Then 不提交 confirm: true，直接进入“套餐升级处理中”页（plan-pending），显示申请套餐与提交时间
+    And 重定向前仅有未保存变更时以 PATCH confirm: false 保存，无变更不保存；结果不锁定、任务保持 VERIFYING、completed_at 为空
+
+  Scenario: AC-FR-SYS-012-03 ACTIVE 显式确认与套餐可用性恢复
+    Given 用户已登录并完成注册，任务所属工作空间存在 APPROVED 的付费套餐申请（ACTIVE），包括另有更高档升级申请处理中的情况
+    When 用户在结果页点击 "Continue" 且通过核验校验
+    Then 先检查认证与该任务工作空间订阅，再提交 confirm: true
+    And 仅确认成功后锁定结果、记录 completed_at 并进入最终结果页
+    Given 因订阅检查中断的任务尚为 VERIFYING 或历史 VERIFIED
+    When 该任务工作空间套餐开通或可用性恢复为 ACTIVE，用户恢复该任务
+    Then 返回结果页（result）等待用户显式继续，不自动提交确认或进入最终结果页
+    When 用户在结果页再次显式继续并确认成功
+    Then 任务变为 COMPLETED 并进入最终结果页
+    Given 恢复的任务已经 COMPLETED 且其工作空间订阅 ACTIVE
+    Then 可直接进入最终结果页，无需再次确认
+
+  Scenario: AC-FR-SYS-013-01 已开通套餐的展示
+    Given 用户的 Starter 升级申请已被后台批准
+    When 用户打开首页或套餐页
+    Then 首页横幅与当前套餐卡显示 "Starter"，套餐页将 Starter 标记为当前套餐
+    And 首页横幅与当前套餐卡按套餐每月页数显示 "5,000 / 5,000 pages left this month"（随本月已识别页数递减），不含 "free" 描述与 Sign-in bonus 角标；未开通套餐时保留 "free scans left"
+    And 本月剩余页数为 0 时创建 OCR 任务被拒绝（quota_exceeded），且不消耗免费任务
+
+  Scenario: AC-FR-SYS-013-02 升级至更高档套餐
+    Given 用户当前套餐为 Starter 且没有处理中的申请
+    When 用户在套餐页点击 Intermediate 的 "Upgrade"
+    Then 系统弹出确认框显示目标套餐 Intermediate；点击取消则不创建申请
+    When 用户在确认框中点击确认
+    Then 系统创建 PLAN_UPGRADE 申请并提示“您的申请已经收到，我们会尽快联系您”，确认后返回首页
+    And 再次打开套餐页时页面顶部显示醒目的处理中卡片（含目标套餐与提交时间），Intermediate 卡片带 "IN REVIEW" 角标并显示 "Upgrade in progress"，其他升级按钮不可用
+    And 申请 Kinder 或 Starter 被拒绝（plan.not_upgrade）
+
+  Scenario: AC-FR-SYS-013-03 游客不显示套餐横幅
+    Given 未登录的游客
+    When 打开首页
+    Then 不显示套餐与免费额度横幅
+
+  Scenario: AC-FR-SYS-013-04 注册后为免费版
+    Given 刚完成注册且没有已批准套餐升级申请的用户
+    When 用户打开首页或套餐页
+    Then 首页横幅显示 "Free · 1000 / 1000 free scans left"，套餐页当前套餐卡显示 "Free" 与 Sign-in bonus 角标
+    And 套餐目录中 Kinder 不标记为当前套餐，Kinder、Starter、Intermediate、Advance 均显示 "Upgrade"
+    And 申请 Kinder 被接受（不返回 plan.not_upgrade）
+
+  Scenario: AC-FR-SYS-014-01 LINE 注册信息录入
+    Given 一个尚未注册的 LINE 账号完成 LINE 认证
+    Then 系统弹出注册信息框，手机号预填且只读，邮箱、昵称与头像预填且可修改，并提供验证码输入框
+    When 用户修改邮箱、昵称或头像，向该邮箱发送验证码并输入验证码后点击注册
+    Then 系统完成注册，保存修改后的邮箱、昵称与头像，并继续进入应用
+
+  Scenario: AC-FR-SYS-014-02 注册邮箱与验证码校验
+    Given LINE 未提供邮箱，或用户修改了预填邮箱
+    When 用户未填写邮箱或填写格式错误的邮箱并点击注册
+    Then 系统提示邮箱必填或格式错误，不完成注册
+    When 用户未向当前填写的邮箱发送验证码，或未输入验证码并点击注册
+    Then 系统提示先发送验证码或验证码必填，不完成注册
+    When 用户向有效邮箱发送验证码、输入验证码并提交
+    Then 系统完成注册并保存该邮箱（生产环境校验验证码，开发环境不校验）
+
+  Scenario: AC-FR-SYS-014-03 取消注册与已注册用户登录
+    Given 注册信息框已弹出
+    When 用户点击取消
+    Then 本次会话被撤销并回到登录页
+    Given 已注册用户修改过昵称与头像
+    When 用户再次通过 LINE 登录
+    Then 昵称与头像保持用户修改后的值，不再弹出注册信息框
+
+  Scenario: AC-FR-SYS-015-01 修改昵称与头像
+    Given 已登录用户在个人中心
+    When 用户点击资料卡，修改昵称或头像并保存
+    Then 个人中心立即显示新的昵称与头像；昵称为空时不可保存
+
+  Scenario: AC-FR-SYS-016-01 更换邮箱
+    Given 已登录用户在个人中心点击邮箱「更换」
+    When 用户输入新邮箱并点击发送验证码
+    Then 系统向新邮箱发送验证码，按钮进入 60 秒倒计时
+    When 用户输入验证码并确认
+    Then 邮箱更新为新邮箱
+
+  Scenario: AC-FR-SYS-016-02 更换邮箱校验
+    Given 用户正在更换邮箱
+    Then 新邮箱与当前邮箱相同或格式错误时不可发送验证码
+    And 未向当前输入的新邮箱发送验证码或未输入验证码时不可确认
+    And 生产环境验证码错误或过期时拒绝更换（开发环境不校验验证码）
+
+  Scenario: AC-FR-SYS-017-01 工作空间刷新后保持
+    Given 已登录用户在首页将工作空间切换为已认证企业
+    When 用户刷新页面或重新登录
+    Then 当前工作空间仍为该企业
+    And 若该企业已解绑或不再可用，则回落为个人空间
+
+  Scenario: AC-FR-SYS-017-02 个人与企业数据隔离、企业成员共享
+    Given 用户 A（企业 OWNER）与用户 B（企业 MEMBER）各有个人任务，并各在企业空间有任务
+    When A 处于个人空间
+    Then 首页最近任务与历史页仅显示 A 的个人任务
+    When A 或 B 切换到企业空间
+    Then 仅显示该企业空间的任务，且包含 A 与 B 在企业空间创建的任务
+
+  Scenario: AC-FR-SYS-017-03 企业空间单独购买套餐
+    Given 企业空间未开通付费套餐，企业 OWNER 处于企业空间
+    When OWNER 在套餐页申请升级 Kinder 并确认
+    Then 创建归属该企业的 PLAN_UPGRADE 申请，个人空间的订阅状态不变
+    And 该企业的 MEMBER 在套餐页看到同一处理中申请，但不能提交升级
+    When 后台批准该申请
+    Then 该企业全体成员在企业空间看到 Kinder 套餐及共享的本月剩余页数，个人空间仍为 Free
 ```
 
 ## 7. EPIC-08 — 文档格式模板配置
@@ -316,6 +574,28 @@ Feature: NFR V1.0 门槛
     Given TextIn 或必需的 Google Cloud 服务不可用
     When 上传一份文档并开始处理
     Then 该文档显示可操作的失败状态，且其他批次文档不受影响并可重试
+
+  Scenario: AC-NFR-USAB-004-01 统一品牌等待反馈
+    Given 用户使用 LINE Mini App
+    When 启动、页面读取、局部请求或按钮操作处于等待中
+    Then 显示 SaiFlow F＋圆点标志、saiflow 字标与本地化操作文字
+    And 扫描光线、光环及环绕光点适配所在布局，标志本身不旋转
+    And 上传百分比与进度条、OCR 阶段保留；等待不改变认证、套餐分流或确认行为
+
+  Scenario: AC-NFR-USAB-004-02 等待结束与失败恢复
+    Given 页面或操作正在等待
+    When 请求成功或失败
+    Then 对应等待效果消失，恢复结果或可操作的本地化错误
+    And 已有防重复提交、验证码冷却及禁用规则保持不变
+    And OCR 终态不再显示加载动效，套餐审核状态不冒充网络等待
+
+  Scenario: AC-NFR-USAB-004-03 动效与移动端可访问性
+    Given 用户使用泰语或英语界面及 320px 宽屏幕
+    When 显示页面、局部或按钮等待效果
+    Then 标志、字标与操作文字不遮挡输入框或溢出操作区域
+    And 等待状态有可访问文字，上传百分比不作为持续 live 播报
+    When 用户启用 prefers-reduced-motion
+    Then 加载动画停止且扫描光线隐藏，状态文字仍可见
 ```
 
 ## 9. 覆盖矩阵（摘要）
@@ -323,11 +603,11 @@ Feature: NFR V1.0 门槛
 | Epic | P0 需求 | 已有 AC | 自动化？ |
 |------|---------|---------|----------|
 | EPIC-01 | 8 | ✔ | 是（相机硬件除外，人工） |
-| EPIC-02 | 14 | ✔ | 是（基于样本与集成桩） |
-| EPIC-03 | 11 | ✔ | 是 |
-| EPIC-04 | 8 | ✔ | 是 |
+| EPIC-02 | 16 | ✔ | 是（基于样本与集成桩） |
+| EPIC-03 | 17 | ✔ | 是 |
+| EPIC-04 | 9 | ✔ | 是 |
 | EPIC-05 | 2（P0 子集） | ✔ | 是 |
-| EPIC-06 | 6 | ✔ | 是 |
+| EPIC-06 | 17 | ✔ | 是 |
 | EPIC-08 | 0（P1，待 OQ-9） | ✔ | 是 |
 | NFR | 门槛 | ✔ | 混合（性能/安全测试工具） |
 
@@ -340,6 +620,29 @@ Feature: NFR V1.0 门槛
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.8.12 | 2026-10-18 | Product Engineering | 新增 AC-NFR-USAB-004-01/02/03：统一品牌等待反馈、等待结束与失败恢复、减少动态效果及移动端可访问性；保留进度和既有业务行为 |
+| 1.8.11 | 2026-10-18 | Product Engineering | 补充 AC-FR-VERIFY-017-04：最终结果页保留任务阶段标签，不重复显示 Confirmed，仍只读且可导出 |
+| 1.8.10 | 2026-10-18 | Product Engineering | 新增 AC-FR-VERIFY-015-02：电话号码等标量数组逐项编辑，保留数组、未编辑元素及历史快照，确认锁定后只读 |
+| 1.8.9 | 2026-10-18 | Product Engineering | 修订 AC-FR-VERIFY-016-01/02、017-01 与 AC-FR-SYS-011-01、012-01/02/03：LINE 确认前认证/工作空间订阅检查、仅变更草稿保存、ACTIVE 显式确认、恢复未完成任务返回结果页及历史 VERIFIED 兼容 |
+| 1.8.8 | 2026-10-18 | Product Engineering | 补充 AC-FR-UPLOAD-010-01：上传进度持续更新，确认成功前不满，失败与重试正确复位 |
+| 1.8.7 | 2026-10-18 | Product Engineering | 修订 AC-FR-SYS-010-02：归集后删除游客账户，游客首登赠送不叠加 |
+| 1.8.6 | 2026-10-18 | Product Engineering | 修订 AC-FR-ENTRY-015-01：XLSX 导出为单工作表，版式与解析结果页一致 |
+| 1.8.5 | 2026-10-18 | Product Engineering | 新增 AC-FR-VERIFY-017-04：点击「最终完成」任务直接进入最终结果页 |
+| 1.8.4 | 2026-10-18 | Product Engineering | 修订 AC-FR-VERIFY-017-01/02：阶段按确认时注册状态判定，筛选始终含「数据已验证」 |
+| 1.8.3 | 2026-10-18 | Product Engineering | 新增 AC-FR-VERIFY-017-03：历史筛选项完整显示与每页 20 条滚动分页 |
+| 1.8.2 | 2026-10-18 | Product Engineering | 新增 AC-FR-OCR-020-03：取消任务前需确认 |
+| 1.8.1 | 2026-10-18 | Product Engineering | 新增 AC-FR-VERIFY-017-01/02：任务流程阶段展示与按阶段筛选 |
+| 1.8.0 | 2026-10-18 | Product Engineering | 新增 AC-FR-SYS-017-01/02/03：工作空间刷新保持、个人/企业数据隔离与企业成员共享、企业空间单独购买套餐 |
+| 1.7.3 | 2026-10-18 | Product Engineering | 新增 AC-FR-SYS-001-03：个人中心登出前须确认 |
+| 1.7.2 | 2026-10-18 | Product Engineering | 新增 AC-FR-SYS-013-04：注册后未开通付费套餐为免费版 `Free`（1,000 次赠送扫描），Kinder 可升级 |
+| 1.7.1 | 2026-10-18 | Product Engineering | AC-FR-SYS-014-01/02：注册邮箱可修改并须输入验证码 |
+| 1.7.0 | 2026-10-17 | Product Engineering | 新增 AC-FR-SYS-014-01/02/03、AC-FR-SYS-015-01、AC-FR-SYS-016-01/02：LINE 注册信息录入、修改昵称与头像、更换邮箱 |
+| 1.6.1 | 2026-10-17 | Product Engineering | AC-FR-SYS-013-02：套餐页处理中提示改为顶部醒目卡片，处理中套餐带 IN REVIEW 角标 |
+| 1.6.2 | 2026-10-17 | Product Engineering | AC-FR-SYS-013-01：付费套餐按每月页数展示与校验，去掉 free 描述 |
+| 1.6.0 | 2026-10-17 | Product Engineering | 新增 AC-FR-SYS-013-01/02/03：已开通套餐展示、升级至更高档、游客隐藏套餐横幅 |
+| 1.5.0 | 2026-10-17 | Product Engineering | 新增 AC-FR-SYS-012-01/02/03：确认后按订阅状态分流；移除 AC-FR-SYS-011-02 |
+| 1.4.0 | 2026-10-17 | Product Engineering | 新增失败 OCR 任务可读原因与重试验收场景 |
+| 1.3.0 | 2026-10-17 | Product Engineering | 新增原图置顶与缩放、结构化版本化编辑、游客试用与归集、确认后登录/订阅、最终页 XLSX 导出验收场景 |
 | 1.2.0 | 2026-10-07 | Product Engineering | 新增 TextIn、Firestore、Cloud Functions 转换及模板配置验收场景；移除离线归档假设 |
 | 1.1.0 | 2026-10-06 | Product Engineering | 新增无需复核、二级复核门控、最终复核通过和复核日志验收场景 |
 | 1.0.1 | 2026-10-02 | Product Engineering | 将人类可读内容与验收场景翻译为简体中文 |

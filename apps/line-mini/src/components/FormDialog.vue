@@ -1,0 +1,179 @@
+<script setup lang="ts">
+defineProps<{ title: string; subtitle?: string }>();
+</script>
+
+<template>
+  <div class="fd-mask" role="dialog" aria-modal="true">
+    <div class="fd-card">
+      <div class="fd-title">{{ title }}</div>
+      <p v-if="subtitle" class="fd-subtitle">{{ subtitle }}</p>
+      <slot />
+    </div>
+  </div>
+</template>
+
+<!-- 不加 scoped：表单字段类名统一 fd- 前缀，供各弹框插槽内容复用 -->
+<style>
+.fd-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(17, 24, 39, 0.45);
+}
+
+.fd-card {
+  width: 100%;
+  min-width: 0;
+  max-width: 360px;
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  background: var(--card);
+  color: var(--text);
+  border-radius: 18px;
+  padding: 22px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fd-title {
+  font-size: 16px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.fd-subtitle {
+  margin: -6px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.fd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.fd-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--icon);
+}
+
+.fd-label .fd-required {
+  color: var(--danger);
+  margin-left: 2px;
+}
+
+.fd-input {
+  height: 42px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  padding: 0 12px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--card);
+  outline: none;
+  width: 100%;
+}
+
+.fd-input:focus {
+  border-color: var(--primary);
+}
+
+.fd-input[readonly] {
+  background: var(--track);
+  color: var(--icon);
+}
+
+.fd-input.invalid {
+  border-color: var(--danger);
+}
+
+.fd-inline {
+  display: flex;
+  gap: 8px;
+}
+
+.fd-inline .fd-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.fd-hint {
+  font-size: 10px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.fd-hint.danger {
+  color: var(--danger);
+}
+
+.fd-error {
+  margin: 0;
+  font-size: 11px;
+  color: var(--danger);
+  text-align: center;
+}
+
+.fd-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.fd-btn {
+  flex: 1;
+  min-width: 0;
+  min-height: 46px;
+  padding: 4px 6px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.fd-btn.primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.fd-btn.secondary {
+  flex: 0 1 30%;
+  background: var(--track);
+  color: var(--text);
+}
+
+.fd-btn.danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.fd-btn:disabled,
+.fd-mini-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.fd-mini-btn {
+  flex-shrink: 0;
+  min-width: 0;
+  max-width: 58%;
+  min-height: 42px;
+  padding: 4px 6px;
+  border-radius: 10px;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+</style>

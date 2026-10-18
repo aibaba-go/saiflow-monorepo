@@ -1,22 +1,32 @@
-/**
- * 三段式上传流程：预检 → PUT 内容 → complete。
- * 成功后返回 READY 状态的 FileInfo。
- */
 import { completeUpload, createUpload, uploadContent, type FileInfo } from './api';
 
 export async function uploadFile(
   file: File,
   workspace?: { workspace_type?: string; enterprise_id?: number },
   purpose: 'OCR_TASK' | 'APPLICATION_MATERIAL' = 'OCR_TASK',
+  onProgress?: (percent: number) => void,
 ): Promise<FileInfo> {
-  const { file: created, upload_id: uploadId } = await createUpload(file.name, file.size, workspace, purpose);
+  let percent = 0;
+  const report = (next: number) => {
+    percent = Math.max(percent, next);
+    onProgress?.(percent);
+  };
+  const started = performance.now();
+  const estimatedMs = 3000 + (file.size / (512 * 1024)) * 1000;
+  // 预检、存储与校验没有字节事件，估算期间保留最后 5% 给后端确认。
+  const timer = onProgress ? window.setInterval(() => {
+    report(Math.min(95, Math.floor(95 * (1 - Math.exp(-(performance.now() - started) / estimatedMs)))));
+  }, 120) : undefined;
+  report(0);
   try {
-    await uploadContent(uploadId, file, file.type || 'application/octet-stream');
+    const { upload_id: uploadId } = await createUpload(file.name, file.size, workspace, purpose);
+    await uploadContent(uploadId, file, file.type || 'application/octet-stream',
+      onProgress ? (fraction) => report(Math.min(95, Math.floor(fraction * 95))) : undefined);
     const { file: ready } = await completeUpload(uploadId);
+    report(100);
     return ready;
-  } catch (e) {
-    // 上传失败时尽力而为地保留文件记录（后端可重新 PUT 修复），错误继续上抛
-    throw e;
+  } finally {
+    if (timer !== undefined) window.clearInterval(timer);
   }
 }
 

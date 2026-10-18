@@ -4,6 +4,10 @@ FROM python:3.12-slim
 # 设置时区，避免日志时间错乱
 ENV TZ=Asia/Shanghai
 
+# 临时：LINE 暂不可用，生产与本地一致开启开发调试（dev_id 登录、随机 LINE 资料、邮箱验证码不发信不校验）
+# 恢复 LINE 联合登录时改为 false（或 docker run -e AUTH_DEV_MODE=false 覆盖）
+ENV AUTH_DEV_MODE=true
+
 # 工作目录
 WORKDIR /app
 
@@ -16,8 +20,8 @@ RUN pip install --no-cache-dir \
     --timeout 120 --retries 5 \
     -r requirements.txt
 
-# 复制应用代码（根目录模块白名单；storage.py 对象存储抽象、quota.py 配额流水、plans.py 套餐目录）
-COPY app.py config.py extensions.py models.py auth.py errors.py fileaccess.py middleware.py worker.py workspace.py storage.py quota.py plans.py deepseek.py ./
+# 复制应用代码（根目录模块白名单；storage.py 对象存储抽象、quota.py 配额流水、plans.py 套餐目录、avatars.py 头像存储）
+COPY app.py config.py extensions.py models.py auth.py errors.py fileaccess.py middleware.py worker.py workspace.py storage.py quota.py plans.py deepseek.py avatars.py ./
 COPY routes ./routes
 # TextIn OCR provider（唯一厂商，PRD §12）
 COPY textin ./textin

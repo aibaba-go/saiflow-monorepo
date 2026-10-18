@@ -13,6 +13,7 @@ import uuid
 
 from datetime import datetime, timezone
 
+import avatars
 from extensions import db
 
 
@@ -46,23 +47,47 @@ class User(db.Model, TimestampMixin):
     line_provider = db.Column(db.String(32), nullable=False, default="line")
     line_sub = db.Column(db.String(128), nullable=False)
     display_name = db.Column(db.String(128), nullable=False, default="")
-    avatar_url = db.Column(db.String(512), nullable=False, default="")
+    avatar_url = db.Column(db.Text, nullable=False, default="")  # 仅外部 https 头像（LINE）
+    avatar_path = db.Column(db.String(255), nullable=False, default="")  # 对象存储中的头像对象名
     language = db.Column(db.String(8), nullable=False, default="th")
     status = db.Column(db.String(16), nullable=False, default="ACTIVE")  # ACTIVE / DISABLED
+    phone = db.Column(db.String(32), nullable=False, default="")  # 来自 LINE，用户不可改
+    email = db.Column(db.String(254), nullable=False, default="")
+    registered_at = db.Column(db.DateTime, nullable=True)  # NULL = 未完成注册信息录入
 
     __table_args__ = (
         db.UniqueConstraint("line_provider", "line_sub", name="uq_users_line_identity"),
     )
 
+    @property
+    def is_guest(self) -> bool:
+        return self.line_provider == "guest"
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "display_name": self.display_name,
-            "avatar_url": self.avatar_url,
+            "avatar_url": avatars.display_url(self),
             "language": self.language,
             "status": self.status,
+            "is_guest": self.is_guest,
+            "phone": self.phone,
+            "email": self.email,
+            "registered": self.registered_at is not None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
+
+class EmailVerificationCode(db.Model):
+    __tablename__ = "email_verification_codes"
+
+    id = db.Column(_bigint_pk(), primary_key=True, autoincrement=True)
+    user_id = db.Column(db.BigInteger, db.ForeignKey("users.id"), nullable=False, index=True)
+    email = db.Column(db.String(254), nullable=False)
+    code_hash = db.Column(db.String(64), nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    consumed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=_now)
 
 
 class Session(db.Model):
@@ -151,7 +176,7 @@ class Application(db.Model, TimestampMixin):
     id = db.Column(_bigint_pk(), primary_key=True, autoincrement=True)
     type = db.Column(
         db.String(32), nullable=False
-    )  # ENTERPRISE_VERIFICATION / MEMBERSHIP
+    )  # ENTERPRISE_VERIFICATION / MEMBERSHIP / PLAN_UPGRADE（APPROVED=套餐已开通）
     applicant_user_id = db.Column(
         db.BigInteger, db.ForeignKey("users.id"), nullable=False, index=True
     )
@@ -268,6 +293,18 @@ class OcrJob(db.Model, TimestampMixin):
     )  # UNREVIEWED/EDITED/CONFIRMED
     started_at = db.Column(db.DateTime, nullable=True)
     finished_at = db.Column(db.DateTime, nullable=True)
+    # 已注册用户确认结果的时间；游客/未注册用户确认后为空（数据已验证）
+    completed_at = db.Column(db.DateTime, nullable=True)
+
+    def stage(self) -> str:
+        """流程阶段：OCR 处理中/失败 → 数据验证中 → 数据已验证（未注册时确认）/ 最终完成。"""
+        if self.status in ("FAILED", "CANCELLED"):
+            return "OCR_FAILED"
+        if self.status not in ("SUCCEEDED", "PARTIAL_SUCCESS"):
+            return "OCR_PROCESSING"
+        if self.review_status != "CONFIRMED":
+            return "VERIFYING"
+        return "COMPLETED" if self.completed_at else "VERIFIED"
 
     def to_summary(self, file_name: str = "") -> dict:
         return {
@@ -283,6 +320,7 @@ class OcrJob(db.Model, TimestampMixin):
             "field_count": self.field_count,
             "duration_ms": self.duration_ms,
             "review_status": self.review_status,
+            "stage": self.stage(),
             "error_code": self.error_code,
             "error_message": self.error_message,
             "parent_job_id": self.parent_job_id,

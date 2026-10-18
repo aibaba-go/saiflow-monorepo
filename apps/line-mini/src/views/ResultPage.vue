@@ -1,11 +1,24 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { ApiError, filePagePreviewUrl, getJob, getJobResults, type JobResults, type JobSummary } from '../api';
+import {
+  ApiError,
+  fetchSubscription,
+  getJob,
+  getJobResults,
+  rerunJob,
+  updateJobResults,
+  type JobResults,
+  type JobSummary,
+} from '../api';
 import { messageText } from '../i18n';
 import { useT } from '../i18nVue';
-import { goTab } from '../store';
+import { goTab, isAuthenticated, isGuest, jobWorkspace, navigate, rememberPendingJob } from '../store';
+import { setAtPath, type Path } from '../structured';
+import BrandLoading from '../components/BrandLoading.vue';
+import OriginalPreview from '../components/OriginalPreview.vue';
 import PageHeader from '../components/PageHeader.vue';
 import StatusChip from '../components/StatusChip.vue';
+import StructuredDataView from '../components/StructuredDataView.vue';
 
 const { t } = useT();
 
@@ -13,179 +26,130 @@ const props = defineProps<{
   jobId: string;
 }>();
 
-type Tab = 'json' | 'table' | 'original';
-type JsonRecord = Record<string, unknown>;
-
-interface ResultTable {
-  path: string;
-  columns: string[];
-  rows: unknown[][];
-}
-
-interface DetailSection {
-  path: string;
-  rows: { key: string; value: unknown }[];
-}
-
-const tab = ref<Tab>('json');
-
 const results = ref<JobResults | null>(null);
 const job = ref<JobSummary | null>(null);
+const draft = ref<unknown>(null);
 const errorMsg = ref('');
-const copied = ref(false);
-const activePage = ref(1);
+const saving = ref(false);
+const retrying = ref(false);
 
-function isRecord(value: unknown): value is JsonRecord {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function collectTables(value: unknown, path: string[] = []): ResultTable[] {
-  if (Array.isArray(value)) {
-    if (value.length > 0 && value.every(isRecord)) {
-      const records = value as JsonRecord[];
-      const columns = Array.from(new Set(records.flatMap((row) => Object.keys(row))));
-      const rows = records.map((row) => columns.map((column) => row[column]));
-      const tables: ResultTable[] = [{ path: path.join('.'), columns, rows }];
-      records.forEach((row, index) => {
-        tables.push(...collectTables(row, [...path, String(index + 1)]));
-      });
-      return tables;
-    }
-
-    const isMatrix =
-      value.length > 0 &&
-      value.every(
-        (row) =>
-          Array.isArray(row) &&
-          row.every((cell) => !Array.isArray(cell) && !isRecord(cell)),
-      );
-    if (isMatrix) {
-      const rows = value as unknown[][];
-      const columnCount = Math.max(...rows.map((row) => row.length));
-      const columns = Array.from({ length: columnCount }, (_, index) => `${index + 1}`);
-      return [{ path: path.join('.'), columns, rows }];
-    }
-
-    return value.flatMap((item, index) => collectTables(item, [...path, String(index + 1)]));
-  }
-
-  if (isRecord(value)) {
-    return Object.entries(value).flatMap(([key, item]) => collectTables(item, [...path, key]));
-  }
-
-  return [];
-}
-
-function collectDetailSections(value: unknown, path: string[] = []): DetailSection[] {
-  if (!isRecord(value)) return [];
-
-  const entries = Object.entries(value);
-  const rows = entries
-    .filter(([, item]) => {
-      if (isRecord(item)) return false;
-      if (!Array.isArray(item)) return true;
-      return item.every((entry) => !Array.isArray(entry) && !isRecord(entry));
-    })
-    .map(([key, item]) => ({ key, value: item }));
-  const sections = rows.length > 0 ? [{ path: path.join('.'), rows }] : [];
-
-  entries.forEach(([key, item]) => {
-    if (isRecord(item)) {
-      sections.push(...collectDetailSections(item, [...path, key]));
-    }
-  });
-
-  return sections;
-}
-
-function displayName(value: string): string {
-  return value
-    .split('.')
-    .map((part) => part.replace(/_/g, ' '))
-    .join(' / ');
-}
-
-function formatCell(value: unknown): string {
-  if (value === null || value === undefined) return '—';
-  if (Array.isArray(value)) {
-    if (value.length === 0) return '—';
-    if (value.every((item) => !Array.isArray(item) && !isRecord(item))) {
-      return value.map((item) => (item === null || item === undefined ? '—' : String(item))).join('\n');
-    }
-  }
-  if (typeof value === 'object') return JSON.stringify(value, null, 2);
-  return String(value);
-}
-
-const jsonText = computed(() => JSON.stringify(results.value?.structured ?? {}, null, 2));
-const detailSections = computed(() => collectDetailSections(results.value?.structured));
-const resultTables = computed(() => collectTables(results.value?.structured));
-const pageNumbers = computed(() => {
-  const n = job.value?.page_count || results.value?.page_count || 1;
-  return Array.from({ length: n }, (_, i) => i + 1);
+const locked = computed(() => results.value?.review_status === 'CONFIRMED');
+const failed = computed(
+  () => job.value?.status === 'FAILED' || job.value?.status === 'CANCELLED',
+);
+const failureReason = computed(() => {
+  if (job.value?.error_code === 'TEXTIN_ERROR_40003') return t('err.ocr.vendor_balance');
+  return job.value?.error_message || t('err.ocr.failed');
 });
+
+function cloneStructured(value: unknown): unknown {
+  return value === undefined ? null : JSON.parse(JSON.stringify(value));
+}
 
 async function load() {
   try {
-    [results.value, job.value] = await Promise.all([getJobResults(props.jobId), getJob(props.jobId)]);
+    const jobPayload = await getJob(props.jobId);
+    job.value = jobPayload;
+    if (jobPayload.status === 'FAILED' || jobPayload.status === 'CANCELLED') return;
+    results.value = await getJobResults(props.jobId);
+    draft.value = cloneStructured(results.value.structured);
   } catch (e) {
     errorMsg.value = e instanceof ApiError ? messageText(e.messageKey) : t('common.unknownError');
   }
 }
 
+async function retry(): Promise<void> {
+  if (retrying.value) return;
+  retrying.value = true;
+  errorMsg.value = '';
+  try {
+    const next = await rerunJob(props.jobId);
+    navigate('processing', { jobId: next.id });
+  } catch (e) {
+    errorMsg.value = e instanceof ApiError ? messageText(e.messageKey) : t('common.unknownError');
+  } finally {
+    retrying.value = false;
+  }
+}
+
 onMounted(load);
 
-// LINE 内置 WebView 等环境可能不支持/拒绝 Clipboard API，退回 execCommand
-function legacyCopy(text: string): boolean {
-  const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.setAttribute('readonly', '');
-  ta.style.position = 'fixed';
-  ta.style.opacity = '0';
-  document.body.appendChild(ta);
-  ta.select();
-  try {
-    return document.execCommand('copy');
-  } finally {
-    document.body.removeChild(ta);
-  }
+function onEdit(path: Path, value: string): void {
+  setAtPath(draft.value, path, value);
 }
 
-async function copyJson() {
+async function saveDraft(): Promise<void> {
+  if (!results.value || locked.value || JSON.stringify(draft.value) === JSON.stringify(results.value.structured)) return;
+  results.value = await updateJobResults(props.jobId, {
+    expected_version: results.value.version,
+    structured: draft.value,
+    confirm: false,
+  });
+}
+
+async function confirm(): Promise<void> {
+  if (!results.value || !job.value || saving.value) return;
   errorMsg.value = '';
-  let ok = false;
+
+  saving.value = true;
   try {
-    await navigator.clipboard.writeText(jsonText.value);
-    ok = true;
-  } catch {
-    ok = legacyCopy(jsonText.value);
-  }
-  if (ok) {
-    copied.value = true;
-    setTimeout(() => (copied.value = false), 1500);
-  } else {
-    errorMsg.value = t('result.copyFailed');
+    if (!isAuthenticated.value) {
+      await saveDraft();
+      rememberPendingJob(props.jobId);
+      navigate('auth', { jobId: props.jobId });
+      return;
+    }
+    const sub = await fetchSubscription(jobWorkspace(job.value));
+    if (sub.status !== 'ACTIVE') {
+      await saveDraft();
+      if (sub.status === 'PENDING') {
+        navigate('plan-pending', { jobId: props.jobId, plan: sub.plan_name ?? '', submittedAt: sub.submitted_at ?? '' });
+      } else {
+        navigate('plans', { jobId: props.jobId });
+      }
+      return;
+    }
+    if (!locked.value) {
+      const updated = await updateJobResults(props.jobId, {
+        expected_version: results.value.version,
+        structured: draft.value,
+        confirm: true,
+      });
+      results.value = updated;
+      draft.value = cloneStructured(updated.structured);
+    } else if (job.value.stage === 'VERIFIED') {
+      results.value = await updateJobResults(props.jobId, {
+        expected_version: results.value.version,
+        confirm: true,
+      });
+    }
+    navigate('final', { jobId: props.jobId });
+  } catch (e) {
+    errorMsg.value = e instanceof ApiError ? messageText(e.messageKey) : t('common.unknownError');
+  } finally {
+    saving.value = false;
   }
 }
-
-function formatTime(iso: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-const TABS: { key: Tab; label: string }[] = [
-  { key: 'json', label: 'result.tabJson' },
-  { key: 'table', label: 'result.tabTable' },
-  { key: 'original', label: 'result.tabOriginal' },
-];
 </script>
 
 <template>
   <div class="result">
     <PageHeader :title="job?.file_name || '…'" @back="goTab('history')" />
 
-    <div v-if="errorMsg && !results" class="fatal">
+    <div v-if="failed" class="failure">
+      <div class="failure-badge">!</div>
+      <h2>{{ job?.status === 'CANCELLED' ? t('result.cancelledTitle') : t('result.failedTitle') }}</h2>
+      <p class="failure-file">{{ job?.file_name }}</p>
+      <p class="failure-reason">{{ failureReason }}</p>
+      <p v-if="errorMsg" class="status-error">{{ errorMsg }}</p>
+      <button class="primary-btn" :disabled="retrying" @click="retry">
+        <BrandLoading v-if="retrying" variant="button" :label="t('result.retrying')" />
+        <template v-else>{{ t('result.retry') }}</template>
+      </button>
+      <button class="home-btn" @click="goTab('history')">{{ t('common.back') }}</button>
+    </div>
+
+    <div v-else-if="errorMsg && !results" class="fatal">
       <p class="status-error">{{ errorMsg }}</p>
       <button class="home-btn" @click="goTab('history')">{{ t('common.back') }}</button>
     </div>
@@ -193,102 +157,49 @@ const TABS: { key: Tab; label: string }[] = [
     <template v-else-if="results">
       <div class="summary">
         <div class="chips">
-          <StatusChip v-if="job" :status="job.status" />
+          <StatusChip v-if="job" :stage="job.stage" />
+          <span class="review-chip" :class="results.review_status.toLowerCase()">
+            {{ t(`job.review.${results.review_status}`) }}
+          </span>
         </div>
         <div class="meta">
           {{ t('result.meta', { pages: job?.page_count ?? results.page_count, tables: results.table_count }) }}
-          · {{ t('result.updatedAt', { time: formatTime(job?.finished_at ?? job?.created_at ?? null) }) }}
         </div>
       </div>
 
-      <div class="tabs">
-        <button
-          v-for="item in TABS"
-          :key="item.key"
-          class="tab"
-          :class="{ active: tab === item.key }"
-          @click="tab = item.key"
-        >
-          {{ t(item.label) }}
+      <div class="content">
+        <!-- 原图置于表格上方，点击放大 / 缩小 -->
+        <OriginalPreview
+          v-if="job"
+          :file-id="job.file_id"
+          :file-name="job.file_name"
+          :page-count="job.page_count || results.page_count || 1"
+        />
+
+        <div class="edit-hint">
+          <template v-if="locked">{{ t('result.lockedHint') }}</template>
+          <template v-else>{{ t('result.editHint') }}</template>
+        </div>
+
+        <StructuredDataView
+          :data="draft"
+          :editable="!locked"
+          @edit="onEdit"
+        />
+
+        <p v-if="errorMsg" class="status-error">{{ errorMsg }}</p>
+      </div>
+
+      <div class="action-bar">
+        <p v-if="isGuest" class="guest-hint">{{ t('result.guestHint') }}</p>
+        <button class="primary-btn" :disabled="saving" @click="confirm">
+          <BrandLoading v-if="saving" variant="button" :label="t('result.saving')" />
+          <template v-else>{{ t('result.continue') }}</template>
         </button>
       </div>
-
-      <div class="tab-content">
-        <div v-if="tab === 'json'" class="json-card">
-          <div class="json-head">
-            <span class="json-title">JSON</span>
-            <button class="copy-btn" @click="copyJson">
-              {{ copied ? t('result.copied') : t('result.copyJson') }}
-            </button>
-          </div>
-          <pre class="json-body">{{ jsonText }}</pre>
-        </div>
-
-        <div v-else-if="tab === 'table'" class="tables-view">
-          <div v-if="detailSections.length === 0 && resultTables.length === 0" class="table-empty">
-            {{ t('result.noTables') }}
-          </div>
-
-          <section v-for="section in detailSections" :key="section.path || 'document'" class="table-card">
-            <div class="table-title">
-              {{ section.path ? displayName(section.path) : t('result.documentInfo') }}
-            </div>
-            <dl class="detail-list">
-              <div v-for="row in section.rows" :key="row.key" class="detail-row">
-                <dt>{{ displayName(row.key) }}</dt>
-                <dd>{{ formatCell(row.value) }}</dd>
-              </div>
-            </dl>
-          </section>
-
-          <section v-for="table in resultTables" :key="table.path" class="table-card">
-            <div class="table-title">{{ displayName(table.path) }}</div>
-            <div class="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th v-for="column in table.columns" :key="column">
-                      {{ displayName(column) }}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(row, rowIndex) in table.rows" :key="rowIndex">
-                    <td v-for="(column, columnIndex) in table.columns" :key="column">
-                      {{ formatCell(row[columnIndex]) }}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </div>
-
-        <template v-else>
-          <div class="pager">
-            <button
-              v-for="p in pageNumbers"
-              :key="p"
-              class="page-pill"
-              :class="{ active: activePage === p }"
-              @click="activePage = p"
-            >
-              {{ p }}
-            </button>
-          </div>
-          <img
-            v-if="job"
-            class="original"
-            :src="filePagePreviewUrl(job.file_id, activePage)"
-            :alt="job.file_name"
-          />
-        </template>
-      </div>
-
-      <p v-if="errorMsg" class="status-error">{{ errorMsg }}</p>
     </template>
 
-    <div v-else class="fatal"><p>{{ t('common.loading') }}</p></div>
+    <div v-else class="fatal"><BrandLoading :label="t('common.loading')" /></div>
   </div>
 </template>
 
@@ -309,6 +220,60 @@ const TABS: { key: Tab; label: string }[] = [
   padding: 24px;
 }
 
+.failure {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+}
+
+.failure-badge {
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  background: #fdeaea;
+  color: var(--danger);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.failure h2 {
+  margin: 2px 0 0;
+  font-size: 16px;
+}
+
+.failure-file {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+.failure-reason {
+  margin: 4px 0 10px;
+  max-width: 320px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--danger);
+}
+
+.failure .primary-btn,
+.failure .home-btn {
+  width: 100%;
+  max-width: 320px;
+}
+
+.failure .home-btn {
+  height: 44px;
+}
+
 .summary {
   padding: 2px 20px 10px;
   display: flex;
@@ -320,6 +285,7 @@ const TABS: { key: Tab; label: string }[] = [
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .meta {
@@ -327,217 +293,75 @@ const TABS: { key: Tab; label: string }[] = [
   color: var(--text-secondary);
 }
 
-.tabs {
-  display: flex;
-  gap: 20px;
-  padding: 0 20px;
-  border-bottom: 1px solid var(--border);
+.review-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--track);
+  color: var(--icon);
+  font-size: 9px;
+  font-weight: 700;
 }
 
-.tab {
-  font-size: 12px;
-  color: var(--text-secondary);
-  padding: 10px 2px;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  font-weight: 600;
+.review-chip.confirmed {
+  background: var(--success-bg);
+  color: var(--success);
 }
 
-.tab.active {
-  color: var(--primary);
-  border-bottom-color: var(--primary);
+.review-chip.edited {
+  background: var(--processing-bg);
+  color: var(--processing);
 }
 
-.tab-content {
+.content {
   flex: 1;
-  padding: 14px 20px 20px;
+  padding: 0 20px 20px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  overflow-y: auto;
 }
 
-.json-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  overflow: hidden;
+.edit-hint {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  padding: 0 2px;
 }
 
-.json-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-}
-
-.json-title {
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.copy-btn {
-  height: 28px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: var(--primary-light);
-  color: var(--primary);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.json-body {
-  margin: 0;
-  padding: 14px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 11px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--text);
-}
-
-.tables-view {
+.action-bar {
+  position: sticky;
+  bottom: 0;
+  background: linear-gradient(180deg, rgba(245, 247, 250, 0) 0%, var(--bg) 28%);
+  padding: 12px 20px 18px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-}
-
-.table-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  overflow: hidden;
-}
-
-.table-title {
-  padding: 11px 14px;
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: capitalize;
-}
-
-.detail-list {
-  margin: 0;
-}
-
-.detail-row {
-  display: grid;
-  grid-template-columns: minmax(100px, 34%) minmax(0, 1fr);
-  border-bottom: 1px solid var(--border);
-}
-
-.detail-row:last-child {
-  border-bottom: 0;
-}
-
-.detail-row dt,
-.detail-row dd {
-  margin: 0;
-  padding: 10px 12px;
-  font-size: 11px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.detail-row dt {
-  border-right: 1px solid var(--border);
-  background: var(--primary-light);
-  color: var(--primary);
-  font-weight: 700;
-  text-transform: capitalize;
-}
-
-.detail-row dd {
-  color: var(--text);
-}
-
-.table-scroll { 
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-}
-
-table {
-  width: 100%;
-  min-width: max-content;
-  border-collapse: collapse;
-  font-size: 11px;
-}
-
-th,
-td {
-  max-width: 260px;
-  padding: 10px 12px;
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  text-align: left;
-  vertical-align: top;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-th {
-  background: var(--primary-light);
-  color: var(--primary);
-  font-weight: 700;
-  text-transform: capitalize;
-  white-space: nowrap;
-}
-
-th:last-child,
-td:last-child {
-  border-right: 0;
-}
-
-tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-.table-empty {
-  padding: 36px 20px;
-  border: 1px dashed var(--border);
-  border-radius: 14px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  text-align: center;
-}
-
-.pager {
-  display: flex;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
-.page-pill {
-  min-width: 32px;
-  height: 32px;
-  border-radius: 999px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  font-size: 11px;
+.guest-hint {
+  margin: 0;
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--processing);
   font-weight: 600;
-  color: var(--icon);
 }
 
-.page-pill.active {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: #fff;
-}
-
-.original {
-  width: 100%;
+.primary-btn {
+  height: 53px;
   border-radius: 14px;
-  border: 1px solid var(--border);
-  background: var(--card);
+  background: var(--primary);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.primary-btn:disabled {
+  opacity: 0.6;
 }
 
 .status-error {
   margin: 0;
-  padding: 0 20px 16px;
+  padding: 4px 0;
   text-align: center;
   font-size: 12px;
   color: var(--danger);

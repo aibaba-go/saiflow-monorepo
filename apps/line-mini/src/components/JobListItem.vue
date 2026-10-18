@@ -34,7 +34,7 @@ function formatTime(iso: string | null): string {
         {{ t('result.meta', { pages: job.page_count, tables: job.table_count }) }} · {{ formatTime(job.created_at) }}
       </div>
     </div>
-    <StatusChip :status="job.status" />
+    <StatusChip :stage="job.stage" />
   </button>
 </template>
 
