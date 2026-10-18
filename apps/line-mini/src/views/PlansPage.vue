@@ -599,13 +599,12 @@ function priceSub(p: Plan): string {
 
 .dialog-actions .continue-btn,
 .dialog-cancel {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
   min-height: 46px;
 }
 
 .dialog-cancel {
-  flex: 0 1 30%;
   padding: 4px 6px;
   border-radius: 14px;
   background: var(--track);

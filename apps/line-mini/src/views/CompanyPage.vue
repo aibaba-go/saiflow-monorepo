@@ -15,6 +15,7 @@ import { useT } from '../i18nVue';
 import { currentWorkspace, goTab, refreshSession, setWorkspace, workspaces } from '../store';
 import { uploadFile } from '../upload';
 import BrandLoading from '../components/BrandLoading.vue';
+import FormDialog from '../components/FormDialog.vue';
 import PageHeader from '../components/PageHeader.vue';
 
 const { t } = useT();
@@ -87,8 +88,13 @@ async function doBind() {
 
 // ---------- 解绑 ----------
 
-async function doUnbind(c: MyCompany) {
-  if (!window.confirm(t('company.unbindConfirm', { name: c.legal_name }))) return;
+const unbindTarget = ref<MyCompany | null>(null);
+const unbinding = ref(false);
+
+async function doUnbind() {
+  const c = unbindTarget.value;
+  if (!c || unbinding.value) return;
+  unbinding.value = true;
   errorMsg.value = '';
   try {
     await unbindCompany(c.id);
@@ -101,6 +107,9 @@ async function doUnbind(c: MyCompany) {
     }
   } catch (e) {
     errorMsg.value = e instanceof ApiError ? messageText(e.messageKey) : t('common.unknownError');
+  } finally {
+    unbinding.value = false;
+    unbindTarget.value = null;
   }
 }
 
@@ -263,7 +272,7 @@ async function submit() {
               <button v-if="c.my_role === 'OWNER'" class="mini-btn" @click="startEdit(c)">
                 {{ t('company.edit') }}
               </button>
-              <button class="mini-btn danger" @click="doUnbind(c)">
+              <button class="mini-btn danger" @click="unbindTarget = c">
                 {{ t('company.unbind') }}
               </button>
             </div>
@@ -323,6 +332,18 @@ async function submit() {
       style="display: none"
       @change="onCertPicked"
     />
+
+    <FormDialog v-if="unbindTarget" :title="t('company.unbindConfirm')" :subtitle="unbindTarget.legal_name">
+      <div class="fd-actions">
+        <button class="fd-btn secondary" :disabled="unbinding" @click="unbindTarget = null">
+          {{ t('common.cancel') }}
+        </button>
+        <button class="fd-btn danger" :disabled="unbinding" @click="doUnbind">
+          <BrandLoading v-if="unbinding" variant="button" :label="t('company.unbind')" />
+          <template v-else>{{ t('company.unbind') }}</template>
+        </button>
+      </div>
+    </FormDialog>
   </div>
 </template>
 

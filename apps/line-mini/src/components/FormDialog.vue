@@ -131,7 +131,7 @@ defineProps<{ title: string; subtitle?: string }>();
 }
 
 .fd-btn {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
   min-height: 46px;
   padding: 4px 6px;
@@ -147,7 +147,6 @@ defineProps<{ title: string; subtitle?: string }>();
 }
 
 .fd-btn.secondary {
-  flex: 0 1 30%;
   background: var(--track);
   color: var(--text);
 }
