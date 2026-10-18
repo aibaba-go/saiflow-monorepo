@@ -47,6 +47,13 @@ TEXTIN_CONNECT_TIMEOUT_SECONDS=10
 Success envelope: `{code:"OK", data}`; errors: `{code, message_key,
 request_id, retryable, field_errors}`.
 
+Full contract: [`openapi.yaml`](openapi.yaml) (OpenAPI 3.0.3, open in Swagger
+Editor / Swagger UI). Keep it in sync when routes change.
+
+Table/column descriptions live in `models.py` as `comment=` and are written to
+PostgreSQL as `COMMENT ON` (new tables get them via `create_all`; existing
+tables need the statements re-applied).
+
 ## Project layout
 
 ```
@@ -54,7 +61,8 @@ request_id, retryable, field_errors}`.
 ├── app.py            # create_app factory + middleware wiring
 ├── config.py         # Config (env-driven)
 ├── auth.py           # session + CSRF + audit
-├── models.py         # SQLAlchemy models (PRD §13)
+├── models.py         # SQLAlchemy models (PRD §13) + DB comments
+├── openapi.yaml      # OpenAPI 3.0.3 contract (Swagger)
 ├── routes/           # auth / me / uploads / ocr / results / exports / enterprises
 ├── textin/           # TextIn provider (client, adapter, field extractor)
 ├── worker.py         # background job runner (thread)
