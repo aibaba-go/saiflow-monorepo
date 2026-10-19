@@ -34,8 +34,15 @@ def configure_schema(app: Flask) -> None:
             cur.execute(f"SET SESSION search_path TO {schema}")
             cur.close()
 
-        with engine.begin() as conn:
-            conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
+        # 已存在则不执行 DDL：启动只读目录，不与共享库上的其他会话争锁
+        with engine.connect() as conn:
+            exists = conn.execute(
+                text("SELECT 1 FROM pg_namespace WHERE nspname = :s"), {"s": schema}
+            ).scalar()
+        if not exists:
+            with engine.begin() as conn:
+                conn.execute(text("SET LOCAL lock_timeout = '15s'"))
+                conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
 
 
 def init_textin(app: Flask) -> None:

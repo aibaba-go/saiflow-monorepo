@@ -32,6 +32,21 @@ _ADD_COLUMNS = [
 ]
 
 
+def _ensure_tables() -> None:
+    """只在缺表时建表：表齐全时启动只做只读的目录查询，不执行任何 DDL、不申请表锁。"""
+    from sqlalchemy import inspect
+
+    existing = set(inspect(db.engine).get_table_names())
+    missing = [t for t in db.metadata.tables.values() if t.name not in existing]
+    if not missing:
+        return
+    with db.engine.begin() as conn:
+        if conn.dialect.name == "postgresql":
+            # 新表的外键会锁被引用表；拿不到锁就失败退出，而不是无限等待
+            conn.execute(text("SET LOCAL lock_timeout = '15s'"))
+        db.metadata.create_all(bind=conn, tables=missing)
+
+
 def _patch_columns() -> None:
     # 空跑的 ALTER 也要拿 ACCESS EXCLUSIVE 锁，会被任一未结束事务挡死启动：先查缺失项，再以 lock_timeout 兜底
     with db.engine.begin() as conn:
@@ -92,7 +107,7 @@ def create_app(config_overrides: dict | None = None) -> Flask:
             os.makedirs(app.config[key], exist_ok=True)
 
     with app.app_context():
-        db.create_all()
+        _ensure_tables()
         if db.engine.dialect.name == "postgresql":
             _patch_columns()
 

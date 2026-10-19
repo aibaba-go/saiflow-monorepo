@@ -3,8 +3,8 @@ doc_id: AC-000
 title: "SaiFlow — 汇总验收标准（V1.0 / P0）"
 type: acceptance
 status: active
-version: 1.8.12
-updated: 2026-10-18
+version: 1.8.14
+updated: 2026-10-19
 owner: QA
 verified_requirements: [FR-UPLOAD, FR-OCR, FR-VERIFY, FR-ENTRY, FR-MGMT, FR-SYS, FR-TEMPLATE]
 ---
@@ -204,7 +204,23 @@ Feature: FR-VERIFY Human-in-the-loop
     Given 一份已完成识别的文档
     When 打开核验结果页
     Then 页面仅显示原图预览与结构化字段/表格，且原图位于表格数据上方
-    And 点击原图可在放大与缩小之间切换
+    When 点击原图（核验结果页或最终结果页）
+    Then 以当前页打开全屏查看器，支持双指捏合缩放、双击放大/复原、拖动平移与多页翻页
+    And 在查看器中翻页后关闭，原图卡片的页码按钮同步为查看器最后所在页
+    Given 公司 OWNER 已上传公司证书（图片或 PDF）
+    When 在公司页点击证书缩略图（公司列表或编辑表单）
+    Then 打开同一全屏查看器，PDF 证书逐页可翻看
+
+  Scenario: AC-FR-VERIFY-014-02 上传确认页预览缩放
+    Given 用户在 LINE Mini App 上传单据后进入上传确认页
+    When 点击预览图
+    Then 打开全屏查看器，缩放为 100%，多页 PDF 显示页码并可左右滑动或按钮翻页
+    When 用户双指捏合张开、双击图片或点击 "+"
+    Then 图片放大（双指以两指中点、双击以双击点为焦点，最大 500%），放大后可单指拖动且不露出图片外空白
+    When 用户双击已放大的图片、点击百分比按钮或捏合收拢
+    Then 复原为 100%，不小于 100%
+    When 用户点击关闭按钮
+    Then 查看器关闭，仍停留在上传确认页，可继续 "Start processing"
 
   Scenario: AC-FR-VERIFY-015-01 结构化编辑生成新版本
     Given 当前结果版本为 1，某个表格单元格数量为 120
@@ -223,6 +239,14 @@ Feature: FR-VERIFY Human-in-the-loop
     And 数组类型、顺序、长度及本次未编辑的第一个元素保持不变，版本 1 和版本 2 的快照不被覆盖
     When 用户按现有确认流程成功确认并锁定结果
     Then 两个号码及其他结构化字段与表格单元格均为只读
+
+  Scenario: AC-FR-VERIFY-015-03 金额数字千分位与 2 位小数
+    Given 结构化结果中 items[0] = {seq: 1, quantity: 990, price: 26.96, amount: 29650}，totals.sub_total = 68523.4
+    When 用户打开核验结果页、最终结果页或导出 Excel/CSV
+    Then amount 显示为 "29,650.00"，sub_total 显示为 "68,523.40"，price 仍为 "26.96"
+    And seq 显示为 "1"，quantity 显示为 "990"（计数/标识字段不补小数、不加千分位）
+    When 用户将 amount 改为 "29650.5" 并离开输入框
+    Then 该值以数字 29650.5 保存（JSON 类型不变为字符串），并回显为 "29,650.50"
 
   Scenario: AC-FR-VERIFY-016-01 已注册付费用户显式确认
     Given 用户已登录并完成注册，任务所属工作空间订阅为 ACTIVE，且所有必填字段均有效
@@ -620,6 +644,8 @@ Feature: NFR V1.0 门槛
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.8.14 | 2026-10-19 | Product Engineering | 新增 AC-FR-VERIFY-015-03：金额数字千分位 + 保留 2 位小数（页面与导出一致），计数字段按原值，编辑后保持数字类型；更新 AC-FR-VERIFY-014-01：结果页/最终结果页原图与公司证书使用全屏查看器 |
+| 1.8.13 | 2026-10-19 | Product Engineering | 新增 AC-FR-VERIFY-014-02：上传确认页预览全屏缩放与双指触控捏合缩放 |
 | 1.8.12 | 2026-10-18 | Product Engineering | 新增 AC-NFR-USAB-004-01/02/03：统一品牌等待反馈、等待结束与失败恢复、减少动态效果及移动端可访问性；保留进度和既有业务行为 |
 | 1.8.11 | 2026-10-18 | Product Engineering | 补充 AC-FR-VERIFY-017-04：最终结果页保留任务阶段标签，不重复显示 Confirmed，仍只读且可导出 |
 | 1.8.10 | 2026-10-18 | Product Engineering | 新增 AC-FR-VERIFY-015-02：电话号码等标量数组逐项编辑，保留数组、未编辑元素及历史快照，确认锁定后只读 |

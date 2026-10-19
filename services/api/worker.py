@@ -110,7 +110,10 @@ class OcrWorker:
         from models import OcrJob
 
         job = db.session.get(OcrJob, job_id)
-        return job is not None and job.status == "CANCEL_REQUESTED"
+        cancelled = job is not None and job.status == "CANCEL_REQUESTED"
+        # 只读检查后立即结束事务：调用方随后可能等待 TextIn/重试退避，不能 idle in transaction 占锁
+        db.session.rollback()
+        return cancelled
 
     # ---- 任务处理 ----
 
@@ -156,12 +159,17 @@ class OcrWorker:
                              error_message="TextIn client not configured")
             return
 
-        self._transition(job_id, "PROCESSING", progress=30)
-
-        content = storage.get_bytes(file.storage_path)
+        # 外部调用所需的值先读出：_transition 提交后 ORM 对象过期，再访问属性会隐式开读事务，
+        # 并在整个 TextIn/DeepSeek 调用期间 idle in transaction 持有 ocr_jobs/files 的表锁
         file_pages = file.page_count
+        file_name = file.original_name or f"{file.id}"
+        storage_path = file.storage_path
         params = dict(job.params or {})
         params.pop("field_names", None)  # Prompt 模式不使用自定义字段
+
+        self._transition(job_id, "PROCESSING", progress=30)
+
+        content = storage.get_bytes(storage_path)
         started = time.monotonic()
 
         result: dict[str, Any] | None = None
@@ -172,7 +180,7 @@ class OcrWorker:
 
                 result = run_extraction(
                     client,
-                    filename=file.original_name or f"{file.id}",
+                    filename=file_name,
                     content=content,
                     params=params,
                 )
