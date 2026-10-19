@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { filePagePreviewUrl } from '../api';
+import { filePagePreviewUrl, filePageUrls } from '../api';
 import { useT } from '../i18nVue';
+import ImageViewer from './ImageViewer.vue';
 
 const props = defineProps<{
   fileId: string;
@@ -12,17 +13,12 @@ const props = defineProps<{
 const { t } = useT();
 
 const activePage = ref(1);
-const zoomOpen = ref(false);
-const zoomedIn = ref(false);
+const viewerOpen = ref(false);
 
 const pageNumbers = computed(() =>
   Array.from({ length: Math.max(props.pageCount || 1, 1) }, (_, index) => index + 1),
 );
-
-function openZoom(): void {
-  zoomedIn.value = false;
-  zoomOpen.value = true;
-}
+const pageSources = computed(() => filePageUrls(props.fileId, props.pageCount));
 </script>
 
 <template>
@@ -42,7 +38,7 @@ function openZoom(): void {
         {{ page }}
       </button>
     </div>
-    <button class="original-frame" @click="openZoom">
+    <button class="original-frame" :aria-label="t('result.tapZoom')" @click="viewerOpen = true">
       <img
         class="original"
         :src="filePagePreviewUrl(fileId, activePage)"
@@ -57,19 +53,15 @@ function openZoom(): void {
     </button>
   </section>
 
-  <Teleport to="body">
-    <div v-if="zoomOpen" class="zoom-backdrop" @click.self="zoomOpen = false">
-      <button class="zoom-close" :aria-label="t('common.close')" @click="zoomOpen = false">×</button>
-      <img
-        class="zoom-image"
-        :class="{ zoomed: zoomedIn }"
-        :src="filePagePreviewUrl(fileId, activePage)"
-        :alt="fileName"
-        @click="zoomedIn = !zoomedIn"
-      />
-      <div class="zoom-tip">{{ zoomedIn ? t('result.tapToShrink') : t('result.tapToEnlarge') }}</div>
-    </div>
-  </Teleport>
+  <!-- 全屏查看器：双指捏合缩放、双击放大、拖动平移、多页滑动翻页（FR-VERIFY-014） -->
+  <ImageViewer
+    v-if="viewerOpen"
+    :sources="pageSources"
+    :index="activePage - 1"
+    :alt="fileName"
+    @update:index="activePage = $event + 1"
+    @close="viewerOpen = false"
+  />
 </template>
 
 <style scoped>
@@ -149,55 +141,5 @@ function openZoom(): void {
   justify-content: center;
   background: rgba(23, 26, 28, 0.68);
   color: #fff;
-}
-
-.zoom-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  background: rgba(10, 12, 16, 0.9);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 18px;
-}
-
-.zoom-close {
-  position: absolute;
-  top: 14px;
-  right: 16px;
-  width: 38px;
-  height: 38px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
-  font-size: 24px;
-  line-height: 1;
-}
-
-.zoom-image {
-  max-width: 100%;
-  max-height: 88dvh;
-  object-fit: contain;
-  border-radius: 8px;
-  background: #fff;
-  transition: transform 0.18s ease;
-  cursor: zoom-in;
-}
-
-.zoom-image.zoomed {
-  max-width: none;
-  max-height: none;
-  width: 180%;
-  cursor: zoom-out;
-}
-
-.zoom-tip {
-  position: absolute;
-  bottom: 18px;
-  left: 50%;
-  transform: translateX(-50%);
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 11px;
 }
 </style>

@@ -55,21 +55,86 @@ export function displayName(value: string): string {
     .join(' / ');
 }
 
-export function formatCell(value: unknown): string {
+// ---------- 金额显示 ----------
+// 单据中的数字默认视为金额：千分位逗号 + 至少保留 2 位小数（29650 → 29,650.00，68523.4 → 68,523.40），
+// 超过 2 位的原样保留不截断；序号、数量、编号、比率等计数/标识字段按原值显示。
+// 规则与后端导出 routes/exports.py 的 _format_number 保持一致。
+
+// 优先级：计数/比率（数量、序号、税率…）> 金额（金额、单价、合计…）> 编号类（no、item…）> 默认金额
+const COUNT_TOKENS = new Set([
+  'seq', 'sequence', 'qty', 'quantity', 'count', 'pcs', 'piece', 'pieces', 'page', 'pages', 'id',
+  'tel', 'phone', 'fax', 'mobile', 'year', 'zip', 'postal', 'postcode', 'rate', 'ratio', 'percent',
+  'pct',
+]);
+const AMOUNT_TOKENS = new Set([
+  'amount', 'amt', 'price', 'total', 'subtotal', 'sum', 'vat', 'tax', 'discount', 'fee', 'cost',
+  'balance', 'paid', 'payment', 'deposit', 'charge', 'money', 'net', 'gross',
+]);
+const LABEL_TOKENS = new Set(['no', 'num', 'number', 'index', 'idx', 'line', 'row', 'item', 'code']);
+const COUNT_TEXT = /序号|数量|页|率|ลำดับ|หน้า|อัตรา/;
+const AMOUNT_TEXT = /金额|价|费|税|额|เงิน|ราคา|ภาษี|ส่วนลด|ยอด/;
+const LABEL_TEXT = /编号|เลขที่|จำนวน/;
+
+function keyTokens(key: string): string[] {
+  return key
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z]+/)
+    .filter(Boolean);
+}
+
+/** 该字段的数字是否按金额显示（默认是；明确的计数/标识字段除外） */
+export function isAmountKey(key = ''): boolean {
+  const tokens = keyTokens(key);
+  if (tokens.some((tk) => COUNT_TOKENS.has(tk)) || COUNT_TEXT.test(key)) return false;
+  if (tokens.some((tk) => AMOUNT_TOKENS.has(tk)) || AMOUNT_TEXT.test(key)) return true;
+  return !(tokens.some((tk) => LABEL_TOKENS.has(tk)) || LABEL_TEXT.test(key));
+}
+
+export function formatNumber(value: number, key = ''): string {
+  const text = String(value);
+  if (!Number.isFinite(value) || !isAmountKey(key) || /e/i.test(text)) return text;
+  const sign = text.startsWith('-') ? '-' : '';
+  const [int, frac = ''] = text.slice(sign.length).split('.');
+  const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return `${sign}${grouped}.${frac.padEnd(2, '0')}`;
+}
+
+function scalarText(value: unknown, key: string, empty: string): string {
+  if (value === null || value === undefined) return empty;
+  if (typeof value === 'number') return formatNumber(value, key);
+  return String(value);
+}
+
+export function formatCell(value: unknown, key = ''): string {
   if (value === null || value === undefined) return '—';
   if (Array.isArray(value)) {
     if (value.length === 0) return '—';
     if (value.every((item) => isScalar(item))) {
-      return value.map((item) => (item === null || item === undefined ? '—' : String(item))).join('\n');
+      return value.map((item) => scalarText(item, key, '—')).join('\n');
     }
   }
   if (typeof value === 'object') return JSON.stringify(value, null, 2);
-  return String(value);
+  return scalarText(value, key, '—');
 }
 
-export function inputText(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  return String(value);
+export function inputText(value: unknown, key = ''): string {
+  return scalarText(value, key, '');
+}
+
+/** 输入框中的数字文本（允许千分位逗号） */
+export function parseNumberText(text: string): number | null {
+  const s = text.trim().replace(/,/g, '');
+  return /^-?\d+(\.\d+)?$/.test(s) ? Number(s) : null;
+}
+
+export function getAtPath(root: unknown, path: Path): unknown {
+  let node = root;
+  for (const part of path) {
+    if (node === null || typeof node !== 'object') return undefined;
+    node = (node as Record<string | number, unknown>)[part];
+  }
+  return node;
 }
 
 /** 修改 draft 中 path 指向的标量；draft 为 reactive 对象时视图会自动更新 */

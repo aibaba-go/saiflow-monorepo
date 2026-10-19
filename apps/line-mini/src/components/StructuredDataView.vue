@@ -20,6 +20,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (e: 'edit', path: Path, value: string): void;
+  (e: 'commit', path: Path): void;
 }>();
 
 const { t } = useT();
@@ -58,17 +59,19 @@ function onInput(path: Path, event: Event): void {
                 :key="valueIndex"
                 class="cell-input"
                 :aria-label="`${displayName(row.key)} ${valueIndex + 1}`"
-                :value="inputText(value)"
+                :value="inputText(value, row.key)"
                 @input="onInput([...row.path, valueIndex], $event)"
+                @change="emit('commit', [...row.path, valueIndex])"
               />
             </template>
             <input
               v-else-if="editable && row.editable"
               class="cell-input"
-              :value="inputText(row.value)"
+              :value="inputText(row.value, row.key)"
               @input="onInput(row.path, $event)"
+              @change="emit('commit', row.path)"
             />
-            <span v-else class="cell-text">{{ formatCell(row.value) }}</span>
+            <span v-else class="cell-text">{{ formatCell(row.value, row.key) }}</span>
           </dd>
         </div>
       </dl>
@@ -96,17 +99,19 @@ function onInput(path: Path, event: Event): void {
                     :key="valueIndex"
                     class="cell-input"
                     :aria-label="`${displayName(table.columns[cellIndex])} ${valueIndex + 1}`"
-                    :value="inputText(value)"
+                    :value="inputText(value, table.columns[cellIndex])"
                     @input="onInput([...cell.path, valueIndex], $event)"
+                    @change="emit('commit', [...cell.path, valueIndex])"
                   />
                 </template>
                 <input
                   v-else-if="editable && cell.editable"
                   class="cell-input"
-                  :value="inputText(cell.value)"
+                  :value="inputText(cell.value, table.columns[cellIndex])"
                   @input="onInput(cell.path, $event)"
+                  @change="emit('commit', cell.path)"
                 />
-                <span v-else class="cell-text">{{ formatCell(cell.value) }}</span>
+                <span v-else class="cell-text">{{ formatCell(cell.value, table.columns[cellIndex]) }}</span>
               </td>
             </tr>
           </tbody>
