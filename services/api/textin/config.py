@@ -8,8 +8,9 @@ import time.
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -25,20 +26,28 @@ class TextInSettings(BaseSettings):
         extra="ignore",
     )
 
-    textin_app_id: str = Field(default="", description="TextIn 应用 ID，传给 x-ti-app-id")
-    textin_secret_code: str = Field(default="", description="TextIn 密钥，传给 x-ti-secret-code")
-    textin_endpoint: str = "https://api.textin.com/api/v1/xparse/parse/sync"
+    textin_app_id: str = Field(default="", description="TextIn DocFlow 应用 ID，传给 x-ti-app-id")
+    textin_secret_code: str = Field(default="", description="TextIn DocFlow 密钥，传给 x-ti-secret-code")
+    textin_docflow_workspace_id: str = Field(
+        default="",
+        description="TextIn DocFlow workspace id（必填；走 DocFlow /upload/sync 时作为 query 参数 workspace_id）",
+    )
+    textin_endpoint: str = "https://docflow.textin.ai/api/app-api/sip/platform/v2/file/upload/sync"
     textin_extract_endpoint: str = "https://api.textin.com/api/v1/xparse/extract/sync"
     textin_prompt_endpoint: str = "https://api.textin.com/ai/service/v2/entity_extraction"
     ocr_storage_dir: Path = Path("./temp/extractions")
     ocr_uploads_dir: Path = Path("./temp/uploads")
     max_upload_bytes: int = 20 * 1024 * 1024
-    timeout_seconds: float = 60.0
+    timeout_seconds: float = 300.0
     prompt_timeout_seconds: float = 180.0
     connect_timeout_seconds: float = 10.0
 
     def has_credentials(self) -> bool:
-        return bool(self.textin_app_id and self.textin_secret_code)
+        return bool(
+            self.textin_app_id
+            and self.textin_secret_code
+            and self.textin_docflow_workspace_id
+        )
 
 
 def _resolve(value: Any, default: Any) -> Any:
@@ -63,9 +72,10 @@ def build_textin_settings(app_config: Mapping[str, Any]) -> TextInSettings:
     data: dict[str, Any] = {}
 
     candidates = {
-        "textin_app_id": ("TEXTIN_APP_ID", "4a8a32165b164e4fef6f2e54336de2d7"),
-        "textin_secret_code": ("TEXTIN_SECRET_CODE", "eac1b93270d3c7b9b7641c89309bb444"),
-        "textin_endpoint": ("TEXTIN_ENDPOINT", "https://api.textin.com/api/v1/xparse/parse/sync"),
+        "textin_app_id": ("TEXTIN_APP_ID", ""),
+        "textin_secret_code": ("TEXTIN_SECRET_CODE", ""),
+        "textin_docflow_workspace_id": ("TEXTIN_DOCFLOW_WORKSPACE_ID", ""),
+        "textin_endpoint": ("TEXTIN_ENDPOINT", "https://docflow.textin.ai/api/app-api/sip/platform/v2/file/upload/sync"),
         "textin_extract_endpoint": (
             "TEXTIN_EXTRACT_ENDPOINT",
             "https://api.textin.com/api/v1/xparse/extract/sync",
@@ -77,7 +87,7 @@ def build_textin_settings(app_config: Mapping[str, Any]) -> TextInSettings:
         "ocr_storage_dir": ("OCR_STORAGE_DIR", "./temp/extractions"),
         "ocr_uploads_dir": ("OCR_UPLOADS_DIR", "./temp/uploads"),
         "max_upload_bytes": ("MAX_UPLOAD_BYTES", 20 * 1024 * 1024),
-        "timeout_seconds": ("TEXTIN_TIMEOUT_SECONDS", 60.0),
+        "timeout_seconds": ("TEXTIN_TIMEOUT_SECONDS", 300.0),
         "prompt_timeout_seconds": ("TEXTIN_PROMPT_TIMEOUT_SECONDS", 180.0),
         "connect_timeout_seconds": ("TEXTIN_CONNECT_TIMEOUT_SECONDS", 10.0),
     }

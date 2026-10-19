@@ -1,18 +1,63 @@
-"""TextIn 结果规范化（PRD §12.2）。
+"""Adapter: turn a DocFlow `upload_file_sync` call into a normalized run result.
 
-当前唯一路径：run_extraction → v2 Prompt 模式智能抽取，只保留 llm_json
-（key-value 字段 + 表格）作为结构化结果。normalize_response 为 parse/sync
-的旧版逐页规范化（表格单元格/文字/字段），保留供兼容旧结果。
+The worker hands the adapter:
+  - filename, content (PDF bytes), content_type, parser_params
+    (DocFlow-shaped query keys: parser_parse_mode, parser_formula_level,
+    parser_crop_dewarp, parser_dpi, parser_apply_merge, category,
+    batch_number, target_process; routes validate user input upstream).
+
+The adapter returns a plain dict that the worker maps onto OcrJob:
+
+  {
+    "status": "SUCCEEDED" | "PARTIAL_SUCCESS" | "FAILED",
+    "error_code": "DOCFLOW_RECOGNITION_FAILED" | "DOCFLOW_UNEXPECTED_STATUS" | None,
+    "error_message": str | None,         # flattened failure_causes
+    "structured": dict,                  # result.files[0] verbatim (data + pages + metadata)
+    "task_id": str | None,
+    "batch_number": str | None,
+    "category": str | None,
+  }
+
+`recognition_status` mapping (PRD §12.2 + DocFlow semantics):
+  1 → SUCCEEDED iff data.fields AND data.items are both non-empty; else PARTIAL_SUCCESS.
+  2 → FAILED (DOCFLOW_RECOGNITION_FAILED); failure_causes collapse into error_message.
+  anything else → FAILED (DOCFLOW_UNEXPECTED_STATUS) — vendor returned a non-terminal
+                  status to a synchronous endpoint, which should never happen.
+
+Legacy xparse parsers, page-by-page heuristics, prompt-mode helpers, and the
+former standalone KV extraction module were intentionally removed during the
+DocFlow migration.
 """
+
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from textin.client import TextInClient
-from textin.errors import TextInAPIError
+from textin.errors import (
+    DOCFLOW_RECOGNITION_FAILED,
+    DOCFLOW_UNEXPECTED_STATUS,
+)
 
-VENDOR = "textin"
+VENDOR = "textin-docflow"
+
+# DocFlow-accepted query keys (worker routes must validate user input upstream).
+ALLOWED_PARSER_KEYS: frozenset[str] = frozenset(
+    {
+        "parser_parse_mode",
+        "parser_formula_level",
+        "parser_crop_dewarp",
+        "parser_dpi",
+        "parser_apply_merge",
+        "category",
+        "batch_number",
+        "target_process",
+    }
+)
+
+# Cap failure_causes summary text to keep DB error_message columns bounded.
+_MAX_ERROR_MESSAGE_LEN = 512
+_MAX_FAILURE_CAUSES = 5
 
 
 def _num(value: Any, default: int = 0) -> int:
@@ -22,188 +67,143 @@ def _num(value: Any, default: int = 0) -> int:
         return default
 
 
-def _find(response: dict[str, Any], key: str) -> Any:
-    """parse/sync 的结果在顶层；extract/sync 的解析结果可能包在 result 里。"""
-    if key in response:
-        return response[key]
-    result = response.get("result")
-    if isinstance(result, dict) and key in result:
-        return result[key]
-    return None
+def _has_non_empty_items(items: Any) -> bool:
+    """data.items[][] — considered non-empty if any row has at least one cell."""
+    if not isinstance(items, list):
+        return False
+    for row in items:
+        if isinstance(row, list) and len(row) > 0:
+            return True
+    return False
 
 
-def _page_numbers(response: dict[str, Any]) -> list[int]:
-    pages = _find(response, "pages") or []
-    out: list[int] = []
-    for p in pages:
-        if isinstance(p, dict) and p.get("page_number") is not None:
-            out.append(_num(p["page_number"], -1))
-    if not out:
-        for e in _find(response, "elements") or []:
-            if isinstance(e, dict) and e.get("page_number") is not None:
-                n = _num(e["page_number"], -1)
-                if n > 0 and n not in out:
-                    out.append(n)
-    return sorted(n for n in out if n > 0)
+def _format_failure_causes(causes: Any) -> str | None:
+    """Flatten failure_causes[] into a single human-readable string.
 
-
-def _page_texts(response: dict[str, Any]) -> dict[int, str]:
-    pages = _find(response, "pages") or []
-    out: dict[int, str] = {}
-    for p in pages:
-        if not isinstance(p, dict):
-            continue
-        n = _num(p.get("page_number"), 0)
-        md = (p.get("markdown") or "").strip()
-        if n > 0 and md:
-            out[n] = md
-    for e in _find(response, "elements") or []:
-        # TextIn 文字块 type 为 NarrativeText/Title/TableCaption 等；Table 的 text 是 HTML 表格，跳过
-        if not isinstance(e, dict) or e.get("type") == "Table":
-            continue
-        n = _num(e.get("page_number"), 0)
-        text = (e.get("text") or "").strip().replace("**", "")
-        if n > 0 and text:
-            out[n] = f"{out[n]}\n{text}".strip() if n in out else text
-    return out
-
-
-def _normalize_tables(response: dict[str, Any]) -> dict[int, list[dict[str, Any]]]:
-    out: dict[int, list[dict[str, Any]]] = {}
-    seq = 0
-    for e in _find(response, "elements") or []:
-        if not isinstance(e, dict) or e.get("type") != "Table":
-            continue
-        seq += 1
-        page = _num(e.get("page_number"), 1)
-        ts = e.get("table_structure") or {}
-        cells_in = ts.get("cells") or []
-        cells: list[dict[str, Any]] = []
-        max_row = max_col = 0
-        for c in cells_in:
-            if not isinstance(c, dict):
-                continue
-            row = _num(c.get("row"))
-            col = _num(c.get("col"))
-            row_span = max(1, _num(c.get("row_span"), 1))
-            col_span = max(1, _num(c.get("col_span"), 1))
-            text = str(c.get("text") or "")
-            max_row = max(max_row, row + row_span)
-            max_col = max(max_col, col + col_span)
-            cells.append(
-                {
-                    "row_index": row,
-                    "column_index": col,
-                    "row_span": row_span,
-                    "column_span": col_span,
-                    "raw_text": text,
-                    "current_text": text,
-                    "polygon": c.get("polygon") or c.get("coordinates") or [],
-                    "confidence": float(c.get("confidence") or 0),
-                    "review_status": "UNREVIEWED",
-                }
-            )
-        # 第一行约定为表头：跳过不进 fields，但保留在表格结构里
-        out.setdefault(page, []).append(
-            {
-                "table_id": f"table_{seq}",
-                "row_count": max_row,
-                "column_count": max_col,
-                "cells": cells,
-            }
-        )
-    return out
-
-
-def _fields_for_page(fields: list[dict[str, Any]], page: int) -> list[dict[str, Any]]:
-    return [
-        {"name": f["name"], "value": f["value"], "source": f.get("source", ""), "source_page": f.get("page_number", 0)}
-        for f in fields
-        if f.get("page_number", 0) in (0, page)
-    ]
-
-
-def normalize_response(
-    response: dict[str, Any],
-    *,
-    fields: list[dict[str, Any]],
-    page_start: int = 1,
-    page_count: int | None = None,
-) -> dict[str, Any]:
-    """标准化主入口。page_start/page_count 为 1 基请求范围，用于缺失页计算。"""
-    page_numbers = _page_numbers(response)
-    texts = _page_texts(response)
-    tables = _normalize_tables(response)
-
-    requested_end = (page_start + page_count - 1) if page_count else None
-    if requested_end:
-        expected = set(range(page_start, requested_end + 1))
-    else:
-        expected = set(page_numbers) or {page_start}
-    missing = sorted(expected - set(page_numbers))
-
-    pages = []
-    for n in sorted(set(page_numbers) | (expected - set(missing))):
-        pages.append(
-            {
-                "page_number": n,
-                "text": texts.get(n, ""),
-                "tables": tables.get(n, []),
-                "fields": _fields_for_page(fields, n),
-            }
-        )
-
-    table_count = sum(len(t) for t in tables.values())
-    duration = response.get("duration")
-    metadata = _find(response, "metadata") or {}
-    return {
-        "vendor": VENDOR,
-        "page_count": _num(metadata.get("page_count"), len(page_numbers) or 1),
-        "duration_ms": _num(duration) if isinstance(duration, (int, float)) else 0,
-        "pages": pages,
-        "missing_pages": missing,
-        "table_count": table_count,
-        "field_count": len(fields),
-    }
-
-
-EXTRACT_PROMPT = "请帮我结构化这个文件，结果以 JSON 形式返回"
-
-
-def _parse_llm_json(raw: Any) -> dict[str, Any] | list[Any]:
-    """llm_json 通常是对象；个别情况下以字符串（可能带 ```json 围栏）返回。"""
-    if isinstance(raw, (dict, list)):
-        return raw
-    if isinstance(raw, str):
-        s = raw.strip()
-        if s.startswith("```"):
-            s = s.strip("`").removeprefix("json").strip()
-        try:
-            parsed = json.loads(s)
-        except ValueError as e:
-            raise TextInAPIError(-1, "llm_json is not valid JSON") from e
-        if isinstance(parsed, (dict, list)):
-            return parsed
-    raise TextInAPIError(-1, "llm_json missing in TextIn response")
+    Each cause is a dict like {"code": ..., "msg": ...}; render `[code] msg`.
+    Truncate to first N causes and overall length to keep error_message bounded.
+    """
+    if not isinstance(causes, list) or not causes:
+        return None
+    parts: list[str] = []
+    for cause in causes[:_MAX_FAILURE_CAUSES]:
+        if isinstance(cause, dict):
+            code = cause.get("code", "")
+            msg = cause.get("msg") or cause.get("message") or ""
+            rendered = f"[{code}] {msg}".strip()
+            if rendered:
+                parts.append(rendered)
+        else:
+            parts.append(str(cause))
+    if not parts:
+        return None
+    return "; ".join(parts)[:_MAX_ERROR_MESSAGE_LEN]
 
 
 def _count_structure(node: Any) -> tuple[int, int]:
-    """(表格数, 字段数)：元素为对象的数组视为表格，其余标量叶子计为字段。"""
+    """Count (tables, fields) in a structured OCR payload.
+
+    Handles both shapes:
+    - DocFlow native: `{"data": {"fields": [...], "items": [[...]], "tables": [...]}}`
+      → tables = len(data.tables) + number of non-empty rows in data.items[][];
+        fields = len(data.fields).
+    - Legacy llm_json: any nested dict / list → recursively count tables-of-dicts
+      (a list whose elements are all dicts is a table) and scalar leaves as fields.
+    """
+    if isinstance(node, dict):
+        data = node.get("data")
+        if isinstance(data, dict):
+            fields_raw = data.get("fields")
+            items_raw = data.get("items")
+            tables_raw = data.get("tables")
+            field_count = len(fields_raw) if isinstance(fields_raw, list) else 0
+            tables_block_count = (
+                sum(1 for row in items_raw if isinstance(row, list) and len(row) > 0)
+                if isinstance(items_raw, list)
+                else 0
+            )
+            tables_data_count = (
+                len(tables_raw) if isinstance(tables_raw, list) else 0
+            )
+            return (tables_block_count + tables_data_count, field_count)
+        tables = fields = 0
+        for value in node.values():
+            t, f = _count_structure(value)
+            tables += t
+            fields += f
+        return (tables, fields)
     if isinstance(node, list):
         if node and all(isinstance(x, dict) for x in node):
-            return 1, 0
+            return (1, 0)
         tables = fields = 0
         for x in node:
             t, f = _count_structure(x)
-            tables, fields = tables + t, fields + f
-        return tables, fields
-    if isinstance(node, dict):
-        tables = fields = 0
-        for v in node.values():
-            t, f = _count_structure(v)
-            tables, fields = tables + t, fields + f
-        return tables, fields
-    return 0, 1
+            tables += t
+            fields += f
+        return (tables, fields)
+    return (0, 1)
+
+
+def build_parser_params(params: dict[str, Any]) -> dict[str, Any]:
+    """Filter caller-supplied parser_params to keys DocFlow accepts (passthrough)."""
+    out: dict[str, Any] = {}
+    for key in ALLOWED_PARSER_KEYS:
+        if key in params and params[key] is not None:
+            out[key] = params[key]
+    return out
+
+
+def normalize_items_to_rows(items: Any) -> list[dict[str, Any]]:
+    """Turn DocFlow `data.items[][]` into a row list for DM persistence.
+
+    Each input cell has DocFlow's shape `{"key": str, "value": any, "position": [...]}`.
+    Output rows contain:
+      - `row_index`: 0-based
+      - `cells`: each cell in encounter order, with `key` coerced to a string
+                 (or replaced with `${row_index}-${col_index}` if missing)
+      - `kv`: dict mapping key → last value seen (later overrides earlier)
+      - `cell_positions`: [{key, position}, ...] for distinct keys
+
+    Cells missing a key get a placeholder of `${row_index}-${col_index}` so the
+    downstream table viewer can still reference them by row+col.
+    """
+    rows: list[dict[str, Any]] = []
+    if not isinstance(items, list):
+        return rows
+
+    for row_index, row in enumerate(items):
+        if not isinstance(row, list):
+            continue
+
+        cells: list[dict[str, Any]] = []
+        kv: dict[str, Any] = {}
+        cell_positions: list[dict[str, Any]] = []
+
+        for col_index, cell in enumerate(row):
+            if not isinstance(cell, dict):
+                continue
+            raw_key = cell.get("key")
+            key: str = (
+                raw_key
+                if isinstance(raw_key, str) and raw_key
+                else f"{row_index}-{col_index}"
+            )
+            value = cell.get("value", "")
+            position = cell.get("position", [])
+
+            cells.append({"key": key, "value": value, "position": position})
+            kv[key] = value
+            cell_positions.append({"key": key, "position": position})
+
+        rows.append(
+            {
+                "row_index": row_index,
+                "cells": cells,
+                "kv": kv,
+                "cell_positions": cell_positions,
+            }
+        )
+    return rows
 
 
 def run_extraction(
@@ -211,37 +211,75 @@ def run_extraction(
     *,
     filename: str,
     content: bytes,
-    params: dict[str, Any],
+    content_type: str = "application/octet-stream",
+    params: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """唯一 OCR 调用路径：TextIn Prompt 模式智能抽取（PRD §12 单厂商）。
+    """Single DocFlow extraction entry.
 
-    结果只保留大模型返回的结构化 JSON（key-value 字段 + 表格）。
+    `params` is the user-supplied DocFlow-shaped parser_params dict (routes
+    validate that `parser_parse_mode` ∈ {auto, scan, vlm} before this is
+    called). The full `result.files[0]` payload is returned under
+    `structured` so the persistence layer can keep vendor positions and
+    pages verbatim for downstream rendering.
     """
-    response = client.extract_with_prompt(
-        filename=filename, content=content, prompt=EXTRACT_PROMPT, params=params
+    parser_params = build_parser_params(params or {})
+    response = client.upload_file_sync(
+        filename=filename,
+        content=content,
+        content_type=content_type,
+        parser_params=parser_params,
     )
-    result = response.get("result") if isinstance(response.get("result"), dict) else {}
-    structured = _parse_llm_json(result.get("llm_json"))
-    table_count, field_count = _count_structure(structured)
-    pages = result.get("pages")
-    page_count = _num(response.get("page_count")) or (len(pages) if isinstance(pages, list) else 0)
-    duration = response.get("duration")
+
+    result = response.get("result") if isinstance(response, dict) else None
+    if not isinstance(result, dict):
+        result = {}
+
+    files = result.get("files") if isinstance(result.get("files"), list) else []
+    file_entry = files[0] if files and isinstance(files[0], dict) else {}
+
+    data = file_entry.get("data") if isinstance(file_entry.get("data"), dict) else {}
+    fields = data.get("fields") if isinstance(data.get("fields"), list) else []
+    items = data.get("items") if isinstance(data.get("items"), list) else []
+
+    recognition_status = _num(file_entry.get("recognition_status"), -1)
+    failure_causes = file_entry.get("failure_causes")
+    error_message = _format_failure_causes(failure_causes)
+
+    if recognition_status == 1:
+        has_fields = len(fields) > 0
+        has_items = _has_non_empty_items(items)
+        status = "SUCCEEDED" if (has_fields and has_items) else "PARTIAL_SUCCESS"
+        error_code = None
+    elif recognition_status == 2:
+        status = "FAILED"
+        error_code = DOCFLOW_RECOGNITION_FAILED
+    else:
+        status = "FAILED"
+        error_code = DOCFLOW_UNEXPECTED_STATUS
+
+    table_count, field_count = _count_structure(file_entry)
+
     return {
         "vendor": VENDOR,
-        "page_count": page_count,
-        "duration_ms": _num(duration) if isinstance(duration, (int, float)) else 0,
-        "structured": structured,
-        "missing_pages": [],
+        "status": status,
+        "error_code": error_code,
+        "error_message": error_message,
+        "structured": file_entry,
+        "task_id": file_entry.get("task_id") if isinstance(file_entry.get("task_id"), str) else None,
+        "batch_number": file_entry.get("batch_number") if isinstance(file_entry.get("batch_number"), str) else None,
+        "category": file_entry.get("category") if isinstance(file_entry.get("category"), str) else None,
         "table_count": table_count,
         "field_count": field_count,
-        "field_source": "prompt",
     }
 
 
 __all__ = [
-    "EXTRACT_PROMPT",
+    "ALLOWED_PARSER_KEYS",
+    "DOCFLOW_RECOGNITION_FAILED",
+    "DOCFLOW_UNEXPECTED_STATUS",
     "VENDOR",
-    "TextInAPIError",
-    "normalize_response",
+    "_count_structure",
+    "build_parser_params",
+    "normalize_items_to_rows",
     "run_extraction",
 ]
