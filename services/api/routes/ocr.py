@@ -26,6 +26,30 @@ RUNNING = {"QUEUED", "PREPROCESSING", "PROCESSING", "POSTPROCESSING"}
 MAX_FIELD_NAMES = 100
 MAX_FIELD_NAME_LEN = 64
 
+# DocFlow vendor accepted parameter set (mirrors textin.adapter.ALLOWED_PARSER_KEYS
+# minus execution knobs the route re-validates below).
+ALLOWED_PARSER_PARAMS: frozenset[str] = frozenset(
+    {
+        "parser_parse_mode",
+        "parser_formula_level",
+        "parser_crop_dewarp",
+        "parser_dpi",
+        "parser_apply_merge",
+        "category",
+        "batch_number",
+        "target_process",
+    }
+)
+ALLOWED_PARSE_MODES: frozenset[str] = frozenset({"auto", "scan", "vlm"})
+ALLOWED_TARGET_PROCESS: frozenset[str] = frozenset({"classify", "extract"})
+ALLOWED_PARSER_DPI: frozenset[int] = frozenset({144, 216})
+
+# Legacy keys from the xparse / Prompt-mode vendor; reject so callers update
+# to the DocFlow-shaped parameter set.
+REJECTED_PARAM_KEYS: frozenset[str] = frozenset(
+    {"parse_mode", "table", "formula", "rotate", "layout", "article", "field_names"}
+)
+
 
 def _active_enterprise_ids(user_id: int) -> list[int]:
     rows = Membership.query.filter_by(user_id=user_id, status="ACTIVE").all()
@@ -76,13 +100,13 @@ def capabilities():
     cfg = current_app.config
     return ok(
         {
-            "vendor": "textin",
+            "vendor": "textin-docflow",
             "features": {
                 "table": True,
                 "formula": True,
                 "rotate": True,
                 "fields": True,
-                "parse_modes": ["scan", "layout", "article"],
+                "parse_modes": ["auto", "scan", "vlm"],
             },
             "limits": {
                 "allowed_extensions": sorted(cfg["ALLOWED_FILE_EXTENSIONS"]),
@@ -93,6 +117,98 @@ def capabilities():
             },
         }
     )
+
+
+def _validate_parser_params(params: dict) -> None:
+    """Reject legacy xparse param keys; enforce DocFlow-shaped enums.
+
+    Raises ApiError (the runtime form of `invalid_argument`) so the blueprint
+    handler renders 400 with field_errors attributed to the offending key.
+    """
+    rejected = [k for k in params if k in REJECTED_PARAM_KEYS]
+    if rejected:
+        raise invalid_argument(
+            field_errors=[
+                {"field": key, "reason": "unsupported by DocFlow vendor"}
+                for key in rejected
+            ]
+        )
+
+    unknown = [k for k in params if k not in ALLOWED_PARSER_PARAMS
+               and k not in {"page", "page_count"}]
+    if unknown:
+        raise invalid_argument(
+            field_errors=[
+                {"field": key, "reason": "unknown parser param"}
+                for key in unknown
+            ]
+        )
+
+    mode = params.get("parser_parse_mode")
+    if mode is not None and mode not in ALLOWED_PARSE_MODES:
+        raise invalid_argument(
+            field_errors=[
+                {
+                    "field": "parser_parse_mode",
+                    "reason": f"must be one of {sorted(ALLOWED_PARSE_MODES)}",
+                }
+            ]
+        )
+
+    formula_level = params.get("parser_formula_level")
+    if formula_level is not None and formula_level not in (0, 1):
+        raise invalid_argument(
+            field_errors=[
+                {"field": "parser_formula_level", "reason": "must be 0 or 1"}
+            ]
+        )
+
+    crop = params.get("parser_crop_dewarp")
+    if crop is not None and not isinstance(crop, bool):
+        raise invalid_argument(
+            field_errors=[
+                {"field": "parser_crop_dewarp", "reason": "must be boolean"}
+            ]
+        )
+
+    dpi = params.get("parser_dpi")
+    if dpi is not None and dpi not in ALLOWED_PARSER_DPI:
+        raise invalid_argument(
+            field_errors=[
+                {
+                    "field": "parser_dpi",
+                    "reason": f"must be one of {sorted(ALLOWED_PARSER_DPI)}",
+                }
+            ]
+        )
+
+    apply_merge = params.get("parser_apply_merge")
+    if apply_merge is not None and not isinstance(apply_merge, bool):
+        raise invalid_argument(
+            field_errors=[
+                {"field": "parser_apply_merge", "reason": "must be boolean"}
+            ]
+        )
+
+    target = params.get("target_process")
+    if target is not None and target not in ALLOWED_TARGET_PROCESS:
+        raise invalid_argument(
+            field_errors=[
+                {
+                    "field": "target_process",
+                    "reason": f"must be one of {sorted(ALLOWED_TARGET_PROCESS)}",
+                }
+            ]
+        )
+
+    for str_field in ("category", "batch_number"):
+        value = params.get(str_field)
+        if value is not None and (
+            not isinstance(value, str) or not value.strip() or len(value) > 64
+        ):
+            raise invalid_argument(
+                field_errors=[{"field": str_field, "reason": "invalid"}]
+            )
 
 
 @ocr_bp.post("/ocr/jobs")
@@ -122,15 +238,6 @@ def create_job():
     params = body.get("params") or {}
     if not isinstance(params, dict):
         raise invalid_argument(field_errors=[{"field": "params", "reason": "invalid"}])
-    field_names = body.get("field_names")
-    if field_names is not None:
-        if (
-            not isinstance(field_names, list)
-            or len(field_names) > MAX_FIELD_NAMES
-            or any(not isinstance(n, str) or not n.strip() or len(n) > MAX_FIELD_NAME_LEN for n in field_names)
-        ):
-            raise invalid_argument(field_errors=[{"field": "field_names", "reason": "invalid"}])
-        field_names = [n.strip() for n in field_names if n.strip()]
 
     page = params.get("page")
     page_count = params.get("page_count")
@@ -148,6 +255,8 @@ def create_job():
         if span > current_app.config["MAX_PAGES_PER_TASK"]:
             raise invalid_argument("job.page_count_exceeded")
 
+    _validate_parser_params(params)
+
     idem = request.headers.get("Idempotency-Key") or body.get("idempotency_key") or None
     if idem is not None:
         if not isinstance(idem, str) or not idem.strip() or len(idem) > 128:
@@ -163,13 +272,21 @@ def create_job():
                 return ok(_summary(existing), status=200)  # 幂等重放
             raise not_found()
 
-    stored_params = {
-        k: params[k]
-        for k in ("parse_mode", "table", "formula", "rotate", "page", "page_count")
-        if k in params
-    }
-    if field_names:
-        stored_params["field_names"] = field_names
+    # Persist only the validated DocFlow-shaped subset (plus page/page_count
+    # which the worker reads to slice the document).
+    stored_keys = (
+        "parser_parse_mode",
+        "parser_formula_level",
+        "parser_crop_dewarp",
+        "parser_dpi",
+        "parser_apply_merge",
+        "category",
+        "batch_number",
+        "target_process",
+        "page",
+        "page_count",
+    )
+    stored_params = {k: params[k] for k in stored_keys if k in params}
 
     job = OcrJob(
         workspace_type=workspace_type,
@@ -177,7 +294,7 @@ def create_job():
         created_by_user_id=user.id,
         file_id=file.id,
         params=stored_params,
-        capability={"vendor": "textin"},
+        capability={"vendor": "textin-docflow"},
         status="QUEUED",
         progress=0,
         idempotency_key=idem,

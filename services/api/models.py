@@ -364,6 +364,19 @@ class OcrJob(db.Model, TimestampMixin):
     error_code = db.Column(db.String(64), nullable=False, default="", comment="失败错误码")
     error_message = db.Column(db.String(512), nullable=False, default="", comment="失败错误信息")
     vendor_request_id = db.Column(db.String(64), nullable=False, default="", comment="TextIn 请求 ID（排障用）")
+    vendor_task_id = db.Column(
+        db.String(64), nullable=True, comment="DocFlow file-level task_id（vendor 返回；排障 + 重试用）"
+    )
+    vendor_batch_number = db.Column(
+        db.String(64), nullable=True, comment="DocFlow file-level batch_number（vendor 返回）"
+    )
+    vendor_category = db.Column(
+        db.String(64), nullable=True, comment="DocFlow file-level category（vendor 分类结果）"
+    )
+    recognition_status = db.Column(
+        db.Integer, nullable=True,
+        comment="DocFlow 文件级 recognition_status（0/1/2/...）；持久化以便 audit",
+    )
     page_count = db.Column(db.Integer, nullable=False, default=0, comment="识别页数")
     table_count = db.Column(db.Integer, nullable=False, default=0, comment="识别出的表格数")
     field_count = db.Column(db.Integer, nullable=False, default=0, comment="识别出的字段数")
@@ -410,6 +423,10 @@ class OcrJob(db.Model, TimestampMixin):
             "parent_job_id": self.parent_job_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "finished_at": self.finished_at.isoformat() if self.finished_at else None,
+            "task_id": self.vendor_task_id,
+            "batch_number": self.vendor_batch_number,
+            "category": self.vendor_category,
+            "recognition_status": self.recognition_status,
         }
 
 

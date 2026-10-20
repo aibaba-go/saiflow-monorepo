@@ -41,8 +41,9 @@ def configure_schema(app: Flask) -> None:
 def init_textin(app: Flask) -> None:
     """装配 TextIn 配置与客户端（唯一 OCR 厂商，PRD §12）。
 
-    未配置凭据时不创建 client，OCR 任务会进入 FAILED(能力不可用)；
-    其余路由不受影响。
+    凭据齐全（`app_id` + `secret_code` + `workspace_id`）才创建 client；
+    否则记 WARN（明确缺哪个），OCR 任务会进入 FAILED(能力不可用)，
+    其余路由不受影响。atexit 关闭行为不变。
     """
     from textin.client import TextInClient
     from textin.config import build_textin_settings
@@ -52,7 +53,17 @@ def init_textin(app: Flask) -> None:
     settings = build_textin_settings(app.config)
     app.extensions["textin_settings"] = settings
 
-    if settings.has_credentials():
+    missing = [
+        name
+        for name, flag in (
+            ("TEXTIN_APP_ID", bool(settings.textin_app_id)),
+            ("TEXTIN_SECRET_CODE", bool(settings.textin_secret_code)),
+            ("TEXTIN_DOCFLOW_WORKSPACE_ID", bool(settings.textin_docflow_workspace_id)),
+        )
+        if not flag
+    ]
+
+    if not missing:
         client = TextInClient(settings)
         app.extensions["textin_client"] = client
 
@@ -64,4 +75,7 @@ def init_textin(app: Flask) -> None:
 
         atexit.register(_close_client)
     else:
-        logger.warning("TEXTIN_APP_ID / TEXTIN_SECRET_CODE 未配置；OCR 任务将失败。")
+        logger.warning(
+            "TextIn DocFlow 凭据缺失 (%s)；OCR 任务将失败。",
+            ", ".join(missing) or "未知",
+        )

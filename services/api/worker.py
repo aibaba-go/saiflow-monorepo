@@ -5,12 +5,18 @@ SUCCEEDED / PARTIAL_SUCCESS / FAILED；CANCEL_REQUESTED → CANCELLED。
 进程重启后把中断的非终态任务重新排队（不丢任务、不重复计费——
 恢复时仅在任务仍处于 QUEUED/PREPROCESSING 时继续；PROCESSING 中
 厂商是否已接收无法对账，按 PRD §12.4 标记 FAILED(uncertain) 保守处理）。
+
+DocFlow 适配：`_process_inner` 调 `textin.adapter.run_extraction`；识别结果
+按 `result["status"]` 映射到 OcrJob，并把 vendor 标识
+（vendor_task_id / vendor_batch_number / vendor_category / recognition_status）
+持久化以便排障 + 重试；审计 JSON 写入完整 structured 摘要。
 """
 from __future__ import annotations
 
 import logging
 import threading
 import time
+from collections.abc import Callable
 from typing import Any
 
 from flask import Flask
@@ -19,6 +25,96 @@ logger = logging.getLogger(__name__)
 
 TERMINAL = {"SUCCEEDED", "PARTIAL_SUCCESS", "FAILED", "CANCELLED"}
 MAX_VENDOR_RETRIES = 3  # 限流类错误的有界指数退避（PRD §12.4）
+
+# Map adapter run_extraction status → OcrJob.status string.
+_STATUS_MAP: dict[str, str] = {
+    "SUCCEEDED": "SUCCEEDED",
+    "PARTIAL_SUCCESS": "PARTIAL_SUCCESS",
+    "FAILED": "FAILED",
+}
+
+
+def _truncate(s: str | None, limit: int = 512) -> str:
+    s = s or ""
+    return s[:limit]
+
+
+def apply_extraction_to_job(job, result: dict[str, Any], duration_ms: int) -> None:
+    """Pure mapping: take an OcrJob ORM instance + the run_extraction result and
+    update all fields that depend on a successful vendor response.
+
+    Side effects:
+      - Sets `status`, `progress`, `duration_ms`, `page_count`, `table_count`,
+        `field_count`, `vendor_task_id`, `vendor_batch_number`, `vendor_category`,
+        `recognition_status`, `capability` (vendor="textin-docflow"), `error_code`,
+        `error_message`.
+
+    Note: this helper does NOT commit, transition to a worker state, or open a
+    DB session. The caller owns those so the helper stays a pure function and
+    is testable without Flask context.
+    """
+    status_raw = result.get("status") or "FAILED"
+    job.status = _STATUS_MAP.get(status_raw, "FAILED")
+
+    if job.status == "FAILED":
+        # 任务失败时把 vendor 错误码与可读信息写入 OcrJob。
+        job.error_code = (result.get("error_code") or "OCR_FAILED")
+        job.error_message = _truncate(result.get("error_message"))
+
+    structured = result.get("structured") or {}
+    if not isinstance(structured, dict):
+        structured = {}
+
+    job.duration_ms = result.get("duration_ms") or duration_ms
+    job.page_count = (
+        result.get("page_count")
+        or getattr(job, "file", None) and getattr(job.file, "page_count", 0)
+        or 1
+    )
+    job.table_count = result.get("table_count", 0) or 0
+    job.field_count = result.get("field_count", 0) or 0
+
+    job.vendor_task_id = result.get("task_id")
+    job.vendor_batch_number = result.get("batch_number")
+    job.vendor_category = result.get("category")
+    rs = structured.get("recognition_status")
+    job.recognition_status = rs if isinstance(rs, int) else None
+
+    # Capability 摘要：保留用户已有的能力快照，只覆盖 vendor 字段。
+    capability = dict(job.capability or {})
+    capability["vendor"] = result.get("vendor") or "textin-docflow"
+    capability.pop("field_source", None)  # 老 vendor 的字段源不再适用
+    job.capability = capability
+
+
+def build_audit_payload(
+    job_id: str,
+    result: dict[str, Any],
+    *,
+    saved_at: str,
+    duration_ms: int,
+) -> dict[str, Any]:
+    """Build the audit JSON snapshot.
+
+    Includes the full `structured` payload so post-mortem on a failed job
+    has enough vendor context without re-fetching. Heavy keys (pages /
+    handwritings / stamps) are kept verbatim — audit storage is sized for it.
+    """
+    summary: dict[str, Any] = {
+        "vendor": result.get("vendor"),
+        "status": result.get("status"),
+        "page_count": result.get("page_count"),
+        "table_count": result.get("table_count"),
+        "field_count": result.get("field_count"),
+        "duration_ms": result.get("duration_ms") or duration_ms,
+        "task_id": result.get("task_id"),
+        "batch_number": result.get("batch_number"),
+        "category": result.get("category"),
+        "error_code": result.get("error_code"),
+        "error_message": result.get("error_message"),
+        "structured": result.get("structured"),
+    }
+    return {"job_id": job_id, "saved_at": saved_at, "summary": summary}
 
 
 class OcrWorker:
@@ -41,9 +137,9 @@ class OcrWorker:
     def _loop(self) -> None:
         from datetime import datetime, timedelta, timezone
 
+        import quota
         from extensions import db
         from models import OcrJob
-        import quota
 
         with self.app.app_context():
             # 重启恢复：中断的任务重新入队；已请求取消的直接落终态（不再计费）
@@ -75,7 +171,7 @@ class OcrWorker:
                     job_id = job.id if job is not None else None
                 if job_id is not None:
                     self._process(job_id)
-            except Exception:  # noqa: BLE001 worker 永不退出
+            except Exception:
                 logger.exception("OCR worker 轮询异常")
             self._stop.wait(self.poll_seconds)
 
@@ -83,9 +179,9 @@ class OcrWorker:
 
     def _transition(self, job_id: str, status: str, *, progress: int | None = None,
                     error_code: str = "", error_message: str = "") -> None:
+        import quota
         from extensions import db
         from models import OcrJob
-        import quota
 
         job = db.session.get(OcrJob, job_id)
         if job is None:
@@ -101,7 +197,7 @@ class OcrWorker:
             # 未产出可用结果：返还本次免费任务消耗（幂等）
             try:
                 quota.refund_for_job(job_id)
-            except Exception:  # noqa: BLE001 返还不阻塞状态落库
+            except Exception:
                 logger.exception("配额返还失败 job=%s", job_id)
         db.session.commit()
 
@@ -159,10 +255,9 @@ class OcrWorker:
         self._transition(job_id, "PROCESSING", progress=30)
 
         content = storage.get_bytes(file.storage_path)
-        file_pages = file.page_count
         params = dict(job.params or {})
-        params.pop("field_names", None)  # Prompt 模式不使用自定义字段
         started = time.monotonic()
+        content_type = "application/octet-stream"
 
         result: dict[str, Any] | None = None
         last_err: Exception | None = None
@@ -174,6 +269,7 @@ class OcrWorker:
                     client,
                     filename=file.original_name or f"{file.id}",
                     content=content,
+                    content_type=content_type,
                     params=params,
                 )
                 break
@@ -201,7 +297,6 @@ class OcrWorker:
 
         self._transition(job_id, "POSTPROCESSING", progress=80)
 
-        refiner = ""
         import deepseek
 
         if deepseek.is_configured(self.app.config):
@@ -211,9 +306,8 @@ class OcrWorker:
                 refined = deepseek.refine_json(result["structured"], self.app.config)
                 result["structured"] = refined
                 result["table_count"], result["field_count"] = _count_structure(refined)
-                refiner = str(self.app.config.get("DEEPSEEK_MODEL") or "deepseek")
-            except Exception as e:  # noqa: BLE001 二次整理失败不影响主流程，保留 TextIn 结果
-                logger.warning("DeepSeek 整理失败，沿用 TextIn JSON job=%s: %s", job_id, e)
+            except Exception as e:  # noqa: BLE001 二次整理失败不影响主流程，保留 DocFlow 结果
+                logger.warning("DeepSeek 整理失败，沿用 DocFlow JSON job=%s: %s", job_id, e)
 
         with self.app.app_context():
             job = db.session.get(OcrJob, job_id)
@@ -223,15 +317,7 @@ class OcrWorker:
                 structured=result["structured"],
             )
             db.session.add(version)
-            job.duration_ms = result["duration_ms"] or duration_ms
-            job.page_count = result["page_count"] or file_pages or 1
-            job.table_count = result["table_count"]
-            job.field_count = result["field_count"]
-            job.missing_pages = list(result.get("missing_pages") or [])
-            job.capability = {"vendor": "textin", **(job.capability or {}),
-                              "field_source": result.get("field_source", "heuristic"),
-                              **({"refiner": refiner} if refiner else {})}
-            job.status = "PARTIAL_SUCCESS" if result["missing_pages"] else "SUCCEEDED"
+            apply_extraction_to_job(job, result, duration_ms)
             job.progress = 100
             job.started_at = job.started_at or datetime.now(timezone.utc).replace(tzinfo=None)
             job.finished_at = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -240,19 +326,19 @@ class OcrWorker:
         # 审计副本 + 完成通知
         try:
             import json
-            from datetime import datetime, timezone
+            from datetime import datetime as _dt
+            from datetime import timezone as _tz
 
             storage.put_bytes(
                 "audit",
                 f"{job_id}.json",
                 json.dumps(
-                    {
-                        "job_id": job_id,
-                        "saved_at": datetime.now(timezone.utc).isoformat(),
-                        "summary": {k: result[k] for k in
-                                    ("page_count", "table_count", "field_count", "missing_pages",
-                                     "duration_ms", "field_source", "vendor")},
-                    },
+                    build_audit_payload(
+                        job_id,
+                        result,
+                        saved_at=_dt.now(_tz.utc).isoformat(),
+                        duration_ms=int((time.monotonic() - started) * 1000),
+                    ),
                     ensure_ascii=False,
                 ).encode("utf-8"),
                 "application/json",
@@ -274,11 +360,49 @@ class OcrWorker:
                 )
 
 
+def call_extraction_with_retry(
+    client,
+    *,
+    filename: str,
+    content: bytes,
+    content_type: str,
+    params: dict[str, Any] | None,
+    max_retries: int = MAX_VENDOR_RETRIES,
+    sleep: Callable[[float], None] = time.sleep,
+) -> dict[str, Any]:
+    """Run `run_extraction` with bounded retry. Sleeps between retries via the
+    injected `sleep` callable (tests pass a no-op). Returns the run_extraction
+    dict on success; raises the last exception if no retry budget remains or
+    the error is non-retryable.
+    """
+    last_err: Exception | None = None
+    for attempt in range(max_retries):
+        try:
+            from textin.adapter import run_extraction
+
+            return run_extraction(
+                client,
+                filename=filename,
+                content=content,
+                content_type=content_type,
+                params=params,
+            )
+        except Exception as e:
+            last_err = e
+            if _is_retryable(e) and attempt < max_retries - 1:
+                sleep(2 ** (attempt + 1))
+                continue
+            raise
+    # Unreachable when attempt >= 1; defensive only.
+    assert last_err is not None
+    raise last_err
+
+
 def _is_retryable(err: Exception) -> bool:
     from textin.errors import TextInAPIError
 
     if isinstance(err, TextInAPIError):
-        return str(err.code) in {"429", "458", "459"} or "rate" in err.message.lower()
+        return str(err.code) in {"429", "458", "459"} or "rate" in err.msg.lower()
     import httpx
 
     return isinstance(err, (httpx.TransportError, httpx.TimeoutException))
