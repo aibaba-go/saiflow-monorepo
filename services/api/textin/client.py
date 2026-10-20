@@ -1,7 +1,7 @@
 """TextIn xparse/parse/sync 接口客户端封装。
 
 参考文档：https://docs.textin.com/api-reference/endpoint/xparse/v1/parse-sync
-- endpoint: POST https://api.textin.com/api/v1/xparse/parse/sync
+- endpoint: POST https://api.textin.ai/api/v1/xparse/parse/sync
 - 鉴权 header: x-ti-app-id / x-ti-secret-code
 - 请求体 multipart/form-data，必填字段：
     - file (二进制) 或 file_url (字符串) 二选一
@@ -10,12 +10,12 @@
   错误响应使用 message 字段
 
 Schema 驱动智能抽取：
-- endpoint: POST https://api.textin.com/api/v1/xparse/extract/sync
+- endpoint: POST https://api.textin.ai/api/v1/xparse/extract/sync
 - multipart: file + extract_config(schema) + parse_config
 - 响应：{"data":{"result":{"extracted_schema":{name: value | {value,bounding_regions}}, ...}}}
 
 Prompt 模式智能抽取（v2）：
-- endpoint: POST https://api.textin.com/ai/service/v2/entity_extraction
+- endpoint: POST https://api.textin.ai/ai/service/v2/entity_extraction
 - JSON body: {"file": base64, "prompt": "..."}；query: file_name/page_start/page_count
 - 响应：{"code":200,"result":{"llm_json":{...},"raw_json":...,"pages":[...]},"page_count":N,"duration":ms}
 """
