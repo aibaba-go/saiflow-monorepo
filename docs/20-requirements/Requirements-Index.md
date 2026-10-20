@@ -3,8 +3,8 @@ doc_id: REQ-INDEX
 title: "SaiFlow — 需求索引与可追溯性矩阵"
 type: index
 status: active
-version: 1.3.6
-updated: 2026-10-19
+version: 1.3.7
+updated: 2026-10-20
 owner: Product Engineering
 ---
 
@@ -76,7 +76,7 @@ owner: Product Engineering
 | FR-VERIFY-012 | 最终复核门控业务录入 | P0 | §3.1/§4.3 | VERIFY-011 | AC-FR-VERIFY-012-01/02 | DM-Document | active |
 | FR-VERIFY-013 | 复核日志 | P0 | §3.1 | VERIFY-011 | AC-FR-VERIFY-013-01 | DM-ReviewRecord | active |
 | FR-VERIFY-014 | 原图置顶与全屏触控缩放（上传确认页、结果页、最终结果页、公司证书） | P0 | 界面调整 2026-10-17/19 | VERIFY-001 | AC-FR-VERIFY-014-01/02 | OriginalPreview、ImageViewer | active |
-| FR-VERIFY-015 | 结构化结果版本化编辑；金额千分位 + 2 位小数 | P0 | 界面调整 2026-10-17/19 | VERIFY-002 | AC-FR-VERIFY-015-01/02/03 | DM-ResultVersion | active |
+| FR-VERIFY-015 | 结构化结果版本化编辑（含字段/表格行增删、Reset 放弃改动）；金额千分位 + 2 位小数 | P0 | 界面调整 2026-10-17/20 | VERIFY-002 | AC-FR-VERIFY-015-01/02/03/04/05 | DM-ResultVersion | active |
 | FR-VERIFY-016 | LINE 确认前认证与工作空间订阅检查；已注册付费用户显式确认后进入最终页，恢复未完成任务返回结果页 | P0 | 界面调整 2026-10-17/18 | VERIFY-006/SYS-011/SYS-012 | AC-FR-VERIFY-016-01/02 | DM-ResultVersion | active |
 | FR-VERIFY-017 | 任务流程阶段展示、历史筛选与分页加载 | P0 | 界面调整 2026-10-18 | VERIFY-016 | AC-FR-VERIFY-017-01/02/03 | DM-OcrJob | active |
 | FR-ENTRY-001 | 生成 Excel 模板 | P0 | §4.4 | VERIFY-006 | AC-FR-ENTRY-001-01 | DM-ExportJob | active |
@@ -167,6 +167,7 @@ owner: Product Engineering
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.3.7 | 2026-10-20 | Product Engineering | FR-VERIFY-015 扩展为字段/表格行增删与 Reset 放弃改动，新增 AC-FR-VERIFY-015-04/05 |
 | 1.3.6 | 2026-10-19 | Product Engineering | FR-VERIFY-015 增加金额千分位 + 2 位小数显示/导出规则，新增 AC-FR-VERIFY-015-03；FR-VERIFY-014 扩展全屏触控缩放至结果页、最终结果页与公司证书 |
 | 1.3.5 | 2026-10-19 | Product Engineering | FR-VERIFY-014 增加上传确认页触控缩放，新增 AC-FR-VERIFY-014-02 |
 | 1.3.4 | 2026-10-18 | Product Engineering | 对齐 FR-VERIFY-016、FR-SYS-011 的 LINE 确认前认证与任务恢复描述；补列既有 FR-SYS-012 工作空间订阅分流及验收引用 |
