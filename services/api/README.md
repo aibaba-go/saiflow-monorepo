@@ -24,8 +24,8 @@ pytest -q
 # TextIn OCR (sole vendor, PRD §12)
 TEXTIN_APP_ID=...
 TEXTIN_SECRET_CODE=...
-TEXTIN_ENDPOINT=https://api.textin.com/api/v1/xparse/parse/sync
-TEXTIN_EXTRACT_ENDPOINT=https://api.textin.com/api/v1/xparse/extract/sync
+TEXTIN_ENDPOINT=https://api.textin.ai/api/v1/xparse/parse/sync
+TEXTIN_EXTRACT_ENDPOINT=https://api.textin.ai/api/v1/xparse/extract/sync
 OCR_STORAGE_DIR=./temp/extractions
 OCR_UPLOADS_DIR=./temp/uploads
 TEXTIN_TIMEOUT_SECONDS=60
