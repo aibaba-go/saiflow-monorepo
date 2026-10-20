@@ -1,11 +1,69 @@
 /**
  * structured OCR JSON 的表格化视图与按路径编辑。
- * TextIn Prompt 模式返回任意嵌套的 key-value + 对象数组；这里统一折算成
- * 「字段表 + 数据表」，并保留每个值在原始 JSON 中的路径，供核验页就地修改。
+ * TextIn DocFlow 同步抽取返回 `result.files[0]` 原样（含 `data.fields` /
+ * `data.items[][]` / `data.tables` / `data.stamps` / `data.handwritings` 与
+ * `pages`、position 坐标）；迁移前的老任务是 Prompt 模式结构的扁平
+ * llm_json。这里统一折算成「字段表 + 数据表」，并保留每个值在原始 JSON
+ * 中的路径，供核验页就地修改。
  */
 
 export type Path = (string | number)[];
 export type JsonRecord = Record<string, unknown>;
+
+/** DocFlow 字段单元素；保留坐标以供前端后续做位置回查。 */
+export interface DocFlowFieldItem {
+  key: string;
+  value: string;
+  position?: unknown[];
+}
+
+/** DocFlow 抽取内容（与 TextIn 文档一致）。 */
+export interface DocFlowStructured {
+  data?: {
+    fields?: DocFlowFieldItem[];
+    items?: unknown[][][];
+    tables?: unknown[];
+    stamps?: unknown[];
+    handwritings?: unknown[];
+  };
+  pages?: unknown[];
+  task_id?: string;
+  batch_number?: string;
+  category?: string;
+  recognition_status?: number;
+  [extra: string]: unknown;
+}
+
+/**
+ * 迁移前任务的扁平结构（Prompt 模式）：任意嵌套 key-value，没有顶层 `data`。
+ * 这里不强约束形状——任何对象都可能是 Prompt 模式的合法返回。
+ */
+export interface LegacyStructured {
+  [key: string]: unknown;
+}
+
+/**
+ * `ResultVersion.structured` 的判别联合。运行时通过 `'data' in obj` 嗅探
+ * DocFlow；嗅探失败的保持兼容，按 LegacyStructured 平铺渲染。
+ */
+export type StructuredPayload = DocFlowStructured | LegacyStructured;
+
+export function isDocFlowStructured(value: unknown): value is DocFlowStructured {
+  return isRecord(value) && 'data' in value;
+}
+
+/** 把任意 structured 负载归一为视图层消费的 unknown；让现有 render 路径不变。 */
+export function normalizeStructuredForView(value: unknown): unknown {
+  if (isDocFlowStructured(value)) {
+    const data = value.data ?? {};
+    return {
+      fields: (data.fields ?? []).map((item) => ({ key: item.key, value: item.value })),
+      tables: data.tables ?? [],
+      items: data.items ?? [],
+    };
+  }
+  return value;
+}
 
 export interface FieldRow {
   path: Path;

@@ -13,7 +13,7 @@ import {
 import { messageText } from '../i18n';
 import { useT } from '../i18nVue';
 import { goTab, isAuthenticated, isGuest, jobWorkspace, navigate, rememberPendingJob } from '../store';
-import { setAtPath, type Path } from '../structured';
+import { normalizeStructuredForView, setAtPath, type Path } from '../structured';
 import BrandLoading from '../components/BrandLoading.vue';
 import OriginalPreview from '../components/OriginalPreview.vue';
 import PageHeader from '../components/PageHeader.vue';
@@ -52,7 +52,7 @@ async function load() {
     job.value = jobPayload;
     if (jobPayload.status === 'FAILED' || jobPayload.status === 'CANCELLED') return;
     results.value = await getJobResults(props.jobId);
-    draft.value = cloneStructured(results.value.structured);
+    draft.value = cloneStructured(normalizeStructuredForView(results.value.structured));
   } catch (e) {
     errorMsg.value = e instanceof ApiError ? messageText(e.messageKey) : t('common.unknownError');
   }
