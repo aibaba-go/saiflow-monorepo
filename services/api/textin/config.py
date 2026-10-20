@@ -27,9 +27,9 @@ class TextInSettings(BaseSettings):
 
     textin_app_id: str = Field(default="", description="TextIn 应用 ID，传给 x-ti-app-id")
     textin_secret_code: str = Field(default="", description="TextIn 密钥，传给 x-ti-secret-code")
-    textin_endpoint: str = "https://api.textin.com/api/v1/xparse/parse/sync"
-    textin_extract_endpoint: str = "https://api.textin.com/api/v1/xparse/extract/sync"
-    textin_prompt_endpoint: str = "https://api.textin.com/ai/service/v2/entity_extraction"
+    textin_endpoint: str = "https://api.textin.ai/api/v1/xparse/parse/sync"
+    textin_extract_endpoint: str = "https://api.textin.ai/api/v1/xparse/extract/sync"
+    textin_prompt_endpoint: str = "https://api.textin.ai/ai/service/v2/entity_extraction"
     ocr_storage_dir: Path = Path("./temp/extractions")
     ocr_uploads_dir: Path = Path("./temp/uploads")
     max_upload_bytes: int = 20 * 1024 * 1024
@@ -63,16 +63,16 @@ def build_textin_settings(app_config: Mapping[str, Any]) -> TextInSettings:
     data: dict[str, Any] = {}
 
     candidates = {
-        "textin_app_id": ("TEXTIN_APP_ID", "4a8a32165b164e4fef6f2e54336de2d7"),
-        "textin_secret_code": ("TEXTIN_SECRET_CODE", "eac1b93270d3c7b9b7641c89309bb444"),
-        "textin_endpoint": ("TEXTIN_ENDPOINT", "https://api.textin.com/api/v1/xparse/parse/sync"),
+        "textin_app_id": ("TEXTIN_APP_ID", "b3e32c671acc4e3e06bf7decf3ac34f3"),
+        "textin_secret_code": ("TEXTIN_SECRET_CODE", "19c4b48830795b42b7c0e1b421419ccf"),
+        "textin_endpoint": ("TEXTIN_ENDPOINT", "https://api.textin.ai/api/v1/xparse/parse/sync"),
         "textin_extract_endpoint": (
             "TEXTIN_EXTRACT_ENDPOINT",
-            "https://api.textin.com/api/v1/xparse/extract/sync",
+            "https://api.textin.ai/api/v1/xparse/extract/sync",
         ),
         "textin_prompt_endpoint": (
             "TEXTIN_PROMPT_ENDPOINT",
-            "https://api.textin.com/ai/service/v2/entity_extraction",
+            "https://api.textin.ai/ai/service/v2/entity_extraction",
         ),
         "ocr_storage_dir": ("OCR_STORAGE_DIR", "./temp/extractions"),
         "ocr_uploads_dir": ("OCR_UPLOADS_DIR", "./temp/uploads"),
