@@ -21,16 +21,33 @@ pytest -q
 ## Configuration (`.env`)
 
 ```dotenv
-# TextIn OCR (sole vendor, PRD §12)
+# TextIn DocFlow OCR (PRD §12, sole vendor; DocFlow /upload/sync)
+# All three credentials are REQUIRED — without workspace_id DocFlow will reject
+# every upload. Source them from Secret Manager / Cloud Run secrets manager.
 TEXTIN_APP_ID=...
 TEXTIN_SECRET_CODE=...
-TEXTIN_ENDPOINT=https://api.textin.com/api/v1/xparse/parse/sync
-TEXTIN_EXTRACT_ENDPOINT=https://api.textin.com/api/v1/xparse/extract/sync
+TEXTIN_DOCFLOW_WORKSPACE_ID=...
+# Optional overrides (defaults shown)
+TEXTIN_ENDPOINT=https://docflow.textin.ai/api/app-api/sip/platform/v2/file/upload/sync
 OCR_STORAGE_DIR=./temp/extractions
 OCR_UPLOADS_DIR=./temp/uploads
-TEXTIN_TIMEOUT_SECONDS=60
+TEXTIN_TIMEOUT_SECONDS=300
 TEXTIN_CONNECT_TIMEOUT_SECONDS=10
 ```
+
+## Schema sync
+
+This service uses SQLAlchemy `db.create_all()` via `setup_db.py` (no Alembic).
+After pulling a new release that touched `models.py` (e.g. added DocFlow
+columns on `ocr_jobs`), re-run:
+
+```bash
+python setup_db.py         # idempotent in dev; for prod, snapshot first
+```
+
+New tables get full schema + `COMMENT ON` descriptions via `create_all`; for
+existing tables, add the new columns manually or back-fill with a one-off
+`ALTER TABLE`.
 
 ## Endpoint groups
 

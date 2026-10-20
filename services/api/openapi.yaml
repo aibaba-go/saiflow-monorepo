@@ -1218,7 +1218,7 @@ paths:
     get:
       tags: [OCR]
       summary: 获取 OCR 能力与限额
-      description: 返回 OCR 厂商（固定 textin）、支持的特性与上传/任务限额（取自服务端配置）。
+      description: 返回 OCR 厂商（固定 textin-docflow）、支持的特性与上传/任务限额（取自服务端配置）。
       operationId: getOcrCapabilities
       security:
         - sessionCookie: []
@@ -1546,7 +1546,7 @@ paths:
       tags: [Results]
       summary: 获取当前识别结果
       description: |
-        返回任务当前结果版本（is_current=true）。`structured` 为 TextIn Prompt 模式结构化 JSON；旧版逐页结果没有 structured 时折算为 `{fields: {名称: 值}, tables: [[[单元格文本]]]}`。`pages` 为旧版逐页数据（Prompt 任务为空数组）。
+        返回任务当前结果版本（is_current=true）。`structured` 为 DocFlow 同步抽取原始载荷（含 `data.{fields,items[][],tables,stamps,handwritings}`、`pages`、文件级元数据、position 坐标）；兼容读取运行时嗅探 `'data' in obj`。
         - 尚无结果且任务非终态 → 409 STATE_CONFLICT `results.not_ready`；任务已终态但无结果（如失败或结果已删除）→ 404。
         - 可见性同 GET /ocr/jobs/{job_id}。
       operationId: getOcrJobResults
@@ -2178,7 +2178,7 @@ paths:
     get:
       tags: [Ops]
       summary: 健康检查
-      description: 非版本化运维端点，实际路径为 `/api/health`，无需登录。`vendor` 表示 TextIn 客户端是否已配置。
+      description: 非版本化运维端点，实际路径为 `/api/health`，无需登录。`vendor` 表示 TextIn DocFlow 客户端是否已配置。
       operationId: getHealth
       security: []
       servers:
@@ -2200,7 +2200,7 @@ paths:
                     example: saiflow-api
                   vendor:
                     type: string
-                    enum: [textin, unconfigured]
+                    enum: [textin-docflow, unconfigured]
 components:
   securitySchemes:
     sessionCookie:
@@ -2902,7 +2902,7 @@ components:
       properties:
         vendor:
           type: string
-          enum: [textin]
+          enum: [textin-docflow]
         features:
           type: object
           properties:
@@ -2922,7 +2922,8 @@ components:
               type: array
               items:
                 type: string
-              example: [scan, layout, article]
+                enum: [auto, scan, vlm]
+              example: [auto, scan, vlm]
         limits:
           type: object
           properties:
@@ -2945,17 +2946,30 @@ components:
               example: 52428800
     OcrJobParams:
       type: object
-      description: OCR 参数。仅以下键会被保存；parse_mode/table/formula/rotate 服务端不校验取值，原样保存。
+      description: DocFlow 解析参数。仅以下键会被保存；其他键被 400 拒绝。
       properties:
-        parse_mode:
+        parser_parse_mode:
           type: string
-          description: 解析模式，能力接口给出 scan / layout / article。
-        table:
+          enum: [auto, scan, vlm]
+        parser_formula_level:
+          type: integer
+          enum: [0, 1]
+        parser_crop_dewarp:
           type: boolean
-        formula:
+        parser_dpi:
+          type: integer
+          enum: [144, 216]
+        parser_apply_merge:
           type: boolean
-        rotate:
-          type: boolean
+        category:
+          type: string
+          maxLength: 64
+        batch_number:
+          type: string
+          maxLength: 64
+        target_process:
+          type: string
+          enum: [classify, extract]
         page:
           type: integer
           minimum: 0
@@ -3161,10 +3175,10 @@ components:
             type: integer
         structured:
           description: |
-            结构化结果（任意 JSON 对象或数组，保留键顺序）。TextIn Prompt 任务为结构化 JSON；旧版逐页结果折算为 `{fields: {名称: 值}, tables: [[[单元格文本]]]}`。
+            结构化结果（任意 JSON 对象或数组，保留键顺序）。DocFlow 任务为 `result.files[0]` 原始载荷（含 `data.{fields,items[][],tables,stamps,handwritings}` 与 `pages`/position）；迁移前任务折算为 `{fields: {名称: 值}, tables: [[[单元格文本]]]}`。
         pages:
           type: array
-          description: 旧版逐页数据；TextIn Prompt 任务为空数组。
+          description: 旧版逐页数据；DocFlow 任务为空数组。
           items:
             $ref: '#/components/schemas/ResultPage'
     ResultCellEdit:
