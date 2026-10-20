@@ -38,7 +38,7 @@
 ## 7. 端到端验证
 
 - [x] 7.1 在 `services/api` 内运行 `ruff check .` 与 `pytest -q`（含本变更新增 test_*.py），全部通过。验证：CI 入口命令无报错（README 已记录）
-- [ ] 7.2 提交本次 apply 变更（按 `operations.apply.guidance`"每个提交引用 `<change>`"），commit message 末尾含 `textin-docflow-migration`。验证：`git log -1 --format=%s` 含 `textin-docflow-migration`
+- [x] 7.2 提交本次 apply 变更（按 `operations.apply.guidance`"每个提交引用 `<change>`"），commit message 末尾含 `textin-docflow-migration`。验证：`git log -1 --format=%s` 含 `textin-docflow-migration`
 
 ## Workflow follow-up
 
