@@ -13,7 +13,13 @@ import {
 import { messageText } from '../i18n';
 import { useT } from '../i18nVue';
 import { goTab, isAuthenticated, isGuest, jobWorkspace, navigate, rememberPendingJob } from '../store';
-import { normalizeStructuredForView, setAtPath, type Path } from '../structured';
+import {
+  getAtPath,
+  normalizeStructuredForView,
+  parseNumberText,
+  setAtPath,
+  type Path,
+} from '../structured';
 import BrandLoading from '../components/BrandLoading.vue';
 import OriginalPreview from '../components/OriginalPreview.vue';
 import PageHeader from '../components/PageHeader.vue';
@@ -76,6 +82,15 @@ onMounted(load);
 
 function onEdit(path: Path, value: string): void {
   setAtPath(draft.value, path, value);
+}
+
+/** 失焦提交时，原值为数字的字段转回数字，保持 JSON 类型并按金额格式（2 位小数）回显 */
+function onCommit(path: Path): void {
+  const original = getAtPath(results.value?.structured, path);
+  const current = getAtPath(draft.value, path);
+  if (typeof original !== 'number' || typeof current !== 'string') return;
+  const parsed = parseNumberText(current);
+  if (parsed !== null) setAtPath(draft.value, path, parsed);
 }
 
 async function saveDraft(): Promise<void> {
@@ -185,6 +200,7 @@ async function confirm(): Promise<void> {
           :data="draft"
           :editable="!locked"
           @edit="onEdit"
+          @commit="onCommit"
         />
 
         <p v-if="errorMsg" class="status-error">{{ errorMsg }}</p>

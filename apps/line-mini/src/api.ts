@@ -489,6 +489,10 @@ export function fileContentUrl(fileId: string): string {
 export function filePagePreviewUrl(fileId: string, page: number): string {
   return `${API_BASE}/files/${fileId}/pages/${page}/preview`;
 }
+/** 全部页的预览图 URL（图片为 1 页；PDF 由服务端逐页渲染） */
+export function filePageUrls(fileId: string, pageCount: number): string[] {
+  return Array.from({ length: Math.max(pageCount || 1, 1) }, (_, i) => filePagePreviewUrl(fileId, i + 1));
+}
 
 // ---------- OCR 任务 ----------
 

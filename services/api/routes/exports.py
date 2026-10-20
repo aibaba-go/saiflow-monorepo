@@ -10,6 +10,8 @@ from __future__ import annotations
 import csv
 import io
 import json
+import math
+import re
 import unicodedata
 from datetime import timedelta
 
@@ -53,10 +55,69 @@ def _base_name(job) -> str:
     return stem or job.id
 
 
+_PLAIN_NUMBER = re.compile(r"^-?\d{1,3}(,\d{3})*(\.\d+)?$|^-?\d+(\.\d+)?$")
+
+
 def _safe_cell(value) -> str:
     """防 Excel/CSV 公式注入：用户可编辑的 OCR 文本一律按文本落地。"""
     text = "" if value is None else str(value)
+    if _PLAIN_NUMBER.match(text):  # -1,370.47 等纯数字不是公式，无需前缀
+        return text
     return "'" + text if text[:1] in ("=", "+", "-", "@") else text
+
+
+# ---------- 金额显示（与 line-mini structured.ts 的 isAmountKey / formatNumber 保持一致）----------
+# 单据中的数字默认视为金额：千分位逗号 + 至少保留 2 位小数（29650 → 29,650.00，68523.4 → 68,523.40），
+# 超过 2 位的原样保留；序号、数量、税率、编号等计数/标识字段按原值输出。
+# 优先级：计数/比率 > 金额 > 编号类 > 默认金额
+_COUNT_TOKENS = {
+    "seq", "sequence", "qty", "quantity", "count", "pcs", "piece", "pieces", "page", "pages", "id",
+    "tel", "phone", "fax", "mobile", "year", "zip", "postal", "postcode", "rate", "ratio", "percent",
+    "pct",
+}
+_AMOUNT_TOKENS = {
+    "amount", "amt", "price", "total", "subtotal", "sum", "vat", "tax", "discount", "fee", "cost",
+    "balance", "paid", "payment", "deposit", "charge", "money", "net", "gross",
+}
+_LABEL_TOKENS = {"no", "num", "number", "index", "idx", "line", "row", "item", "code"}
+_COUNT_TEXT = re.compile(r"序号|数量|页|率|ลำดับ|หน้า|อัตรา")
+_AMOUNT_TEXT = re.compile(r"金额|价|费|税|额|เงิน|ราคา|ภาษี|ส่วนลด|ยอด")
+_LABEL_TEXT = re.compile(r"编号|เลขที่|จำนวน")
+
+
+def _key_tokens(key: str) -> list[str]:
+    spaced = re.sub(r"([a-z])([A-Z])", r"\1 \2", key).lower()
+    return [t for t in re.split(r"[^a-z]+", spaced) if t]
+
+
+def _is_amount_key(key: str = "") -> bool:
+    tokens = _key_tokens(key)
+    if any(t in _COUNT_TOKENS for t in tokens) or _COUNT_TEXT.search(key):
+        return False
+    if any(t in _AMOUNT_TOKENS for t in tokens) or _AMOUNT_TEXT.search(key):
+        return True
+    return not (any(t in _LABEL_TOKENS for t in tokens) or _LABEL_TEXT.search(key))
+
+
+def _format_number(value: int | float, key: str = "") -> str:
+    text = str(value)
+    if isinstance(value, float) and text.endswith(".0"):
+        text = text[:-2]  # 与 JS String(29650) 一致
+    if not math.isfinite(value) or not _is_amount_key(key) or "e" in text.lower():
+        return text
+    sign = "-" if text.startswith("-") else ""
+    integer, _, frac = text[len(sign):].partition(".")
+    return f"{sign}{int(integer):,}.{frac.ljust(2, '0')}"
+
+
+def _scalar_text(value, key: str = "") -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return _format_number(value, key)
+    return str(value)
 
 
 def _collect_fields(node, path: str, out: list[tuple[str, object]]) -> None:
@@ -71,9 +132,9 @@ def _collect_fields(node, path: str, out: list[tuple[str, object]]) -> None:
                 if any(isinstance(item, (dict, list)) for item in value):
                     out.append((child, json.dumps(value, ensure_ascii=False)))
                 else:
-                    out.append((child, ", ".join("" if item is None else str(item) for item in value)))
+                    out.append((child, ", ".join(_scalar_text(item, str(key)) for item in value)))
             else:
-                out.append((child, value))
+                out.append((child, _scalar_text(value, str(key))))
     elif isinstance(node, list):
         for index, value in enumerate(node):
             child = f"{path}.{index}" if path else str(index)
@@ -98,7 +159,15 @@ def _collect_tables(node, path: str, out: list[tuple[str, list[str], list[list]]
             (
                 path or "Table",
                 columns,
-                [[row.get(column, "") for column in columns] for row in node],
+                [
+                    [
+                        _scalar_text(row.get(column), column)
+                        if _is_scalar(row.get(column))
+                        else row.get(column)
+                        for column in columns
+                    ]
+                    for row in node
+                ],
             )
         )
         for row in node:
@@ -133,16 +202,14 @@ def _display_name(path: str) -> str:
     return " ".join(word[:1].upper() + word[1:] for word in text.split(" "))
 
 
-def _format_cell(value) -> str:
+def _format_cell(value, key: str = "") -> str:
     if value is None:
         return ""
     if isinstance(value, list) and all(_is_scalar(item) for item in value):
-        return "\n".join("" if item is None else str(item) for item in value)
+        return "\n".join(_scalar_text(item, key) for item in value)
     if isinstance(value, (dict, list)):
         return json.dumps(value, ensure_ascii=False, indent=2)
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    return str(value)
+    return _scalar_text(value, key)
 
 
 def _field_sections(node, path: list[str]) -> list[tuple[str, list[tuple[str, object]]]]:
@@ -259,13 +326,13 @@ def _build_xlsx_structured(
             blank()
             plan.append(("section", [(_display_name(path), "section", center)]))
         for key, value in rows:
-            plan.append(("row", [(_display_name(key), "key", center), (_format_cell(value), "value", left)]))
+            plan.append(("row", [(_display_name(key), "key", center), (_format_cell(value, str(key)), "value", left)]))
 
     for path, columns, rows in tables:
         blank()
         plan.append(("section", [(_display_name(path) if path else tables_title, "section", center)]))
         plan.append(("row", [(_display_name(column), "head", center) for column in columns]))
-        texts = [[_format_cell(value) for value in values] for values in rows]
+        texts = [[_format_cell(value, columns[col]) for col, value in enumerate(values)] for values in rows]
         long_cols = {
             col
             for line in texts

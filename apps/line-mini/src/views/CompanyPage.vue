@@ -5,6 +5,8 @@ import {
   bindCompany,
   createCompany,
   filePagePreviewUrl,
+  filePageUrls,
+  getFile,
   getMyCompanies,
   unbindCompany,
   updateCompany,
@@ -16,6 +18,7 @@ import { currentWorkspace, goTab, refreshSession, setWorkspace, workspaces } fro
 import { uploadFile } from '../upload';
 import BrandLoading from '../components/BrandLoading.vue';
 import FormDialog from '../components/FormDialog.vue';
+import ImageViewer from '../components/ImageViewer.vue';
 import PageHeader from '../components/PageHeader.vue';
 
 const { t } = useT();
@@ -111,6 +114,20 @@ async function doUnbind() {
     unbinding.value = false;
     unbindTarget.value = null;
   }
+}
+
+// ---------- 证书查看（全屏缩放，FR-VERIFY-014） ----------
+
+const viewerSources = ref<string[] | null>(null);
+
+async function openCert(fileId: string) {
+  let pages = 1;
+  try {
+    pages = (await getFile(fileId)).file.page_count || 1; // PDF 多页时逐页翻看
+  } catch {
+    // 取页数失败时仍可查看第 1 页
+  }
+  viewerSources.value = filePageUrls(fileId, pages);
 }
 
 // ---------- 添加 / 编辑 ----------
@@ -262,12 +279,14 @@ async function submit() {
               </svg>
               {{ t('company.bonusHint') }}
             </div>
-            <img
+            <button
               v-if="c.cert_file_id && c.my_role === 'OWNER'"
-              class="cert-thumb"
-              :src="filePagePreviewUrl(c.cert_file_id, 1)"
-              alt="cert"
-            />
+              class="cert-thumb-btn"
+              :aria-label="t('result.tapZoom')"
+              @click="openCert(c.cert_file_id)"
+            >
+              <img class="cert-thumb" :src="filePagePreviewUrl(c.cert_file_id, 1)" alt="cert" />
+            </button>
             <div class="company-actions">
               <button v-if="c.my_role === 'OWNER'" class="mini-btn" @click="startEdit(c)">
                 {{ t('company.edit') }}
@@ -310,7 +329,14 @@ async function submit() {
                 <BrandLoading v-if="certUploading" variant="button" :label="t('company.certUploading')" />
                 <template v-else>{{ certFileId ? t('company.certChange') : t('company.certPick') }}</template>
               </button>
-              <img v-if="certFileId" class="cert-thumb" :src="filePagePreviewUrl(certFileId, 1)" alt="cert" />
+              <button
+                v-if="certFileId"
+                class="cert-thumb-btn"
+                :aria-label="t('result.tapZoom')"
+                @click="openCert(certFileId)"
+              >
+                <img class="cert-thumb" :src="filePagePreviewUrl(certFileId, 1)" alt="cert" />
+              </button>
             </div>
             <p class="hint">{{ t('company.certHint') }}</p>
           </div>
@@ -332,6 +358,8 @@ async function submit() {
       style="display: none"
       @change="onCertPicked"
     />
+
+    <ImageViewer v-if="viewerSources" :sources="viewerSources" alt="cert" @close="viewerSources = null" />
 
     <FormDialog v-if="unbindTarget" :title="t('company.unbindConfirm')" :subtitle="unbindTarget.legal_name">
       <div class="fd-actions">
@@ -539,6 +567,17 @@ async function submit() {
   object-fit: cover;
   border-radius: 8px;
   border: 1px solid var(--border);
+}
+
+.cert-thumb-btn {
+  display: block;
+  align-self: flex-start;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  line-height: 0;
+  cursor: zoom-in;
 }
 
 .company-actions {

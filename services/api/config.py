@@ -37,7 +37,14 @@ class Config:
     # search_path 走连接启动参数（protocol 级，每个新物理连接都生效）：
     # 不能只用 SET SESSION 事件——Cloud SQL 服务端会重置/迁移空闲连接，事件设置的
     # search_path 在池化连接上可能丢失（实测间歇性 "relation does not exist"）。
-    _pg_opts = quote_plus(f"-csearch_path={PGSCHEMA}")
+    # 本地与 Cloud Run 共用同一实例：会话级兜底，防止任一客户端长期占锁挡住其他实例（含启动 DDL）
+    # - idle_in_transaction_session_timeout：事务内空闲超 5 分钟由服务端结束会话并释放锁
+    # - tcp_keepalives_*：本机断网/休眠后约 1 分钟内服务端探测到死连接并回收（Unix 套接字下自动忽略）
+    _pg_opts = quote_plus(
+        f"-c search_path={PGSCHEMA}"
+        " -c idle_in_transaction_session_timeout=300000"
+        " -c tcp_keepalives_idle=30 -c tcp_keepalives_interval=10 -c tcp_keepalives_count=3"
+    )
     if PGHOST.startswith("/"):
         SQLALCHEMY_DATABASE_URI = (
             f"postgresql+psycopg://{_pg_auth}@/{PGDATABASE}"
@@ -47,6 +54,7 @@ class Config:
         SQLALCHEMY_DATABASE_URI = (
             f"postgresql+psycopg://{_pg_auth}@{PGHOST}:{PGPORT}/{PGDATABASE}"
             f"?sslmode=require&options={_pg_opts}"
+            "&keepalives=1&keepalives_idle=30&keepalives_interval=10&keepalives_count=3"
         )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
