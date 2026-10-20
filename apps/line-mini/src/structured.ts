@@ -16,6 +16,8 @@ export interface FieldRow {
 
 export interface FieldSection {
   path: string;
+  /** 原始 JSON 路径（保留数组下标类型），用于增删字段 */
+  parts: Path;
   rows: FieldRow[];
 }
 
@@ -30,8 +32,14 @@ export interface TableRow {
   cells: TableCell[];
 }
 
+export type TableKind = 'records' | 'matrix';
+
 export interface TableSection {
   path: string;
+  /** 原始 JSON 路径（保留数组下标类型），用于增删行 */
+  parts: Path;
+  /** records = 对象数组（按列名取值）；matrix = 二维数组（按列序号取值） */
+  kind: TableKind;
   columns: string[];
   rows: TableRow[];
 }
@@ -149,6 +157,51 @@ export function setAtPath(root: unknown, path: Path, value: unknown): void {
   (node as Record<string | number, unknown>)[path[path.length - 1]] = value;
 }
 
+// ---------- 增删字段 / 表格行（直接修改 draft 中的原始 JSON） ----------
+
+export interface TableRowTarget {
+  parts: Path;
+  kind: TableKind;
+  columns: string[];
+}
+
+/** 在指定对象末尾新增字段；名称为空或与现有字段重名时返回 false */
+export function addFieldAt(root: unknown, parts: Path, name: string, value: unknown): boolean {
+  const node = getAtPath(root, parts);
+  const key = name.trim();
+  if (!isRecord(node) || !key || Object.prototype.hasOwnProperty.call(node, key)) return false;
+  node[key] = value;
+  return true;
+}
+
+export function removeFieldAt(root: unknown, path: Path): boolean {
+  if (path.length === 0) return false;
+  const parent = getAtPath(root, path.slice(0, -1));
+  const key = path[path.length - 1];
+  if (!isRecord(parent) || !Object.prototype.hasOwnProperty.call(parent, key)) return false;
+  delete parent[key];
+  return true;
+}
+
+/** 追加一行空值：对象数组补全所有列名，二维数组按列数补空单元格 */
+export function addTableRowAt(root: unknown, table: TableRowTarget): boolean {
+  const node = getAtPath(root, table.parts);
+  if (!Array.isArray(node)) return false;
+  if (table.kind === 'matrix') {
+    node.push(table.columns.map(() => ''));
+  } else {
+    node.push(Object.fromEntries(table.columns.map((column) => [column, ''])));
+  }
+  return true;
+}
+
+export function removeTableRowAt(root: unknown, parts: Path, index: number): boolean {
+  const node = getAtPath(root, parts);
+  if (!Array.isArray(node) || index < 0 || index >= node.length) return false;
+  node.splice(index, 1);
+  return true;
+}
+
 /** 顶层/嵌套对象的标量字段；对象数组交给 collectTableSections */
 export function collectFieldSections(value: unknown, path: Path = []): FieldSection[] {
   if (!isRecord(value)) return [];
@@ -161,7 +214,7 @@ export function collectFieldSections(value: unknown, path: Path = []): FieldSect
       value: item,
       editable: isDisplayableLeaf(item),
     }));
-  const sections: FieldSection[] = rows.length > 0 ? [{ path: path.join('.'), rows }] : [];
+  const sections: FieldSection[] = rows.length > 0 ? [{ path: path.join('.'), parts: path, rows }] : [];
 
   for (const [key, item] of Object.entries(value)) {
     if (isRecord(item)) {
@@ -197,7 +250,7 @@ export function collectTableSections(value: unknown, path: Path = []): TableSect
           };
         }),
       }));
-      const tables: TableSection[] = [{ path: path.join('.'), columns, rows }];
+      const tables: TableSection[] = [{ path: path.join('.'), parts: path, kind: 'records', columns, rows }];
       records.forEach((row, index) => {
         for (const [key, item] of Object.entries(row)) {
           if (isRecord(item) || Array.isArray(item)) {
@@ -214,6 +267,8 @@ export function collectTableSections(value: unknown, path: Path = []): TableSect
       return [
         {
           path: path.join('.'),
+          parts: path,
+          kind: 'matrix',
           columns,
           rows: value.map((row, rowIndex) => ({
             path: [...path, rowIndex],

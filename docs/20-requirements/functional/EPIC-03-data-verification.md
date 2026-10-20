@@ -3,8 +3,8 @@ doc_id: EPIC-03
 title: "EPIC-03 — 数据人工核验与修改"
 type: epic
 status: active
-version: 1.5.7
-updated: 2026-10-19
+version: 1.5.8
+updated: 2026-10-20
 owner: Product Engineering
 priority: P0
 source: "PRD-001 §3.1 场景 3, §4.3"
@@ -38,7 +38,7 @@ related: [DM-Document, DM-ExtractedField, DM-ChangeLog, DM-ReviewRecord, DM-Resu
 | FR-VERIFY-012 | 仅在最终所需复核级别通过后允许数据正式进入业务流程 | P0 | §3.1 场景 3, §4.3 | FR-VERIFY-011 | AC-FR-VERIFY-012-01/02 |
 | FR-VERIFY-013 | 记录每次复核决定、复核级别、复核人、时间与意见 | P0 | §3.1 场景 3 | FR-VERIFY-011 | AC-FR-VERIFY-013-01 |
 | FR-VERIFY-014 | 核验结果页仅保留原图预览与结构化数据，原图位于表格上方；上传确认页预览、核验结果页/最终结果页原图与公司证书图片点击后均以全屏查看器打开，支持双指触控捏合缩放 | P0 | 界面调整 2026-10-17/19 | FR-VERIFY-001 | AC-FR-VERIFY-014-01/02 |
-| FR-VERIFY-015 | 允许直接编辑结构化字段与表格单元格，并以新结果版本保存；金额数字统一千分位 + 保留 2 位小数显示与导出 | P0 | 界面调整 2026-10-17/19 | FR-VERIFY-002 | AC-FR-VERIFY-015-01/02/03 |
+| FR-VERIFY-015 | 允许直接编辑结构化字段与表格单元格，并可新增/删除字段与表格行、通过 Reset 放弃未保存改动，以新结果版本保存；金额数字统一千分位 + 保留 2 位小数显示与导出 | P0 | 界面调整 2026-10-17/20 | FR-VERIFY-002 | AC-FR-VERIFY-015-01/02/03/04/05 |
 | FR-VERIFY-016 | LINE Mini App 结果页 Continue 在确认前检查认证、注册完成状态与任务所属工作空间的订阅；仅已注册且已开通付费套餐的用户可显式确认、锁定结果后进入最终结果页 | P0 | 界面调整 2026-10-17/18 | FR-VERIFY-006, FR-SYS-011, FR-SYS-012 | AC-FR-VERIFY-016-01/02 |
 | FR-VERIFY-017 | 在任务列表与结果页按流程阶段（OCR 处理中 / OCR 处理失败 / 数据验证中 / 数据已验证 / 最终完成）展示任务状态，并支持按阶段筛选历史任务，历史列表每页 20 条滚动分页加载 | P0 | 界面调整 2026-10-18 | FR-VERIFY-016 | AC-FR-VERIFY-017-01/02/03 |
 
@@ -186,6 +186,34 @@ Feature: EPIC-03 核验与修改
     When 用户将 amount 改为 "29650.5" 并离开输入框
     Then 该值以数字 29650.5 保存（JSON 类型不变为字符串），并回显为 "29,650.50"
 
+  Scenario: AC-FR-VERIFY-015-04 新增与删除字段、表格行
+    Given LINE Mini App 核验结果尚未确认，字段分区包含 seller.name、totals.sub_total，明细表 items 有 3 行
+    When 用户点击字段分区的 "Add field"，输入字段名 "tax_id" 与值 "0105551234567" 并确认
+    Then 该字段追加到对应 JSON 对象末尾，与原有字段一样可继续编辑
+    And 字段名留空或与该分区现有字段重名时，确认按钮不可用
+    When 用户删除某个字段
+    Then 仅移除该字段，其他字段、表格与历史结果版本不受影响
+    When 用户在明细表点击 "Add row"
+    Then items 末尾追加一行，所有列均可编辑，单元格初始为空
+    When 用户在新增行或新增字段的金额类列填入 "29650" 并离开输入框
+    Then 该值按金额格式回显为 "29,650.00" 并以数字保存
+    When 用户删除明细表的某一行
+    Then 仅移除该行，其余行的顺序与数据保持不变
+    And 删除某分区最后一个字段或表格最后一行后，页面保留该空卡片及 "Add field"/"Add row" 入口，可继续添加
+    When 用户按现有确认流程保存并确认
+    Then 增删后的结构生成新的结果版本，导出 Excel/CSV 与页面显示一致
+    And 结果确认锁定后，增删按钮与输入框均不可用
+
+  Scenario: AC-FR-VERIFY-015-05 重置未保存的改动
+    Given 用户在核验结果页修改了字段值或增删了字段/表格行，尚未点击 Continue
+    When 用户点击 Continue 左侧的 "Reset"
+    Then 弹出确认框，说明所有编辑以及新增/删除的字段和行都会被放弃
+    When 用户选择取消
+    Then 确认框关闭，页面上的改动保持不变
+    When 用户确认重置
+    Then 页面恢复为当前结果版本的结构与原值，空卡片等临时状态一并清除
+    And 未做任何改动时 Reset 按钮不可用；结果已确认锁定时不显示 Reset 按钮
+
   Scenario: AC-FR-VERIFY-016-01 已注册付费用户显式确认
     Given 用户已登录并完成注册，任务所属工作空间订阅为 ACTIVE，且所有必填字段均有效
     When 用户在 LINE Mini App 结果页点击 "Continue"
@@ -252,6 +280,7 @@ Feature: EPIC-03 核验与修改
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.5.8 | 2026-10-20 | Product Engineering | FR-VERIFY-015：核验结果页支持新增/删除字段与表格增删行（删除到空时保留空卡片入口，新增金额类值按金额格式保存与显示）；Continue 旁新增 Reset 按钮，确认后放弃未保存改动；新增 AC-FR-VERIFY-015-04/05 |
 | 1.5.7 | 2026-10-19 | Product Engineering | FR-VERIFY-015：金额数字千分位逗号 + 至少保留 2 位小数（不省略 .00），计数/标识字段按原值；页面与 Excel/CSV 导出一致，编辑后保持数字类型；新增 AC-FR-VERIFY-015-03。FR-VERIFY-014：核验结果页/最终结果页原图与公司证书统一使用全屏查看器（双指捏合缩放）；更新 AC-FR-VERIFY-014-01 |
 | 1.5.6 | 2026-10-19 | Product Engineering | FR-VERIFY-014：上传确认页预览图支持全屏缩放与双指触控捏合缩放；新增 AC-FR-VERIFY-014-02 |
 | 1.5.5 | 2026-10-18 | Product Engineering | FR-VERIFY-017：最终结果页移除重复 Confirmed 标签，保留任务阶段、只读结果与导出；同步 AC-FR-VERIFY-017-04 |

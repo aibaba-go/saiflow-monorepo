@@ -3,8 +3,8 @@ doc_id: AC-000
 title: "SaiFlow — 汇总验收标准（V1.0 / P0）"
 type: acceptance
 status: active
-version: 1.8.14
-updated: 2026-10-19
+version: 1.8.15
+updated: 2026-10-20
 owner: QA
 verified_requirements: [FR-UPLOAD, FR-OCR, FR-VERIFY, FR-ENTRY, FR-MGMT, FR-SYS, FR-TEMPLATE]
 ---
@@ -247,6 +247,34 @@ Feature: FR-VERIFY Human-in-the-loop
     And seq 显示为 "1"，quantity 显示为 "990"（计数/标识字段不补小数、不加千分位）
     When 用户将 amount 改为 "29650.5" 并离开输入框
     Then 该值以数字 29650.5 保存（JSON 类型不变为字符串），并回显为 "29,650.50"
+
+  Scenario: AC-FR-VERIFY-015-04 新增与删除字段、表格行
+    Given LINE Mini App 核验结果尚未确认，字段分区包含 seller.name、totals.sub_total，明细表 items 有 3 行
+    When 用户点击字段分区的 "Add field"，输入字段名 "tax_id" 与值 "0105551234567" 并确认
+    Then 该字段追加到对应 JSON 对象末尾，与原有字段一样可继续编辑
+    And 字段名留空或与该分区现有字段重名时，确认按钮不可用
+    When 用户删除某个字段
+    Then 仅移除该字段，其他字段、表格与历史结果版本不受影响
+    When 用户在明细表点击 "Add row"
+    Then items 末尾追加一行，所有列均可编辑，单元格初始为空
+    When 用户在新增行或新增字段的金额类列填入 "29650" 并离开输入框
+    Then 该值按金额格式回显为 "29,650.00" 并以数字保存
+    When 用户删除明细表的某一行
+    Then 仅移除该行，其余行的顺序与数据保持不变
+    And 删除某分区最后一个字段或表格最后一行后，页面保留该空卡片及 "Add field"/"Add row" 入口，可继续添加
+    When 用户按现有确认流程保存并确认
+    Then 增删后的结构生成新的结果版本，导出 Excel/CSV 与页面显示一致
+    And 结果确认锁定后，增删按钮与输入框均不可用
+
+  Scenario: AC-FR-VERIFY-015-05 重置未保存的改动
+    Given 用户在核验结果页修改了字段值或增删了字段/表格行，尚未点击 Continue
+    When 用户点击 Continue 左侧的 "Reset"
+    Then 弹出确认框，说明所有编辑以及新增/删除的字段和行都会被放弃
+    When 用户选择取消
+    Then 确认框关闭，页面上的改动保持不变
+    When 用户确认重置
+    Then 页面恢复为当前结果版本的结构与原值，空卡片等临时状态一并清除
+    And 未做任何改动时 Reset 按钮不可用；结果已确认锁定时不显示 Reset 按钮
 
   Scenario: AC-FR-VERIFY-016-01 已注册付费用户显式确认
     Given 用户已登录并完成注册，任务所属工作空间订阅为 ACTIVE，且所有必填字段均有效
@@ -644,6 +672,7 @@ Feature: NFR V1.0 门槛
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.8.15 | 2026-10-20 | Product Engineering | 新增 AC-FR-VERIFY-015-04：核验结果页新增/删除字段与表格增删行（含空卡片继续添加、新增金额值格式化、确认后只读与导出一致）；新增 AC-FR-VERIFY-015-05：Reset 按钮确认后放弃未保存改动 |
 | 1.8.14 | 2026-10-19 | Product Engineering | 新增 AC-FR-VERIFY-015-03：金额数字千分位 + 保留 2 位小数（页面与导出一致），计数字段按原值，编辑后保持数字类型；更新 AC-FR-VERIFY-014-01：结果页/最终结果页原图与公司证书使用全屏查看器 |
 | 1.8.13 | 2026-10-19 | Product Engineering | 新增 AC-FR-VERIFY-014-02：上传确认页预览全屏缩放与双指触控捏合缩放 |
 | 1.8.12 | 2026-10-18 | Product Engineering | 新增 AC-NFR-USAB-004-01/02/03：统一品牌等待反馈、等待结束与失败恢复、减少动态效果及移动端可访问性；保留进度和既有业务行为 |

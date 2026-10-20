@@ -13,8 +13,20 @@ import {
 import { messageText } from '../i18n';
 import { useT } from '../i18nVue';
 import { goTab, isAuthenticated, isGuest, jobWorkspace, navigate, rememberPendingJob } from '../store';
-import { getAtPath, parseNumberText, setAtPath, type Path } from '../structured';
+import {
+  addFieldAt,
+  addTableRowAt,
+  getAtPath,
+  isAmountKey,
+  parseNumberText,
+  removeFieldAt,
+  removeTableRowAt,
+  setAtPath,
+  type Path,
+  type TableRowTarget,
+} from '../structured';
 import BrandLoading from '../components/BrandLoading.vue';
+import FormDialog from '../components/FormDialog.vue';
 import OriginalPreview from '../components/OriginalPreview.vue';
 import PageHeader from '../components/PageHeader.vue';
 import StatusChip from '../components/StatusChip.vue';
@@ -32,8 +44,13 @@ const draft = ref<unknown>(null);
 const errorMsg = ref('');
 const saving = ref(false);
 const retrying = ref(false);
+const confirmingReset = ref(false);
 
 const locked = computed(() => results.value?.review_status === 'CONFIRMED');
+/** 草稿与当前结果版本有差异（编辑、增删字段或表格行） */
+const dirty = computed(
+  () => !!results.value && JSON.stringify(draft.value) !== JSON.stringify(results.value.structured),
+);
 const failed = computed(
   () => job.value?.status === 'FAILED' || job.value?.status === 'CANCELLED',
 );
@@ -78,17 +95,63 @@ function onEdit(path: Path, value: string): void {
   setAtPath(draft.value, path, value);
 }
 
+/** 只接受无前导零的纯数字，避免把编号类文本（00123）误转成数字 */
+const PLAIN_NUMBER = /^-?(0|[1-9]\d*)(\.\d+)?$/;
+
+/** 新增值的类型推断：金额类字段的纯数字转成数字，与 OCR 数字的显示/导出规则一致 */
+function inferValue(key: string, text: string): string | number {
+  if (!isAmountKey(key)) return text;
+  const trimmed = text.trim();
+  return PLAIN_NUMBER.test(trimmed.replace(/,/g, '')) ? Number(trimmed.replace(/,/g, '')) : text;
+}
+
 /** 失焦提交时，原值为数字的字段转回数字，保持 JSON 类型并按金额格式（2 位小数）回显 */
 function onCommit(path: Path): void {
   const original = getAtPath(results.value?.structured, path);
   const current = getAtPath(draft.value, path);
-  if (typeof original !== 'number' || typeof current !== 'string') return;
-  const parsed = parseNumberText(current);
-  if (parsed !== null) setAtPath(draft.value, path, parsed);
+  if (typeof current !== 'string') return;
+  const last = path[path.length - 1];
+  const key = typeof last === 'number' ? String(path[path.length - 2] ?? '') : String(last);
+  if (typeof original === 'number') {
+    const parsed = parseNumberText(current);
+    if (parsed !== null) setAtPath(draft.value, path, parsed);
+  } else if ((original === undefined || original === null) && current.trim() !== '') {
+    // 新增字段 / 新增表格行没有原值，按字段名推断金额并保持数字类型
+    const inferred = inferValue(key, current);
+    if (typeof inferred === 'number') setAtPath(draft.value, path, inferred);
+  }
+}
+
+function onAddField(parts: Path, name: string, value: string): void {
+  addFieldAt(draft.value, parts, name, inferValue(name, value));
+}
+
+function onRemoveField(path: Path): void {
+  removeFieldAt(draft.value, path);
+}
+
+function onAddRow(target: TableRowTarget): void {
+  addTableRowAt(draft.value, target);
+}
+
+function onRemoveRow(parts: Path, index: number): void {
+  removeTableRowAt(draft.value, parts, index);
+}
+
+function askReset(): void {
+  if (!dirty.value || locked.value) return;
+  confirmingReset.value = true;
+}
+
+/** 放弃本次所有改动，恢复到当前结果版本（含字段与表格行的增删） */
+function resetDraft(): void {
+  if (!results.value) return;
+  draft.value = cloneStructured(results.value.structured);
+  confirmingReset.value = false;
 }
 
 async function saveDraft(): Promise<void> {
-  if (!results.value || locked.value || JSON.stringify(draft.value) === JSON.stringify(results.value.structured)) return;
+  if (!results.value || locked.value || !dirty.value) return;
   results.value = await updateJobResults(props.jobId, {
     expected_version: results.value.version,
     structured: draft.value,
@@ -195,6 +258,10 @@ async function confirm(): Promise<void> {
           :editable="!locked"
           @edit="onEdit"
           @commit="onCommit"
+          @add-field="onAddField"
+          @remove-field="onRemoveField"
+          @add-row="onAddRow"
+          @remove-row="onRemoveRow"
         />
 
         <p v-if="errorMsg" class="status-error">{{ errorMsg }}</p>
@@ -202,14 +269,30 @@ async function confirm(): Promise<void> {
 
       <div class="action-bar">
         <p v-if="isGuest" class="guest-hint">{{ t('result.guestHint') }}</p>
-        <button class="primary-btn" :disabled="saving" @click="confirm">
-          <BrandLoading v-if="saving" variant="button" :label="t('result.saving')" />
-          <template v-else>{{ t('result.continue') }}</template>
-        </button>
+        <div class="action-buttons">
+          <button v-if="!locked" class="reset-btn" :disabled="!dirty || saving" @click="askReset">
+            {{ t('result.reset') }}
+          </button>
+          <button class="primary-btn" :disabled="saving" @click="confirm">
+            <BrandLoading v-if="saving" variant="button" :label="t('result.saving')" />
+            <template v-else>{{ t('result.continue') }}</template>
+          </button>
+        </div>
       </div>
     </template>
 
     <div v-else class="fatal"><BrandLoading :label="t('common.loading')" /></div>
+
+    <FormDialog
+      v-if="confirmingReset && !locked"
+      :title="t('result.resetConfirm')"
+      :subtitle="t('result.resetConfirmBody')"
+    >
+      <div class="fd-actions">
+        <button class="fd-btn secondary" @click="confirmingReset = false">{{ t('common.cancel') }}</button>
+        <button class="fd-btn danger" @click="resetDraft">{{ t('result.reset') }}</button>
+      </div>
+    </FormDialog>
   </div>
 </template>
 
@@ -354,6 +437,34 @@ async function confirm(): Promise<void> {
   font-size: 10.5px;
   color: var(--processing);
   font-weight: 600;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.action-buttons .primary-btn,
+.action-buttons .reset-btn {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.reset-btn {
+  height: 53px;
+  border: 0;
+  /* 用内阴影画边框，避免 border 宽度让两个等宽按钮出现 1px 偏差 */
+  box-shadow: inset 0 0 0 1px var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.reset-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .primary-btn {
