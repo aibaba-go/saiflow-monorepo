@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Any
+from typing import Any, Callable, Mapping
 
 from flask import Flask
 
@@ -172,35 +172,21 @@ class OcrWorker:
         content = storage.get_bytes(storage_path)
         started = time.monotonic()
 
-        result: dict[str, Any] | None = None
-        last_err: Exception | None = None
-        for attempt in range(MAX_VENDOR_RETRIES):
-            try:
-                from textin.adapter import run_extraction
-
-                result = run_extraction(
-                    client,
-                    filename=file_name,
-                    content=content,
-                    params=params,
-                )
-                break
-            except Exception as e:  # noqa: BLE001
-                last_err = e
-                if self._cancel_requested(job_id):
-                    self._transition(job_id, "CANCELLED")
-                    return
-                if _is_retryable(e) and attempt < MAX_VENDOR_RETRIES - 1:
-                    delay = 2 ** (attempt + 1)
-                    logger.warning("TextIn 可重试错误（%s），%ds 后第 %d 次重试", e, delay, attempt + 2)
-                    time.sleep(delay)
-                else:
-                    break
-
-        if result is None:
-            err = last_err or RuntimeError("unknown")
-            self._transition(job_id, "FAILED", error_code=_error_code(err),
-                             error_message=str(err)[:512])
+        try:
+            result, actual_extractor, fallback_reason = _run_extraction_pipeline(
+                client,
+                app_config=self.app.config,
+                params=params,
+                filename=file_name,
+                content=content,
+                cancelled=lambda: self._cancel_requested(job_id),
+            )
+        except _ExtractionCancelled:
+            self._transition(job_id, "CANCELLED")
+            return
+        except Exception as e:  # noqa: BLE001
+            self._transition(job_id, "FAILED", error_code=_error_code(e),
+                             error_message=str(e)[:512])
             return
 
         if self._cancel_requested(job_id):
@@ -238,6 +224,9 @@ class OcrWorker:
             job.missing_pages = list(result.get("missing_pages") or [])
             job.capability = {"vendor": "textin", **(job.capability or {}),
                               "field_source": result.get("field_source", "heuristic"),
+                              "extractor": actual_extractor,
+                              **({"parser": "parse/sync"} if actual_extractor != "prompt" else {}),
+                              **({"fallback_reason": fallback_reason} if fallback_reason else {}),
                               **({"refiner": refiner} if refiner else {})}
             job.status = "PARTIAL_SUCCESS" if result["missing_pages"] else "SUCCEEDED"
             job.progress = 100
@@ -290,6 +279,88 @@ def _is_retryable(err: Exception) -> bool:
     import httpx
 
     return isinstance(err, (httpx.TransportError, httpx.TimeoutException))
+
+
+def _select_extractor(app_config: Mapping[str, Any], params: Mapping[str, Any]) -> str:
+    """决定走 extract-v3 还是 Prompt 模式。
+
+    优先级: job.params["extract_v3"] 显式 > 全局 EXTRACT_V3_ENABLED。
+    返回 'extract_v3' / 'prompt'。
+    """
+    per_job = params.get("extract_v3") if isinstance(params, Mapping) else None
+    if per_job is True:
+        return "extract_v3"
+    if per_job is False:
+        return "prompt"
+    return "extract_v3" if app_config.get("EXTRACT_V3_ENABLED", False) else "prompt"
+
+
+def _classify_fallback(err: Exception) -> str:
+    """解析 extract-v3 失败原因，归入 design §6 枚举。"""
+    from textin.errors import TextInAPIError
+
+    if isinstance(err, TextInAPIError):
+        # -1 是内部约定的归一器失败码（llm_json / extract-v3 响应不可解析）
+        return "normalize_failed" if err.code == -1 else "vendor_error"
+    return "empty_or_invalid"
+
+
+class _ExtractionCancelled(Exception):
+    """退避重试期间收到取消请求;调用方据此落 CANCELLED 而非 FAILED。"""
+
+
+def _run_extraction_pipeline(
+    client: Any,
+    *,
+    app_config: Mapping[str, Any],
+    params: Mapping[str, Any],
+    filename: str,
+    content: bytes,
+    cancelled: Callable[[], bool] | None = None,
+) -> tuple[dict[str, Any], str, str | None]:
+    """按 cfg 选择 extract-v3 或 Prompt 路径;v3 失败自动回退 Prompt。
+
+    返回 (result, actual_extractor, fallback_reason);终态失败时抛最后一次异常,
+    交由调用方按 _error_code 落 FAILED;cancelled 回调为真时抛 _ExtractionCancelled。
+    """
+    from textin.adapter import run_extraction, run_extraction_v3
+
+    extractor_target = _select_extractor(app_config, params)
+    actual_extractor = extractor_target
+    fallback_reason: str | None = None
+
+    def _do(call):
+        last_err: Exception | None = None
+        for attempt in range(MAX_VENDOR_RETRIES):
+            try:
+                return call()
+            except Exception as e:  # noqa: BLE001
+                last_err = e
+                if _is_retryable(e) and attempt < MAX_VENDOR_RETRIES - 1:
+                    if cancelled is not None and cancelled():
+                        raise _ExtractionCancelled from e
+                    delay = 2 ** (attempt + 1)
+                    logger.warning("TextIn 可重试错误（%s），%ds 后第 %d 次重试", e, delay, attempt + 2)
+                    time.sleep(delay)
+                else:
+                    break
+        raise last_err if last_err else RuntimeError("unknown")
+
+    if extractor_target == "extract_v3":
+        try:
+            result = _do(lambda: run_extraction_v3(client, filename=filename, content=content, params=dict(params)))
+        except _ExtractionCancelled:
+            raise
+        except Exception as e:  # noqa: BLE001
+            fallback_reason = _classify_fallback(e)
+            logger.warning("extract-v3 失败，回退 Prompt 模式: %s", e)
+            actual_extractor = "prompt_fallback"
+            result = _do(lambda: run_extraction(client, filename=filename, content=content, params=dict(params)))
+    else:
+        actual_extractor = "prompt"
+        result = _do(lambda: run_extraction(client, filename=filename, content=content, params=dict(params)))
+
+    return result, actual_extractor, fallback_reason
 
 
 def _error_code(err: Exception) -> str:

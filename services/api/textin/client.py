@@ -172,6 +172,38 @@ class TextInClient:
         resp = self._client.post(self.endpoint, files=form)
         return self._parse(resp)
 
+    def parse_sync(
+        self,
+        filename: str,
+        content: bytes,
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """上传文件到 parse/sync,返回 OCR JSON。"""
+        config_str = build_config(params)
+        form = {
+            "file": (filename, content, "application/octet-stream"),
+            "config": (None, config_str, "application/json"),
+        }
+        logger.info("TextIn parse_sync: filename=%s size=%d", filename, len(content))
+        resp = self._client.post(self.endpoint, files=form)
+        return self._parse(resp)
+
+    def extract_v3_from_ocr_json(
+        self,
+        parse_json: dict[str, Any],
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """把 parse_sync 返回的 OCR JSON 回传 extract-v3 端点抽取。
+        schema 在 TextIn 控制台预先勾选;请求体内不再传 schema。
+        TODO: 真实契约待对齐 — 当前以 parse_json 整体作为 JSON body。
+        """
+        logger.info("TextIn extract_v3_from_ocr_json: pages=%d", len(parse_json.get("pages", [])))
+        resp = self._client.post(
+            self._settings.textin_extract_v3_endpoint,
+            json=parse_json,
+        )
+        return self._parse(resp)
+
     def extract_url(
         self,
         url: str,

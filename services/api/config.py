@@ -108,6 +108,10 @@ class Config:
     OCR_STORAGE_DIR = os.getenv("OCR_STORAGE_DIR", "./temp/extractions")
     TEXTIN_TIMEOUT_SECONDS = float(os.getenv("TEXTIN_TIMEOUT_SECONDS", "120"))
     TEXTIN_CONNECT_TIMEOUT_SECONDS = float(os.getenv("TEXTIN_CONNECT_TIMEOUT_SECONDS", "10"))
+    # extract-v3 灰度开关；任务级 params["extract_v3"] 可单独覆盖（见 worker._select_extractor）
+    EXTRACT_V3_ENABLED = os.getenv("EXTRACT_V3_ENABLED", "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
 
     # ---------- DeepSeek：二次整理 TextIn JSON（未配置 key 则跳过，直接用 TextIn 结果） ----------
     DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")

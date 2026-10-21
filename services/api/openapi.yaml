@@ -1248,8 +1248,8 @@ paths:
         - 页范围（文件 page_count > 0 时校验）：起始页 = `params.page`(0 起) + 1，超过文件页数 → 400 `job.page_out_of_range`；`params.page_count`（缺省为 min(文件页数, 50)）> 50 → 400 `job.page_count_exceeded`。
         - 幂等：`Idempotency-Key` 请求头优先，body `idempotency_key` 兜底（去首尾空白后 1~128 字符）。命中已有任务且当前用户可见（本人创建或同企业 ACTIVE 成员）→ 200 原样返回该任务摘要；命中但不可见 → 404。
         - 配额：已开通付费套餐的空间按本月剩余页数校验（不消耗免费次数）；否则消耗 1 次免费 OCR 任务。余额不足 → 402 QUOTA_EXCEEDED（`quota.exceeded`）。
-        - 仅 `params` 中的 parse_mode/table/formula/rotate/page/page_count 及 `field_names` 会被保存，其他键忽略。
-        - 参数非法时 400 INVALID_ARGUMENT，field_errors 形如 `{field: file_id|params|field_names|page|page_count|idempotency_key, reason: required|invalid}`。
+        - 仅 `params` 中的 parse_mode/table/formula/rotate/page/page_count/extract_v3 及 `field_names` 会被保存，其他键忽略。
+        - 参数非法时 400 INVALID_ARGUMENT，field_errors 形如 `{field: file_id|params|field_names|page|page_count|extract_v3|idempotency_key, reason: required|invalid}`。
       operationId: createOcrJob
       security:
         - sessionCookie: []
@@ -2965,6 +2965,12 @@ components:
           minimum: 1
           maximum: 50
           description: 识别页数；缺省为 min(文件页数, 50)。
+        extract_v3:
+          type: boolean
+          description: >-
+            任务级灰度覆盖。true 走 TextIn extract-v3 智能抽取，false 走 Prompt 模式；
+            缺省时取全局开关 EXTRACT_V3_ENABLED。extract-v3 失败自动回退 Prompt 模式，
+            实际路径回写 ocr_jobs.capability.extractor。
     OcrJobCreateRequest:
       type: object
       required: [file_id]

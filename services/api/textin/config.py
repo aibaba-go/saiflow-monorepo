@@ -30,6 +30,10 @@ class TextInSettings(BaseSettings):
     textin_endpoint: str = "https://api.textin.ai/api/v1/xparse/parse/sync"
     textin_extract_endpoint: str = "https://api.textin.ai/api/v1/xparse/extract/sync"
     textin_prompt_endpoint: str = "https://api.textin.ai/ai/service/v2/entity_extraction"
+    textin_extract_v3_endpoint: str = Field(
+        default="https://api.textin.ai/api/v1/xparse/extract/sync",
+        description="TODO: 确认 extract-v3 实际端点;目前默认复用 extract/sync URL",
+    )
     ocr_storage_dir: Path = Path("./temp/extractions")
     ocr_uploads_dir: Path = Path("./temp/uploads")
     max_upload_bytes: int = 20 * 1024 * 1024
@@ -73,6 +77,10 @@ def build_textin_settings(app_config: Mapping[str, Any]) -> TextInSettings:
         "textin_prompt_endpoint": (
             "TEXTIN_PROMPT_ENDPOINT",
             "https://api.textin.ai/ai/service/v2/entity_extraction",
+        ),
+        "textin_extract_v3_endpoint": (
+            "TEXTIN_EXTRACT_V3_ENDPOINT",
+            "https://api.textin.ai/api/v1/xparse/extract/sync",
         ),
         "ocr_storage_dir": ("OCR_STORAGE_DIR", "./temp/extractions"),
         "ocr_uploads_dir": ("OCR_UPLOADS_DIR", "./temp/uploads"),

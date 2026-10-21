@@ -13,8 +13,9 @@ __pycache__/
 
 # 运行时数据（TextIn 抽取记录 + 原始上传文件）
 uploads
-tests
 storage
 temp
+# 注：tests/ 是 pytest 单测源码目录，需纳入版本控制；
+# 厂商抽取产物写在 temp/extractions（见 config.OCR_STORAGE_DIR），与 tests/ 无关。
 .pytest_cache/
 .venv/

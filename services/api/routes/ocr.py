@@ -140,6 +140,9 @@ def create_job():
         not isinstance(page_count, int) or isinstance(page_count, bool) or page_count < 1
     ):
         raise invalid_argument(field_errors=[{"field": "page_count", "reason": "invalid"}])
+    extract_v3 = params.get("extract_v3")
+    if extract_v3 is not None and not isinstance(extract_v3, bool):
+        raise invalid_argument(field_errors=[{"field": "extract_v3", "reason": "invalid"}])
     if file.page_count:
         start = (page or 0) + 1
         span = page_count or min(file.page_count, current_app.config["MAX_PAGES_PER_TASK"])
@@ -165,7 +168,7 @@ def create_job():
 
     stored_params = {
         k: params[k]
-        for k in ("parse_mode", "table", "formula", "rotate", "page", "page_count")
+        for k in ("parse_mode", "table", "formula", "rotate", "page", "page_count", "extract_v3")
         if k in params
     }
     if field_names:

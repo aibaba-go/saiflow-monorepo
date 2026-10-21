@@ -238,10 +238,53 @@ def run_extraction(
     }
 
 
+def normalize_v3_to_ir(v3_fields: Any) -> dict[str, Any]:
+    """把 extract-v3 返回的扁平 KV 转 IR。
+
+    当前 contract: k 来自 schema 字段(后台勾选),v 为抽取值;具体类型未对齐前保持原样。
+    TODO: 真实契约含 confidence/bbox/表格时再迭代。
+    """
+    if isinstance(v3_fields, dict):
+        return {str(k): v for k, v in v3_fields.items()}
+    return {}
+
+
+def run_extraction_v3(
+    client: TextInClient,
+    *,
+    filename: str,
+    content: bytes,
+    params: dict[str, Any],
+) -> dict[str, Any]:
+    """新支路: parse_sync → extract_v3 → 归一 IR。
+
+    返回与 run_extraction 同 schema;失败抛 TextInAPIError,由 worker 走兜底矩阵。
+    """
+    parse_json = client.parse_sync(filename=filename, content=content, params=params)
+    result = client.extract_v3_from_ocr_json(parse_json=parse_json, params=params)
+    extracted = result.get("extracted") if isinstance(result.get("extracted"), dict) else {}
+    structured = normalize_v3_to_ir(extracted)
+    table_count, field_count = _count_structure(structured)
+    page_count = _num(result.get("page_count")) or _num(parse_json.get("page_count"))
+    duration = result.get("duration") or parse_json.get("duration")
+    return {
+        "vendor": VENDOR,
+        "page_count": page_count,
+        "duration_ms": _num(duration) if isinstance(duration, (int, float)) else 0,
+        "structured": structured,
+        "missing_pages": [],
+        "table_count": table_count,
+        "field_count": field_count,
+        "field_source": "extract_v3",
+    }
+
+
 __all__ = [
     "EXTRACT_PROMPT",
     "VENDOR",
     "TextInAPIError",
     "normalize_response",
+    "normalize_v3_to_ir",
     "run_extraction",
+    "run_extraction_v3",
 ]
