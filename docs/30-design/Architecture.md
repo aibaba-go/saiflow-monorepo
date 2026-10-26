@@ -3,11 +3,11 @@ doc_id: DES-001
 title: "SaiFlow — 系统架构"
 type: design
 status: active
-version: 2.2.1
-updated: 2026-10-18
+version: 2.3.0
+updated: 2026-10-26
 owner: Product Engineering
 source: "PRD-001 §3.1, §4, §5; ADR-001"
-related: [DM-Document, DM-ExtractionPayload, DM-ConversionJob, OCR-Pipeline, API-Spec, NFR-SEC, ADR-001]
+related: [DM-Document, DM-ExtractionPayload, DM-ConversionJob, OCR-Pipeline, API-Spec, NFR-SEC, ADR-001, ADR-005]
 ---
 
 # SaiFlow — 系统架构
@@ -25,8 +25,8 @@ related: [DM-Document, DM-ExtractionPayload, DM-ConversionJob, OCR-Pipeline, API
 | **前端共享库** | `packages/ui/`（组件/主题）、`packages/api-client/`（OpenAPI 生成）、`packages/tsconfig/` | 禁止手写第二份 API 契约 |
 | **包管理** | pnpm workspace | 仅扫描 `apps/*` 与 `packages/*`；`services/` 隔离 |
 | **后端** | Python `>=3.12,<3.15` + FastAPI + Pydantic + pydantic-settings | `services/api/`，异步优先 |
-| **ORM / 数据库驱动** | SQLAlchemy 2.x async + asyncpg | 通过 Cloud SQL Python Connector 或 IAM 连接 |
-| **关系数据库** | Google Cloud SQL for PostgreSQL **18.6** | 事务、查询、审计、模板与关系化业务数据 |
+| **ORM / 数据库驱动** | SQLAlchemy 2.x + psycopg 3 | TCP 直连，参数取 `PG*` 环境变量（ADR-005） |
+| **关系数据库** | 自建 PostgreSQL **17.6**（`122.51.11.112` / 库 `odoo` / schema `saiflow`） | 事务、查询、审计、模板与关系化业务数据；原 Cloud SQL 18.6 已停用（ADR-005） |
 | **对象存储** | 私有 Google Cloud Storage Bucket | 原件、派生文件、导出工件 |
 | **原始 OCR JSON** | Google Cloud Firestore | 按载荷版本不可变 |
 | **事件转换** | Google Cloud Functions（Firestore 触发） | 按模板将原始 JSON 幂等投影至 Cloud SQL |
@@ -127,9 +127,9 @@ Browser upload → FastAPI format/size validation → private GCS original objec
 | 原始识别数据 | Firestore | 保存不可变 JSON 载荷、处理状态和关联元数据 |
 | 事件转换 | Cloud Functions（Firestore 触发） | 默认逐份模板转换与 Cloud SQL 幂等写入 |
 | 批量转换 | Dataflow（可选） | 仅用于经批准的回填、重处理或高吞吐任务 |
-| 关系型数据 | Cloud SQL for PostgreSQL **18.6** | 事务、查询、审计、模板与关系化业务数据 |
+| 关系型数据 | 自建 PostgreSQL **17.6**（ADR-005） | 事务、查询、审计、模板与关系化业务数据 |
 | 文档数据 | 私有 GCS Bucket | 对原件和工件进行持久的双重存储 |
-| 数据库连接 | Cloud SQL Python Connector / IAM 启用的连接 | 不需要公开数据库端点 |
+| 数据库连接 | 公网 TCP，`PGSSLMODE` 控制 TLS；口令经 Secret Manager `saiflow-pg-password` 注入 | 服务端启用 SSL 后须改为 `require`（ADR-005 待整改项） |
 | 对象访问 | 专用 Cloud Run 服务账号 | 最小权限 GCS 对象访问 |
 | 密钥 | 在运行时注入 Secret Manager | 源码或镜像中不包含密钥 |
 | 区域 | 部署配置 | 必须为 PDPA/数据驻留需求确认 |
@@ -148,14 +148,15 @@ Browser upload → FastAPI format/size validation → private GCS original objec
 
 | ADR | 决策 | 状态 |
 |-----|------|------|
-| ADR-001 | Google Cloud：Cloud Run + Cloud SQL PostgreSQL 18.6 + 私有 GCS | accepted |
+| ADR-001 | Google Cloud：Cloud Run + Cloud SQL PostgreSQL 18.6 + 私有 GCS | accepted（关系数据库部分被 ADR-005 取代） |
 | ADR-002 | 在稳定接口后使用可插拔 OCR/提取引擎；V1.0 默认适配 TextIn | proposed |
 | ADR-003 | ERP/管理系统集成采用适配器模式 | proposed |
 | ADR-004 | Firestore 保存原始识别 JSON；Cloud Functions 事件驱动模板转换；Dataflow 仅用于批准的批量处理 | proposed |
+| ADR-005 | 关系数据库迁移至自建 PostgreSQL 17（122.51.11.112 / odoo.saiflow） | accepted |
 
 ## 链接
 
-- ADR：`docs/30-design/ADR-001-cloud-native-deployment.md`
+- ADR：`docs/30-design/ADR-001-cloud-native-deployment.md`、`docs/30-design/ADR-005-self-hosted-postgresql.md`
 - 数据模型：`docs/30-design/Data-Model.md`
 - API：`docs/30-design/API-Spec.md`
 - NFR：`docs/20-requirements/non-functional/NFR.md`
@@ -164,6 +165,7 @@ Browser upload → FastAPI format/size validation → private GCS original objec
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.3.0 | 2026-10-26 | Product Engineering | 按 ADR-005 将关系数据库由 Cloud SQL PostgreSQL 18.6 切换为自建 PostgreSQL 17.6（odoo.saiflow）；更新技术基线与数据库连接方式 |
 | 2.2.1 | 2026-10-18 | Product Engineering | 新增 §3.1 LINE Mini App 品牌等待设计：共享 BrandLoading.vue 四种 variant 与 label、品牌动效及 reduced-motion；映射 NFR-USAB-004 与已有 AC，不改变业务流程 |
 | 2.2.0 | 2026-10-12 | Product Engineering | 新增“0. 技术基线”章节，汇总前后端、数据库、云服务、外部服务与工程工具链；明确版本号以配置文件为唯一事实来源 |
 | 2.1.0 | 2026-10-07 | Product Engineering | 新增 TextIn、Firestore、Cloud Functions 模板转换与可选 Dataflow 架构 |

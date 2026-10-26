@@ -3,8 +3,8 @@ doc_id: ADR-001
 title: "ADR-001 — Google Cloud 云原生部署"
 type: adr
 status: accepted
-version: 1.0.1
-updated: 2026-10-02
+version: 1.0.2
+updated: 2026-10-26
 owner: Product Engineering
 related: [NFR-SEC-001, NFR-SEC-002, NFR-DATA-001]
 ---
@@ -13,7 +13,7 @@ related: [NFR-SEC-001, NFR-SEC-002, NFR-DATA-001]
 
 ## 状态
 
-已接受。
+已接受。其中“结构化业务数据存储在 Cloud SQL for PostgreSQL 18.6”部分自 2026-10-26 起被 [ADR-005](ADR-005-self-hosted-postgresql.md) 取代（改为自建 PostgreSQL 17）；Cloud Run、私有 GCS、Firestore 部分仍然有效。
 
 ## 背景
 
@@ -55,5 +55,6 @@ PDPA 适用：需定义数据区域、保留/删除策略、授权访问和审�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.0.2 | 2026-10-26 | Product Engineering | 标注关系数据库部分被 ADR-005（自建 PostgreSQL 17）取代 |
 | 1.0.1 | 2026-10-02 | Product Engineering | 将人类可读内容翻译为简体中文 |
 | 1.0.0 | 2026-10-01 | Product Engineering | 记录 Google Cloud Cloud Run、Cloud SQL PostgreSQL 18.6 与私有 GCS 的正式部署决策 |
