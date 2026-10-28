@@ -22,16 +22,17 @@ def _bool(name: str, default: bool = False) -> bool:
 class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "change-this-in-production")
 
-    # ---------- PostgreSQL（Google Cloud SQL） ----------
-    # 本地开发：公网 IP 直连（pg_hba 要求 SSL，sslmode=require）；
-    # Cloud Run：PGHOST=/cloudsql/<项目>:<地区>:<实例> 走 Unix 套接字（云侧已加密，不加 sslmode）。
-    # 连接名：saiflow-509205:asia-southeast1:saiflow-dev
-    PGHOST = os.getenv("PGHOST", "34.87.95.49")
+    # ---------- PostgreSQL（自建 PostgreSQL 17，ADR-002；原 Google Cloud SQL 已停用） ----------
+    # 本地与 Cloud Run 均 TCP 直连 122.51.11.112:5432 / 库 odoo / schema saiflow。
+    # PGSSLMODE：服务端开启 SSL 后应改为 require；当前服务端未启用 SSL，默认 prefer（有则用）。
+    # 仍兼容 PGHOST=/cloudsql/... Unix 套接字（回滚到 Cloud SQL 时使用）。
+    PGHOST = os.getenv("PGHOST", "122.51.11.112")
     PGPORT = int(os.getenv("PGPORT", "5432"))
-    PGUSER = os.getenv("PGUSER", "postgres")
+    PGUSER = os.getenv("PGUSER", "odoo_app")
     PGPASSWORD = os.getenv("PGPASSWORD", "")
-    PGDATABASE = os.getenv("PGDATABASE", "postgres")
+    PGDATABASE = os.getenv("PGDATABASE", "odoo")
     PGSCHEMA = os.getenv("PGSCHEMA", "saiflow")
+    PGSSLMODE = os.getenv("PGSSLMODE", "prefer")
 
     _pg_auth = f"{quote_plus(PGUSER)}:{quote_plus(PGPASSWORD)}"
     # search_path 走连接启动参数（protocol 级，每个新物理连接都生效）：
@@ -40,8 +41,9 @@ class Config:
     # 本地与 Cloud Run 共用同一实例：会话级兜底，防止任一客户端长期占锁挡住其他实例（含启动 DDL）
     # - idle_in_transaction_session_timeout：事务内空闲超 5 分钟由服务端结束会话并释放锁
     # - tcp_keepalives_*：本机断网/休眠后约 1 分钟内服务端探测到死连接并回收（Unix 套接字下自动忽略）
+    # - TimeZone=UTC：模型时间均为 naive UTC；新库服务端默认 Asia/Shanghai，会话统一为 UTC
     _pg_opts = quote_plus(
-        f"-c search_path={PGSCHEMA}"
+        f"-c search_path={PGSCHEMA} -c TimeZone=UTC"
         " -c idle_in_transaction_session_timeout=300000"
         " -c tcp_keepalives_idle=30 -c tcp_keepalives_interval=10 -c tcp_keepalives_count=3"
     )
@@ -53,7 +55,7 @@ class Config:
     else:
         SQLALCHEMY_DATABASE_URI = (
             f"postgresql+psycopg://{_pg_auth}@{PGHOST}:{PGPORT}/{PGDATABASE}"
-            f"?sslmode=require&options={_pg_opts}"
+            f"?sslmode={quote_plus(PGSSLMODE)}&options={_pg_opts}"
             "&keepalives=1&keepalives_idle=30&keepalives_interval=10&keepalives_count=3"
         )
     SQLALCHEMY_TRACK_MODIFICATIONS = False

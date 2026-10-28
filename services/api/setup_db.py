@@ -1,7 +1,7 @@
 """干净重建 PostgreSQL 中的业务表（开发/重建用，PRD §13）。
 
-- 连接参数与 Flask 完全一致：PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE/PGSCHEMA
-  （本地公网直连 sslmode=require；PGHOST 为 /cloudsql/... 时走 Unix 套接字）；
+- 连接参数与 Flask 完全一致：PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE/PGSCHEMA/PGSSLMODE
+  （TCP 直连按 PGSSLMODE，默认 prefer；PGHOST 为 /cloudsql/... 时走 Unix 套接字）；
 - 只重建 models.py 声明的本应用表（DROP TABLE ... CASCADE），
   不碰同 schema 下不属于本应用的对象（如演示表 saiflow."user"）；
 - 表结构以 models.py 为准（与 app.py 启动时的 db.create_all() 一致）。
