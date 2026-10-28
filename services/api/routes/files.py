@@ -22,7 +22,7 @@ from errors import ApiError, invalid_argument, not_found, ok
 from extensions import db
 from fileaccess import get_file_for_user
 from models import File
-from workspace import resolve_workspace
+from workspace import resolve_tenant
 import storage
 
 logger = logging.getLogger(__name__)
@@ -82,9 +82,7 @@ def create_upload():
     """预检归属/用途/格式/限额，创建 UPLOADING 会话。"""
     body = request.get_json(silent=True) or {}
     user = current_user()
-    ws_type, enterprise_id = resolve_workspace(
-        user, body.get("workspace_type"), body.get("enterprise_id")
-    )
+    tenant = resolve_tenant(user, body.get("tenant_id"))
     purpose = body.get("purpose") or "OCR_TASK"
     if purpose not in ("OCR_TASK", "APPLICATION_MATERIAL"):
         raise invalid_argument("error.invalid_argument")
@@ -100,8 +98,7 @@ def create_upload():
         raise invalid_argument("files.too_large")
 
     f = File(
-        workspace_type=ws_type,
-        enterprise_id=enterprise_id,
+        tenant_id=tenant.id,
         created_by_user_id=user.id,
         uploader_user_id=user.id,
         purpose=purpose,
@@ -189,9 +186,7 @@ def file_import():
 
     body = request.get_json(silent=True) or {}
     user = current_user()
-    ws_type, enterprise_id = resolve_workspace(
-        user, body.get("workspace_type"), body.get("enterprise_id")
-    )
+    tenant = resolve_tenant(user, body.get("tenant_id"))
     url = str(body.get("url") or "").strip()
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
@@ -226,8 +221,7 @@ def file_import():
         name = f"{name or 'import'}.{ext}"
 
     f = File(
-        workspace_type=ws_type,
-        enterprise_id=enterprise_id,
+        tenant_id=tenant.id,
         created_by_user_id=user.id,
         uploader_user_id=user.id,
         purpose="OCR_TASK",

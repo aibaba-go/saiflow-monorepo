@@ -1,17 +1,17 @@
 """套餐目录（PRD v1.4 §20.1 / P15 定价页）。
 
 P0 仅作展示目录：支付完全线下（联系销售开通/续费），无在线下单、
-无回调、无自动续费。免费额度与付费套餐分开记账、互不合并
-（免费按 OCR_TASK/次，付费按 OCR_PAGE/页）。
+无回调、无自动续费。没有 Free 档位、没有赠送次数：任何租户默认开通
+Kinder 一个月，计量统一为 OCR_PAGE（每月页数），到期即停止新建任务，
+续费由人工审批 PLAN_UPGRADE 申请时写入有效期。
 """
 from __future__ import annotations
 
-# 免费赠送额度（PRD v1.4 §20.2）
-FIRST_LOGIN_BONUS_TASKS = 1000
-FIRST_ENTERPRISE_VERIFIED_BONUS_TASKS = 1000
-
-# 未开通任何付费套餐时的档位（仅享赠送免费额度），不在可购买目录中
-FREE_PLAN: dict = {"code": "FREE", "name": "Free"}
+# 默认开通的档位与时长（FR-SYS-012/013）
+DEFAULT_PLAN_CODE = "KINDER"
+DEFAULT_PERIOD_MONTHS = 1
+# 人工审批未显式指定有效期时的默认续期月数（Kinder 为年付目录价）
+APPROVED_PERIOD_MONTHS = 12
 
 PLAN_CATALOG: list[dict] = [
     {

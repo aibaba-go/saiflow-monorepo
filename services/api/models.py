@@ -1,12 +1,15 @@
 """核心数据模型（PRD §13 的 P0 落地）。
 
-覆盖：users / sessions / enterprises / memberships / applications /
+覆盖：users / sessions / tenants / enterprises / memberships / applications /
 invitations / files（含 upload_sessions 生命周期）/ ocr_jobs /
-result_versions / page_results / exports / notifications / audit_events /
-data_requests / review_sync_cursors。
+result_versions / page_results / exports / subscriptions / plan_reminders /
+notifications / audit_events / data_requests / review_sync_cursors。
 大型结果 JSON 存 page_results.tables/text/fields（PostgreSQL JSON 列），
 原件字节存私有存储目录，库中只保存引用与索引。
 表/字段说明写在 comment=，是数据库 COMMENT 的唯一来源。
+
+归属统一走 tenants：个人用户与企业各占一个租户，业务表只带 tenant_id，
+不再出现 workspace_type/enterprise_id 这种双列归属（避免两套口径互相漂移）。
 """
 from __future__ import annotations
 
@@ -65,9 +68,9 @@ class User(db.Model, TimestampMixin):
         db.String(16), nullable=False, default="ACTIVE", comment="账号状态：ACTIVE=正常 / DISABLED=禁用"
     )
     phone = db.Column(
-        db.String(32), nullable=False, default="", comment="手机号（来自 LINE，用户不可修改）"
+        db.String(32), nullable=False, default="", comment="手机号（默认 LINE 返回值，注册时可编辑；个人中心可修改）"
     )
-    email = db.Column(db.String(254), nullable=False, default="", comment="已验证的邮箱")
+    email = db.Column(db.String(254), nullable=False, default="", comment="邮箱（注册前可为 LINE 默认值，注册后已验证）")
     registered_at = db.Column(
         db.DateTime, nullable=True, comment="完成注册信息录入的时间；NULL=尚未完成注册"
     )
@@ -143,14 +146,56 @@ class Session(db.Model):
         self.idle_expires_at = _now() + timedelta(seconds=idle_ttl_seconds)
 
 
+# ---------- 租户（统一归属主体） ----------
+
+
+class Tenant(db.Model, TimestampMixin):
+    """个人用户与企业用户的统一归属主体；业务表只通过 tenant_id 关联。
+
+    个人租户与 user 严格 1:1（owner_user_id 唯一，含游客）；企业租户与
+    enterprise 1:1（owner_user_id 为 NULL，专有字段留在 enterprises）。
+    status 只表达「这个租户还能不能用」，企业的审核语义仍在 enterprises.status。
+    """
+
+    __tablename__ = "tenants"
+    __table_args__ = (
+        # 个人租户与 user 严格 1:1；企业租户 owner_user_id 为 NULL，
+        # PostgreSQL 唯一约束不约束 NULL，因此企业租户不受影响。
+        db.UniqueConstraint("owner_user_id", name="uq_tenants_owner_user"),
+        {"comment": "租户（个人用户与企业用户的统一归属主体，业务表按 tenant_id 归属）"},
+    )
+
+    id = db.Column(_bigint_pk(), primary_key=True, autoincrement=True, comment="租户 ID（自增主键）")
+    tenant_type = db.Column(
+        db.String(16), nullable=False,
+        comment="租户类型：PERSONAL=个人租户（含游客） / ENTERPRISE=企业租户",
+    )
+    owner_user_id = db.Column(
+        db.BigInteger, db.ForeignKey("users.id"), nullable=True,
+        comment="个人租户的所属用户 → users.id（唯一，保证 1:1）；企业租户为 NULL",
+    )
+    display_name = db.Column(
+        db.String(255), nullable=False, default="",
+        comment="租户显示名称（个人=用户昵称快照 / 企业=企业法定名称）",
+    )
+    status = db.Column(
+        db.String(16), nullable=False, default="ACTIVE",
+        comment="租户可用性：ACTIVE=可用 / SUSPENDED=暂停 / DISABLED=停用（企业审核状态见 enterprises.status）",
+    )
+
+
 # ---------- 企业与成员 ----------
 
 
 class Enterprise(db.Model, TimestampMixin):
     __tablename__ = "enterprises"
-    __table_args__ = {"comment": "企业（企业工作空间主体）"}
+    __table_args__ = {"comment": "企业（企业租户的专有信息；共性信息在 tenants）"}
 
     id = db.Column(_bigint_pk(), primary_key=True, autoincrement=True, comment="企业 ID（自增主键）")
+    tenant_id = db.Column(
+        db.BigInteger, db.ForeignKey("tenants.id"), nullable=False, unique=True,
+        comment="对应的企业租户 → tenants.id（一对一，业务归属一律用它）",
+    )
     code = db.Column(
         db.String(32), nullable=False, unique=True, comment="企业编号（形如 ent-yymmdd-xxxxxx），成员凭此绑定企业"
     )
@@ -165,12 +210,17 @@ class Enterprise(db.Model, TimestampMixin):
         db.String(32), nullable=False, default="PENDING_VERIFICATION",
         comment="企业状态：PENDING_VERIFICATION=待认证 / VERIFIED=已认证 / SUSPENDED=暂停 / DISABLED=停用",
     )
+    verified_at = db.Column(
+        db.DateTime, nullable=True,
+        comment="认证通过时间（UTC）；企业默认 Kinder 一个月自此起算，人工改 status 后由服务端补填",
+    )
     external_ref = db.Column(db.String(64), nullable=False, default="", comment="外部系统引用号（预留）")
     policy_version = db.Column(db.Integer, nullable=False, default=1, comment="企业策略版本号（预留）")
 
     def to_dict(self) -> dict:
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "code": self.code,
             "country": self.country,
             "legal_name": self.legal_name,
@@ -178,19 +228,20 @@ class Enterprise(db.Model, TimestampMixin):
             "contact_phone": self.contact_phone,
             "cert_file_id": self.cert_file_id,
             "status": self.status,
+            "verified_at": self.verified_at.isoformat() if self.verified_at else None,
         }
 
 
 class Membership(db.Model, TimestampMixin):
     __tablename__ = "memberships"
     __table_args__ = (
-        db.UniqueConstraint("enterprise_id", "user_id", name="uq_membership_enterprise_user"),
-        {"comment": "企业成员关系（用户 × 企业，唯一）"},
+        db.UniqueConstraint("tenant_id", "user_id", name="uq_membership_tenant_user"),
+        {"comment": "企业成员关系（用户 × 企业租户，唯一）"},
     )
 
     id = db.Column(_bigint_pk(), primary_key=True, autoincrement=True, comment="主键")
-    enterprise_id = db.Column(
-        db.BigInteger, db.ForeignKey("enterprises.id"), nullable=False, comment="所属企业 → enterprises.id"
+    tenant_id = db.Column(
+        db.BigInteger, db.ForeignKey("tenants.id"), nullable=False, comment="所属企业租户 → tenants.id"
     )
     user_id = db.Column(
         db.BigInteger, db.ForeignKey("users.id"), nullable=False, index=True, comment="成员用户 → users.id"
@@ -225,8 +276,9 @@ class Application(db.Model, TimestampMixin):
     applicant_user_id = db.Column(
         db.BigInteger, db.ForeignKey("users.id"), nullable=False, index=True, comment="申请人 → users.id"
     )
-    target_enterprise_id = db.Column(
-        db.BigInteger, db.ForeignKey("enterprises.id"), nullable=True, comment="目标企业 → enterprises.id"
+    target_tenant_id = db.Column(
+        db.BigInteger, db.ForeignKey("tenants.id"), nullable=False,
+        comment="申请归属的租户 → tenants.id（个人套餐申请指向本人个人租户，入企/企业套餐指向企业租户）",
     )
     form = db.Column(
         db.JSON, nullable=False,
@@ -249,7 +301,7 @@ class Application(db.Model, TimestampMixin):
             "form": self.form,
             "version": self.version,
             "review_note": self.review_note,
-            "target_enterprise_id": self.target_enterprise_id,
+            "target_tenant_id": self.target_tenant_id,
             "submitted_at": self.submitted_at.isoformat() if self.submitted_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
@@ -262,8 +314,8 @@ class Invitation(db.Model, TimestampMixin):
 
     id = db.Column(_bigint_pk(), primary_key=True, autoincrement=True, comment="邀请 ID（自增主键）")
     token_hash = db.Column(db.String(64), nullable=False, unique=True, comment="邀请令牌的 SHA-256 哈希")
-    enterprise_id = db.Column(
-        db.BigInteger, db.ForeignKey("enterprises.id"), nullable=False, comment="邀请加入的企业 → enterprises.id"
+    tenant_id = db.Column(
+        db.BigInteger, db.ForeignKey("tenants.id"), nullable=False, comment="邀请加入的企业租户 → tenants.id"
     )
     created_by_user_id = db.Column(
         db.BigInteger, db.ForeignKey("users.id"), nullable=False, comment="邀请创建人 → users.id"
@@ -284,11 +336,9 @@ class File(db.Model, TimestampMixin):
     __table_args__ = {"comment": "上传文件（含上传会话生命周期；原件字节存私有对象存储）"}
 
     id = db.Column(db.String(36), primary_key=True, default=_uuid, comment="文件 ID（UUID hex），兼作上传会话 ID")
-    workspace_type = db.Column(
-        db.String(16), nullable=False, default="PERSONAL", comment="所属工作空间类型：PERSONAL=个人 / ENTERPRISE=企业"
-    )
-    enterprise_id = db.Column(
-        db.BigInteger, db.ForeignKey("enterprises.id"), nullable=True, comment="企业空间时的企业 → enterprises.id"
+    tenant_id = db.Column(
+        db.BigInteger, db.ForeignKey("tenants.id"), nullable=False, index=True,
+        comment="归属租户 → tenants.id（个人或企业租户）",
     )
     created_by_user_id = db.Column(
         db.BigInteger, db.ForeignKey("users.id"), nullable=False, index=True, comment="创建人 → users.id"
@@ -315,8 +365,7 @@ class File(db.Model, TimestampMixin):
     def to_dict(self) -> dict:
         return {
             "id": self.id,
-            "workspace_type": self.workspace_type,
-            "enterprise_id": self.enterprise_id,
+            "tenant_id": self.tenant_id,
             "purpose": self.purpose,
             "original_name": self.original_name,
             "mime_type": self.mime_type,
@@ -337,11 +386,9 @@ class OcrJob(db.Model, TimestampMixin):
     __table_args__ = {"comment": "OCR 识别任务（自有队列表，由进程内 worker 轮询驱动）"}
 
     id = db.Column(db.String(36), primary_key=True, default=_uuid, comment="任务 ID（UUID hex）")
-    workspace_type = db.Column(
-        db.String(16), nullable=False, default="PERSONAL", comment="所属工作空间类型：PERSONAL=个人 / ENTERPRISE=企业"
-    )
-    enterprise_id = db.Column(
-        db.BigInteger, db.ForeignKey("enterprises.id"), nullable=True, comment="企业空间时的企业 → enterprises.id"
+    tenant_id = db.Column(
+        db.BigInteger, db.ForeignKey("tenants.id"), nullable=False, index=True,
+        comment="归属租户 → tenants.id（与源文件同租户）",
     )
     created_by_user_id = db.Column(
         db.BigInteger, db.ForeignKey("users.id"), nullable=False, index=True, comment="创建人 → users.id"
@@ -393,8 +440,7 @@ class OcrJob(db.Model, TimestampMixin):
     def to_summary(self, file_name: str = "") -> dict:
         return {
             "id": self.id,
-            "workspace_type": self.workspace_type,
-            "enterprise_id": self.enterprise_id,
+            "tenant_id": self.tenant_id,
             "file_id": self.file_id,
             "file_name": file_name,
             "status": self.status,
@@ -562,32 +608,63 @@ class ReviewSyncCursor(db.Model):
     updated_at = db.Column(db.DateTime, nullable=False, default=_now, comment="游标更新时间（UTC）")
 
 
-# ---------- 配额流水（PRD v1.4 §20） ----------
+# ---------- 订阅与到期提醒（PRD v1.4 §20） ----------
 
 
-class QuotaLedger(db.Model):
-    """赠送/消耗/返还统一记账：工作空间余额 = SUM(quantity)。
+class Subscription(db.Model, TimestampMixin):
+    """租户订阅（一个租户恰好一行）：套餐档位 + 有效期。
 
-    个人空间键 = (PERSONAL, user_id)；企业空间键 = (ENTERPRISE, enterprise_id)。
-    grant_key 唯一约束保证发放幂等（首登赠 / 企业认证赠）；消耗与返还按
-    job_id 关联，返还以「已有 CONSUME 且无 REFUND」幂等防重。
+    默认开通：个人租户（含游客）建租户即 DEFAULT KINDER 一个月；企业租户在
+    enterprises.status=VERIFIED 后按 verified_at 起算一个月。到期即硬停，
+    不再有 Free 档位与赠送次数兜底；续费由人工审批 PLAN_UPGRADE 申请时
+    写入 form.valid_from / valid_to，读取订阅时据 application_id 惰性同步。
     """
 
-    __tablename__ = "quota_ledger"
-    __table_args__ = {"comment": "配额流水（赠送/消耗/返还统一记账，工作空间余额 = SUM(quantity)）"}
+    __tablename__ = "subscriptions"
+    __table_args__ = {"comment": "租户订阅（套餐档位与有效期，一租户一行）"}
 
     id = db.Column(_bigint_pk(), primary_key=True, autoincrement=True, comment="主键")
-    grant_key = db.Column(
-        db.String(128), nullable=True, unique=True, comment="发放幂等键（首登赠 / 企业认证赠），消耗与返还为 NULL"
+    tenant_id = db.Column(
+        db.BigInteger, db.ForeignKey("tenants.id"), nullable=False, unique=True,
+        comment="订阅所属租户 → tenants.id（一对一）",
     )
-    workspace_type = db.Column(db.String(16), nullable=False, comment="工作空间类型：PERSONAL=个人 / ENTERPRISE=企业")
-    enterprise_id = db.Column(db.BigInteger, nullable=True, comment="企业空间的企业 ID（企业空间余额键）")
-    user_id = db.Column(db.BigInteger, nullable=True, index=True, comment="个人空间的用户 ID（个人空间余额键）")
-    entry_type = db.Column(db.String(16), nullable=False, comment="流水类型：GRANT=发放 / CONSUME=消耗 / REFUND=返还")
-    benefit_code = db.Column(
-        db.String(32), nullable=False,
-        comment="权益代码：FIRST_LOGIN=首次登录赠送 / FIRST_ENTERPRISE_VERIFIED=企业首次认证赠送 / OCR_TASK=OCR 任务",
+    plan_code = db.Column(
+        db.String(32), nullable=False, default="KINDER",
+        comment="套餐代码：KINDER / STARTER / INTERMEDIATE / ADVANCE（无 FREE 档）",
     )
-    quantity = db.Column(db.Integer, nullable=False, comment="数量：发放/返还为正，消耗为负")
-    job_id = db.Column(db.String(36), nullable=True, index=True, comment="关联的 OCR 任务 ID（消耗/返还）")
-    created_at = db.Column(db.DateTime, nullable=False, default=_now, comment="记账时间（UTC）")
+    source = db.Column(
+        db.String(16), nullable=False, default="DEFAULT",
+        comment="权益来源：DEFAULT=系统默认开通一个月 / APPROVED=人工审批续费开通",
+    )
+    starts_at = db.Column(db.DateTime, nullable=False, default=_now, comment="本期生效时间（UTC）")
+    expires_at = db.Column(db.DateTime, nullable=False, comment="本期到期时间（UTC），到期即停止新建任务")
+    application_id = db.Column(
+        db.BigInteger, db.ForeignKey("applications.id"), nullable=True,
+        comment="最近一次据以续期的申请 → applications.id；默认开通为 NULL",
+    )
+
+
+class PlanReminder(db.Model):
+    """到期提醒发送记录（幂等键：租户 + 本期到期时间 + 提醒节点）。
+
+    续费后 period_end 变化，新周期重新按节点提醒；同一节点不重复发送。
+    """
+
+    __tablename__ = "plan_reminders"
+    __table_args__ = (
+        db.UniqueConstraint("tenant_id", "period_end", "stage", name="uq_plan_reminder_stage"),
+        {"comment": "套餐到期提醒发送记录（站内通知 + 邮件，按节点幂等）"},
+    )
+
+    id = db.Column(_bigint_pk(), primary_key=True, autoincrement=True, comment="主键")
+    tenant_id = db.Column(
+        db.BigInteger, db.ForeignKey("tenants.id"), nullable=False, index=True,
+        comment="提醒所属租户 → tenants.id",
+    )
+    period_end = db.Column(db.DateTime, nullable=False, comment="提醒对应的本期到期时间（UTC）")
+    stage = db.Column(
+        db.String(16), nullable=False,
+        comment="提醒节点：D7/D3/D1=到期前 7/3/1 天 / D0=到期当天 / EXPIRED=已到期",
+    )
+    email_sent = db.Column(db.Boolean, nullable=False, default=False, comment="邮件是否发送成功")
+    created_at = db.Column(db.DateTime, nullable=False, default=_now, comment="发送时间（UTC）")

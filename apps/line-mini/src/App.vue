@@ -2,22 +2,29 @@
 import { onMounted, ref, watch } from 'vue';
 import {
   boot,
+  clearAuthIntent,
   clearPendingJob,
   continueAfterAuth,
   ensureGuestSession,
+  finishPendingLogout,
+  getAuthIntent,
   goTab,
+  hasLogoutPending,
   isAuthenticated,
+  logoutBlocked,
   navigate,
   needsRegistration,
+  peekPendingJob,
+  refreshQuota,
+  refreshSession,
   route,
+  sessionTransition,
   signInWithLine,
-  signOutLocally,
-  takePendingJob,
   user,
 } from './store';
-import { logout } from './api';
-import { initLiff } from './liff';
-import { getLocale } from './i18n';
+import { ApiError } from './api';
+import { initLiff, resetLiffLogin } from './liff';
+import { getLocale, messageText } from './i18n';
 import { useT } from './i18nVue';
 import BrandLoading from './components/BrandLoading.vue';
 import RegisterDialog from './components/RegisterDialog.vue';
@@ -40,91 +47,126 @@ type Phase = 'splash' | 'login' | 'app';
 const phase = ref<Phase>('splash');
 const bootError = ref('');
 
+function showBootError(error: unknown): void {
+  bootError.value = error instanceof ApiError ? messageText(error.messageKey) : t('common.unknownError');
+}
+
 async function resumeAfterAuth(): Promise<void> {
-  // 新 LINE 账号须先完成注册信息录入（RegisterDialog 完成后再次进入此处）
-  if (needsRegistration.value) return;
   phase.value = 'app';
   bootError.value = '';
-  const jobId = takePendingJob();
+  if (needsRegistration.value) {
+    navigate('auth', route.params);
+    return;
+  }
+  const jobId = peekPendingJob();
   if (jobId && isAuthenticated.value) {
     try {
       await continueAfterAuth(jobId);
-    } catch {
-      navigate('plans', { jobId });
+    } catch (error) {
+      showBootError(error); // 保留待续任务，不把异常误判为订阅不足
+      navigate('result', { jobId });
     }
     return;
   }
-  goTab('scan');
+  const from = route.params?.from;
+  goTab(from === 'my' || from === 'history' ? from : 'scan');
 }
 
-onMounted(async () => {
-  // 1) LINE 内：用 ID token 建/恢复会话；游客数据会在服务端归并
+async function start(): Promise<void> {
+  phase.value = 'splash';
+  bootError.value = '';
+  // LIFF 初始化仍处理 OAuth 回跳，但残留 token 不是自动登录许可。
+  const liffState = initLiff();
+  const intent = getAuthIntent();
+  const recoveringLogout = hasLogoutPending();
   try {
-    const liffState = await initLiff();
-    if (liffState.idToken) {
-      await signInWithLine(liffState.idToken, getLocale());
-      resumeAfterAuth();
-      return;
-    }
-  } catch {
-    /* LIFF 不可用则走 Cookie 恢复/游客会话 */
-  }
-  // 2) 桌面/外部浏览器：先尝试既有 Cookie 会话
-  try {
+    await finishPendingLogout();
+    // FR-SYS-001：退出重试与刷新成功均恢复游客首页，不保留旧个人中心路由。
+    if (recoveringLogout) goTab('scan');
     await boot();
-  } catch (e) {
-    bootError.value = e instanceof Error ? e.message : String(e);
+    if (!user.value) await ensureGuestSession(getLocale());
+    if (intent) {
+      navigate('auth', {
+        ...(intent.jobId ? { jobId: intent.jobId } : {}),
+        ...(intent.from ? { from: intent.from } : {}),
+      });
+      const state = await liffState;
+      if (state.idToken) {
+        await signInWithLine(state.idToken, getLocale());
+        await resumeAfterAuth();
+        return;
+      }
+    }
+    phase.value = 'app';
+  } catch (error) {
+    showBootError(error);
+    if (intent && !hasLogoutPending()) {
+      if (error instanceof ApiError && error.status === 401) resetLiffLogin();
+      clearAuthIntent();
+      phase.value = 'app';
+      navigate('auth', {
+        ...(intent.jobId ? { jobId: intent.jobId } : {}),
+        ...(intent.from ? { from: intent.from } : {}),
+      });
+    } else {
+      phase.value = 'login';
+    }
   }
-  if (user.value) {
-    resumeAfterAuth();
-    return;
-  }
-  // 3) 无会话时建立游客会话：可上传/OCR/核验，确认前要求登录
+}
+
+onMounted(start);
+
+watch(logoutBlocked, (blocked) => {
+  if (!blocked) return;
+  bootError.value = t('my.logoutFailed');
+  phase.value = 'login'; // 撤销失败时锁主壳，不能取消提示后继续旧身份操作
+});
+
+// 试用页面会话过期恢复游客；认证窗口中的 401 留在窗口供用户重试。
+watch(user, async (u) => {
+  if (u || phase.value !== 'app' || sessionTransition.value || logoutBlocked.value || hasLogoutPending() || route.name === 'auth') return;
+  sessionTransition.value = true;
+  phase.value = 'splash';
+  clearAuthIntent();
+  clearPendingJob();
+  goTab('scan');
   try {
     await ensureGuestSession(getLocale());
     phase.value = 'app';
-    return;
-  } catch (e) {
-    bootError.value = e instanceof Error ? e.message : String(e);
-  }
-  phase.value = 'login';
-});
-
-// 401 / 登出 → 回登录页
-watch(user, (u) => {
-  if (!u && phase.value === 'app') {
+  } catch (error) {
+    showBootError(error);
     phase.value = 'login';
+  } finally {
+    sessionTransition.value = false;
   }
 });
 
-function onLoggedIn(): void {
-  resumeAfterAuth();
+async function onLoggedIn(): Promise<void> {
+  await resumeAfterAuth();
 }
 
-/** 放弃注册：撤销刚建立的会话，回到登录页 */
-async function cancelRegistration(): Promise<void> {
-  try {
-    await logout();
-  } catch {
-    /* 会话已失效也照常回登录页 */
+async function onRegistered(): Promise<void> {
+  if (!(await refreshSession())) {
+    bootError.value = t('err.auth.session_expired');
+    // 注册已提交，但会话刷新失败：保留 auth 与任务上下文，重新登录后再恢复。
+    return;
   }
-  signOutLocally();
-  phase.value = 'login';
+  await refreshQuota();
+  await resumeAfterAuth();
 }
 
+/** 取消不撤销已归集任务的正式会话，否则会丢失草稿访问能力。 */
 function leaveAuth(): void {
+  clearAuthIntent();
   clearPendingJob();
+  phase.value = 'app';
   const jobId = route.params?.jobId;
   if (jobId) {
     navigate('result', { jobId });
     return;
   }
   const from = route.params?.from;
-  if (from === 'my' || from === 'history' || from === 'scan') {
-    goTab(from);
-    return;
-  }
-  goTab('scan');
+  goTab(from === 'my' || from === 'history' ? from : 'scan');
 }
 
 const TABS = [
@@ -144,7 +186,7 @@ const TABS = [
     </div>
   </div>
 
-  <LoginPage v-else-if="phase === 'login'" :notice="bootError" @logged-in="onLoggedIn" />
+  <LoginPage v-else-if="phase === 'login'" :notice="bootError" can-back @back="start" @logged-in="onLoggedIn" />
 
   <!-- 主壳：430px 手机框 + 底部导航 -->
   <div v-else class="phone">
@@ -167,6 +209,7 @@ const TABS = [
         v-else-if="route.name === 'auth'"
         embedded
         can-back
+        :notice="bootError"
         @back="leaveAuth"
         @logged-in="onLoggedIn"
       />
@@ -225,7 +268,7 @@ const TABS = [
     </nav>
   </div>
 
-  <RegisterDialog v-if="needsRegistration" @done="resumeAfterAuth" @cancel="cancelRegistration" />
+  <RegisterDialog v-if="phase === 'app' && route.name === 'auth' && needsRegistration" @done="onRegistered" @cancel="leaveAuth" />
 </template>
 
 <style>

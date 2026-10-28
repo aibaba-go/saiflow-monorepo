@@ -5,6 +5,9 @@ SUCCEEDED / PARTIAL_SUCCESS / FAILED；CANCEL_REQUESTED → CANCELLED。
 进程重启后把中断的非终态任务重新排队（不丢任务、不重复计费——
 恢复时仅在任务仍处于 QUEUED/PREPROCESSING 时继续；PROCESSING 中
 厂商是否已接收无法对账，按 PRD §12.4 标记 FAILED(uncertain) 保守处理）。
+
+同一个轮询循环还挂了套餐到期提醒的低频触发（见 `_maybe_sweep_reminders`）：
+每 30 分钟检查一次「今天（泰国自然日）是否已跑过」，避免每 2 秒扫订阅表。
 """
 from __future__ import annotations
 
@@ -19,6 +22,9 @@ logger = logging.getLogger(__name__)
 
 TERMINAL = {"SUCCEEDED", "PARTIAL_SUCCESS", "FAILED", "CANCELLED"}
 MAX_VENDOR_RETRIES = 3  # 限流类错误的有界指数退避（PRD §12.4）
+# 到期提醒的调度间隔：仅决定「多久检查一次」，当天是否已跑过由 _reminder_day 判断，
+# 真正的发送唯一性由 plan_reminders 唯一约束保证（多实例并行时内存标记不可信）
+REMINDER_CHECK_SECONDS = 30 * 60
 
 
 class OcrWorker:
@@ -27,6 +33,8 @@ class OcrWorker:
         self.poll_seconds = poll_seconds
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self._next_reminder_check = 0.0  # 单调时钟；0 表示启动后第一圈就检查
+        self._reminder_day = None  # 最近一次成功 sweep 的泰国自然日
 
     def start(self) -> None:
         if self._thread is not None:
@@ -43,7 +51,6 @@ class OcrWorker:
 
         from extensions import db
         from models import OcrJob
-        import quota
 
         with self.app.app_context():
             # 重启恢复：中断的任务重新入队；已请求取消的直接落终态（不再计费）
@@ -60,7 +67,6 @@ class OcrWorker:
             for job in cancelling:
                 job.status = "CANCELLED"
                 job.finished_at = datetime.now(timezone.utc).replace(tzinfo=None)
-                quota.refund_for_job(job.id)
             db.session.commit()
 
         while not self._stop.is_set():
@@ -77,7 +83,38 @@ class OcrWorker:
                     self._process(job_id)
             except Exception:  # noqa: BLE001 worker 永不退出
                 logger.exception("OCR worker 轮询异常")
+            try:
+                self._maybe_sweep_reminders()
+            except Exception:  # noqa: BLE001 提醒失败同样不能让 worker 退出
+                logger.exception("套餐到期提醒调度异常")
             self._stop.wait(self.poll_seconds)
+
+    # ---- 套餐到期提醒（每日一次，独立 app_context） ----
+
+    def _maybe_sweep_reminders(self) -> None:
+        """低频触发：30 分钟检查一次，当天已跑过就不再扫订阅表。
+
+        内存标记只用于省掉重复扫库，不作为幂等保证——本地与 Cloud Run 共用同一个
+        库、可能多实例并行，同一节点只发一次靠 plan_reminders 的唯一约束。
+        """
+        if not self.app.config.get("PLAN_REMINDERS_ENABLED", True):
+            return
+        now = time.monotonic()
+        if now < self._next_reminder_check:
+            return
+        self._next_reminder_check = now + REMINDER_CHECK_SECONDS
+
+        import reminders
+        import subscriptions
+        from models import _now
+
+        with self.app.app_context():
+            today = subscriptions.local_date(_now())
+            if self._reminder_day == today:
+                return
+            stats = reminders.sweep()
+            self._reminder_day = today
+            logger.info("套餐到期提醒 sweep 完成 %s %s", today, stats)
 
     # ---- 状态推进（独立上下文，提交即持久） ----
 
@@ -85,7 +122,6 @@ class OcrWorker:
                     error_code: str = "", error_message: str = "") -> None:
         from extensions import db
         from models import OcrJob
-        import quota
 
         job = db.session.get(OcrJob, job_id)
         if job is None:
@@ -97,12 +133,7 @@ class OcrWorker:
             job.error_code = error_code
         if error_message:
             job.error_message = error_message[:512]
-        if status in ("FAILED", "CANCELLED"):
-            # 未产出可用结果：返还本次免费任务消耗（幂等）
-            try:
-                quota.refund_for_job(job_id)
-            except Exception:  # noqa: BLE001 返还不阻塞状态落库
-                logger.exception("配额返还失败 job=%s", job_id)
+        # FAILED/CANCELLED 不计入月页额度（pages_used 只统计非终态失败的任务），无需返还
         db.session.commit()
 
     def _cancel_requested(self, job_id: str) -> bool:

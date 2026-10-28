@@ -17,9 +17,11 @@ from flask import Blueprint, request
 
 from auth import audit, current_user
 from errors import (
+    auth_required,
     invalid_argument,
     not_found,
     ok,
+    permission_denied,
     state_conflict,
     version_conflict,
 )
@@ -131,6 +133,11 @@ def update_results(job_id: str):
     if not isinstance(edits, list):
         raise invalid_argument(field_errors=[{"field": "edits", "reason": "invalid"}])
     confirm = bool(body.get("confirm"))
+    # FR-SYS-011/014：仅结果 Continue 要求注册；在任何版本/状态写入前拒绝，草稿仍可保存。
+    if confirm and not _registered(user):
+        if user.is_guest:
+            raise auth_required()
+        raise permission_denied("registration.required")
 
     normalized_structured = None
     structured_changed = False
@@ -243,7 +250,7 @@ def update_results(job_id: str):
 
     if confirm:
         job.review_status = "CONFIRMED"
-        if job.completed_at is None and _registered(user):
+        if job.completed_at is None:
             job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
         if not normalized and not structured_changed:
             # 仅确认：内容未变，直接把当前版本所有单元格置为 CONFIRMED

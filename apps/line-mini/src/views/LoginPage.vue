@@ -1,18 +1,16 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onBeforeUnmount, ref, watch } from 'vue';
 import { ApiError } from '../api';
 import { getLocale, messageText, t } from '../i18n';
 import { useT } from '../i18nVue';
-import { initLiff, redirectToLineLogin } from '../liff';
-import { signInWithDevId, signInWithLine } from '../store';
+import { initLiff, redirectToLineLogin, reopenLineLogin, resetLiffLogin, signOutLiff } from '../liff';
+import { clearAuthIntent, rememberAuthIntent, signInWithDevId, signInWithLine } from '../store';
 import BrandLoading from '../components/BrandLoading.vue';
 
 const { t: tt } = useT();
 
-// LINE 暂不可用：启用开发者登录入口（仍由用户手动点击，不再自动登录）
-const skipLogin = import.meta.env.VITE_AUTO_DEV_LOGIN === 'true';
-// vite dev 或构建期 VITE_DEV_BYPASS=true：Login/Register with LINE 直接使用开发身份，跳过 LINE 验证
-const devBypass = skipLogin && (import.meta.env.DEV || import.meta.env.VITE_DEV_BYPASS === 'true');
+// 仅本地开发且显式开启时显示开发者登录，仍需用户手动点击；LINE 按钮不使用开发身份
+const devLoginEnabled = import.meta.env.DEV && import.meta.env.VITE_AUTO_DEV_LOGIN === 'true';
 const defaultDevId = (import.meta.env.VITE_DEV_LOGIN_ID || 'demo-user').trim();
 
 const props = defineProps<{
@@ -36,46 +34,63 @@ function switchMode(next: AuthMode): void {
 
 // 启动失败原因（如会话过期）以通用错误展示
 const errorMsg = ref(props.notice ?? '');
+watch(() => props.notice, (notice) => { if (notice) errorMsg.value = notice; });
 
 const lineLoading = ref(false);
 const devId = ref(defaultDevId);
 const devLoading = ref(false);
+let lineAttempt = 0;
+
+// FR-SYS-011：返回/卸载使仍在等待 SDK 的登录失效，迟到结果不能兑换身份或跳转。
+onBeforeUnmount(() => { lineAttempt++; });
+function back(): void {
+  lineAttempt++;
+  lineLoading.value = false;
+  clearAuthIntent();
+  emit('back');
+}
 
 async function loginWithLine() {
-  if (devBypass) {
-    lineLoading.value = true;
-    try {
-      // 开发环境「注册」模拟一个全新 LINE 账号（资料随机），以走注册信息录入弹框
-      await loginWithDev(mode.value === 'register' ? `reg-${Math.random().toString(36).slice(2, 10)}` : undefined);
-    } finally {
-      lineLoading.value = false;
-    }
-    return;
-  }
+  if (lineLoading.value) return;
+  const attempt = ++lineAttempt;
   errorMsg.value = '';
   lineLoading.value = true;
+  rememberAuthIntent();
   try {
     const state = await initLiff();
+    if (attempt !== lineAttempt) return;
     if (state.idToken) {
       await signInWithLine(state.idToken, getLocale());
+      if (attempt !== lineAttempt) return;
       emit('logged-in');
       return;
     }
     if (state.loginAvailable) {
+      signOutLiff(); // 缺 openid 的旧 SDK 会话需重新授权；仅显式点击时执行
       redirectToLineLogin(); // 用户显式点击后才跳转 LINE OAuth
       return;
     }
-    // init 失败（网络等）可重试；完全未配置 LIFF 则提示不可用
-    errorMsg.value = t(state.initFailed ? 'err.auth.line_init_failed' : 'err.auth.line_not_configured');
+    // 用户已明确要求登录：SDK/客户端握手失败时从官方入口恢复一次。
+    // 重开前不清 auth intent/待续任务；启动流程仍须验真 token，不能自动确认。
+    if (state.initFailed && reopenLineLogin()) return;
+    clearAuthIntent();
+    const errorKey = !state.initFailed ? 'err.auth.line_not_configured'
+      : state.failureReason === 'timeout' ? 'err.auth.line_init_timeout'
+      : 'err.auth.line_init_failed';
+    errorMsg.value = t(errorKey);
   } catch (e) {
+    if (attempt !== lineAttempt) return;
+    clearAuthIntent();
+    if (e instanceof ApiError && e.status === 401) resetLiffLogin();
     errorMsg.value = e instanceof ApiError ? messageText(e.messageKey) : t('login.failed');
   } finally {
-    lineLoading.value = false;
+    if (attempt === lineAttempt) lineLoading.value = false;
   }
 }
 
-async function loginWithDev(overrideId?: string) {
-  const id = overrideId || devId.value.trim() || defaultDevId;
+async function loginWithDev() {
+  if (!devLoginEnabled) return;
+  const id = devId.value.trim() || defaultDevId;
   if (!id || devLoading.value) return;
   errorMsg.value = '';
   devLoading.value = true;
@@ -93,7 +108,7 @@ async function loginWithDev(overrideId?: string) {
 <template>
   <div class="login" :class="{ embedded }">
     <div v-if="canBack" class="auth-top">
-      <button class="back-btn" @click="emit('back')">
+      <button class="back-btn" @click="back">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
           <path d="M15 18l-6-6 6-6" />
         </svg>
@@ -139,8 +154,8 @@ async function loginWithDev(overrideId?: string) {
     <p v-if="mode === 'register'" class="auth-note">{{ tt('auth.registerNote') }}</p>
     <p v-if="errorMsg" class="login-error">{{ errorMsg }}</p>
 
-    <!-- 开发兜底：仅在配置开启时显示，后端仍需 AUTH_DEV_MODE=1 -->
-    <div v-if="skipLogin" class="dev-box">
+    <!-- 手动开发登录：仅本地开发且显式开启时显示，后端仍需 AUTH_DEV_MODE=1 -->
+    <div v-if="devLoginEnabled" class="dev-box">
       <div class="dev-title">{{ tt('login.devTitle') }}</div>
       <div class="dev-hint">{{ tt('login.devHint') }}</div>
       <div class="dev-row">

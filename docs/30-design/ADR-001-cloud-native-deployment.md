@@ -3,8 +3,8 @@ doc_id: ADR-001
 title: "ADR-001 — Google Cloud 云原生部署"
 type: adr
 status: accepted
-version: 1.0.2
-updated: 2026-10-26
+version: 1.0.3
+updated: 2026-10-27
 owner: Product Engineering
 related: [NFR-SEC-001, NFR-SEC-002, NFR-DATA-001]
 ---
@@ -13,7 +13,7 @@ related: [NFR-SEC-001, NFR-SEC-002, NFR-DATA-001]
 
 ## 状态
 
-已接受。其中“结构化业务数据存储在 Cloud SQL for PostgreSQL 18.6”部分自 2026-10-26 起被 [ADR-005](ADR-005-self-hosted-postgresql.md) 取代（改为自建 PostgreSQL 17）；Cloud Run、私有 GCS、Firestore 部分仍然有效。
+已接受（accepted），包括“结构化业务数据存储在 Cloud SQL for PostgreSQL 18.6”部分。2026-10-27 已恢复原实例 `saiflow-dev` 的库 `postgres`、schema `saiflow`；本决策的数据库条目当前不再被 ADR-005 取代，历史迁移与回切记录见 [ADR-005](ADR-005-self-hosted-postgresql.md)（reverted）。Cloud Run、私有 GCS、Firestore 部分保持有效。
 
 ## 背景
 
@@ -55,6 +55,7 @@ PDPA 适用：需定义数据区域、保留/删除策略、授权访问和审�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.0.3 | 2026-10-27 | Product Engineering | 恢复 Cloud SQL 数据库条目的 accepted 状态，记录 saiflow-dev/postgres.saiflow 已回切，ADR-005 不再取代本决策 |
 | 1.0.2 | 2026-10-26 | Product Engineering | 标注关系数据库部分被 ADR-005（自建 PostgreSQL 17）取代 |
 | 1.0.1 | 2026-10-02 | Product Engineering | 将人类可读内容翻译为简体中文 |
 | 1.0.0 | 2026-10-01 | Product Engineering | 记录 Google Cloud Cloud Run、Cloud SQL PostgreSQL 18.6 与私有 GCS 的正式部署决策 |
