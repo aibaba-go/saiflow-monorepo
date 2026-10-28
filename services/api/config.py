@@ -20,19 +20,20 @@ def _bool(name: str, default: bool = False) -> bool:
 
 
 class Config:
+    APP_ENV = os.getenv("APP_ENV", "production")
     SECRET_KEY = os.getenv("SECRET_KEY", "change-this-in-production")
 
-    # ---------- PostgreSQL（自建 PostgreSQL 17，ADR-002；原 Google Cloud SQL 已停用） ----------
-    # 本地与 Cloud Run 均 TCP 直连 122.51.11.112:5432 / 库 odoo / schema saiflow。
-    # PGSSLMODE：服务端开启 SSL 后应改为 require；当前服务端未启用 SSL，默认 prefer（有则用）。
-    # 仍兼容 PGHOST=/cloudsql/... Unix 套接字（回滚到 Cloud SQL 时使用）。
-    PGHOST = os.getenv("PGHOST", "122.51.11.112")
+    # ---------- PostgreSQL（Cloud SQL 18.6；ADR-001、ADR-005 回切记录） ----------
+    # 库 postgres / schema saiflow；API 使用仅授权此 schema 的 saiflow_api 账号。
+    # Cloud Run 配置 PGHOST=/cloudsql/... Unix 套接字；本地通过公网 TCP + TLS 连接。
+    # 密码由环境变量提供，线上从 Secret Manager 注入，不在源码保存。
+    PGHOST = os.getenv("PGHOST", "34.87.95.49")
     PGPORT = int(os.getenv("PGPORT", "5432"))
-    PGUSER = os.getenv("PGUSER", "odoo_app")
+    PGUSER = os.getenv("PGUSER", "saiflow_api")
     PGPASSWORD = os.getenv("PGPASSWORD", "")
-    PGDATABASE = os.getenv("PGDATABASE", "odoo")
+    PGDATABASE = os.getenv("PGDATABASE", "postgres")
     PGSCHEMA = os.getenv("PGSCHEMA", "saiflow")
-    PGSSLMODE = os.getenv("PGSSLMODE", "prefer")
+    PGSSLMODE = os.getenv("PGSSLMODE", "require")
 
     _pg_auth = f"{quote_plus(PGUSER)}:{quote_plus(PGPASSWORD)}"
     # search_path 走连接启动参数（protocol 级，每个新物理连接都生效）：
@@ -41,7 +42,7 @@ class Config:
     # 本地与 Cloud Run 共用同一实例：会话级兜底，防止任一客户端长期占锁挡住其他实例（含启动 DDL）
     # - idle_in_transaction_session_timeout：事务内空闲超 5 分钟由服务端结束会话并释放锁
     # - tcp_keepalives_*：本机断网/休眠后约 1 分钟内服务端探测到死连接并回收（Unix 套接字下自动忽略）
-    # - TimeZone=UTC：模型时间均为 naive UTC；新库服务端默认 Asia/Shanghai，会话统一为 UTC
+    # - TimeZone=UTC：模型时间均为 naive UTC；数据库会话统一为 UTC
     _pg_opts = quote_plus(
         f"-c search_path={PGSCHEMA} -c TimeZone=UTC"
         " -c idle_in_transaction_session_timeout=300000"
@@ -77,8 +78,29 @@ class Config:
     # ---------- LINE 登录 ----------
     # LINE 登录
     LINE_CHANNEL_ID = os.getenv("LINE_CHANNEL_ID", "")
-    # 免登录兜底：LINE 暂不可用，开发/生产一致开启；恢复 LINE 联合登录时必须改回 false
-    AUTH_DEV_MODE = _bool("AUTH_DEV_MODE", True)
+    # FR-SYS-001/014/016：本地开发须显式启用；Cloud Run 即使误配也禁止绕过。
+    AUTH_DEV_MODE = (
+        APP_ENV == "development"
+        and os.getenv("AUTH_DEV_MODE", "false").lower() == "true"
+        and "K_SERVICE" not in os.environ
+    )
+
+    # ---------- 邮箱验证码（FR-SYS-014/016） ----------
+    # 生产密码仅通过 Secret Manager 注入；Gmail 使用应用专用密码，不是网页登录密码。
+    MAIL_SMTP_HOST = os.getenv("MAIL_SMTP_HOST", "")
+    MAIL_SMTP_PORT = int(os.getenv("MAIL_SMTP_PORT", "465"))
+    MAIL_SMTP_SECURITY = os.getenv("MAIL_SMTP_SECURITY", "ssl")
+    MAIL_SMTP_USERNAME = os.getenv("MAIL_SMTP_USERNAME", "")
+    MAIL_SMTP_PASSWORD = os.getenv("MAIL_SMTP_PASSWORD", "")
+    MAIL_FROM = os.getenv("MAIL_FROM", MAIL_SMTP_USERNAME)
+    MAIL_SMTP_TIMEOUT_SECONDS = float(os.getenv("MAIL_SMTP_TIMEOUT_SECONDS", "10"))
+
+    # ---------- 套餐到期提醒（FR-SYS-012/013） ----------
+    # worker 每 30 分钟检查一次「今天是否已跑过」，真正的唯一性由
+    # plan_reminders 唯一约束保证（本地与 Cloud Run 共用一个库，可能多实例并行）。
+    PLAN_REMINDERS_ENABLED = _bool("PLAN_REMINDERS_ENABLED", True)
+    # 提醒邮件里的「打开 SaiFlow」链接；留空则邮件中不放任何链接（不编造地址）
+    APP_BASE_URL = os.getenv("APP_BASE_URL", "")
 
     # ---------- 上传与任务限额（PRD §11） ----------
     # 对象存储后端（storage.py）：local=本地盘（开发/测试），firebase=Firebase Storage（生产）

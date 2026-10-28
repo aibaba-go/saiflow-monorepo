@@ -8,25 +8,25 @@ import {
   getJob,
   submitPlanApplication,
   type Plan,
-  type QuotaWorkspace,
+  type QuotaTenant,
   type Subscription,
-  type WorkspaceRef,
+  type SubscriptionStatus,
 } from '../api';
 import { messageText } from '../i18n';
 import { useT } from '../i18nVue';
 import {
   continueAfterAuth,
-  currentWorkspace,
+  currentTenantId,
   goTab,
   isAuthenticated,
-  jobWorkspace,
+  jobTenantId,
   navigate,
-  workspaces,
+  tenants,
 } from '../store';
 import alibabaLogo from '../assets/alibaba-logo.png';
 import BrandLoading from '../components/BrandLoading.vue';
 
-const { t: tt } = useT();
+const { t: tt, d } = useT();
 
 const props = withDefaults(
   defineProps<{
@@ -36,7 +36,7 @@ const props = withDefaults(
 );
 
 const plans = ref<Plan[]>([]);
-const myQuota = ref<QuotaWorkspace | null>(null);
+const myQuota = ref<QuotaTenant | null>(null);
 const sub = ref<Subscription | null>(null);
 const loading = ref(true);
 const errorMsg = ref('');
@@ -50,38 +50,83 @@ const confirmPlan = computed(() => plans.value.find((p) => p.code === confirmCod
 const checkMode = computed(() => !!props.jobId);
 const selectedPlan = computed(() => plans.value.find((p) => p.code === selectedCode.value) ?? null);
 
-// 订阅按工作空间计：确认页取任务所属空间，否则取当前空间
-const ws = ref<WorkspaceRef>({ enterprise_id: currentWorkspace.value?.enterprise_id ?? null });
+// 订阅按租户计：确认页取任务所属租户，否则取当前租户（null = 个人租户）
+const tenantId = ref<number | null>(currentTenantId.value);
 const canManage = computed(() => sub.value?.can_manage ?? false);
 const currentCode = computed(() => myQuota.value?.plan.code ?? '');
 const pendingCode = computed(() => sub.value?.pending?.plan_code ?? null);
+/** 同级套餐视为续订，弹窗文案区分升级/续订 */
+const confirmIsRenew = computed(() => !!confirmCode.value && confirmCode.value === currentCode.value);
 const showPending = computed(() => !checkMode.value && !!pendingCode.value);
 const pendingSubmittedAt = computed(() => {
   const at = sub.value?.pending?.submitted_at;
   if (!at) return '';
-  const d = new Date(at.endsWith('Z') ? at : `${at}Z`);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString();
+  const d2 = new Date(at.endsWith('Z') ? at : `${at}Z`);
+  return Number.isNaN(d2.getTime()) ? '' : d2.toLocaleString();
+});
+
+// ---- 订阅有效期（优先用 /me/subscription，未取到时回落配额里的 subscription）----
+const subStatus = computed<SubscriptionStatus | null>(
+  () => sub.value?.status ?? myQuota.value?.subscription.status ?? null,
+);
+const expiresAt = computed<string | null>(
+  () => sub.value?.expires_at ?? myQuota.value?.subscription.expires_at ?? null,
+);
+const daysLeft = computed<number | null>(
+  () => sub.value?.days_remaining ?? myQuota.value?.subscription.days_remaining ?? null,
+);
+const expired = computed(() => subStatus.value === 'EXPIRED');
+/** 剩余 7 天及以内提示即将到期 */
+const expiringSoon = computed(
+  () => subStatus.value === 'ACTIVE' && daysLeft.value != null && daysLeft.value <= 7,
+);
+
+const statusLabel = computed(() => {
+  if (subStatus.value === 'ACTIVE') return tt('plans.currentActive');
+  if (subStatus.value === 'EXPIRED') return tt('sub.expired');
+  return tt('sub.notActive');
+});
+
+const validUntilText = computed(() => {
+  const date = d(expiresAt.value);
+  return date ? tt('sub.validUntil', { date }) : '';
+});
+
+const daysLeftText = computed(() => {
+  if (subStatus.value !== 'ACTIVE' || daysLeft.value == null) return '';
+  return daysLeft.value <= 0 ? tt('sub.lastDay') : tt('sub.daysLeft', { n: daysLeft.value });
 });
 
 function rank(code: string | null): number {
   return plans.value.findIndex((p) => p.code === code);
 }
 
-type Cta = 'current' | 'pending' | 'upgrade' | 'locked' | 'lower' | 'contact';
+function isCurrentPlan(p: Plan): boolean {
+  return !!currentCode.value && p.code === currentCode.value;
+}
+
+type Cta = 'renew' | 'pending' | 'upgrade' | 'locked' | 'lower' | 'contact';
 
 function ctaKind(p: Plan): Cta {
   if (!isAuthenticated.value) return 'contact';
-  if (p.code === currentCode.value) return 'current';
   if (p.code === pendingCode.value) return 'pending';
+  // 同级续订已放开，仅拒绝降级
   if (rank(p.code) < rank(currentCode.value)) return 'lower';
   if (!canManage.value) return 'contact';
-  return pendingCode.value ? 'locked' : 'upgrade';
+  if (pendingCode.value) return 'locked';
+  return isCurrentPlan(p) ? 'renew' : 'upgrade';
+}
+
+/** 可提交（升级或同级续订） */
+function ctaActionable(p: Plan): boolean {
+  const kind = ctaKind(p);
+  return kind === 'upgrade' || kind === 'renew';
 }
 
 function ctaLabel(p: Plan): string {
   switch (ctaKind(p)) {
-    case 'current':
-      return tt('plans.current');
+    case 'renew':
+      return tt('sub.renew');
     case 'pending':
       return tt('plans.upgradePending');
     case 'upgrade':
@@ -98,10 +143,10 @@ function hasPrice(p: Plan): boolean {
 
 onMounted(async () => {
   try {
-    if (props.jobId && isAuthenticated.value) ws.value = jobWorkspace(await getJob(props.jobId));
-    const s = isAuthenticated.value ? await fetchSubscription(ws.value) : null;
-    if (props.jobId && s && s.status !== 'NONE') {
-      // 已开通或申请中不应停留在选择页（如从历史回退进入）
+    if (props.jobId && isAuthenticated.value) tenantId.value = jobTenantId(await getJob(props.jobId));
+    const s = isAuthenticated.value ? await fetchSubscription(tenantId.value) : null;
+    if (props.jobId && s && (s.status === 'ACTIVE' || s.pending)) {
+      // 已在有效期内或已有申请在审，不应停留在选择页（如从历史回退进入）
       await continueAfterAuth(props.jobId);
       return;
     }
@@ -110,7 +155,7 @@ onMounted(async () => {
     plans.value = p.items;
     selectedCode.value = p.items.find((plan) => plan.code === 'KINDER')?.code ?? p.items[0]?.code ?? '';
     myQuota.value = q
-      ? q.workspaces.find((w) => w.enterprise_id === ws.value.enterprise_id) ?? q.workspaces[0] ?? null
+      ? q.tenants.find((x) => x.tenant_id === tenantId.value) ?? q.tenants[0] ?? null
       : null;
   } catch (e) {
     errorMsg.value = e instanceof ApiError ? messageText(e.messageKey) : tt('common.unknownError');
@@ -143,7 +188,7 @@ async function submitUpgrade(code: string | undefined): Promise<void> {
   submitting.value = true;
   submitError.value = '';
   try {
-    sub.value = await submitPlanApplication(code, ws.value);
+    sub.value = await submitPlanApplication(code, tenantId.value);
     received.value = true;
   } catch (e) {
     if (e instanceof ApiError && e.status === 409 && props.jobId) {
@@ -151,7 +196,9 @@ async function submitUpgrade(code: string | undefined): Promise<void> {
       return;
     }
     submitError.value = e instanceof ApiError ? messageText(e.messageKey) : tt('common.unknownError');
-    if (e instanceof ApiError && e.status === 409) sub.value = await fetchSubscription(ws.value).catch(() => sub.value);
+    if (e instanceof ApiError && e.status === 409) {
+      sub.value = await fetchSubscription(tenantId.value).catch(() => sub.value);
+    }
   } finally {
     submitting.value = false;
   }
@@ -165,30 +212,26 @@ function closeReceived(): void {
 const quotaPct = computed(() => {
   const q = myQuota.value;
   if (!q) return 0;
-  const { remaining, total } = q.plan.is_paid
-    ? { remaining: q.paid_pages.remaining, total: q.paid_pages.monthly_total }
-    : q.free_tasks;
+  const { remaining, monthly_total: total } = q.pages;
   if (total <= 0) return 0;
   return Math.min(100, Math.round((remaining / total) * 100));
 });
 
+// 配额统一按「月页数」展示（已无免费次数概念）
 const quotaMeta = computed(() => {
   const q = myQuota.value;
   if (!q) return '';
-  if (q.plan.is_paid) {
-    return tt('plans.pagesLeft', {
-      left: q.paid_pages.remaining.toLocaleString('en-US'),
-      total: q.paid_pages.monthly_total.toLocaleString('en-US'),
-    });
-  }
-  return tt('plans.freeScansLeft', { left: q.free_tasks.remaining, total: q.free_tasks.total });
+  return tt('plans.pagesLeft', {
+    left: q.pages.remaining.toLocaleString('en-US'),
+    total: q.pages.monthly_total.toLocaleString('en-US'),
+  });
 });
 
-function workspaceLabel(): string {
-  const eid = ws.value.enterprise_id;
-  if (eid == null) return tt('plans.personalWorkspace');
-  const ent = workspaces.value.find((w) => w.enterprise_id === eid);
-  return ent?.enterprise_name || tt('plans.enterpriseWorkspace');
+function tenantLabel(): string {
+  const id = tenantId.value;
+  const target = id == null ? null : tenants.value.find((x) => x.tenant_id === id) ?? null;
+  if (!target || target.tenant_type === 'PERSONAL') return tt('plans.personalWorkspace');
+  return target.name || tt('plans.enterpriseWorkspace');
 }
 
 function seatsLabel(p: Plan): string {
@@ -249,24 +292,38 @@ function priceSub(p: Plan): string {
           </div>
         </div>
 
+        <!-- 已过期提醒：醒目横幅 + 线下续订指引（不展示价格或支付链接） -->
+        <div v-if="expired" class="expired-card" role="alert">
+          <div class="expired-head">
+            <span class="expired-badge">{{ tt('sub.expired') }}</span>
+            <span class="expired-title">{{ tt('sub.expiredTitle') }}</span>
+          </div>
+          <p class="expired-body">{{ tt('sub.expiredBody') }}</p>
+          <p class="expired-body">{{ tt('plans.offlineBody') }}</p>
+        </div>
+
         <!-- 当前套餐：渐变卡片 -->
         <div v-if="myQuota" class="current-card">
           <div class="current-top">
             <div class="current-name">
-              <template v-if="myQuota.plan.is_paid">
-                {{ myQuota.plan.name }} · <span class="current-free">{{ tt('plans.currentActive') }}</span>
-              </template>
-              <template v-else>{{ tt('plans.freePlan') }}</template>
+              {{ myQuota.plan.name }} · <span class="current-free">{{ statusLabel }}</span>
             </div>
-            <span v-if="!myQuota.plan.is_paid" class="current-badge">{{ tt('home.freeBadge') }}</span>
+            <span v-if="expired || expiringSoon" class="current-badge" :class="{ danger: expired }">
+              {{ expired ? tt('sub.expired') : tt('sub.expiringSoon') }}
+            </span>
           </div>
           <div class="current-track">
             <div class="current-fill" :style="{ width: quotaPct + '%' }" />
           </div>
           <div class="current-meta">
             <span>{{ quotaMeta }}</span>
-            <span class="current-ws">{{ workspaceLabel() }}</span>
+            <span class="current-ws">{{ tenantLabel() }}</span>
           </div>
+          <div v-if="validUntilText || daysLeftText" class="current-expiry">
+            <span v-if="validUntilText">{{ validUntilText }}</span>
+            <span v-if="daysLeftText" class="current-days">{{ daysLeftText }}</span>
+          </div>
+          <div v-else-if="subStatus === 'NONE'" class="current-expiry">{{ tt('sub.enterprisePending') }}</div>
         </div>
 
         <!-- 套餐目录 -->
@@ -278,7 +335,7 @@ function priceSub(p: Plan): string {
             :key="p.code"
             class="plan-card"
             :class="{
-              default: !checkMode && ctaKind(p) === 'current',
+              default: !checkMode && isCurrentPlan(p),
               pending: !checkMode && ctaKind(p) === 'pending',
               dark: p.code === 'ADVANCE',
               selectable: checkMode,
@@ -289,7 +346,7 @@ function priceSub(p: Plan): string {
             @click="checkMode && (selectedCode = p.code)"
             @keyup.enter="checkMode && (selectedCode = p.code)"
           >
-            <div v-if="checkMode ? selectedCode === p.code : ctaKind(p) === 'current'" class="plan-flag">
+            <div v-if="checkMode ? selectedCode === p.code : isCurrentPlan(p)" class="plan-flag">
               {{ checkMode ? tt('plans.selected') : tt('plans.current') }}
             </div>
             <div v-else-if="!checkMode && ctaKind(p) === 'pending'" class="plan-flag pending-flag">
@@ -307,14 +364,14 @@ function priceSub(p: Plan): string {
               v-if="!checkMode && ctaKind(p) !== 'lower'"
               class="plan-cta"
               :class="{
-                primary: ctaKind(p) === 'upgrade' || (ctaKind(p) === 'contact' && hasPrice(p)),
+                primary: ctaActionable(p) || (ctaKind(p) === 'contact' && hasPrice(p)),
                 dark: p.code === 'ADVANCE',
               }"
-              :disabled="ctaKind(p) !== 'upgrade' || submitting"
+              :disabled="!ctaActionable(p) || submitting"
               :title="ctaKind(p) === 'contact' ? tt('plans.offlineTitle') : undefined"
               @click="askUpgrade(p.code)"
             >
-              <BrandLoading v-if="submitting && confirmCode === p.code && ctaKind(p) === 'upgrade'" variant="button" :label="tt('plans.submitting')" :announce="false" />
+              <BrandLoading v-if="submitting && confirmCode === p.code && ctaActionable(p)" variant="button" :label="tt('plans.submitting')" :announce="false" />
               <template v-else>{{ ctaLabel(p) }}</template>
             </button>
           </div>
@@ -357,8 +414,10 @@ function priceSub(p: Plan): string {
 
     <div v-if="confirmPlan" class="dialog-mask" role="dialog" aria-modal="true">
       <div class="dialog">
-        <div class="dialog-title">{{ tt('plans.confirmTitle') }}</div>
-        <p class="dialog-body">{{ tt('plans.confirmBody', { plan: confirmPlan.name }) }}</p>
+        <div class="dialog-title">{{ confirmIsRenew ? tt('sub.renewTitle') : tt('plans.confirmTitle') }}</div>
+        <p class="dialog-body">
+          {{ confirmIsRenew ? tt('sub.renewBody', { plan: confirmPlan.name }) : tt('plans.confirmBody', { plan: confirmPlan.name }) }}
+        </p>
         <div class="dialog-actions">
           <button class="dialog-cancel" :disabled="submitting" @click="confirmCode = null">{{ tt('common.cancel') }}</button>
           <button class="continue-btn" :disabled="submitting" @click="confirmUpgrade">
@@ -699,6 +758,65 @@ function priceSub(p: Plan): string {
   font-weight: 700;
   letter-spacing: 0.4px;
   white-space: nowrap;
+}
+
+/* 已过期徽标更醒目 */
+.current-badge.danger {
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--danger);
+}
+
+/* ---- 有效期信息 ---- */
+.current-expiry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-size: 10px;
+  opacity: 0.92;
+}
+
+.current-days {
+  font-weight: 700;
+}
+
+/* ---- 已过期横幅 ---- */
+.expired-card {
+  border-radius: 16px;
+  padding: 14px;
+  background: linear-gradient(135deg, #ff6b6b 0%, #e23b3b 100%);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 6px 18px rgba(226, 59, 59, 0.28);
+}
+
+.expired-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.expired-badge {
+  background: rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+
+.expired-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.expired-body {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
 }
 
 .current-track {

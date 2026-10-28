@@ -3,8 +3,8 @@ doc_id: AGENTS
 title: "SaiFlow monorepo — AI 代理入口"
 type: index
 status: active
-version: 2.3.0
-updated: 2026-10-26
+version: 2.4.0
+updated: 2026-10-27
 audience: [ai-agent, engineer, pm]
 ---
 
@@ -16,7 +16,7 @@ audience: [ai-agent, engineer, pm]
 
 **SaiFlow — “We turn paper into process.”（将纸张变为流程。）**
 
-面向泰国 SME 制造企业的纸质单据 OCR 数字化录入系统。识别采购订单（PO）、送货单（Delivery Note）、发票（Invoice）、收据（Receipt）、贷项通知单（Credit Note）与税务收据（Tax Receipt）；由人工核验后，录入并归档至本地 ERP、Excel 与文件夹。部署于 Google Cloud（Cloud Run、私有 GCS、Firestore、Cloud Functions、Secret Manager）。
+面向泰国 SME 制造企业的纸质单据 OCR 数字化录入系统。识别采购订单（PO）、送货单（Delivery Note）、发票（Invoice）、收据（Receipt）、贷项通知单（Credit Note）与税务收据（Tax Receipt）；由人工核验后，录入并归档至本地 ERP、Excel 与文件夹。部署于 Google Cloud（Cloud Run、Cloud SQL PostgreSQL 18.6〔实例 `saiflow-dev` / `postgres.saiflow`，ADR-001、ADR-005 回切记录〕、私有 GCS、Firestore、Cloud Functions、Secret Manager）。
 
 ## 2. 入口与读取顺序（渐进式加载）
 
@@ -94,7 +94,7 @@ AI 开发、分析、转换、调试、测试过程中产生的所有临时文�
 4. **验收优先：** 编码前必须先读取对应的 `AC-*` 验收标准。
 5. **禁止范围蔓延：** 初始版本 V1.0 只包含 P0；不得提前实现 P1/P2/P3 功能。
 6. **同步更新文档：** 改变系统行为时，必须更新源需求、相关设计、验收标准及版本历史（`docs/20-requirements`、`docs/30-design`、`docs/40-acceptance` 等）。
-7. **云端数据边界：** 原件存私有 GCS、TextIn 原始 JSON 存 Firestore、关系数据存自建 PostgreSQL 17（`odoo.saiflow`，ADR-005）；仅服务端可访问云资源与 TextIn 凭据，必须符合 PDPA 与 `NFR-SEC-*`。
+7. **云端数据边界：** 原件存私有 GCS、TextIn 原始 JSON 存 Firestore、关系数据存 Cloud SQL PostgreSQL 18.6（实例 `saiflow-dev` / 库 `postgres` / schema `saiflow`，即 `postgres.saiflow`；ADR-001、ADR-005 回切记录）；仅服务端可访问云资源与 TextIn 凭据，必须符合 PDPA 与 `NFR-SEC-*`。
 8. **临时文件隔离：** 所有临时产物必须置于 `./temp/`。
 9. **过程与成果分层：** 过程产物写 `openspec/changes/<change>/`，产品级成果写 `docs/`；同一内容只定义一次，其余链接。
 10. **勿手改生成物：** `.claude/commands/opsx/**` 与 `.claude/skills/openspec-*` 由 OpenSpec 生成，升级时会被覆盖；通过 `openspec update` 更新，不手工编辑。
@@ -111,6 +111,7 @@ AI 开发、分析、转换、调试、测试过程中产生的所有临时文�
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 2.4.0 | 2026-10-27 | Product Engineering | 产品云平台描述与规则 7 恢复 Cloud SQL PostgreSQL 18.6（saiflow-dev/postgres.saiflow；ADR-001、ADR-005 回切记录）；其余代理指令与权限不变 |
 | 2.3.0 | 2026-10-26 | Product Engineering | 关系数据库由 Cloud SQL 切换为自建 PostgreSQL 17（ADR-005），更新产品说明与云端数据边界 |
 | 2.2.0 | 2026-10-12 | Product Engineering | 完成 saiflow-docs 内容迁移；`docs/` 成为 SaiFlow 唯一文档根，旧 `saiflow-docs` 废弃 |
 | 2.1.0 | 2026-10-12 | Product Engineering | 文档唯一根收敛：`docs/` 统一继承 saiflow-docs 00/01/10/20/30/40 分层；读取路径从 `../saiflow-docs` 改为本仓库 `docs/` |

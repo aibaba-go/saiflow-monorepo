@@ -7,7 +7,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@line/liff": "2.31.0",
+    "@line/liff": "2.31.1",
     "dayjs": "^1.11.13",
     "vue": "3.5.43"
   },

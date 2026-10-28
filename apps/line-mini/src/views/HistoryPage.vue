@@ -3,7 +3,7 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { ApiError, listJobs, type JobStage, type JobSummary } from '../api';
 import { messageText } from '../i18n';
 import { useT } from '../i18nVue';
-import { currentWorkspace, navigate } from '../store';
+import { currentTenant, currentTenantId, navigate } from '../store';
 import BrandLoading from '../components/BrandLoading.vue';
 import JobListItem from '../components/JobListItem.vue';
 
@@ -41,7 +41,7 @@ async function fetchPage(reset: boolean) {
       page_size: PAGE_SIZE,
       stage: filter.value === 'ALL' ? undefined : filter.value,
       q: keyword.value.trim() || undefined,
-      workspace: currentWorkspace.value ?? undefined,
+      tenantId: currentTenantId.value,
     });
     if (mySeq !== seq) return;
     jobs.value = reset ? data.items : [...jobs.value, ...data.items];
@@ -91,7 +91,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => observer?.disconnect());
 
-watch(() => currentWorkspace.value?.enterprise_id ?? null, load);
+watch(() => currentTenantId.value, load);
 watch(filter, load);
 
 let kwTimer: ReturnType<typeof setTimeout> | undefined;
@@ -101,10 +101,10 @@ watch(keyword, () => {
 });
 onBeforeUnmount(() => clearTimeout(kwTimer));
 
-function workspaceLabel(): string {
-  const ws = currentWorkspace.value;
-  if (!ws || ws.workspace_type === 'PERSONAL') return t('home.workspacePersonal');
-  return ws.enterprise_name || t('my.company');
+function tenantLabel(): string {
+  const tenant = currentTenant.value;
+  if (!tenant || tenant.tenant_type === 'PERSONAL') return t('home.workspacePersonal');
+  return tenant.name || t('my.company');
 }
 
 function openJob(job: JobSummary) {
@@ -118,7 +118,7 @@ function openJob(job: JobSummary) {
   <div class="history">
     <header class="history-header">
       <h1>{{ t('history.title') }}</h1>
-      <div class="ws-pill">{{ workspaceLabel() }}</div>
+      <div class="ws-pill">{{ tenantLabel() }}</div>
     </header>
 
     <div class="content">

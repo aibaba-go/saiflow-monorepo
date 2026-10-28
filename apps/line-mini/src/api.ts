@@ -5,7 +5,7 @@
  * - 会话是 HttpOnly Cookie（saiflow_session，Path=/api），前端不持有、不存储任何长期凭证；
  * - 成功响应统一为 { code: "OK", data }；错误为扁平的 { code, message_key, request_id, retryable, field_errors }；
  * - 所有写请求必须携带 X-CSRF-Token（登录或 GET /auth/session 时下发，仅存内存）；
- * - 401 触发 onUnauthorized 订阅者（App 回到登录态），绝不把凭证写进 URL/localStorage。
+ * - 401 触发 onUnauthorized 订阅者（试用页面恢复游客，认证窗口可重试），绝不把凭证写进 URL/localStorage。
  */
 
 const API_BASE = '/api/v1';
@@ -38,16 +38,18 @@ export class ApiError extends Error {
 }
 
 let csrfToken: string | null = null;
+let sessionEpoch = 0;
 
-/** 登录 / 会话刷新时由调用方注入；登出时清空 */
+/** 新会话/清理递增代次，旧并发请求的 401 不能清除新会话。 */
 export function setCsrfToken(token: string | null): void {
   csrfToken = token;
+  sessionEpoch += 1;
 }
 
 type UnauthorizedListener = () => void;
 const unauthorizedListeners = new Set<UnauthorizedListener>();
 
-/** 401 通知（App 用来回到登录页） */
+/** 401 通知（清本地身份，由 App 按认证上下文恢复） */
 export function onUnauthorized(fn: UnauthorizedListener): () => void {
   unauthorizedListeners.add(fn);
   return () => {
@@ -56,7 +58,7 @@ export function onUnauthorized(fn: UnauthorizedListener): () => void {
 }
 
 function emitUnauthorized(): void {
-  csrfToken = null;
+  setCsrfToken(null);
   unauthorizedListeners.forEach((fn) => fn());
 }
 
@@ -68,11 +70,13 @@ interface RequestOptions {
   headers?: Record<string, string>;
   idempotencyKey?: string;
   onUploadProgress?: (fraction: number) => void;
+  timeoutMs?: number;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', json, rawBody, contentType, headers = {}, idempotencyKey, onUploadProgress } = options;
 
+  const requestEpoch = sessionEpoch;
   const h: Record<string, string> = { ...headers };
   const isWrite = method !== 'GET' && method !== 'HEAD';
   if (isWrite && csrfToken) {
@@ -91,6 +95,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   let res: Response;
+  const controller = options.timeoutMs ? new AbortController() : null;
+  const timer = controller ? window.setTimeout(() => controller.abort(), options.timeoutMs) : null;
   try {
     if (onUploadProgress && rawBody instanceof Blob) {
       res = await new Promise<Response>((resolve, reject) => {
@@ -109,7 +115,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         xhr.send(rawBody);
       });
     } else {
-      res = await fetch(`${API_BASE}${path}`, { method, headers: h, body, credentials: 'same-origin' });
+      res = await fetch(`${API_BASE}${path}`, { method, headers: h, body, credentials: 'same-origin', signal: controller?.signal });
     }
   } catch {
     throw new ApiError(0, {
@@ -119,10 +125,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       retryable: true,
       field_errors: [],
     });
+  } finally {
+    if (timer !== null) window.clearTimeout(timer);
   }
 
   if (res.status === 401) {
-    emitUnauthorized();
+    if (requestEpoch === sessionEpoch) emitUnauthorized();
     let body401: ApiErrorBody = {
       code: 'AUTH_REQUIRED',
       message_key: 'auth.login_required',
@@ -170,7 +178,7 @@ export interface User {
   status: string;
   /** 游客会话：可试用上传/核验，确认前需登录或注册 */
   is_guest: boolean;
-  /** 来自 LINE，用户不可修改 */
+  /** 注册时使用 LINE 默认值或用户录入，个人中心可修改（PATCH /me phone） */
   phone: string;
   email: string;
   /** 已完成注册信息录入（FR-SYS-014） */
@@ -178,23 +186,24 @@ export interface User {
   created_at: string;
 }
 
-export interface Workspace {
-  workspace_type: 'PERSONAL' | 'ENTERPRISE';
-  enterprise_id: number | null;
-  enterprise_name: string | null;
+/** 归属只有一个表达：tenant_id（PERSONAL 为本人个人租户，ENTERPRISE 为已授权企业租户） */
+export interface Tenant {
+  tenant_id: number;
+  tenant_type: 'PERSONAL' | 'ENTERPRISE';
+  /** 企业租户为企业名；个人租户为 null，由前端按语言渲染「个人」 */
+  name: string | null;
   role: 'OWNER' | 'ADMIN' | 'MEMBER' | null;
 }
 
 export interface AuthPayload {
   user: User;
   csrf_token: string;
-  workspaces: Workspace[];
+  tenants: Tenant[];
 }
 
 export interface FileInfo {
   id: string;
-  workspace_type: string;
-  enterprise_id: number | null;
+  tenant_id: number;
   original_name: string;
   mime_type: string;
   status: 'UPLOADING' | 'UPLOADED' | 'VALIDATING' | 'READY' | 'REJECTED';
@@ -224,8 +233,7 @@ export interface JobSummary {
   id: string;
   file_id: string;
   file_name: string;
-  workspace_type: string;
-  enterprise_id: number | null;
+  tenant_id: number;
   status: JobStatus;
   stage: JobStage;
   progress: number;
@@ -301,9 +309,16 @@ export interface ExportInfo {
   created_at: string;
 }
 
-export interface WorkspacesPayload {
-  workspaces: Workspace[];
-  pending_applications: unknown[];
+/** GET /me/tenants：当前有效身份 + 在审申请（企业认证/套餐续期） */
+export interface PendingApplication {
+  id: number;
+  type: string;
+  status: string;
+}
+
+export interface TenantsPayload {
+  tenants: Tenant[];
+  pending_applications: PendingApplication[];
 }
 
 export interface PlanPrice {
@@ -321,23 +336,36 @@ export interface Plan {
   features: string[];
 }
 
-export interface QuotaWorkspace {
-  workspace_type: 'PERSONAL' | 'ENTERPRISE';
-  enterprise_id: number | null;
-  enterprise_name: string | null;
+/** 订阅状态：ACTIVE 可用；EXPIRED 到期硬停；NONE 企业未认证（未开通） */
+export type SubscriptionStatus = 'ACTIVE' | 'EXPIRED' | 'NONE';
+
+/** 订阅有效期（/me/quota 内嵌的精简视图） */
+export interface SubscriptionPeriod {
+  status: SubscriptionStatus;
+  starts_at: string | null;
+  expires_at: string | null;
+  /** 剩余自然日：当天到期为 0，已过期为负数 */
+  days_remaining: number | null;
+}
+
+/** 只有一种计量：OCR_PAGE 月页额度（没有 Free 档位、没有赠送次数） */
+export interface QuotaTenant {
+  tenant_id: number;
+  tenant_type: 'PERSONAL' | 'ENTERPRISE';
+  name: string | null;
   plan: {
-    code: string;
-    name: string;
+    code: string | null;
+    name: string | null;
     is_paid: boolean;
-    free_unit: string;
-    paid_unit: string;
+    source?: 'DEFAULT' | 'APPROVED' | null;
+    metering?: 'OCR_PAGE';
   };
-  free_tasks: { total: number; remaining: number };
-  paid_pages: { monthly_total: number; remaining: number };
+  subscription: SubscriptionPeriod;
+  pages: { monthly_total: number; remaining: number };
 }
 
 export interface QuotaPayload {
-  workspaces: QuotaWorkspace[];
+  tenants: QuotaTenant[];
 }
 
 export interface PlansPayload {
@@ -353,29 +381,60 @@ export interface PlanApplicationBrief {
   submitted_at: string | null;
 }
 
-/** ACTIVE 时 plan_* 为已开通套餐；pending 为处理中的升级申请；订阅按工作空间计 */
+/**
+ * GET /me/subscription：租户当前权益。
+ * status 只表达「现在能不能用」；pending 为在审的续期/升级申请，既不提升也不降低当前权益。
+ */
 export interface Subscription extends PlanApplicationBrief {
-  status: 'NONE' | 'PENDING' | 'ACTIVE';
+  status: SubscriptionStatus;
+  source?: 'DEFAULT' | 'APPROVED' | null;
+  starts_at: string | null;
+  expires_at: string | null;
+  days_remaining: number | null;
   pending: PlanApplicationBrief | null;
-  workspace_type: 'PERSONAL' | 'ENTERPRISE';
-  enterprise_id: number | null;
-  /** 企业空间仅 OWNER 可申请升级 */
+  tenant_id: number;
+  tenant_type: 'PERSONAL' | 'ENTERPRISE';
+  /** 企业租户仅 OWNER 可提交续期/升级申请 */
   can_manage: boolean;
 }
 
-/** 企业空间传 enterprise_id；缺省/为空即个人空间 */
-export interface WorkspaceRef {
-  enterprise_id: number | null;
+/** 租户引用：缺省/null 即调用者的个人租户 */
+export type TenantRef = number | null | undefined;
+
+/** 站内通知类型（首页铃铛） */
+export type NotificationType =
+  | 'PLAN_EXPIRING'
+  | 'PLAN_EXPIRED'
+  | 'OCR_DONE'
+  | 'PLAN_UPGRADE_SUBMITTED'
+  | 'MEMBERSHIP_ACTIVE';
+
+export interface NotificationItem {
+  id: number;
+  type: NotificationType | string;
+  title: string;
+  body: string;
+  read: boolean;
+  created_at: string | null;
+}
+
+export interface NotificationsPayload {
+  unread_count: number;
+  items: NotificationItem[];
 }
 
 export interface CompanyDetail {
   id: number;
+  /** 企业对应的租户 id（归属与订阅一律用它） */
+  tenant_id: number;
   code: string;
   legal_name: string;
   registration_no: string;
   contact_phone: string;
   cert_file_id: string | null;
   status: 'PENDING_VERIFICATION' | 'VERIFIED' | 'SUSPENDED' | 'DISABLED' | string;
+  /** 人工认证通过时间；订阅有效期从此起算 */
+  verified_at?: string | null;
   created_at?: string | null;
 }
 
@@ -401,25 +460,35 @@ export function loginWithLine(idToken: string, language: 'th' | 'en'): Promise<A
   return request<AuthPayload>('/auth/line', { method: 'POST', json: { id_token: idToken, language } });
 }
 
-/** 开发兜底（后端 AUTH_DEV_MODE=1 时才可用；生产禁用） */
-export function loginWithDevId(devId: string, language: 'th' | 'en'): Promise<AuthPayload> {
+/** 仅本地开发可用，后端仍需 AUTH_DEV_MODE=1；生产在发送请求前拒绝（FR-SYS-001/014） */
+export async function loginWithDevId(devId: string, language: 'th' | 'en'): Promise<AuthPayload> {
+  if (!import.meta.env.DEV) {
+    throw new Error('Developer sign-in is only available in local development.');
+  }
   return request<AuthPayload>('/auth/line', { method: 'POST', json: { dev_id: devId, language } });
 }
 
-export function fetchSession(): Promise<AuthPayload> {
-  return request<AuthPayload>('/auth/session');
+export function fetchSession(timeoutMs?: number): Promise<AuthPayload> {
+  return request<AuthPayload>('/auth/session', { timeoutMs });
 }
 
 export function completeRegistration(input: {
   display_name: string;
   avatar_url: string;
+  phone: string;
   email: string;
   code: string;
 }): Promise<User> {
   return request<User>('/me/registration', { method: 'POST', json: input });
 }
 
-export function updateProfile(input: { display_name?: string; avatar_url?: string }): Promise<User> {
+/** 个人中心可改字段：昵称/头像/语言/手机号（手机号空串即清空） */
+export function updateProfile(input: {
+  display_name?: string;
+  avatar_url?: string;
+  language?: 'th' | 'en';
+  phone?: string;
+}): Promise<User> {
   return request<User>('/me', { method: 'PATCH', json: input });
 }
 
@@ -433,7 +502,7 @@ export function changeEmail(email: string, code: string): Promise<User> {
 
 export async function logout(): Promise<void> {
   try {
-    await request('/auth/logout', { method: 'POST' });
+    await request('/auth/logout', { method: 'POST', timeoutMs: 10000 });
   } finally {
     setCsrfToken(null);
   }
@@ -441,15 +510,20 @@ export async function logout(): Promise<void> {
 
 // ---------- 上传（三段式） ----------
 
+/** tenantId 缺省/为 null 即个人租户，请求体不带该字段 */
+function tenantBody(tenantId: TenantRef): { tenant_id?: number } {
+  return tenantId == null ? {} : { tenant_id: tenantId };
+}
+
 export function createUpload(
   fileName: string,
   sizeBytes: number,
-  workspace?: { workspace_type?: string; enterprise_id?: number },
+  tenantId?: TenantRef,
   purpose: 'OCR_TASK' | 'APPLICATION_MATERIAL' = 'OCR_TASK',
 ): Promise<{ file: FileInfo; upload_id: string }> {
   return request('/uploads', {
     method: 'POST',
-    json: { file_name: fileName, size_bytes: sizeBytes, purpose, ...workspace },
+    json: { file_name: fileName, size_bytes: sizeBytes, purpose, ...tenantBody(tenantId) },
   });
 }
 
@@ -471,11 +545,8 @@ export function completeUpload(uploadId: string): Promise<{ file: FileInfo }> {
   return request(`/uploads/${uploadId}/complete`, { method: 'POST' });
 }
 
-export function importFromUrl(
-  url: string,
-  workspace?: { workspace_type?: string; enterprise_id?: number },
-): Promise<{ file: FileInfo }> {
-  return request('/file-imports', { method: 'POST', json: { url, ...workspace } });
+export function importFromUrl(url: string, tenantId?: TenantRef): Promise<{ file: FileInfo }> {
+  return request('/file-imports', { method: 'POST', json: { url, ...tenantBody(tenantId) } });
 }
 
 export function getFile(fileId: string): Promise<{ file: FileInfo }> {
@@ -526,7 +597,7 @@ export function listJobs(
     q?: string;
     page?: number;
     page_size?: number;
-    workspace?: WorkspaceRef;
+    tenantId?: TenantRef;
   } = {},
 ): Promise<JobList> {
   const qs = new URLSearchParams();
@@ -535,14 +606,8 @@ export function listJobs(
   if (query.q) qs.set('q', query.q);
   if (query.page) qs.set('page', String(query.page));
   if (query.page_size) qs.set('page_size', String(query.page_size));
-  if (query.workspace) {
-    if (query.workspace.enterprise_id != null) {
-      qs.set('workspace_type', 'ENTERPRISE');
-      qs.set('enterprise_id', String(query.workspace.enterprise_id));
-    } else {
-      qs.set('workspace_type', 'PERSONAL');
-    }
-  }
+  // 缺省不带 tenant_id，由后端解析为个人租户
+  if (query.tenantId != null) qs.set('tenant_id', String(query.tenantId));
   const suffix = qs.toString() ? `?${qs.toString()}` : '';
   return request<JobList>(`/ocr/jobs${suffix}`);
 }
@@ -635,16 +700,33 @@ export function fetchQuota(): Promise<QuotaPayload> {
   return request<QuotaPayload>('/me/quota');
 }
 
-export function fetchSubscription(ws?: WorkspaceRef): Promise<Subscription> {
-  const qs = ws?.enterprise_id != null ? `?workspace_type=ENTERPRISE&enterprise_id=${ws.enterprise_id}` : '';
+/** GET /me/tenants：身份列表 + 在审申请 */
+export function fetchTenants(): Promise<TenantsPayload> {
+  return request<TenantsPayload>('/me/tenants');
+}
+
+export function fetchSubscription(tenantId?: TenantRef): Promise<Subscription> {
+  const qs = tenantId != null ? `?tenant_id=${tenantId}` : '';
   return request<Subscription>(`/me/subscription${qs}`);
 }
 
-export function submitPlanApplication(planCode: string, ws?: WorkspaceRef): Promise<Subscription> {
-  const workspace =
-    ws?.enterprise_id != null ? { workspace_type: 'ENTERPRISE', enterprise_id: ws.enterprise_id } : {};
+export function submitPlanApplication(planCode: string, tenantId?: TenantRef): Promise<Subscription> {
   return request<Subscription>('/me/plan-applications', {
     method: 'POST',
-    json: { plan_code: planCode, ...workspace },
+    json: { plan_code: planCode, ...tenantBody(tenantId) },
+  });
+}
+
+// ---------- 站内通知（首页铃铛） ----------
+
+export function fetchNotifications(): Promise<NotificationsPayload> {
+  return request<NotificationsPayload>('/me/notifications');
+}
+
+/** ids 缺省即全部标记已读 */
+export function markNotificationsRead(ids?: number[]): Promise<{ updated: number; unread_count: number }> {
+  return request('/me/notifications/read', {
+    method: 'POST',
+    json: ids && ids.length ? { ids } : {},
   });
 }

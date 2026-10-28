@@ -1,22 +1,31 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { ApiError, importFromUrl, listJobs, type JobSummary, type Workspace } from '../api';
+import {
+  ApiError,
+  fetchNotifications,
+  importFromUrl,
+  listJobs,
+  type JobSummary,
+  type Tenant,
+} from '../api';
 import { messageText } from '../i18n';
 import { useT } from '../i18nVue';
 import {
-  currentWorkspace,
+  currentTenant,
+  currentTenantId,
   isAuthenticated,
   navigate,
-  quotaForWorkspace,
+  quotaForTenant,
   refreshQuota,
-  setWorkspace,
-  workspaces,
+  setTenant,
+  tenants,
 } from '../store';
 import { uploadFile } from '../upload';
 import BrandLoading from '../components/BrandLoading.vue';
 import JobListItem from '../components/JobListItem.vue';
+import NotificationDialog from '../components/NotificationDialog.vue';
 
-const { t: tt } = useT();
+const { t: tt, d } = useT();
 
 const recentJobs = ref<JobSummary[]>([]);
 const loading = ref(true);
@@ -35,7 +44,7 @@ async function loadRecent() {
   loading.value = true;
   errorMsg.value = '';
   try {
-    const data = await listJobs({ page: 1, page_size: 10, workspace: currentWorkspace.value ?? undefined });
+    const data = await listJobs({ page: 1, page_size: 10, tenantId: currentTenantId.value });
     recentJobs.value = data.items;
   } catch (e) {
     errorMsg.value = e instanceof ApiError ? messageText(e.messageKey) : tt('common.unknownError');
@@ -44,54 +53,75 @@ async function loadRecent() {
   }
 }
 
-onMounted(() => {
-  loadRecent();
-  refreshQuota(); // 任务列表之外再刷新一次免费额度
-});
+// 铃铛未读数（静默失败：红点缺省不显示，不阻塞主流程）
+const unreadCount = ref(0);
+const notifyOpen = ref(false);
 
-// 个人/企业数据隔离：切换空间即重新拉取该空间的任务
-watch(() => currentWorkspace.value?.enterprise_id ?? null, loadRecent);
-
-function workspaceLabel(): string {
-  const ws = currentWorkspace.value;
-  if (!ws || ws.workspace_type === 'PERSONAL') return tt('home.workspacePersonal');
-  return ws.enterprise_name || tt('my.company');
+async function loadUnread() {
+  try {
+    unreadCount.value = (await fetchNotifications()).unread_count ?? 0;
+  } catch {
+    unreadCount.value = 0;
+  }
 }
 
-// 工作空间切换（个人 + 已认证企业，同 My 页身份切换一致）
+onMounted(() => {
+  loadRecent();
+  refreshQuota(); // 任务列表之外再刷新一次月页额度与有效期
+  loadUnread();
+});
+
+// 个人/企业数据隔离：切换租户即重新拉取该租户的任务
+watch(() => currentTenantId.value, loadRecent);
+
+function tenantLabel(): string {
+  const tenant = currentTenant.value;
+  if (!tenant || tenant.tenant_type === 'PERSONAL') return tt('home.workspacePersonal');
+  return tenant.name || tt('my.company');
+}
+
+// 租户切换（个人 + 已认证企业，同 My 页身份切换一致）
 const wsMenuOpen = ref(false);
 
-function isCurrentWs(ws: Workspace): boolean {
-  const c = currentWorkspace.value;
-  return !!c && c.workspace_type === ws.workspace_type && (c.enterprise_id ?? null) === (ws.enterprise_id ?? null);
+function isCurrentTenant(tenant: Tenant): boolean {
+  return currentTenantId.value === tenant.tenant_id;
 }
 
 function toggleWsMenu() {
   wsMenuOpen.value = !wsMenuOpen.value;
 }
 
-function selectWorkspace(ws: Workspace) {
-  setWorkspace(ws);
+function selectTenant(tenant: Tenant) {
+  setTenant(tenant);
   wsMenuOpen.value = false;
 }
 
-// 配额横幅（PRD v1.4 §22.2：Kinder · N / 1,000 free scans left）
-const quotaView = computed(() => quotaForWorkspace());
+// 配额横幅：只有一种计量（套餐名 · 本月剩余 / 月页总量）
+const quotaView = computed(() => quotaForTenant());
 const quotaPct = computed(() => {
-  const q = quotaView.value;
-  if (!q) return 0;
-  const { remaining, total } = q.plan.is_paid
-    ? { remaining: q.paid_pages.remaining, total: q.paid_pages.monthly_total }
-    : q.free_tasks;
-  if (total <= 0) return 0;
-  return Math.min(100, Math.round((remaining / total) * 100));
+  const pages = quotaView.value?.pages;
+  if (!pages || pages.monthly_total <= 0) return 0;
+  return Math.min(100, Math.round((pages.remaining / pages.monthly_total) * 100));
 });
 
-// 任务空间跟随文件：以公司身份上传的文件，后续 job/结果都归公司空间
-function workspacePayload(): { workspace_type: string; enterprise_id: number } | undefined {
-  const ws = currentWorkspace.value;
-  if (!ws || ws.workspace_type !== 'ENTERPRISE' || ws.enterprise_id == null) return undefined;
-  return { workspace_type: 'ENTERPRISE', enterprise_id: ws.enterprise_id };
+// 有效期：EXPIRED 硬停（横幅 + 线下续费指引）；剩余 ≤7 天提示即将到期
+const sub = computed(() => quotaView.value?.subscription ?? null);
+const expired = computed(() => sub.value?.status === 'EXPIRED');
+const daysLeft = computed(() => sub.value?.days_remaining ?? null);
+const expiringSoon = computed(
+  () => sub.value?.status === 'ACTIVE' && daysLeft.value != null && daysLeft.value <= 7,
+);
+
+function validUntilText(): string {
+  return sub.value?.expires_at ? tt('sub.validUntil', { date: d(sub.value.expires_at) }) : '';
+}
+
+function daysLeftText(): string {
+  // 仅在有效期内提示剩余天数；已过期由横幅与红色有效期文案表达
+  if (sub.value?.status !== 'ACTIVE') return '';
+  const left = daysLeft.value;
+  if (left == null) return '';
+  return left <= 0 ? tt('sub.lastDay') : tt('sub.daysLeft', { n: left });
 }
 
 async function onPicked(target: HTMLInputElement | null) {
@@ -101,7 +131,8 @@ async function onPicked(target: HTMLInputElement | null) {
   uploadPct.value = 0;
   errorMsg.value = '';
   try {
-    const ready = await uploadFile(file, workspacePayload(), 'OCR_TASK', (percent) => {
+    // 任务租户跟随文件：以公司身份上传的文件，后续 job/结果都归该企业租户
+    const ready = await uploadFile(file, currentTenantId.value, 'OCR_TASK', (percent) => {
       uploadPct.value = percent;
     });
     navigate('confirm', { fileId: ready.id });
@@ -120,7 +151,7 @@ async function submitUrl() {
   urlBusy.value = true;
   errorMsg.value = '';
   try {
-    const { file } = await importFromUrl(url, workspacePayload());
+    const { file } = await importFromUrl(url, currentTenantId.value);
     urlMode.value = false;
     urlValue.value = '';
     navigate('confirm', { fileId: file.id });
@@ -155,21 +186,28 @@ function pick(kind: 'camera' | 'photos' | 'files') {
         </svg>
       </div>
       <div class="brand">saiflow</div>
-      <button class="bell" :aria-label="tt('history.title')">
+      <button class="bell" :aria-label="tt('notify.title')" @click="notifyOpen = true">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#596170" stroke-width="2" stroke-linecap="round">
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.7 21a2 2 0 0 1-3.4 0" />
         </svg>
+        <span v-if="unreadCount > 0" class="bell-dot" :aria-label="tt('notify.hasUnread')" />
       </button>
     </header>
 
+    <NotificationDialog
+      v-if="notifyOpen"
+      @close="notifyOpen = false"
+      @unread="unreadCount = $event"
+    />
+
     <div class="content">
-      <!-- 身份 chip：点击切换 个人/公司 工作空间 -->
+      <!-- 身份 chip：点击切换 个人/公司 租户 -->
       <div class="ws-row">
         <div class="ws-switch">
           <button class="ws-pill" :aria-expanded="wsMenuOpen" @click="toggleWsMenu">
             <span class="ws-dot" />
-            <span>{{ workspaceLabel() }}</span>
+            <span>{{ tenantLabel() }}</span>
             <svg class="ws-chevron" :class="{ open: wsMenuOpen }" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
               <path d="M6 9l6 6 6-6" />
             </svg>
@@ -177,15 +215,15 @@ function pick(kind: 'camera' | 'photos' | 'files') {
           <div v-if="wsMenuOpen" class="ws-menu-backdrop" @click="wsMenuOpen = false" />
           <div v-if="wsMenuOpen" class="ws-menu">
             <button
-              v-for="(ws, i) in workspaces"
-              :key="ws.enterprise_id ?? `p-${i}`"
+              v-for="tenant in tenants"
+              :key="tenant.tenant_id"
               class="ws-menu-item"
-              :class="{ current: isCurrentWs(ws) }"
-              @click="selectWorkspace(ws)"
+              :class="{ current: isCurrentTenant(tenant) }"
+              @click="selectTenant(tenant)"
             >
-              <span class="ws-menu-name">{{ ws.workspace_type === 'PERSONAL' ? tt('home.workspacePersonal') : ws.enterprise_name }}</span>
-              <em v-if="ws.workspace_type === 'ENTERPRISE'">{{ ws.role }}</em>
-              <svg v-if="isCurrentWs(ws)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1F9E6B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <span class="ws-menu-name">{{ tenant.tenant_type === 'PERSONAL' ? tt('home.workspacePersonal') : tenant.name }}</span>
+              <em v-if="tenant.tenant_type === 'ENTERPRISE'">{{ tenant.role }}</em>
+              <svg v-if="isCurrentTenant(tenant)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1F9E6B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M20 6L9 17l-5-5" />
               </svg>
             </button>
@@ -193,7 +231,17 @@ function pick(kind: 'camera' | 'photos' | 'files') {
         </div>
       </div>
 
-      <!-- 配额横幅：Free · N / 1,000 free scans left（付费套餐按每月页数）+ 进度条 + Plans 入口 -->
+      <!-- 到期硬停横幅：仅线下续费指引，不展示价格或支付链接 -->
+      <div v-if="expired && isAuthenticated" class="expired-card">
+        <div class="expired-head">
+          <span class="expired-badge">{{ tt('sub.expired') }}</span>
+          <span class="expired-title">{{ tt('sub.expiredTitle') }}</span>
+        </div>
+        <p class="expired-body">{{ tt('sub.expiredBody') }}</p>
+        <button class="expired-cta" @click="navigate('plans')">{{ tt('sub.expiredCta') }}</button>
+      </div>
+
+      <!-- 配额横幅：套餐名 · 本月剩余 / 月页总量 + 进度条 + 有效期 + Plans 入口 -->
       <div v-if="quotaView && isAuthenticated" class="quota-card">
         <div class="quota-icon">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4A66F7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -203,13 +251,21 @@ function pick(kind: 'camera' | 'photos' | 'files') {
         </div>
         <div class="quota-body">
           <div class="quota-text">
-            {{ quotaView.plan.is_paid
-              ? tt('home.quotaLeftPaid', { plan: quotaView.plan.name, left: quotaView.paid_pages.remaining.toLocaleString('en-US'), total: quotaView.paid_pages.monthly_total.toLocaleString('en-US') })
-              : tt('home.quotaLeft', { plan: tt('plans.freePlan'), left: quotaView.free_tasks.remaining, total: quotaView.free_tasks.total }) }}
+            {{ tt('home.quotaPages', {
+              plan: quotaView.plan.name || tt('sub.notActive'),
+              left: quotaView.pages.remaining.toLocaleString('en-US'),
+              total: quotaView.pages.monthly_total.toLocaleString('en-US'),
+            }) }}
           </div>
           <div class="quota-track">
             <div class="quota-fill" :style="{ width: quotaPct + '%' }" />
           </div>
+          <div v-if="sub && sub.status !== 'NONE'" class="quota-expiry" :class="{ warn: expiringSoon, danger: expired }">
+            <span>{{ validUntilText() }}</span>
+            <span v-if="daysLeftText()" class="quota-days">· {{ daysLeftText() }}</span>
+            <span v-if="expiringSoon" class="quota-soon">{{ tt('sub.expiringSoon') }}</span>
+          </div>
+          <div v-else-if="sub" class="quota-expiry">{{ tt('sub.enterprisePending') }}</div>
         </div>
         <button class="quota-plans" @click="navigate('plans')">{{ tt('home.plansLink') }}</button>
       </div>
@@ -331,6 +387,7 @@ function pick(kind: 'camera' | 'photos' | 'files') {
 }
 
 .bell {
+  position: relative;
   width: 34px;
   height: 34px;
   display: flex;
@@ -339,6 +396,18 @@ function pick(kind: 'camera' | 'photos' | 'files') {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 999px;
+}
+
+/* 未读红点：铃铛右上角 */
+.bell-dot {
+  position: absolute;
+  top: 6px;
+  right: 7px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+  border: 1.5px solid var(--card);
 }
 
 .ws-row {
@@ -498,6 +567,84 @@ function pick(kind: 'camera' | 'photos' | 'files') {
   white-space: nowrap;
   flex-shrink: 0;
   padding: 4px 2px;
+}
+
+/* ---- 有效期与到期（FR-SYS-012/013，线下续费） ---- */
+.quota-expiry {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.quota-expiry.warn,
+.quota-expiry.danger {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.quota-days {
+  white-space: nowrap;
+}
+
+.quota-soon {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--danger);
+  font-weight: 800;
+}
+
+.expired-card {
+  background: var(--card);
+  border: 1px solid var(--danger);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.expired-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.expired-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.expired-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.expired-body {
+  margin: 7px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.expired-cta {
+  margin-top: 9px;
+  width: 100%;
+  min-height: 38px;
+  border-radius: 12px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .content {

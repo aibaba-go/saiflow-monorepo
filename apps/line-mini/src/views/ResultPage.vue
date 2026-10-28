@@ -12,7 +12,7 @@ import {
 } from '../api';
 import { messageText } from '../i18n';
 import { useT } from '../i18nVue';
-import { goTab, isAuthenticated, isGuest, jobWorkspace, navigate, rememberPendingJob } from '../store';
+import { goTab, isAuthenticated, isGuest, jobTenantId, navigate, needsRegistration, rememberPendingJob } from '../store';
 import {
   addFieldAt,
   addTableRowAt,
@@ -165,17 +165,22 @@ async function confirm(): Promise<void> {
 
   saving.value = true;
   try {
-    if (!isAuthenticated.value) {
+    if (!isAuthenticated.value || needsRegistration.value) {
       await saveDraft();
       rememberPendingJob(props.jobId);
       navigate('auth', { jobId: props.jobId });
       return;
     }
-    const sub = await fetchSubscription(jobWorkspace(job.value));
+    // 订阅到期/未开通即硬停：先存草稿，再按「有在审申请」分流到处理中页或套餐页
+    const sub = await fetchSubscription(jobTenantId(job.value));
     if (sub.status !== 'ACTIVE') {
       await saveDraft();
-      if (sub.status === 'PENDING') {
-        navigate('plan-pending', { jobId: props.jobId, plan: sub.plan_name ?? '', submittedAt: sub.submitted_at ?? '' });
+      if (sub.pending) {
+        navigate('plan-pending', {
+          jobId: props.jobId,
+          plan: sub.pending.plan_name ?? '',
+          submittedAt: sub.pending.submitted_at ?? '',
+        });
       } else {
         navigate('plans', { jobId: props.jobId });
       }

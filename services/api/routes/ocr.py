@@ -1,7 +1,7 @@
 """OCR 任务路由（PRD §9/§14.2）。
 
-任务归属工作空间由源文件推导（文件与任务同空间），访问控制与 fileaccess 一致：
-本人任务 + 本人生成，或 ENTERPRISE 空间 ACTIVE 成员可见。
+任务归属租户由源文件推导（文件与任务同租户），访问控制与 fileaccess 一致：
+本人任务 + 本人生成，或所在企业租户的 ACTIVE 成员可见。
 幂等创建：Idempotency-Key（header 优先，body 兜底）命中已有任务时原样返回。
 """
 from __future__ import annotations
@@ -9,15 +9,15 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from flask import Blueprint, current_app, request
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, select
 
 from auth import audit, current_user
 from errors import invalid_argument, not_found, ok, state_conflict
 from extensions import db
 from fileaccess import get_file_for_user
-from models import File, Membership, OcrJob, User
+from models import File, OcrJob, User
 import quota
-from workspace import resolve_workspace
+from workspace import accessible_tenant_ids, resolve_tenant
 
 ocr_bp = Blueprint("ocr", __name__)
 
@@ -27,18 +27,14 @@ MAX_FIELD_NAMES = 100
 MAX_FIELD_NAME_LEN = 64
 
 
-def _active_enterprise_ids(user_id: int) -> list[int]:
-    rows = Membership.query.filter_by(user_id=user_id, status="ACTIVE").all()
-    return [m.enterprise_id for m in rows]
-
-
 def _get_job_for_user(job_id: str, user) -> OcrJob:
     job = db.session.get(OcrJob, job_id)
     if job is None:
         raise not_found()
     if job.created_by_user_id == user.id:
         return job
-    if job.workspace_type == "ENTERPRISE" and job.enterprise_id in _active_enterprise_ids(user.id):
+    # 他人任务只在同一个可见租户下才放行（他人的个人租户不在列表里）
+    if job.tenant_id in accessible_tenant_ids(user):
         return job
     raise not_found()
 
@@ -112,12 +108,8 @@ def create_job():
     if file.status != "READY":
         raise state_conflict("job.file_not_ready")
 
-    # 任务空间与文件一致；企业空间再校验一次成员资格（文件可见≠空间可用）
-    if file.workspace_type == "ENTERPRISE":
-        resolve_workspace(user, "ENTERPRISE", file.enterprise_id)
-        workspace_type, enterprise_id = "ENTERPRISE", file.enterprise_id
-    else:
-        workspace_type, enterprise_id = "PERSONAL", None
+    # 任务与文件同租户；这里再解析一次租户（文件可见≠租户可用，企业需 ACTIVE 成员且已过审）
+    tenant = resolve_tenant(user, file.tenant_id)
 
     params = body.get("params") or {}
     if not isinstance(params, dict):
@@ -156,10 +148,7 @@ def create_job():
         existing = OcrJob.query.filter_by(idempotency_key=idem).first()
         if existing is not None:
             owner = existing.created_by_user_id == user.id
-            if owner or (
-                existing.workspace_type == "ENTERPRISE"
-                and existing.enterprise_id in _active_enterprise_ids(user.id)
-            ):
+            if owner or existing.tenant_id in accessible_tenant_ids(user):
                 return ok(_summary(existing), status=200)  # 幂等重放
             raise not_found()
 
@@ -172,8 +161,7 @@ def create_job():
         stored_params["field_names"] = field_names
 
     job = OcrJob(
-        workspace_type=workspace_type,
-        enterprise_id=enterprise_id,
+        tenant_id=tenant.id,
         created_by_user_id=user.id,
         file_id=file.id,
         params=stored_params,
@@ -195,14 +183,9 @@ def list_jobs():
     user = current_user()
     q = request.args
 
-    scope = or_(
-        and_(
-            OcrJob.workspace_type == "PERSONAL",
-            OcrJob.created_by_user_id == user.id,
-        ),
-        OcrJob.enterprise_id.in_(_active_enterprise_ids(user.id) or [0]),
-    )
-    query = OcrJob.query.filter(scope)
+    # 可见范围就是「我能访问的租户」，个人租户只有本人、企业租户按 ACTIVE 成员
+    tenant_ids = accessible_tenant_ids(user)
+    query = OcrJob.query.filter(OcrJob.tenant_id.in_(tenant_ids or [0]))
 
     status = q.get("status")
     if status:
@@ -212,23 +195,14 @@ def list_jobs():
             raise invalid_argument(field_errors=[{"field": "status", "reason": "invalid"}])
         query = query.filter(OcrJob.status.in_(wanted))
 
-    ws = q.get("workspace_type")
-    if ws:
-        ws = ws.upper()
-        if ws == "PERSONAL":
-            query = query.filter(
-                OcrJob.workspace_type == "PERSONAL",
-                OcrJob.created_by_user_id == user.id,
-            )
-        elif ws == "ENTERPRISE":
-            eid = q.get("enterprise_id", type=int)
-            if not eid or eid not in _active_enterprise_ids(user.id):
-                raise not_found()
-            query = query.filter(
-                OcrJob.workspace_type == "ENTERPRISE", OcrJob.enterprise_id == eid
-            )
-        else:
-            raise invalid_argument(field_errors=[{"field": "workspace_type", "reason": "invalid"}])
+    if q.get("tenant_id") is not None:
+        tid = q.get("tenant_id", type=int)
+        if tid is None:
+            raise invalid_argument(field_errors=[{"field": "tenant_id", "reason": "invalid"}])
+        # 不可见租户按 404 处理（与改造前传他人 enterprise_id 的行为一致）
+        if tid not in tenant_ids:
+            raise not_found()
+        query = query.filter(OcrJob.tenant_id == tid)
 
     stage = q.get("stage")
     if stage:
@@ -290,7 +264,7 @@ def cancel_job(job_id: str):
     if job.status == "QUEUED":
         job.status = "CANCELLED"
         job.finished_at = datetime.now(timezone.utc).replace(tzinfo=None)
-        quota.refund_for_job(job.id)  # 未产出结果：返还本次消耗
+        # 页数计量只统计非 FAILED/CANCELLED 的任务，取消即自动不计，无需返还流水
     else:
         job.status = "CANCEL_REQUESTED"
     db.session.commit()
@@ -307,12 +281,10 @@ def rerun_job(job_id: str):
     file = db.session.get(File, old.file_id)
     if file is None or file.status != "READY":
         raise state_conflict("job.file_not_ready")
-    if file.workspace_type == "ENTERPRISE":
-        resolve_workspace(user, "ENTERPRISE", file.enterprise_id)
+    tenant = resolve_tenant(user, file.tenant_id)
 
     job = OcrJob(
-        workspace_type=old.workspace_type,
-        enterprise_id=old.enterprise_id,
+        tenant_id=tenant.id,
         created_by_user_id=user.id,
         file_id=old.file_id,
         params=dict(old.params or {}),

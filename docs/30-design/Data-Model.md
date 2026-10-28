@@ -3,8 +3,8 @@ doc_id: DES-002
 title: "SaiFlow — 数据模型"
 type: data-model
 status: active
-version: 1.5.4
-updated: 2026-10-18
+version: 1.6.0
+updated: 2026-10-28
 owner: Product Engineering
 source: "EPIC-02, EPIC-03, EPIC-04, EPIC-06, EPIC-07, EPIC-08"
 related: [DM-Document, DM-ExtractionPayload, DM-ConversionJob, DM-DocumentTemplate, DM-ExtractedField, DM-LineItem, DM-ReviewRecord, DM-ResultVersion]
@@ -241,13 +241,97 @@ erDiagram
 
 | 实体 | 关键字段 |
 |------|----------|
-| `DM-User` | id、username、password_hash、status(active/locked)、line_provider(line/guest)、display_name（取自 LINE，可改）、avatar_url（text：仅外部 https 头像 URL，如 LINE）、avatar_path（Firebase Storage 头像对象名 `avatars/<user_id>/<name>.<ext>`，优先于 avatar_url；图片不入库）、phone（取自 LINE，只读）、email（取自 LINE 或注册时录入，经验证码更换）、registered_at（null = 未完成注册信息录入）、prefs(json)、created_at |
-| `DM-EmailVerificationCode` | id、user_id、email（目标新邮箱）、code_hash（sha256）、expires_at（10 分钟）、consumed_at、created_at |
+| `DM-User` | id、username、password_hash、status(active/locked)、line_provider(line/guest)、display_name（取自 LINE，可改）、avatar_url（text：仅外部 https 头像 URL，如 LINE）、avatar_path（Firebase Storage 头像对象名 `avatars/<user_id>/<name>.<ext>`，优先于 avatar_url；图片不入库）、phone（可选：默认取服务端验证的 LINE 返回值，LINE 不保证提供；注册时可编辑或手填并保存，也可留空；注册后在个人中心经 `PATCH /me` 可改可清空，见下文手机号校验）、email（注册必填：默认取服务端验证的 LINE id_token 的 email 声明，需 email scope/用户授权，可编辑或手填并凭验证码确认；注册后经验证码更换）、registered_at（null = 未完成注册信息录入）、prefs(json)、created_at |
+| `DM-EmailVerificationCode` | id、user_id、email（注册时的当前邮箱或更换邮箱时的目标新邮箱）、code_hash（6 位数字码的 sha256）、expires_at（10 分钟 TTL）、consumed_at（非空 = 已用/失效）、created_at（用于 60 秒重发间隔） |
 | `DM-Role` | id、name(clerk/finance/warehouse/reviewer/viewer/admin)、permissions(json) |
 | `DM-OperationLog` | id、user_id、action、target_type、target_id、result、timestamp |
 | `DM-Settings` | key、value(json)、scope(system/user)、updated_by、updated_at |
 
-> `line_provider = guest` 表示游客试用会话，不是正式角色；登录/注册后其名下全部关联记录（含配额消耗/返还流水）改挂正式用户，游客的首登赠送流水、会话、验证码与 `users` 行在同一事务内删除。
+> 注册/换邮箱验证码共用 `email_verification_codes`（FR-SYS-014/016），按当前用户与目标邮箱校验；注册邮箱默认值只取服务端验证后的 LINE token，不信任客户端声明。TLS SMTP 发送成功后才记录有效新码与 10 分钟有效期；60 秒内重发拒绝，成功重发使该用户此前的验证码失效。未配置或发送失败返回 `503 EMAIL_SERVICE_UNAVAILABLE`，不记录有效新码、不完成注册；错误、过期、已用或目标邮箱不匹配均拒绝。注册成功时在同一事务中消费验证码、保存用户提交的可选手机号与必填邮箱并设置 `registered_at`；换邮箱沿用消费验证码后更新邮箱的规则。本地开发例外仅按 FR-SYS-001 明确启用，见 EPIC-06 §4；本次不扩展换邮箱业务规则，SMTP 设计见 Architecture §6。登录刷新已有用户前仍须锁定并重新读取注册状态，与注册提交串行，避免旧状态覆盖用户保存值。
+>
+> **本轮实现、验证与发布（2026-10-27，权益部分已于 2026-10-28 被租户/订阅模型取代，仅作历史保留）：** 启动/认证、退出、注册触发、默认 Kinder 与服务端确认门禁已真实实现并正式发布，不再仅为契约/待验证目标。334 项隔离后端回归、最终生产构建 `index-BUTDgRGj.js` 的 21 项全 mock 浏览器场景、6 项 OAuth 源码模块模拟与 9 项前端会话边界测试均通过，类型检查、Vite 构建及 OpenAPI 283 个内部引用校验通过。当时的默认 Kinder 由既有 `registered_at` 动态推导（现已改为 `subscriptions` 持久化行，见 §2.13「租户、订阅与到期提醒」）。正式发布、生产只读核验及单次日志审查（非长期保证）见 [Architecture §5](Architecture.md#5-部署模型) / [§6](Architecture.md#6-安全性与可靠性) 本轮记录；Cloud SQL `postgres.saiflow`、SMTP 模块及 Secret Manager 版本引用未改变，本轮未发送真实测试邮件。隔离测试从未连接数据库、真实 LINE 或 SMTP，也未创建生产账户记录；不宣称真实 LINE OAuth/完整注册、收件箱、真实数据库并发或验证码防猜码已验证。
+>
+> **历史证据（仅保留，不作为本轮证据）：** SMTP/资料代码的 221 项后端与 5 项模拟浏览器测试曾通过，隔离用例不连接真实数据库或 SMTP；历史本地/Cloud Run Gmail 自测获 SMTP 确认接收，未独立核验收件箱、真实 LINE 注册或真实数据库并发。这些历史测试、SMTP 自测与历史发布不覆盖本轮；既有 phone/email、TLS SMTP、资料锁后重读与换邮箱规则及未验证边界保留。个人中心手机号只读的旧约束已作废（见 §2.13 手机号校验）。
+
+> `line_provider = guest` 表示游客试用会话，不是正式角色；显式登录/注册后其名下全部关联记录改挂正式用户，游客的会话、验证码、游客个人租户上的 `subscriptions` / `plan_reminders` 行与 `users` 行在同一事务内删除，游客提交过的 `applications.target_tenant_id` 改指向正式用户的个人租户。取消注册不回滚已归集任务、不撤销正式会话。游客与正式用户一样在创建个人租户时获得一个月默认 Kinder 订阅，但不接收到期提醒邮件与站内提醒。
+
+### 2.13.1 租户、订阅与到期提醒（EPIC-06）
+
+**归属主体只有 `tenant_id`。** 不再有 `workspace_type` + `enterprise_id` 组合键；个人用户（含游客）与企业各自对应一行 `tenants`，所有业务行只带一个 `tenant_id` 外键。
+
+#### `tenants`（租户，归属唯一入口）
+
+| 字段 | 类型 | 必填 | 约束 | 说明 |
+|------|------|:----:|------|------|
+| id | bigint | Y | PK，自增 | 租户 ID |
+| tenant_type | varchar(16) | Y | PERSONAL / ENTERPRISE | 个人租户含游客 |
+| owner_user_id | bigint | N | FK→users.id；唯一约束 `uq_tenants_owner_user` | 个人租户与 user 严格 1:1；企业租户为 NULL（PostgreSQL 唯一约束不约束 NULL） |
+| display_name | varchar(255) | Y | 默认空串 | 个人=昵称快照 / 企业=法定名称 |
+| status | varchar(16) | Y | ACTIVE / SUSPENDED / DISABLED | 只表达「该租户是否还能用」；企业审核语义仍在 `enterprises.status` |
+| created_at / updated_at | timestamp | Y | UTC | 个人租户的默认订阅自 `created_at` 起算 |
+
+#### `enterprises`（企业租户的 1:1 扩展）
+
+在原有字段（`code`、`country`、`legal_name`、`registration_no`、`contact_phone`、`cert_file_id`、`status`）之外新增：
+
+| 字段 | 类型 | 必填 | 约束 | 说明 |
+|------|------|:----:|------|------|
+| tenant_id | bigint | Y | FK→tenants.id，唯一 | 对应的企业租户；企业的业务归属一律用它，`enterprises.id` 只用于标识企业档案本身（路径参数 `/enterprises/{enterprise_id}` 保持不变） |
+| verified_at | timestamp | N | UTC | 认证通过时间；`status` 首次被读到为 `VERIFIED` 时由服务端补填。企业默认订阅自此起算；为 NULL 表示尚未认证，该租户没有订阅行 |
+
+#### 归属列改挂 `tenant_id`
+
+| 表 | 原字段 | 现字段 | 约束 |
+|----|--------|--------|------|
+| `files` | workspace_type + enterprise_id | `tenant_id` | FK→tenants.id，NOT NULL，带索引 |
+| `ocr_jobs` | workspace_type + enterprise_id | `tenant_id` | FK→tenants.id，NOT NULL，带索引；与源文件同租户 |
+| `memberships` | enterprise_id | `tenant_id` | FK→tenants.id，NOT NULL；唯一约束 `uq_membership_tenant_user(tenant_id, user_id)` |
+| `invitations` | enterprise_id | `tenant_id` | FK→tenants.id，NOT NULL（邀请加入的企业租户） |
+| `applications` | target_enterprise_id | `target_tenant_id` | FK→tenants.id，NOT NULL；个人套餐申请指向本人个人租户，入企/企业套餐申请指向企业租户 |
+
+**租户解析与错误语义（沿用旧 message_key，便于前端不改文案）：** 请求省略或传空 `tenant_id` 时落到调用者本人的个人租户；无法转成整数、租户不存在、或类型不是 `ENTERPRISE` 却按企业路径访问 → `400 INVALID_ARGUMENT` / `error.invalid_workspace`；指向他人的个人租户 → `403 PERMISSION_DENIED`；本人个人租户非 ACTIVE → `403 ACCOUNT_DISABLED`；成员关系非 ACTIVE、企业非 VERIFIED 或租户非 ACTIVE → `403 ENTERPRISE_ACCESS_REVOKED` / `error.enterprise_access_revoked`。
+
+#### `subscriptions`（租户订阅，一租户一行）
+
+| 字段 | 类型 | 必填 | 约束 | 说明 |
+|------|------|:----:|------|------|
+| id | bigint | Y | PK，自增 | |
+| tenant_id | bigint | Y | FK→tenants.id，**唯一** | 唯一约束即幂等开通的保证：并发插入由 IntegrityError 回滚后重读 |
+| plan_code | varchar(32) | Y | 默认 KINDER | KINDER / STARTER / INTERMEDIATE / ADVANCE，**无 FREE 档** |
+| source | varchar(16) | Y | 默认 DEFAULT | DEFAULT=系统默认开通的一个月 / APPROVED=人工审批续费开通 |
+| starts_at | timestamp | Y | UTC | 个人租户取 `tenants.created_at`；企业租户取 `enterprises.verified_at` |
+| expires_at | timestamp | Y | UTC | 按自然月推进并做月末夹取（2026-01-31 + 1 月 = 2026-02-28）；过期即不允许新建 OCR 任务 |
+| application_id | bigint | N | FK→applications.id | 最近一次据以续期的申请；默认开通为 NULL，用于保证同一申请只生效一次 |
+| created_at / updated_at | timestamp | Y | UTC | |
+
+**语义：** 企业未通过认证时没有订阅行，订阅状态为 `NONE`；有行时 `expires_at > now` 为 `ACTIVE`，否则 `EXPIRED`。续费为线下流程：运营批准 `PLAN_UPGRADE` 申请并在 `form` 写 `valid_from` / `valid_to`（或 `period_months`，1~120，缺省 12），读取订阅时据 `application_id` 惰性同步一次；未给 `valid_from` 时新周期从 `max(now, 当前 expires_at)` 起算，即未到期时顺延而非截断。`days_remaining` 按泰国时区（UTC+7）日历日计算，0 = 当天到期，负数 = 已过期。
+
+#### `plan_reminders`（到期提醒发送记录）
+
+| 字段 | 类型 | 必填 | 约束 | 说明 |
+|------|------|:----:|------|------|
+| id | bigint | Y | PK，自增 | |
+| tenant_id | bigint | Y | FK→tenants.id，带索引 | |
+| period_end | timestamp | Y | UTC | 本条提醒对应的 `subscriptions.expires_at` |
+| stage | varchar(16) | Y | D7 / D3 / D1 / D0 / EXPIRED | 到期前 7/3/1 天、到期当天、已到期 |
+| email_sent | boolean | Y | 默认 false | 站内通知先落库提交，邮件结果只回写这一列 |
+| created_at | timestamp | Y | UTC | 发送时间 |
+
+唯一约束 `uq_plan_reminder_stage(tenant_id, period_end, stage)` 即幂等键：同一周期同一节点只发一次；续费后 `period_end` 变化，新周期重新按节点提醒。扫描只在命中 D7/D3/D1/D0/EXPIRED 节点当天写入，**不回补**已错过的节点。站内通知类型为 `PLAN_EXPIRING`（D7/D3/D1/D0）与 `PLAN_EXPIRED`。
+
+#### 计量：无账本，实时统计
+
+`quota_ledger` 表与模型已删除，赠送任务流水（首登 1,000 次、企业认证 1,000 次）一并取消。唯一计量单位为 `OCR_PAGE`：按泰国时区（UTC+7）自然月实时 `SUM(ocr_jobs.page_count)`，`FAILED` 与 `CANCELLED` 的任务不计（因此取消任务天然不计入，没有返还步骤）。各档每月页数：KINDER 1,000 / STARTER 5,000 / INTERMEDIATE 10,000 / ADVANCE 100,000。新建或重跑 OCR 任务时先判订阅：非 `ACTIVE` → `402 PLAN_EXPIRED` / `plan.expired`；`ACTIVE` 但本月页数已用尽 → `402 QUOTA_EXCEEDED` / `quota.exceeded`。查询历史任务与结果不受订阅状态影响。
+
+#### 手机号校验（`users.phone`）
+
+`PATCH /me` 接受 `phone`：空串表示清空；长度 ≤ 32；只允许 `+`、数字、空格、`(`、`)`、`.`、`-`；剔除非数字后须为 6–15 位数字。不合法返回 `400 INVALID_ARGUMENT` 且 `field_errors = [{field: "phone", message_key: "error.phone_invalid"}]`；游客返回 `403 PERMISSION_DENIED`。
+
+#### schema 落地方式（无 Alembic）
+
+项目没有迁移框架：启动时 `app.py::_ensure_tables` 建缺失表，`_patch_columns` 只能 **ADD COLUMN**（`enterprises.verified_at` 走这条路径）。`tenant_id` 这类 NOT NULL 外键无法用 ADD COLUMN 补齐，必须用 `setup_db.py` 整库重建；重建时 `LEGACY_TABLES = ("quota_ledger",)` 会显式 `DROP TABLE IF EXISTS ... CASCADE`——因为该表已不在 `models.py`，自动建表逻辑不会再清理它。
+
+**工作空间有效权益视图已废止。** 原按 `registered_at` 动态推导默认 Kinder、`free_tasks` / `paid_pages` 双计量、`OCR_TASK` 计量单位与赠送账本的那张表整体删除，相关响应字段（`free_tasks`、`paid_pages`、`free_unit`、`paid_unit`）不再返回。
 
 ### 2.14 `DM-ResultVersion`（结果版本快照）
 
@@ -267,7 +351,9 @@ erDiagram
 
 **结构化数组编辑（FR-VERIFY-002/015）：** `structured` 中电话号码等标量数组叶字段（含表格单元格）保留 JSON 数组类型。数组元素按原字段路径追加索引（`path + [index]`）接收 `string` 编辑值，仅替换对应元素；数组顺序、长度及所有未编辑元素保持不变，不转成逗号或换行分隔字符串，不修改旧版本快照。单一字符串电话号码仍按标量字段编辑，确认锁定后只读；本修复不改变确认、认证或订阅流程。
 
-**LINE 客户端确认前流转（FR-VERIFY-016/017、FR-SYS-011/012）：** 结果页 `Continue` 先检查认证、注册完成状态与任务所属工作空间的订阅。游客或未完成注册者进入 `auth`；已注册 Free/NONE 用户进入 `plans`；无已开通付费套餐的 PENDING 用户进入 `plan-pending`，均不提交确认。重定向前仅在结构化内容有未保存变更时，以现有 PATCH 结果操作的 `confirm: false` 保存新版本；无变更不保存，不锁定结果、不记录 `ocr_jobs.completed_at`，未确认任务保持 `VERIFYING`。仅已注册且订阅 ACTIVE 的用户（含另有更高档升级申请处理中）可在结果页显式提交 `confirm: true`，成功后进入最终结果页。登录/注册或套餐可用性恢复后，ACTIVE 的未完成任务须返回结果页等待显式确认，只有已为 `COMPLETED` 的任务可直接进入最终结果页。历史 `VERIFIED` 表示已确认但 `completed_at` 为空，继续兼容且不批量转换；仅已注册付费用户可在结果页显式继续完成。此规则限定 LINE 客户端流转，不新增服务端授权规则或改变 API 契约。
+**结果确认与版本写入边界（FR-VERIFY-016/017、FR-SYS-011/012）：** 仅结果核验 `Continue` 检查认证/注册；游客或未注册者有 dirty 变更时先 PATCH `confirm:false` 保存，无变更不保存，随后到 `auth`，不跳 `plans`。草稿保存不锁定、不记录 `ocr_jobs.completed_at`，`VERIFYING` 保持未完成。服务端所有 `confirm:true` 路径强制 `_registered`，guest 401、已认证未注册 403 `PERMISSION_DENIED` / `registration.required`；拒绝在新增 `DM-ResultVersion`、旧版本 `is_current` 切换及完成状态写入之前，无版本/状态副作用。`confirm:false` 仍可试用，沿用既有任务权限与校验。
+
+订阅为 `ACTIVE` 的租户（默认一个月 Kinder 或已批套餐）均可显式确认，独立 `pending` 申请不拦；企业租户在通过认证后才有订阅行，未认证时为 `NONE`，仅在用户显式 Continue 时保留 plans/plan-pending 分流。认证/注册成功重新读取任务仅返回 result；原已 COMPLETED 才可 final，不自动确认。注册成功与导航完成后才清 pendingJob；取消保留已归集任务权限与服务端草稿并回 result，清 pendingAuth/pendingJob 续接标记，不撤销 LINE/应用会话或自动续接；续接与退出存储边界见 Architecture §6。历史 VERIFIED（completed_at 为空）保留兼容，不批量转换；已注册且任务所属租户订阅为 `ACTIVE`（包括默认 Kinder）者显式完成才记录 completed_at。
 
 ## 3. 枚举
 
@@ -305,6 +391,11 @@ erDiagram
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.6.0 | 2026-10-28 | Product Engineering | 归属改为单一 `tenant_id`：新增 `tenants` 表与 `enterprises.tenant_id` / `verified_at`，files/ocr_jobs/memberships/invitations 改挂 `tenant_id`、applications 改为 `target_tenant_id`，保留 `error.invalid_workspace` / `error.enterprise_access_revoked` 等旧 message_key；新增 `subscriptions`（一租户一行，默认一个月 Kinder、月末夹取、审批惰性续期）与 `plan_reminders`（`uq_plan_reminder_stage` 幂等、不回补节点）；删除 `quota_ledger` 与赠送任务额度、取消 FREE 档与 `free_tasks`/`paid_pages`/`OCR_TASK` 计量，改为按泰国自然月实时统计 `ocr_jobs.page_count`；`users.phone` 在个人中心可改（原「只读」表述作废）；补记无 Alembic、ADD COLUMN 与 `setup_db.py` 重建的 schema 落地方式。未运行测试 |
+| 1.5.8 | 2026-10-27 | Product Engineering | FR-SYS-001/010..014/017、FR-VERIFY-016/017：更新为已真实实现、隔离验证通过并正式发布，334 项后端、final index-BUTDgRGj.js 的 21 项全 mock 浏览器、6 项 OAuth 源码模拟、9 项会话边界及类型检查/Vite 构建/OpenAPI 283 个内部引用通过；registered_at 动态默认 Kinder 每泰国月 1,000 页，无新增 schema/默认申请/付款/历史迁移；发布引用 Architecture §5/§6，历史 221/5 与 SMTP 接收非本轮证据，SMTP 模块/秘密版本引用不变、本轮未实发邮件，隔离不连接数据库/真实 LINE/SMTP、不创建生产账户；真实 LINE/收件箱/数据库并发/防猜码仍未验证，原业务规则不变 |
+| 1.5.7 | 2026-10-27 | Product Engineering | FR-SYS-010..014/017、FR-VERIFY-016/017：补充动态 DEFAULT ACTIVE KINDER 与 APPROVED 优先、pending 独立、OCR_PAGE/月 paid_pages 和 OCR_TASK 赠送隔离；企业不继承个人默认；确认注册门禁须在版本/完成状态写入前拒绝，认证成功仅回 result、取消保留归集权限、legacy VERIFIED 显式完成；无新增字段或 schema 迁移，本轮待验证，SMTP/锁历史证据不覆盖本轮 |
+| 1.5.6 | 2026-10-27 | Product Engineering | FR-SYS-014：补充登录刷新已有用户时的注册状态锁定/重读，与注册串行避免资料覆盖；221 项隔离测试及 SMTP 自测接收已核验，发布和真实 LINE/数据库并发、防猜码验证边界见 Architecture §6；无模型字段或 schema 变更 |
+| 1.5.5 | 2026-10-27 | Product Engineering | FR-SYS-014：phone 注册时可编辑/手填保存且仍可选，个人中心只读；email 默认取服务端验证的 LINE token（email scope/用户授权），可编辑且必填；明确注册/换邮箱验证码共用模型及 SMTP 成功后记有效码、TTL/重发/消费/失败规则；本次验证与发布未完成，保留历史 |
 | 1.5.4 | 2026-10-18 | Product Engineering | FR-VERIFY-002/015 修复说明：structured 标量数组按索引编辑，保留数组、顺序、长度及未编辑元素，不转为拼接字符串或覆盖旧快照 |
 | 1.5.3 | 2026-10-18 | Product Engineering | 补充 LINE 客户端确认前认证/工作空间订阅检查、仅变更草稿保存与显式完成规则；恢复未完成任务返回结果页，保留历史 VERIFIED；不新增服务端授权或改变 API 契约（FR-VERIFY-016/017、FR-SYS-011/012） |
 | 1.5.2 | 2026-10-18 | Product Engineering | 游客归集后删除游客 `users` 行，配额流水随任务改挂正式用户（FR-SYS-010） |

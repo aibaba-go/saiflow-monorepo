@@ -1,8 +1,8 @@
-import { completeUpload, createUpload, uploadContent, type FileInfo } from './api';
+import { completeUpload, createUpload, uploadContent, type FileInfo, type TenantRef } from './api';
 
 export async function uploadFile(
   file: File,
-  workspace?: { workspace_type?: string; enterprise_id?: number },
+  tenantId?: TenantRef,
   purpose: 'OCR_TASK' | 'APPLICATION_MATERIAL' = 'OCR_TASK',
   onProgress?: (percent: number) => void,
 ): Promise<FileInfo> {
@@ -19,7 +19,7 @@ export async function uploadFile(
   }, 120) : undefined;
   report(0);
   try {
-    const { upload_id: uploadId } = await createUpload(file.name, file.size, workspace, purpose);
+    const { upload_id: uploadId } = await createUpload(file.name, file.size, tenantId, purpose);
     await uploadContent(uploadId, file, file.type || 'application/octet-stream',
       onProgress ? (fraction) => report(Math.min(95, Math.floor(fraction * 95))) : undefined);
     const { file: ready } = await completeUpload(uploadId);
