@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import { completeRegistration } from '../api';
 import { useT } from '../i18nVue';
-import { apiErrorText, isValidEmail, useEmailCode } from '../profile';
+import { apiErrorText, isValidEmail, isValidPhone, useEmailCode } from '../profile';
 import { user } from '../store';
 import AvatarPicker from './AvatarPicker.vue';
 import BrandLoading from './BrandLoading.vue';
@@ -16,7 +16,8 @@ const emit = defineEmits<{
 const { t } = useT();
 
 const lineEmail = user.value?.email ?? '';
-const phone = user.value?.phone ?? '';
+const linePhone = user.value?.phone ?? '';
+const phone = ref(linePhone);
 const email = ref(lineEmail);
 const code = ref('');
 const nickname = ref(user.value?.display_name ?? '');
@@ -27,13 +28,15 @@ const errorMsg = ref('');
 const touched = ref(false);
 
 const trimmedEmail = computed(() => email.value.trim());
+const phoneError = computed(() => isValidPhone(phone.value.trim()) ? '' : t('err.error.phone_invalid'));
 const emailError = computed(() => {
   if (!trimmedEmail.value) return t('profile.emailRequired');
   return isValidEmail(trimmedEmail.value) ? '' : t('err.error.email_invalid');
 });
 const codeError = computed(() => {
   if (sentTo.value !== trimmedEmail.value) return t('profile.codeSendFirst');
-  return code.value.trim() ? '' : t('profile.codeRequired');
+  if (!code.value.trim()) return t('profile.codeRequired');
+  return /^[0-9]{6}$/.test(code.value.trim()) ? '' : t('err.error.email_code_invalid');
 });
 const nicknameError = computed(() => (nickname.value.trim() ? '' : t('profile.nicknameRequired')));
 const canSend = computed(() => !emailError.value && cooldown.value === 0 && !sending.value && !submitting.value);
@@ -57,12 +60,13 @@ async function send() {
 async function submit() {
   touched.value = true;
   errorMsg.value = '';
-  if (emailError.value || codeError.value || nicknameError.value || submitting.value) return;
+  if (phoneError.value || emailError.value || codeError.value || nicknameError.value || submitting.value) return;
   submitting.value = true;
   try {
     user.value = await completeRegistration({
       display_name: nickname.value.trim(),
       avatar_url: avatar.value,
+      phone: phone.value.trim(),
       email: trimmedEmail.value,
       code: code.value.trim(),
     });
@@ -81,8 +85,20 @@ async function submit() {
 
     <div class="fd-field">
       <label class="fd-label" for="reg-phone">{{ t('profile.phone') }}</label>
-      <input id="reg-phone" class="fd-input" :value="phone || t('profile.phoneMissing')" readonly />
-      <span class="fd-hint">{{ t('register.fromLineLocked') }}</span>
+      <input
+        id="reg-phone"
+        v-model="phone"
+        class="fd-input"
+        :class="{ invalid: touched && phoneError }"
+        type="tel"
+        inputmode="tel"
+        autocomplete="tel"
+        maxlength="32"
+        :disabled="submitting"
+        :placeholder="t('profile.phonePlaceholder')"
+      />
+      <span v-if="touched && phoneError" class="fd-hint danger">{{ phoneError }}</span>
+      <span v-else class="fd-hint">{{ linePhone ? t('register.fromLineEditable') : t('register.phoneMissing') }}</span>
     </div>
 
     <div class="fd-field">
@@ -97,6 +113,7 @@ async function submit() {
           inputmode="email"
           autocomplete="email"
           maxlength="254"
+          :disabled="submitting"
           :placeholder="t('profile.emailPlaceholder')"
         />
         <button class="fd-mini-btn" :disabled="!canSend" @click="send">
@@ -118,6 +135,7 @@ async function submit() {
         inputmode="numeric"
         autocomplete="one-time-code"
         maxlength="6"
+        :disabled="submitting"
         :placeholder="t('profile.codePlaceholder')"
       />
       <span v-if="touched && !emailError && codeError" class="fd-hint danger">{{ codeError }}</span>
@@ -132,6 +150,7 @@ async function submit() {
         :class="{ invalid: touched && nicknameError }"
         maxlength="128"
         autocomplete="nickname"
+        :disabled="submitting"
       />
       <span v-if="touched && nicknameError" class="fd-hint danger">{{ nicknameError }}</span>
       <span v-else class="fd-hint">{{ t('register.fromLineEditable') }}</span>

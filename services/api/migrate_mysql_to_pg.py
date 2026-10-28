@@ -41,6 +41,7 @@ PGSCHEMA = os.getenv("PGSCHEMA", "saiflow")
 
 # 外键依赖顺序（parents first）。users/enterprises 互换即可满足 files 的两个 FK；
 # enterprises.cert_file_id 指向 files 的环引用单独处理。
+# 注：历史表 quota_ledger 已随订阅制改造移除，不再迁移。
 TABLES = [
     "users",
     "enterprises",
@@ -57,13 +58,12 @@ TABLES = [
     "audit_events",
     "data_requests",
     "review_sync_cursors",
-    "quota_ledger",
 ]
 
 BIGINT_PK_TABLES = [
     "users", "sessions", "enterprises", "memberships", "applications",
     "invitations", "notifications", "audit_events", "data_requests",
-    "review_sync_cursors", "quota_ledger",
+    "review_sync_cursors",
 ]
 
 JSON_COLUMNS = {

@@ -1,12 +1,12 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  /** 开发免登录开关：'true' 时显示开发者登录；vite dev 下 LINE 按钮直接使用开发身份（需后端 AUTH_DEV_MODE=1） */
+  /** LINE LIFF 应用 ID；需启用 openid scope；未配置时 LINE 登录不可用，不自动重定向或降级开发登录 */
+  readonly VITE_LIFF_ID?: string;
+  /** 仅 import.meta.env.DEV 且值为 'true' 时显示手动开发者登录（需后端 AUTH_DEV_MODE=1）；生产无效，LINE 按钮始终走 LINE 认证 */
   readonly VITE_AUTO_DEV_LOGIN?: string;
-  /** 开发者登录身份（默认 demo-user；输入框可修改） */
+  /** 本地开发者登录身份（默认 demo-user；输入框可修改） */
   readonly VITE_DEV_LOGIN_ID?: string;
-  /** 'true' 时生产构建也让 LINE 按钮直接使用开发身份（临时，需后端 AUTH_DEV_MODE=1） */
-  readonly VITE_DEV_BYPASS?: string;
 }
 
 interface ImportMeta {

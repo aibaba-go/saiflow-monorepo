@@ -14,7 +14,7 @@ import {
 } from '../api';
 import { messageText } from '../i18n';
 import { useT } from '../i18nVue';
-import { currentWorkspace, goTab, refreshSession, setWorkspace, workspaces } from '../store';
+import { currentTenantId, goTab, refreshSession, setTenant, tenants } from '../store';
 import { uploadFile } from '../upload';
 import BrandLoading from '../components/BrandLoading.vue';
 import FormDialog from '../components/FormDialog.vue';
@@ -103,10 +103,9 @@ async function doUnbind() {
     await unbindCompany(c.id);
     await load();
     await refreshSession();
-    // 若当前正以该公司身份工作，切回个人空间
-    const ws = currentWorkspace.value;
-    if (ws && ws.workspace_type === 'ENTERPRISE' && ws.enterprise_id === c.id) {
-      setWorkspace(workspaces.value.find((w) => w.workspace_type === 'PERSONAL') ?? null);
+    // 若当前正以该公司身份工作，切回个人租户
+    if (currentTenantId.value != null && currentTenantId.value === c.tenant_id) {
+      setTenant(tenants.value.find((tenant) => tenant.tenant_type === 'PERSONAL') ?? null);
     }
   } catch (e) {
     errorMsg.value = e instanceof ApiError ? messageText(e.messageKey) : t('common.unknownError');
@@ -272,12 +271,6 @@ async function submit() {
               <span>{{ c.registration_no }}</span>
               <span class="company-code">{{ c.code }}</span>
               <em v-if="c.my_role !== 'MEMBER'">{{ c.my_role }}</em>
-            </div>
-            <div v-if="c.status === 'VERIFIED'" class="bonus-line">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1F9E6B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M20 6L9 17l-5-5" />
-              </svg>
-              {{ t('company.bonusHint') }}
             </div>
             <button
               v-if="c.cert_file_id && c.my_role === 'OWNER'"
@@ -547,18 +540,6 @@ async function submit() {
 .company-meta em {
   font-style: normal;
   font-weight: 600;
-}
-
-.bonus-line {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 9.5px;
-  color: var(--icon);
-}
-
-.bonus-line svg {
-  flex-shrink: 0;
 }
 
 .cert-thumb {

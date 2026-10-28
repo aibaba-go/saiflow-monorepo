@@ -103,10 +103,33 @@ const en: Dict = {
   'home.pickHint': 'JPG / PNG / PDF, up to {size}MB',
   'home.workspacePersonal': 'Personal',
   'home.uploading': 'Uploading… {pct}%',
-  'home.quotaLeft': '{plan} · {left} / {total} free scans left',
-  'home.quotaLeftPaid': '{plan} · {left} / {total} pages left this month',
+  'home.quotaPages': '{plan} · {left} / {total} pages left this month',
   'home.plansLink': 'Plans ›',
-  'home.freeBadge': 'Sign-in bonus',
+
+  // 站内通知（首页铃铛）
+  'notify.title': 'Notifications',
+  'notify.unread': '{n} unread',
+  'notify.empty': 'No notifications yet',
+  'notify.emptyHint': 'Plan reminders and finished scans will show up here.',
+  'notify.markAllRead': 'Mark all as read',
+  'notify.loadFailed': 'Could not load notifications. Please try again.',
+  'notify.new': 'New',
+  'notify.hasUnread': 'You have unread notifications',
+
+  // 订阅有效期与到期提醒（FR-SYS-012/013，线下续费）
+  'sub.validUntil': 'Valid until {date}',
+  'sub.daysLeft': '{n} days left',
+  'sub.lastDay': 'Expires today',
+  'sub.expiringSoon': 'Expiring soon',
+  'sub.expired': 'Expired',
+  'sub.expiredTitle': 'Your plan has expired',
+  'sub.expiredBody': 'Existing results stay available, but new scans are paused until you renew. Contact our sales team on LINE to renew offline.',
+  'sub.expiredCta': 'See renewal options',
+  'sub.notActive': 'No active plan',
+  'sub.enterprisePending': 'The company plan starts once the company passes verification.',
+  'sub.renew': 'Renew',
+  'sub.renewTitle': 'Confirm renewal',
+  'sub.renewBody': 'Submit a renewal request for {plan}? Our sales team will contact you to complete payment offline.',
 
   // 任务流程阶段
   'job.stage.OCR_PROCESSING': 'OCR processing',
@@ -218,6 +241,9 @@ const en: Dict = {
   'register.fromLineLocked': 'From your LINE account · cannot be changed',
   'register.fromLineEditable': 'From your LINE account · you can change it',
   'register.emailMissing': 'LINE did not share an email — please enter one.',
+  'register.phoneMissing': 'LINE did not share a phone number — you can enter one.',
+  'profile.phonePlaceholder': '+66 81 234 5678',
+  'err.error.phone_invalid': 'Enter a valid phone number (6–15 digits).',
   'register.submit': 'Register',
   'register.submitting': 'Registering…',
   'profile.edit': 'Edit',
@@ -226,6 +252,11 @@ const en: Dict = {
   'profile.avatarInvalid': 'Please choose a JPG, PNG or WebP image.',
   'profile.phone': 'Phone',
   'profile.phoneMissing': 'Not provided by LINE',
+  'profile.phoneNotSet': 'Not set',
+  'profile.changePhone': 'Change',
+  'profile.changePhoneTitle': 'Change phone',
+  'profile.newPhone': 'New phone number',
+  'profile.phoneClearHint': 'Leave it empty to remove your phone number.',
   'profile.email': 'Email',
   'profile.emailNotSet': 'Not set',
   'profile.emailPlaceholder': 'name@example.com',
@@ -252,7 +283,6 @@ const en: Dict = {
   // P15 套餐与定价（PRD v1.4 §20，THB 线下支付）
   'plans.title': 'Plans & pricing',
   'plans.current': 'Current plan',
-  'plans.freePlan': 'Free',
   'plans.personalWorkspace': 'Personal workspace',
   'plans.enterpriseWorkspace': 'Company workspace',
   'plans.packages': 'PACKAGES · THB',
@@ -282,7 +312,7 @@ const en: Dict = {
   'planPending.submittedAt': 'Submitted',
   'planPending.home': 'Back to home',
   'err.plan.application_pending': 'Your plan upgrade request is already being processed.',
-  'err.plan.not_upgrade': 'Please choose a plan higher than your current plan.',
+  'err.plan.not_upgrade': 'Please choose your current plan or a higher one.',
   'plans.currentActive': 'Active',
   'plans.upgrade': 'Upgrade',
   'plans.upgradePending': 'Upgrade in progress',
@@ -292,7 +322,6 @@ const en: Dict = {
   'plans.pendingNotice': 'Our sales team will contact you soon to complete payment and activation.',
   'plans.pendingTitle': 'Upgrade to {plan} in progress',
   'plans.pagesLeft': '{left} / {total} pages left this month',
-  'plans.freeScansLeft': '{left} / {total} free scans left',
   'plans.inReview': 'IN REVIEW',
 
   // 企业（添加/编辑/编号绑定/解绑，后台人工审核 enterprises.status）
@@ -324,7 +353,6 @@ const en: Dict = {
   'company.submit': 'Submit for review',
   'company.submitting': 'Submitting…',
   'company.reviewHint': 'New and edited companies are reviewed manually by the platform before taking effect. The company number is generated automatically.',
-  'company.bonusHint': 'Verification bonus: 1,000 free scans credited to company workspace',
   'company.status.PENDING_VERIFICATION': 'Under review',
   'company.status.VERIFIED': 'Verified',
   'company.status.SUSPENDED': 'Suspended',
@@ -338,6 +366,7 @@ const en: Dict = {
   'export.failed': 'Export failed',
 
   // 后端 message_key → 用户文案（error 兜底在 err.*）
+  'my.logoutFailed': 'Sign out could not be completed. Use Back to retry before continuing.',
   'err.auth.login_required': 'Please sign in',
   'err.auth.session_expired': 'Session expired, please sign in again',
   'err.auth.session_revoked': 'Session revoked, please sign in again',
@@ -345,7 +374,8 @@ const en: Dict = {
   'err.auth.line_token_invalid': 'LINE sign-in failed, please try again',
   'err.auth.line_token_expired': 'LINE sign-in expired, please try again',
   'err.auth.line_not_configured': 'LINE login is not available',
-  'err.auth.line_init_failed': 'Could not reach LINE. Please try again.',
+  'err.auth.line_init_failed': 'LINE could not initialize. Close this window and reopen SaiFlow from LINE. No scan results were changed.',
+  'err.auth.line_init_timeout': 'LINE took too long to respond. Close this window and reopen SaiFlow from LINE. No scan results were changed.',
   'err.error.csrf_invalid': 'Security token expired, please retry',
   'err.error.not_found': 'Not found or no access',
   'err.error.permission_denied': 'No permission',
@@ -361,6 +391,7 @@ const en: Dict = {
   'err.error.avatar_invalid': 'Please choose a JPG, PNG or WebP image under 300 KB.',
   'err.avatar.upload_failed': 'Could not save your photo. Please try again later.',
   'err.registration.already_done': 'Registration is already complete',
+  'err.registration.required': 'Please complete registration before confirming the result.',
   'err.email.sender_unavailable': 'Email service is not available right now',
   'err.files.unsupported_type': 'Unsupported file type',
   'err.files.too_large': 'File too large',
@@ -381,7 +412,8 @@ const en: Dict = {
   'err.application.not_open': 'Application is already decided',
   'err.membership.rejoin_forbidden': 'Cannot re-apply to this company',
   'err.membership.already_member': 'Already a member of this company',
-  'err.quota.exceeded': 'Free scan quota used up — contact sales to activate a plan',
+  'err.quota.exceeded': 'Monthly page quota used up — contact sales to move to a bigger plan',
+  'err.plan.expired': 'Your plan has expired — renew it before starting a new scan.',
 };
 
 const th: Dict = {
@@ -435,10 +467,33 @@ const th: Dict = {
   'home.pickHint': 'JPG / PNG / PDF ไม่เกิน {size}MB',
   'home.workspacePersonal': 'ส่วนตัว',
   'home.uploading': 'กำลังอัปโหลด… {pct}%',
-  'home.quotaLeft': '{plan} · เหลือฟรี {left} / {total} ครั้ง',
-  'home.quotaLeftPaid': '{plan} · เหลือ {left} / {total} หน้าในเดือนนี้',
+  'home.quotaPages': '{plan} · เหลือ {left} / {total} หน้าในเดือนนี้',
   'home.plansLink': 'แพ็กเกจ ›',
-  'home.freeBadge': 'โบนัสสมัครใหม่',
+
+  // 站内通知（首页铃铛）
+  'notify.title': 'การแจ้งเตือน',
+  'notify.unread': 'ยังไม่อ่าน {n} รายการ',
+  'notify.empty': 'ยังไม่มีการแจ้งเตือน',
+  'notify.emptyHint': 'การแจ้งเตือนแพ็กเกจและงานที่เสร็จแล้วจะแสดงที่นี่',
+  'notify.markAllRead': 'ทำเครื่องหมายว่าอ่านแล้วทั้งหมด',
+  'notify.loadFailed': 'โหลดการแจ้งเตือนไม่สำเร็จ กรุณาลองอีกครั้ง',
+  'notify.new': 'ใหม่',
+  'notify.hasUnread': 'คุณมีการแจ้งเตือนที่ยังไม่อ่าน',
+
+  // 订阅有效期与到期提醒（ชำระเงินแบบออฟไลน์）
+  'sub.validUntil': 'ใช้ได้ถึง {date}',
+  'sub.daysLeft': 'เหลืออีก {n} วัน',
+  'sub.lastDay': 'หมดอายุวันนี้',
+  'sub.expiringSoon': 'ใกล้หมดอายุ',
+  'sub.expired': 'หมดอายุแล้ว',
+  'sub.expiredTitle': 'แพ็กเกจของคุณหมดอายุแล้ว',
+  'sub.expiredBody': 'ผลลัพธ์เดิมยังดูและส่งออกได้ แต่จะสร้างงานสแกนใหม่ไม่ได้จนกว่าจะต่ออายุ ติดต่อทีมขายของเราทาง LINE เพื่อต่ออายุแบบออฟไลน์',
+  'sub.expiredCta': 'ดูวิธีต่ออายุ',
+  'sub.notActive': 'ยังไม่มีแพ็กเกจที่ใช้งานอยู่',
+  'sub.enterprisePending': 'แพ็กเกจของบริษัทจะเริ่มเมื่อบริษัทผ่านการยืนยันแล้ว',
+  'sub.renew': 'ต่ออายุ',
+  'sub.renewTitle': 'ยืนยันการต่ออายุ',
+  'sub.renewBody': 'ส่งคำขอต่ออายุแพ็กเกจ {plan} หรือไม่? ทีมขายของเราจะติดต่อคุณเพื่อชำระเงินแบบออฟไลน์',
 
   // 任务流程阶段
   'job.stage.OCR_PROCESSING': 'กำลังประมวลผล OCR',
@@ -549,6 +604,9 @@ const th: Dict = {
   'register.fromLineLocked': 'จากบัญชี LINE · แก้ไขไม่ได้',
   'register.fromLineEditable': 'จากบัญชี LINE · แก้ไขได้',
   'register.emailMissing': 'LINE ไม่ได้ให้อีเมล กรุณากรอกอีเมล',
+  'register.phoneMissing': 'LINE ไม่ได้ให้เบอร์โทร คุณสามารถกรอกได้',
+  'profile.phonePlaceholder': '+66 81 234 5678',
+  'err.error.phone_invalid': 'กรุณากรอกเบอร์โทรที่ถูกต้อง (6–15 หลัก)',
   'register.submit': 'ลงทะเบียน',
   'register.submitting': 'กำลังลงทะเบียน…',
   'profile.edit': 'แก้ไข',
@@ -557,6 +615,11 @@ const th: Dict = {
   'profile.avatarInvalid': 'กรุณาเลือกรูป JPG, PNG หรือ WebP',
   'profile.phone': 'เบอร์โทร',
   'profile.phoneMissing': 'LINE ไม่ได้ให้ข้อมูล',
+  'profile.phoneNotSet': 'ยังไม่ได้ตั้งค่า',
+  'profile.changePhone': 'เปลี่ยน',
+  'profile.changePhoneTitle': 'เปลี่ยนเบอร์โทร',
+  'profile.newPhone': 'เบอร์โทรใหม่',
+  'profile.phoneClearHint': 'เว้นว่างไว้เพื่อลบเบอร์โทรของคุณ',
   'profile.email': 'อีเมล',
   'profile.emailNotSet': 'ยังไม่ได้ตั้งค่า',
   'profile.emailPlaceholder': 'name@example.com',
@@ -583,7 +646,6 @@ const th: Dict = {
   // P15 套餐与定价
   'plans.title': 'แพ็กเกจและราคา',
   'plans.current': 'แพ็กเกจปัจจุบัน',
-  'plans.freePlan': 'ฟรี',
   'plans.personalWorkspace': 'พื้นที่ส่วนตัว',
   'plans.enterpriseWorkspace': 'พื้นที่บริษัท',
   'plans.packages': 'แพ็กเกจ · THB',
@@ -613,7 +675,7 @@ const th: Dict = {
   'planPending.submittedAt': 'ส่งเมื่อ',
   'planPending.home': 'กลับหน้าแรก',
   'err.plan.application_pending': 'คำขออัปเกรดแพ็กเกจของคุณกำลังดำเนินการอยู่',
-  'err.plan.not_upgrade': 'กรุณาเลือกแพ็กเกจที่สูงกว่าแพ็กเกจปัจจุบัน',
+  'err.plan.not_upgrade': 'กรุณาเลือกแพ็กเกจปัจจุบันหรือสูงกว่า',
   'plans.currentActive': 'ใช้งานอยู่',
   'plans.upgrade': 'อัปเกรด',
   'plans.upgradePending': 'กำลังดำเนินการอัปเกรด',
@@ -623,7 +685,6 @@ const th: Dict = {
   'plans.pendingNotice': 'ทีมขายของเราจะติดต่อคุณเร็ว ๆ นี้เพื่อชำระเงินและเปิดใช้งาน',
   'plans.pendingTitle': 'กำลังอัปเกรดเป็น {plan}',
   'plans.pagesLeft': 'เหลือ {left} / {total} หน้าในเดือนนี้',
-  'plans.freeScansLeft': 'เหลือฟรี {left} / {total} ครั้ง',
   'plans.inReview': 'กำลังตรวจสอบ',
 
   // 企业（添加/编辑/编号绑定/解绑，后台人工审核 enterprises.status）
@@ -655,7 +716,6 @@ const th: Dict = {
   'company.submit': 'ส่งเพื่อตรวจสอบ',
   'company.submitting': 'กำลังส่ง…',
   'company.reviewHint': 'บริษัทที่เพิ่มหรือแก้ไขใหม่จะถูกตรวจสอบด้วยตนเองโดยแพลตฟอร์มก่อนมีผล หมายเลขบริษัทถูกสร้างอัตโนมัติ',
-  'company.bonusHint': 'โบนัสยืนยัน: สแกนฟรี 1,000 ครั้งเข้าพื้นที่ทำงานของบริษัท',
   'company.status.PENDING_VERIFICATION': 'อยู่ระหว่างตรวจสอบ',
   'company.status.VERIFIED': 'ยืนยันแล้ว',
   'company.status.SUSPENDED': 'ถูกระงับ',
@@ -669,6 +729,7 @@ const th: Dict = {
   'export.failed': 'ส่งออกไม่สำเร็จ',
 
   // 后端 message_key → 用户文案
+  'my.logoutFailed': 'ออกจากระบบไม่สำเร็จ กดกลับเพื่อลองใหม่ก่อนใช้งานต่อ',
   'err.auth.login_required': 'กรุณาเข้าสู่ระบบ',
   'err.auth.session_expired': 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง',
   'err.auth.session_revoked': 'เซสชันถูกยกเลิก กรุณาเข้าสู่ระบบอีกครั้ง',
@@ -676,7 +737,8 @@ const th: Dict = {
   'err.auth.line_token_invalid': 'เข้าสู่ระบบ LINE ไม่สำเร็จ กรุณาลองอีกครั้ง',
   'err.auth.line_token_expired': 'การเข้าสู่ระบบ LINE หมดอายุ กรุณาลองอีกครั้ง',
   'err.auth.line_not_configured': 'ไม่พบการตั้งค่าเข้าสู่ระบบ LINE',
-  'err.auth.line_init_failed': 'เชื่อมต่อ LINE ไม่สำเร็จ กรุณาลองอีกครั้ง',
+  'err.auth.line_init_failed': 'เริ่มต้น LINE ไม่สำเร็จ กรุณาปิดหน้าต่างนี้แล้วเปิด SaiFlow จาก LINE อีกครั้ง ผลการสแกนไม่ได้ถูกเปลี่ยนแปลง',
+  'err.auth.line_init_timeout': 'LINE ใช้เวลาตอบกลับนานเกินไป กรุณาปิดหน้าต่างนี้แล้วเปิด SaiFlow จาก LINE อีกครั้ง ผลการสแกนไม่ได้ถูกเปลี่ยนแปลง',
   'err.error.csrf_invalid': 'โทเคนความปลอดภัยหมดอายุ กรุณาลองใหม่',
   'err.error.not_found': 'ไม่พบข้อมูลหรือไม่มีสิทธิ์เข้าถึง',
   'err.error.permission_denied': 'ไม่มีสิทธิ์ดำเนินการ',
@@ -692,6 +754,7 @@ const th: Dict = {
   'err.error.avatar_invalid': 'กรุณาเลือกรูป JPG, PNG หรือ WebP ขนาดไม่เกิน 300 KB',
   'err.avatar.upload_failed': 'บันทึกรูปโปรไฟล์ไม่สำเร็จ กรุณาลองใหม่ภายหลัง',
   'err.registration.already_done': 'ลงทะเบียนเรียบร้อยแล้ว',
+  'err.registration.required': 'กรุณาลงทะเบียนให้เสร็จก่อนยืนยันผลลัพธ์',
   'err.email.sender_unavailable': 'บริการอีเมลยังไม่พร้อมใช้งาน',
   'err.files.unsupported_type': 'ประเภทไฟล์ไม่รองรับ',
   'err.files.too_large': 'ไฟล์ใหญ่เกินไป',
@@ -712,7 +775,8 @@ const th: Dict = {
   'err.application.not_open': 'คำขอถูกตัดสินไปแล้ว',
   'err.membership.rejoin_forbidden': 'ไม่สามารถสมัครเข้าบริษัทนี้ใหม่ได้',
   'err.membership.already_member': 'เป็นสมาชิกบริษัทนี้อยู่แล้ว',
-  'err.quota.exceeded': 'โควตาฟรีหมดแล้ว — ติดต่อฝ่ายขายเพื่อเปิดแพ็กเกจ',
+  'err.quota.exceeded': 'โควตาหน้าของเดือนนี้หมดแล้ว — ติดต่อฝ่ายขายเพื่อเปลี่ยนไปแพ็กเกจที่ใหญ่ขึ้น',
+  'err.plan.expired': 'แพ็กเกจของคุณหมดอายุแล้ว — กรุณาต่ออายุก่อนเริ่มสแกนใหม่',
 };
 
 const dicts: Record<Locale, Dict> = { en, th };
@@ -732,4 +796,21 @@ export function t(key: string, params?: Params): string {
 /** 后端 message_key → 本地文案（带 err. 前缀查表，缺失时兜底通用错误） */
 export function messageText(messageKey: string): string {
   return t(`err.${messageKey}`) !== `err.${messageKey}` ? t(`err.${messageKey}`) : t('common.unknownError');
+}
+
+/** ISO 时间 → 当前语言的自然日（订阅到期日只显示到天） */
+export function formatDate(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  try {
+    return new Intl.DateTimeFormat(current === 'th' ? 'th-TH' : 'en-GB', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }).format(d);
+  } catch {
+    // Intl 不可用时退回 ISO 日期，保证到期日始终可读
+    return d.toISOString().slice(0, 10);
+  }
 }

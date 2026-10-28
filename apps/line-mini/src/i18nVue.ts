@@ -4,6 +4,7 @@
  */
 import { customRef } from 'vue';
 import {
+  formatDate,
   getLocale,
   setLocale,
   subscribeLocale,
@@ -27,16 +28,22 @@ export const locale = customRef<Locale>((track, trigger) => {
   };
 });
 
-/** 在组件中使用：const { t } = useT(); 模板里 {{ t('login.title') }} */
+/** 在组件中使用：const { t, d } = useT(); 模板里 {{ t('login.title') }} / {{ d(iso) }} */
 export function useT(): {
   locale: ReturnType<typeof customRef<Locale>>;
   t: (key: string, params?: Params) => string;
+  d: (iso: string | null | undefined) => string;
 } {
   return {
     locale,
     t: (key: string, params?: Params) => {
       void locale.value; // 建立响应式依赖，切换语言时触发重渲染
       return tRaw(key, params);
+    },
+    // 到期日等日期按当前语言格式化，同样随语言切换重渲染
+    d: (iso: string | null | undefined) => {
+      void locale.value;
+      return formatDate(iso);
     },
   };
 }

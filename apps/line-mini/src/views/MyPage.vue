@@ -1,25 +1,28 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { getMyCompanies, logout, type Workspace } from '../api';
+import { ApiError, getMyCompanies, type Tenant } from '../api';
 import BrandLoading from '../components/BrandLoading.vue';
 import ChangeEmailDialog from '../components/ChangeEmailDialog.vue';
+import ChangePhoneDialog from '../components/ChangePhoneDialog.vue';
 import EditProfileDialog from '../components/EditProfileDialog.vue';
 import FormDialog from '../components/FormDialog.vue';
-import { getLocale, setLocale, type Locale } from '../i18n';
+import { getLocale, messageText, setLocale, type Locale } from '../i18n';
 import { useT } from '../i18nVue';
-import { currentWorkspace, navigate, setWorkspace, signOutLocally, user, workspaces } from '../store';
+import { currentTenantId, isGuest, navigate, setTenant, signOutAccount, tenants, user } from '../store';
 
 const { t, locale } = useT();
 
 const loggingOut = ref(false);
 const confirmingLogout = ref(false);
-const guest = computed(() => !!user.value?.is_guest);
+const logoutError = ref('');
+const guest = isGuest;
 const editingProfile = ref(false);
 const changingEmail = ref(false);
+const changingPhone = ref(false);
 
-const enterpriseList = computed(() => workspaces.value.filter((w) => w.workspace_type === 'ENTERPRISE'));
-const personalWorkspace = computed(
-  () => workspaces.value.find((w) => w.workspace_type === 'PERSONAL') ?? null,
+const enterpriseList = computed(() => tenants.value.filter((x) => x.tenant_type === 'ENTERPRISE'));
+const personalTenant = computed(
+  () => tenants.value.find((x) => x.tenant_type === 'PERSONAL') ?? null,
 );
 
 const pendingCount = ref(0);
@@ -36,13 +39,12 @@ onMounted(async () => {
   }
 });
 
-function isCurrentWs(ws: Workspace): boolean {
-  const c = currentWorkspace.value;
-  return !!c && c.workspace_type === ws.workspace_type && (c.enterprise_id ?? null) === (ws.enterprise_id ?? null);
+function isCurrentTenant(tenant: Tenant): boolean {
+  return currentTenantId.value === tenant.tenant_id;
 }
 
-function switchWorkspace(ws: Workspace) {
-  setWorkspace(ws);
+function switchTenant(tenant: Tenant) {
+  setTenant(tenant);
 }
 
 function switchLanguage(l: Locale) {
@@ -56,12 +58,14 @@ function startAuth(): void {
 async function doLogout() {
   if (loggingOut.value) return;
   loggingOut.value = true;
+  logoutError.value = '';
   try {
-    await logout();
-  } finally {
-    signOutLocally();
-    loggingOut.value = false;
+    await signOutAccount(getLocale());
     confirmingLogout.value = false;
+  } catch (error) {
+    logoutError.value = error instanceof ApiError ? messageText(error.messageKey) : t('common.unknownError');
+  } finally {
+    loggingOut.value = false;
   }
 }
 </script>
@@ -105,11 +109,12 @@ async function doLogout() {
         </span>
       </component>
 
-      <!-- 账号信息：手机号来自 LINE 不可改；邮箱凭验证码更换 -->
+      <!-- 账号信息：手机号可修改（空串即清空）；邮箱凭验证码更换 -->
       <div v-if="!guest" class="account-card">
         <div class="account-row">
           <span class="row-label">{{ t('profile.phone') }}</span>
-          <span class="account-value">{{ user?.phone || t('profile.phoneMissing') }}</span>
+          <span class="account-value" :class="{ muted: !user?.phone }">{{ user?.phone || t('profile.phoneNotSet') }}</span>
+          <button class="account-action" @click="changingPhone = true">{{ t('profile.changePhone') }}</button>
         </div>
         <div class="account-row">
           <span class="row-label">{{ t('profile.email') }}</span>
@@ -158,22 +163,22 @@ async function doLogout() {
 
         <!-- 身份切换：个人 + 已认证企业 -->
         <div class="identity-label">{{ t('my.identity') }}</div>
-        <button v-if="personalWorkspace" class="company-row clickable" :class="{ current: isCurrentWs(personalWorkspace) }" @click="switchWorkspace(personalWorkspace)">
+        <button v-if="personalTenant" class="company-row clickable" :class="{ current: isCurrentTenant(personalTenant) }" @click="switchTenant(personalTenant)">
           <span>{{ t('home.workspacePersonal') }}</span>
-          <svg v-if="isCurrentWs(personalWorkspace)" class="current-mark" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1F9E6B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <svg v-if="isCurrentTenant(personalTenant)" class="current-mark" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1F9E6B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
             <path d="M20 6L9 17l-5-5" />
           </svg>
         </button>
         <button
-          v-for="(ws, i) in enterpriseList"
-          :key="ws.enterprise_id ?? `${ws.enterprise_name}-${i}`"
+          v-for="tenant in enterpriseList"
+          :key="tenant.tenant_id"
           class="company-row clickable"
-          :class="{ current: isCurrentWs(ws) }"
-          @click="switchWorkspace(ws)"
+          :class="{ current: isCurrentTenant(tenant) }"
+          @click="switchTenant(tenant)"
         >
-          <span>{{ ws.enterprise_name }}</span>
-          <em>{{ ws.role }}</em>
-          <svg v-if="isCurrentWs(ws)" class="current-mark" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1F9E6B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <span>{{ tenant.name }}</span>
+          <em>{{ tenant.role }}</em>
+          <svg v-if="isCurrentTenant(tenant)" class="current-mark" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1F9E6B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
             <path d="M20 6L9 17l-5-5" />
           </svg>
         </button>
@@ -192,7 +197,9 @@ async function doLogout() {
 
     <EditProfileDialog v-if="editingProfile" @close="editingProfile = false" />
     <ChangeEmailDialog v-if="changingEmail" @close="changingEmail = false" />
+    <ChangePhoneDialog v-if="changingPhone" @close="changingPhone = false" />
     <FormDialog v-if="confirmingLogout" :title="t('my.logoutConfirmTitle')" :subtitle="t('my.logoutConfirmBody')">
+      <p v-if="logoutError" role="alert" style="color: var(--danger)">{{ logoutError }}</p>
       <div class="fd-actions" :class="{ 'logout-busy': loggingOut }">
         <button class="fd-btn secondary" :disabled="loggingOut" @click="confirmingLogout = false">{{ t('common.cancel') }}</button>
         <button class="fd-btn danger" :disabled="loggingOut" @click="doLogout">

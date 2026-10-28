@@ -41,6 +41,13 @@ async function start() {
     });
     navigate('processing', { jobId: job.id });
   } catch (e) {
+    // 402 PLAN_EXPIRED：订阅已过期，给出明确文案并引导到套餐页（沿用确认前的 plans 分流）
+    if (e instanceof ApiError && e.status === 402 && e.body.code === 'PLAN_EXPIRED') {
+      errorMsg.value = messageText(e.messageKey);
+      starting.value = false;
+      navigate('plans');
+      return;
+    }
     errorMsg.value = e instanceof ApiError ? messageText(e.messageKey) : t('common.unknownError');
     starting.value = false;
   }

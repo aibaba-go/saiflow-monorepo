@@ -2,7 +2,7 @@
 
 PRD §14.1：/api/v1/auth/line 是全系统唯一免登录白名单；
 但仍必须服务端验证 LINE ID token（签名/签发者/过期/渠道受众）。
-未配置 LINE 渠道时可用 AUTH_DEV_MODE=1 开启开发兜底（LINE 暂不可用期间生产临时开启，恢复 LINE 时必须关闭）。
+开发身份仅允许 APP_ENV=development 且 AUTH_DEV_MODE=true 的本地环境（Cloud Run 强制禁用）。
 """
 from __future__ import annotations
 
@@ -27,10 +27,10 @@ from auth import (
 )
 from errors import ApiError, invalid_argument, ok, service_unavailable
 from extensions import db
-from models import Session, User
-import quota
+from models import Session, Tenant, User
+import subscriptions
 import storage
-from workspace import list_workspaces
+from workspace import ensure_personal_tenant, list_tenants
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("auth", __name__)
@@ -45,7 +45,7 @@ def _issue_session_response(user: User, language: str | None = None):
     payload = {
         "user": user.to_dict(),
         "csrf_token": csrf,
-        "workspaces": list_workspaces(user),
+        "tenants": list_tenants(user),
     }
     resp = ok(payload)
     set_session_cookie(resp[0], token)
@@ -73,8 +73,12 @@ def _upsert_line_user(
     if user is None:
         user = User(line_provider=provider, line_sub=sub, language=language or "th")
         db.session.add(user)
-    elif language in ("th", "en"):
-        user.language = language
+    else:
+        # FR-SYS-014: registration may commit after the initial lookup. Lock and
+        # reload before testing registered_at so LINE cannot overwrite saved data.
+        db.session.refresh(user, with_for_update=True)
+        if language in ("th", "en"):
+            user.language = language
     if profile and user.registered_at is None:
         for field in ("display_name", "avatar_url", "email", "phone"):
             if profile.get(field):
@@ -82,6 +86,9 @@ def _upsert_line_user(
     if not user.display_name:
         user.display_name = sub
     db.session.flush()
+    # 新建用户立刻补个人租户：业务行只认 tenant_id，缺租户会导致后续上传无从归属。
+    # 这里只 flush 不 commit，避免提前释放 FR-SYS-014 的 SELECT ... FOR UPDATE 行锁。
+    ensure_personal_tenant(user)
     if profile and profile.get("avatar_png") and user.registered_at is None:
         try:
             avatars.save_bytes(user, profile["avatar_png"], "png")
@@ -127,8 +134,13 @@ def _guest_context() -> tuple[Session | None, User | None]:
     return None, None
 
 
-def _claim_guest_data(guest: User, user: User) -> str:
-    """把游客的全部数据归并到刚登录的真实账号并删除游客账号（同事务，未 commit）；返回待删头像对象。"""
+def _claim_guest_data(guest: User, user: User, tenant: Tenant) -> str:
+    """把游客的全部数据归并到刚登录的真实账号并删除游客账号（同事务，未 commit）；返回待删头像对象。
+
+    归属已统一到 tenant_id，所以除了按 user 迁移的创建人字段，还要把游客租户下的
+    业务行（File / OcrJob）改挂到目标用户的个人租户；游客租户自己的试用订阅与
+    到期提醒记录一并删除（正式账号有自己的订阅周期，不继承游客试用期）。
+    """
     from models import (
         Application,
         AuditEvent,
@@ -140,14 +152,17 @@ def _claim_guest_data(guest: User, user: User) -> str:
         Membership,
         Notification,
         OcrJob,
-        QuotaLedger,
+        PlanReminder,
         ResultVersion,
+        Subscription,
     )
 
     def move(model, column: str) -> int:
         return model.query.filter(getattr(model, column) == guest.id).update(
             {column: user.id}, synchronize_session=False
         )
+
+    guest_tenant = Tenant.query.filter_by(owner_user_id=guest.id).first()
 
     files = File.query.filter_by(created_by_user_id=guest.id).update(
         {"created_by_user_id": user.id, "uploader_user_id": user.id},
@@ -162,19 +177,30 @@ def _claim_guest_data(guest: User, user: User) -> str:
     move(Notification, "user_id")
     move(DataRequest, "user_id")
     move(AuditEvent, "user_id")
-    owned = db.session.query(Membership.enterprise_id).filter(Membership.user_id == user.id)
+    owned = db.session.query(Membership.tenant_id).filter(Membership.user_id == user.id)
     Membership.query.filter(
-        Membership.user_id == guest.id, Membership.enterprise_id.in_(owned)
+        Membership.user_id == guest.id, Membership.tenant_id.in_(owned)
     ).delete(synchronize_session=False)
     move(Membership, "user_id")
-    # 游客首登赠送作废，消耗/返还随任务转入真实账号，避免重复赠送
-    QuotaLedger.query.filter_by(grant_key=f"FIRST_LOGIN:U{guest.id}").delete(
-        synchronize_session=False
-    )
-    move(QuotaLedger, "user_id")
+    if guest_tenant is not None:
+        for model in (File, OcrJob):
+            model.query.filter(model.tenant_id == guest_tenant.id).update(
+                {"tenant_id": tenant.id}, synchronize_session=False
+            )
+        # 游客试用订阅与其提醒记录随租户作废（正式账号按自己的周期计算有效期）
+        Subscription.query.filter_by(tenant_id=guest_tenant.id).delete(synchronize_session=False)
+        PlanReminder.query.filter_by(tenant_id=guest_tenant.id).delete(synchronize_session=False)
+        # 个人套餐申请原本指向游客租户（NOT NULL FK），必须先改指向再删租户
+        Application.query.filter(Application.target_tenant_id == guest_tenant.id).update(
+            {"target_tenant_id": tenant.id}, synchronize_session=False
+        )
     EmailVerificationCode.query.filter_by(user_id=guest.id).delete(synchronize_session=False)
     Session.query.filter_by(user_id=guest.id).delete(synchronize_session=False)
     avatar_path = guest.avatar_path
+    if guest_tenant is not None:
+        # tenants.owner_user_id → users.id，先删租户再删用户，顺序反了会 FK 失败
+        db.session.delete(guest_tenant)
+        db.session.flush()
     db.session.delete(guest)
     db.session.add(
         AuditEvent(
@@ -194,12 +220,14 @@ def _finish_login(
     guest_session: Session | None = None,
     guest_user: User | None = None,
 ):
+    # 老账号可能建于租户改造之前，这里做一次幂等补偿，保证登录后一定有个人租户
+    tenant = ensure_personal_tenant(user)
     if guest_session is not None and guest_user is not None and guest_user.id != user.id:
-        guest_avatar = _claim_guest_data(guest_user, user)
+        guest_avatar = _claim_guest_data(guest_user, user, tenant)
         db.session.commit()
         storage.delete(guest_avatar)
     resp = _issue_session_response(user, language)
-    quota.ensure_user_bonus(user.id)  # 首登赠 1,000 次（幂等，失败不阻断登录）
+    subscriptions.ensure_subscription(tenant, commit=True)  # 默认开通 Kinder 一个月（幂等）
     return resp
 
 
@@ -246,16 +274,20 @@ def _verify_line_id_token(id_token: str) -> dict:
 def auth_line():
     """LINE ID token 换取 saiflow 会话（唯一匿名白名单接口）。"""
     body = request.get_json(silent=True) or {}
+    dev_mode = current_app.config.get("AUTH_DEV_MODE", False)
+    # FR-SYS-001：生产拒绝任何 dev_id（即使同时有 token），且不得先读写游客会话。
+    if "dev_id" in body and not dev_mode:
+        raise invalid_argument("auth.id_token_required")
     id_token = (body.get("id_token") or "").strip()
     language = body.get("language") if body.get("language") in ("th", "en") else None
-    guest_session, guest_user = _guest_context()
 
     if not id_token:
-        # 开发兜底：未配置 LINE 渠道时允许 dev_id 建立开发身份（生产禁用）
+        # 本地开发身份：先校验输入，再读取游客上下文或创建用户。
         dev_id = (body.get("dev_id") or "").strip()
-        if dev_id and current_app.config["AUTH_DEV_MODE"]:
+        if dev_id and dev_mode:
             if len(dev_id) > 64:
                 raise invalid_argument("error.invalid_argument")
+            guest_session, guest_user = _guest_context()
             sub = f"dev:{dev_id}"
             is_new = User.query.filter_by(line_provider="line", line_sub=sub).first() is None
             user = _upsert_line_user("line", sub, _dev_line_profile() if is_new else None, language)
@@ -263,6 +295,7 @@ def auth_line():
         raise invalid_argument("auth.id_token_required")
 
     claims = _verify_line_id_token(id_token)
+    guest_session, guest_user = _guest_context()
     user = _upsert_line_user(
         "line",
         str(claims.get("sub")),
@@ -289,7 +322,7 @@ def auth_guest():
             {
                 "user": existing.to_dict(),
                 "csrf_token": _rotate_csrf(session),
-                "workspaces": list_workspaces(existing),
+                "tenants": list_tenants(existing),
             }
         )
 
@@ -303,8 +336,10 @@ def auth_guest():
     )
     db.session.add(guest)
     db.session.flush()
+    # 游客同样是一个个人租户：试用期的文件/任务也必须有 tenant_id 归属
+    tenant = ensure_personal_tenant(guest)
     resp = _issue_session_response(guest, language)
-    quota.ensure_user_bonus(guest.id)
+    subscriptions.ensure_subscription(tenant, commit=True)  # 游客试用同样是 Kinder 一个月
     return resp
 
 
@@ -318,7 +353,7 @@ def auth_session():
         {
             "user": user.to_dict(),
             "csrf_token": csrf,
-            "workspaces": list_workspaces(user),
+            "tenants": list_tenants(user),
             "issued_at": session.issued_at.isoformat() if session.issued_at else None,
             "absolute_expires_at": (
                 session.absolute_expires_at.isoformat() if session.absolute_expires_at else None

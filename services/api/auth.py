@@ -64,6 +64,9 @@ def resolve_session() -> tuple[Session | None, User | None, str | None]:
     user = db.session.get(User, session.user_id)
     if user is None or user.status != "ACTIVE":
         return session, None, "ACCOUNT_DISABLED"
+    # FR-SYS-001：旧开发 Cookie 在非开发模式下失效，不续期或删除账户数据。
+    if user.line_sub.startswith("dev:") and not current_app.config.get("AUTH_DEV_MODE", False):
+        return session, None, "AUTH_REQUIRED"
     # 空闲续期
     session.touch(current_app.config["SESSION_IDLE_TTL_SECONDS"])
     db.session.commit()
