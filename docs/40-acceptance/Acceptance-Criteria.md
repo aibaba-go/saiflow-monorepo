@@ -3,8 +3,8 @@ doc_id: AC-000
 title: "SaiFlow — 汇总验收标准（V1.0 / P0）"
 type: acceptance
 status: active
-version: 1.8.15
-updated: 2026-10-20
+version: 1.8.21
+updated: 2026-10-28
 owner: QA
 verified_requirements: [FR-UPLOAD, FR-OCR, FR-VERIFY, FR-ENTRY, FR-MGMT, FR-SYS, FR-TEMPLATE]
 ---
@@ -276,11 +276,12 @@ Feature: FR-VERIFY Human-in-the-loop
     Then 页面恢复为当前结果版本的结构与原值，空卡片等临时状态一并清除
     And 未做任何改动时 Reset 按钮不可用；结果已确认锁定时不显示 Reset 按钮
 
-  Scenario: AC-FR-VERIFY-016-01 已注册付费用户显式确认
-    Given 用户已登录并完成注册，任务所属工作空间订阅为 ACTIVE，且所有必填字段均有效
-    When 用户在 LINE Mini App 结果页点击 "Continue"
-    Then 客户端先检查认证、注册完成状态与该任务工作空间订阅，再提交 confirm: true
-    And 确认成功后结果被锁定、记录 completed_at，任务为 COMPLETED 并进入最终结果页
+  Scenario: AC-FR-VERIFY-016-01 已注册且订阅 ACTIVE 的用户显式确认
+    Given 用户已登录并完成注册，任务所属租户订阅为 ACTIVE（默认 Kinder 或已批档位均可），且必填字段有效
+    When 用户在 LINE Mini App 结果页显式点击 "Continue"
+    Then 客户端检查认证、注册与该租户订阅状态，再提交 confirm:true，独立 pending 不拦确认
+    And 服务端强制已注册，注册门禁的无写入副作用见 AC-FR-SYS-011-02
+    And 确认成功后才锁定、记录 completed_at，任务为 COMPLETED 并进入最终结果页
 
   Scenario: AC-FR-VERIFY-016-02 游客确认前重定向与草稿保存
     Given 用户处于游客会话，任务为 VERIFYING，且有未保存的结构化编辑
@@ -295,18 +296,19 @@ Feature: FR-VERIFY Human-in-the-loop
     Given 用户的任务分别处于 OCR 识别中、OCR 失败、OCR 识别成功未确认
     When 用户打开历史页
     Then 各任务分别显示 "OCR 处理中"、"OCR 处理失败"、"数据验证中"
-    Given 用户为游客、未完成注册者，或任务工作空间为 Free/NONE、无已开通付费套餐的 PENDING，且任务为 VERIFYING
+    Given 用户为游客、未注册者，或任务所属租户订阅为 NONE（企业未认证）/EXPIRED，且任务为 VERIFYING
     When 用户在结果页点击 "Continue"
-    Then 不提交确认，任务仍为 "数据验证中"，completed_at 为空
-    When 用户随后完成登录/注册、游客数据归集或套餐开通
-    Then 任务不自动变为 "最终完成"
-    Given 已注册且任务工作空间订阅 ACTIVE 的用户在结果页显式继续并确认成功
-    Then 该任务直接显示 "最终完成"
-    Given 一个历史 "数据已验证" 的任务，completed_at 为空，用户未完成注册或该任务工作空间未开通付费套餐
+    Then 游客/未注册者到 auth，订阅 NONE/EXPIRED 仅在已注册用户显式 Continue 时到 plans/plan-pending
+    And 不提交确认，任务仍为 "数据验证中"，completed_at 为空
+    When 用户随后完成登录/注册、游客数据归集或套餐续期
+    Then 未完成任务仅回 result，不自动变为 "最终完成"
+    Given 已注册且任务所属租户订阅 ACTIVE 的用户显式 Continue 并确认成功
+    Then 该任务显示 "最终完成"，pending 不拦已有权益
+    Given 历史 "数据已验证" 任务 completed_at 为空，用户未注册或任务所属租户订阅为 NONE/EXPIRED
     When 用户点击 "Continue"
-    Then 按认证与订阅检查进入 auth、plans 或 plan-pending，不提交确认，任务仍为 VERIFIED
-    Given 该历史任务由已注册且任务工作空间订阅 ACTIVE 的用户在结果页显式点击 "继续"
-    Then 确认成功后记录 completed_at，任务变为 "最终完成"，不批量转换其他历史任务
+    Then 未注册到 auth，NONE/EXPIRED 到 plans/plan-pending，不确认且保留 VERIFIED
+    Given 该历史任务由已注册且任务所属租户订阅 ACTIVE（含默认 Kinder）的用户显式点击 "继续"
+    Then 成功后记录 completed_at 并显示 "最终完成"，不批量转换其他历史任务
 
   Scenario: AC-FR-VERIFY-017-02 按阶段筛选
     Given 用户位于历史页
@@ -315,7 +317,7 @@ Feature: FR-VERIFY Human-in-the-loop
     And 筛选项始终包含 "数据已验证"
 
   Scenario: AC-FR-VERIFY-017-03 历史分页加载
-    Given 用户当前工作空间有 45 条任务
+    Given 用户当前租户下有 45 条任务
     When 用户打开历史页
     Then 首次仅显示最新的 20 条任务，且所有筛选项完整可见
     When 用户将列表滚动至底部
@@ -399,27 +401,92 @@ Feature: FR-MGMT 分类与预览
 
 ## 6. EPIC-06 — 基础系统
 
+> 以下“开发环境”仅指 FR-SYS-001 明确启用的本地开发。2026-10-27 启动/认证、退出防复登、仅结果 Continue 触发 auth/注册、续接取消与服务端注册门禁已真实实现并正式发布。本轮 334 项隔离后端回归、最终生产构建 `index-BUTDgRGj.js` 的 21 项全 mock 浏览器场景、6 项 OAuth 源码模块模拟与 9 项前端会话边界测试均通过，类型检查、Vite 构建及 OpenAPI 内部引用校验通过。正式发布、生产只读核验及单次日志审查（非长期保证）引用 [Architecture §5](../30-design/Architecture.md#5-部署模型) / [§6](../30-design/Architecture.md#6-安全性与可靠性) 本轮记录。
+>
+> 2026-10-28 的租户归属（`tenants`/`enterprises.tenant_id`）、`subscriptions` 默认一个月 Kinder 与到期硬停、`plan_reminders` 到期提醒、通知中心标记已读与手机号可改，是对后端已实现代码的契约同步：本次文档更新**未运行任何测试**，上一段 334/21/6/9 的通过记录属于 2026-10-27 的历史证据，不覆盖本轮新增行为。原“默认 Kinder 由 `registered_at` 动态推导、无新增 schema”的说明已作废——权益改由 `subscriptions` 持久化行表达，并新增 `tenants`/`subscriptions`/`plan_reminders` 三张表、删除 `quota_ledger`。
+>
+> 隔离测试从未连接数据库、真实 LINE 或 SMTP，也未创建生产账户记录；本轮未发送真实测试邮件，SMTP 模块与 Secret Manager 版本引用未改变，Cloud SQL `postgres.saiflow` 不变。历史 221 项隔离后端、5 项模拟浏览器及本地/Cloud Run SMTP 自测接收证据仍保留，明确不是本轮证据。认证环境、email、TLS SMTP、资料锁后重读与换邮箱规则不变；手机号只读的旧约束已作废（见 AC-FR-SYS-015-02）。不宣称真实 LINE OAuth/完整注册、收件箱、真实数据库并发、验证码防猜码或到期提醒邮件实际投递已验证。下列代表性/汇总 AC 与 EPIC-06 同步，隔离通过与发布不等于真实用户全流程已验收。
+
 ```gherkin
 Feature: FR-SYS 身份与配置
 
   Scenario: AC-FR-SYS-001-01 登录成功
-    Given 有效凭据
+    Given 已注册且具有有效凭据的用户
     When 用户登录
-    Then 创建带有用户角色权限的会话
+    Then 系统 SHALL 创建会话并授予该用户的角色权限
 
   Scenario: AC-FR-SYS-001-02 登录失败
     Given 无效凭据
     When 用户登录
     Then 拒绝访问并记录该次尝试
 
-  Scenario: AC-FR-SYS-001-03 登出需确认
+  Scenario: AC-FR-SYS-001-03 退出确认、超时与刷新防复登
     Given 已登录用户在个人中心
-    When 用户点击 "Sign out"
-    Then 系统弹出登出确认框
-    When 用户点击取消
-    Then 确认框关闭，用户仍保持登录
-    When 用户再次点击 "Sign out" 并在确认框中确认
-    Then 会话被撤销并回到登录页
+    When 用户点击 "Sign out" 后取消确认
+    Then 用户保持登录，不写 logout-pending、不撤销会话
+    When 用户再次点击 "Sign out" 并确认
+    Then 先在 localStorage 写非凭据 logout-pending，再以 10 秒超时的请求撤销旧应用 Cookie/会话
+    And 清身份、当前租户、CSRF 与待续意图，最佳努力清 LIFF SDK 状态
+    When 撤销成功
+    Then 清标记、建立游客会话并返回游客 scan 首页，不停留在旧 My 页，不因残留 LIFF token 静默复登
+    Given 撤销失败或达到 10 秒超时，浏览器可能仍有正式 Cookie
+    Then 保留标记、锁定主壳并提示重试，不复用正式 Cookie 或旧身份
+    When 用户点击 "Back" 重试或刷新页面
+    Then 先 session CSRF-only 仅取得撤销所需 CSRF，不恢复旧身份，再 logout 撤销旧会话，成功后才 guest 建立游客会话
+    And 成功后清标记并返回游客 scan 首页，不停留在旧 My 页；成功前主壳保持锁定，全程不自动 LINE 兑换
+
+  Scenario: AC-FR-SYS-001-04 生产无开发入口且 LINE 按钮仅走真实认证
+    Given 前端为生产构建（import.meta.env.DEV=false），包括 VITE_AUTO_DEV_LOGIN=true 的误配置
+    When 用户打开登录或注册页
+    Then 不显示 Developer sign-in 或其他开发身份入口
+    Given 任一环境，包括已明确启用开发入口的本地环境
+    When 用户点击 "Login/Register with LINE"
+    Then 仅进入真实 LINE OAuth/LIFF 流程，不发送 dev_id、不生成模拟 LINE 身份
+
+  Scenario: AC-FR-SYS-001-05 生产拒绝 dev 请求与旧会话且不回退
+    Given 后端为生产环境，包括 APP_ENV/AUTH_DEV_MODE 均未配置的默认情况
+    When 向认证接口提交 dev_id，分别不带 id_token 和同时携带有效 LINE id_token
+    Then 在任何数据库访问前返回 400 INVALID_ARGUMENT，消息键 auth.id_token_required
+    And 不创建用户、会话、配额或业务数据，不触发游客数据归集
+    Given 生产环境中保留了旧 dev: 身份及其未过期、未撤销的会话
+    When 使用该旧会话访问鉴权 API
+    Then 会话视为无效，拒绝访问，历史用户及业务数据保留，不批量清理或迁移
+    Given 用户通过真实 LINE 流程取得 id_token
+    When 服务端处理 LINE 认证
+    Then 服务端验证 issuer（iss）、audience（aud，匹配配置的 LINE Channel ID）和 expiry（exp）
+    And 验证失败、LINE 不可用或配置缺失时拒绝认证，不回退至 dev 登录
+    And 认证失败不创建用户、会话、配额或业务数据，不触发游客数据归集
+
+  Scenario: AC-FR-SYS-001-06 本地显式启用可开发登录且生产开关不能绕过
+    Given 本地前端 import.meta.env.DEV=true 且 VITE_AUTO_DEV_LOGIN=true
+    And 本地后端 APP_ENV=development 且显式 AUTH_DEV_MODE=true，未检测到 K_SERVICE
+    When 用户通过独立 Developer sign-in 提交 dev_id
+    Then 允许开发身份登录，注册框仍仅在 auth 且 needsRegistration 时显示，不在主壳强制注册
+    And 本地旧 dev: 身份及未过期、未撤销的旧会话仍可使用
+    Given 本地前端 VITE_AUTO_DEV_LOGIN 未配置或不为 true
+    When 用户打开登录或注册页
+    Then 不显示开发身份入口，LINE 按钮仍仅走真实 OAuth/LIFF
+    Given 后端仅设置 AUTH_DEV_MODE=true，但 APP_ENV 未配置、为 production 或其他非 development 值
+    When 向认证接口提交 dev_id（包括同时携带有效 LINE id_token）
+    Then 在任何数据库访问前返回 400 INVALID_ARGUMENT，消息键 auth.id_token_required，不创建用户、会话、配额或业务数据
+    Given APP_ENV=development 但 AUTH_DEV_MODE 未配置或为 false，或两个开发开关均开启但检测到 Cloud Run K_SERVICE
+    When 向认证接口提交 dev_id（包括同时携带有效 LINE id_token）
+    Then 同样在任何数据库访问前拒绝认证（400 INVALID_ARGUMENT，auth.id_token_required），不创建用户、会话、配额或业务数据
+
+  Scenario: AC-FR-SYS-001-07 LIFF 初始化有界恢复与取消
+    Given 生产 LIFF 初始化失败、SDK 会话读取失败或等待达到 20 秒
+    Then 不自动跳转，不兑换身份，不修改扫描结果，不暴露原始异常或凭据
+    When 用户显式点击 LINE 登录按钮且同一 sessionStorage 上下文尚未重开
+    Then 仅重开无查询参数的官方 LIFF 入口一次，重开前保留非凭据登录意图和待续任务
+    Given 同一上下文重开后仍失败，或存储不可用，或 LIFF 未配置
+    Then 停止跳转并提示重试或从 LINE 重新打开，不回退开发身份
+    Given 用户点击登录后在 SDK 完成前返回或登录页卸载
+    When SDK 迟到成功、失败或超时
+    Then 不兑换身份，不跳 OAuth 或官方恢复入口，不自动导航或确认任务
+    And SDK 超时后的迟到成功不能复活初始化缓存
+    Given 初始化成功且用户没有取消
+    Then 清重开标记，沿用 SDK token 验真或原有 OAuth，不自动确认任务
+    And 真实手机重开时的 WebView 与存储连续性须另行验证，桌面模拟不算通过证据
 
   Scenario: AC-FR-SYS-002-01 权限强制执行
     Given 角色为 "viewer" 的用户
@@ -433,118 +500,278 @@ Feature: FR-SYS 身份与配置
 
   Scenario: AC-FR-SYS-004-01 语言切换
     Given UI 当前为泰语
-    When 用户切换为英语
-    Then 所有标签更新，且无需重启应用
+    When 用户将语言切换为英语
+    Then 所有 UI 标签更新为英语，且无需重启应用
 
   Scenario: AC-FR-SYS-009-01 配置复核权限
     Given 管理员正在编辑角色 "reviewer"
     When 管理员授予 review 权限并保存
     Then 该角色用户可执行待复核数据的复核决定
 
-  Scenario: AC-FR-SYS-010-01 游客试用
-    Given 匿名访客首次进入应用
-    When 访客上传文档并完成识别与核验
-    Then 访客仅能访问自己的任务与结果，且不获得管理、报表或配置权限
+  Scenario: AC-FR-SYS-010-01 Cookie 或游客启动，不隐式 LINE 登录或强制注册
+    Given 浏览器存在残留 LIFF token，但没有显式 LINE 登录意图或对应 OAuth 回跳
+    When 启动应用
+    Then 仅恢复有效应用 Cookie 或创建游客会话进入主壳，不自动兑换残留 token
+    And 已认证未注册者也可进入主壳，首页、上传与开始 OCR 不弹登录/注册框
+    When 游客上传、识别并编辑核验草稿
+    Then 仅能访问自己的任务与结果，不获得管理、报表或配置权限
+    Given 用户显式点击 LINE 按钮或返回该次 OAuth 授权
+    Then 才可兑换真实 token，不以 SDK 登录态冒充应用登录
+    Given 运行中试用界面返回 401
+    Then 清理失效应用身份并恢复游客首页，不自动 LINE
+    Given auth 窗口中的请求返回 401
+    Then 保留可重试认证入口，不自动 LINE
 
   Scenario: AC-FR-SYS-010-02 游客数据归集
     Given 游客已完成上传与识别
     When 游客登录或注册为正式用户
-    Then 其文档、任务、结果版本、导出记录与配额消耗流水归集至该正式用户
-    And 游客账户及其会话被删除，游客的首登赠送不叠加到正式用户
+    Then 其文档、任务、结果版本与导出记录按 tenant_id 归集至该正式用户的个人租户
+    And 游客账户、会话、游客租户上的订阅行与到期提醒记录被删除，游客提交过的申请改指向正式用户的个人租户
 
-  Scenario: AC-FR-SYS-011-01 确认前登录或注册与任务恢复
-    Given 用户为游客或尚未完成注册信息录入，任务尚未最终完成
-    When 用户在 LINE Mini App 结果页点击 "Continue"
-    Then 在提交确认前进入 auth，用户可登录或注册，不提交 confirm: true
-    When 用户完成登录或注册，系统归集游客数据并读取该任务工作空间的订阅
-    Then NONE 进入 plans，PENDING 且无已开通付费套餐进入 plan-pending
-    And ACTIVE 返回该未完成任务的结果页（result）等待用户显式继续，不自动确认或进入最终结果页
-    Given 恢复的任务已为 COMPLETED 且该任务工作空间订阅 ACTIVE
-    Then 可直接进入最终结果页
+  Scenario: AC-FR-SYS-011-01 仅结果 Continue 触发 auth，续接取消与异常
+    Given 用户为游客或已认证未注册，任务尚未最终完成
+    When 用户在结果核验页点击 "Continue"
+    Then 仅 dirty 时先 PATCH confirm:false 保存，无变更不保存，随后进入 auth，不跳 plans、不提交 confirm:true
+    And 仅 route=auth 且 needsRegistration 显示注册框，已认证未注册者直接弹注册
+    And pendingAuth 与 pendingJob 分开，sessionStorage 只存非凭据上下文，不存 token、Cookie 或 CSRF
+    When 认证成功但仍需注册
+    Then 保留 pendingJob 供注册，不提前清任务上下文
+    When 完成注册且导航成功
+    Then 重新读取任务，未完成仅回 result、原已 COMPLETED 可 final，之后才清 pendingJob，不自动 confirm 或跳订阅页
+    Given 保存、认证、注册或恢复发生异常
+    Then 保留可重试上下文，保存失败不重定向，不误跳 plans
+    Given 登录/注册已打开且游客任务可能已归集
+    When 用户取消登录或注册
+    Then 清显式 pendingAuth 与 pendingJob 续接标记，回原 result，保留已归集任务权限和 LINE/应用会话
+    And pendingJob 仅供手动续接，不自动恢复或确认
 
-  Scenario: AC-FR-SYS-012-01 Free/NONE 确认前提交套餐升级申请
-    Given 用户已登录并完成注册，未确认任务所属工作空间为 Free/NONE 且没有套餐升级申请，即使其他工作空间已开通付费套餐
-    When 用户在结果页点击 "Continue"
-    Then 不提交 confirm: true，进入订阅计划检查页（plans），默认选中 `Kinder`，按钮显示 "Upgrade to Kinder"
-    And 重定向前仅有未保存变更时以 PATCH confirm: false 保存，无变更不保存；结果不锁定、任务保持 VERIFYING、completed_at 为空
-    When 用户选择套餐并点击按钮，在套餐升级确认框中确认申请
-    Then 系统创建状态为 SUBMITTED 的 PLAN_UPGRADE 申请，并提示“您的申请已经收到，我们会尽快联系您”
-    And 用户确认提示后返回首页，任务仍未确认且未最终完成
+  Scenario: AC-FR-SYS-011-02 服务端确认注册门禁无写入副作用
+    Given 请求者分别为 guest 和已认证但 registered_at 为空的用户，具有自己的试用任务
+    When 直接提交 confirm:true，包括携带结构化改动或针对 legacy VERIFIED
+    Then guest 返回 401，未注册返回 403 PERMISSION_DENIED / registration.required
+    And 在写结果版本、切换 is_current 或写完成状态前拒绝，版本与 completed_at 不变
+    When 提交有效 confirm:false 草稿
+    Then 仍可按原任务权限保存，不要求注册、不锁定或完成任务
 
-  Scenario: AC-FR-SYS-012-02 无已开通付费套餐的 PENDING
-    Given 用户已登录并完成注册，未确认任务所属工作空间无已开通付费套餐且存在处理中的套餐升级申请（PENDING）
-    When 用户在结果页点击 "Continue"
-    Then 不提交 confirm: true，直接进入“套餐升级处理中”页（plan-pending），显示申请套餐与提交时间
-    And 重定向前仅有未保存变更时以 PATCH confirm: false 保存，无变更不保存；结果不锁定、任务保持 VERIFYING、completed_at 为空
+  Scenario: AC-FR-SYS-012-01 个人与游客租户默认开通一个月 Kinder
+    Given 用户首次 LINE 登录或匿名访客首次进入应用
+    When 服务端建立其个人租户
+    Then 订阅为 ACTIVE / KINDER / source=DEFAULT / application_id=null，starts_at 等于 tenants.created_at
+    And expires_at 为 starts_at 往后一个自然月，days_remaining 按泰国时区日历日计算
+    When 同一用户重复登录
+    Then 订阅行不被重置或重复创建（tenant_id 唯一），starts_at 与 expires_at 保持不变
+    And 已注册用户在结果页显式 Continue 并通过核验时允许 confirm:true，成功才锁定、记录 completed_at 并进 final
 
-  Scenario: AC-FR-SYS-012-03 ACTIVE 显式确认与套餐可用性恢复
-    Given 用户已登录并完成注册，任务所属工作空间存在 APPROVED 的付费套餐申请（ACTIVE），包括另有更高档升级申请处理中的情况
-    When 用户在结果页点击 "Continue" 且通过核验校验
-    Then 先检查认证与该任务工作空间订阅，再提交 confirm: true
-    And 仅确认成功后锁定结果、记录 completed_at 并进入最终结果页
-    Given 因订阅检查中断的任务尚为 VERIFYING 或历史 VERIFIED
-    When 该任务工作空间套餐开通或可用性恢复为 ACTIVE，用户恢复该任务
-    Then 返回结果页（result）等待用户显式继续，不自动提交确认或进入最终结果页
-    When 用户在结果页再次显式继续并确认成功
-    Then 任务变为 COMPLETED 并进入最终结果页
-    Given 恢复的任务已经 COMPLETED 且其工作空间订阅 ACTIVE
-    Then 可直接进入最终结果页，无需再次确认
+  Scenario: AC-FR-SYS-012-02 企业自认证时起算，未认证为 NONE
+    Given 某企业提交认证但尚未通过，用户是其成员
+    When 读取该企业租户的订阅
+    Then status=NONE，plan_code / starts_at / expires_at / days_remaining 均为 null
+    When 该企业租户下新建识别任务
+    Then 返回 402 PAYMENT_REQUIRED / PLAN_EXPIRED / plan.expired
+    When 运营将企业状态改为 VERIFIED，服务端首次读到该状态
+    Then 补填 enterprises.verified_at，并自该时刻起开通一个月 KINDER（source=DEFAULT）
+    And 该企业全体 ACTIVE 成员共享同一订阅与月页额度
+    When 用户在结果页对无订阅的企业任务显式 Continue
+    Then 不提交 confirm:true，进入 plans（默认选择 Kinder）或已有处理中申请时进入 plan-pending，仅 dirty 时先 confirm:false 保存
 
-  Scenario: AC-FR-SYS-013-01 已开通套餐的展示
-    Given 用户的 Starter 升级申请已被后台批准
-    When 用户打开首页或套餐页
-    Then 首页横幅与当前套餐卡显示 "Starter"，套餐页将 Starter 标记为当前套餐
-    And 首页横幅与当前套餐卡按套餐每月页数显示 "5,000 / 5,000 pages left this month"（随本月已识别页数递减），不含 "free" 描述与 Sign-in bonus 角标；未开通套餐时保留 "free scans left"
-    And 本月剩余页数为 0 时创建 OCR 任务被拒绝（quota_exceeded），且不消耗免费任务
+  Scenario: AC-FR-SYS-012-03 到期硬停但历史可读
+    Given 某租户订阅的 expires_at 已过
+    When 读取订阅
+    Then status=EXPIRED，days_remaining 为负数
+    When 在该租户下新建或重跑识别任务
+    Then 返回 402 PLAN_EXPIRED / plan.expired，不创建任务
+    When 查看历史任务列表、任务详情、结果版本或已有导出
+    Then 均正常返回，不受到期影响
+    Given 恢复任务为 VERIFYING 或 legacy VERIFIED 且租户订阅为 ACTIVE
+    Then 返回 result 等待用户显式确认，不自动确认或批量转换 legacy VERIFIED；原已 COMPLETED 可直接 final
 
-  Scenario: AC-FR-SYS-013-02 升级至更高档套餐
-    Given 用户当前套餐为 Starter 且没有处理中的申请
+  Scenario: AC-FR-SYS-012-04 线下批准续期、顺延与一次性生效
+    Given 某租户订阅为 ACTIVE 且 expires_at 在未来，已提交 PLAN_UPGRADE 申请
+    When 运营批准该申请但未填 valid_from，仅填 period_months 或 valid_to
+    Then 下次读取订阅时惰性同步为 source=APPROVED、application_id 为该申请
+    And 新周期自当前 expires_at 起算（未到期顺延，不截断当前周期）
+    When 再次读取订阅
+    Then 同一申请不再重复延期（application_id 相同即跳过）
+    Given 某租户订阅已 EXPIRED
+    When 运营批准其申请
+    Then 新周期自批准时的当前时间起算
+
+  Scenario: AC-FR-SYS-012-05 月末夹取与申请档位约束
+    Given 某租户的 starts_at 为 2026-01-31
+    When 计算一个月后的 expires_at
+    Then 结果为 2026-02-28（按目标月实际天数夹取），不溢出到 3 月
+    Given 某租户订阅为 ACTIVE 且当前档位为 Starter
+    When 提交目标档位为 Kinder 的申请
+    Then 返回 409 STATE_CONFLICT / plan.not_upgrade
+    When 提交目标档位为 Starter（同档续费）或更高档的申请
+    Then 允许提交
+    Given 某租户订阅为 EXPIRED 或 NONE
+    When 提交任意档位的申请
+    Then 允许提交
+    Given 该租户已有处理中（SUBMITTED/UNDER_REVIEW/NEEDS_INFO）申请
+    When 再次提交申请
+    Then 返回 409 STATE_CONFLICT / plan.application_pending
+    Given 请求者为企业租户的 MEMBER
+    Then 服务端拒绝提交（403 PERMISSION_DENIED / plan.enterprise_owner_only）
+    Given 请求者为游客会话
+    Then 返回 401
+
+  Scenario: AC-FR-SYS-013-01 已批套餐的展示与月页校验
+    Given 用户的 Starter 升级申请已被后台批准且订阅为 ACTIVE
+    When 用户打开该租户的首页或套餐页
+    Then 当前套餐为 Starter，source=APPROVED、is_paid=true、metering=OCR_PAGE
+    And 本月无用量时显示 "5,000 / 5,000 pages left this month"，不显示 free 或 Sign-in bonus
+    And 页数按泰国自然月实时统计该租户 ocr_jobs.page_count，FAILED 与 CANCELLED 的任务不计
+    And 剩余月页额为 0 时创建 OCR 返回 402 QUOTA_EXCEEDED / quota.exceeded
+
+  Scenario: AC-FR-SYS-013-02 申请更高档套餐
+    Given 用户当前套餐为 Starter、订阅 ACTIVE 且没有处理中的申请
     When 用户在套餐页点击 Intermediate 的 "Upgrade"
     Then 系统弹出确认框显示目标套餐 Intermediate；点击取消则不创建申请
     When 用户在确认框中点击确认
-    Then 系统创建 PLAN_UPGRADE 申请并提示“您的申请已经收到，我们会尽快联系您”，确认后返回首页
+    Then 系统创建 PLAN_UPGRADE 申请（target_tenant_id 为当前租户）并提示“您的申请已经收到，我们会尽快联系您”，确认后返回首页
     And 再次打开套餐页时页面顶部显示醒目的处理中卡片（含目标套餐与提交时间），Intermediate 卡片带 "IN REVIEW" 角标并显示 "Upgrade in progress"，其他升级按钮不可用
-    And 申请 Kinder 或 Starter 被拒绝（plan.not_upgrade）
+    And 申请 Kinder 被拒绝（plan.not_upgrade），申请 Starter（同档续费）被允许
 
   Scenario: AC-FR-SYS-013-03 游客不显示套餐横幅
     Given 未登录的游客
     When 打开首页
     Then 不显示套餐与免费额度横幅
 
-  Scenario: AC-FR-SYS-013-04 注册后为免费版
-    Given 刚完成注册且没有已批准套餐升级申请的用户
-    When 用户打开首页或套餐页
-    Then 首页横幅显示 "Free · 1000 / 1000 free scans left"，套餐页当前套餐卡显示 "Free" 与 Sign-in bonus 角标
-    And 套餐目录中 Kinder 不标记为当前套餐，Kinder、Starter、Intermediate、Advance 均显示 "Upgrade"
-    And 申请 Kinder 被接受（不返回 plan.not_upgrade）
+  Scenario: AC-FR-SYS-013-04 只有 OCR_PAGE 一种计量，没有 FREE 与赠送
+    Given 任意租户（个人、游客或已认证企业）订阅为 ACTIVE 且本月无用量
+    When 打开首页或套餐页
+    Then plan.metering 恒为 OCR_PAGE，plan.code 不会是 FREE
+    And 默认 Kinder 显示 "Kinder · 1,000 / 1,000 pages left this month"，不显示 Free 或 Sign-in bonus
+    And 响应中不包含 free_tasks、paid_pages、free_unit 或 paid_unit 字段
+    When 成功识别 2 页
+    Then 本月剩余页数减少 2，不存在任何赠送次数或额度流水可供回退
+    When 取消一个任务
+    Then 该任务不计入本月消耗，且没有额度返还步骤
+    When 进入下一个 Asia/Bangkok 自然月且没有当月用量
+    Then 月可用额恢复为该档位的每月页数（Kinder 1,000 / Starter 5,000 / Intermediate 10,000 / Advance 100,000）
+    Given 租户订阅为 EXPIRED 或 NONE
+    Then 剩余页数按 0 展示，新建任务按 plan.expired 拒绝（先于 quota.exceeded 判定）
 
-  Scenario: AC-FR-SYS-014-01 LINE 注册信息录入
-    Given 一个尚未注册的 LINE 账号完成 LINE 认证
-    Then 系统弹出注册信息框，手机号预填且只读，邮箱、昵称与头像预填且可修改，并提供验证码输入框
-    When 用户修改邮箱、昵称或头像，向该邮箱发送验证码并输入验证码后点击注册
-    Then 系统完成注册，保存修改后的邮箱、昵称与头像，并继续进入应用
+  Scenario: AC-FR-SYS-018-01 到期提醒按节点幂等且不回补
+    Given 某已注册用户的个人租户订阅将在 7 天后到期，当天尚未发送提醒
+    When OCR worker 进程执行当日的到期提醒扫描
+    Then 写入一条 (tenant_id, period_end, stage=D7) 的 plan_reminders 记录
+    And 生成一条 PLAN_EXPIRING 站内通知，并在该用户有邮箱且已完成注册时尝试发送邮件
+    When 同一泰国日历日再次扫描
+    Then 因 (tenant_id, period_end, stage) 唯一约束不重复发送
+    Given 当日距到期为 5 天（非 D7/D3/D1/D0 节点）且此前未发送过 D7
+    When 执行扫描
+    Then 不发送任何提醒，也不回补已错过的 D7
+    Given 到期当天与到期之后
+    Then 分别发送 stage=D0 的 PLAN_EXPIRING 与 stage=EXPIRED 的 PLAN_EXPIRED，各只发一次
+    Given 该租户随后被批准续期，expires_at 改变
+    When 新周期再次临近到期
+    Then 因 period_end 不同，按节点重新提醒
+    Given 租户为游客个人租户
+    Then 不产生任何提醒记录、通知或邮件
+    Given 邮件发送失败
+    Then 站内通知仍已生成，仅 plan_reminders.email_sent 保持 false
+
+  Scenario: AC-FR-SYS-018-02 企业租户的提醒收件人
+    Given 某企业租户订阅临近到期，企业有一名 ACTIVE 的 OWNER 与多名 ACTIVE 成员
+    When 执行到期提醒扫描
+    Then 通知与邮件发给该 ACTIVE OWNER
+    Given 该企业没有 ACTIVE 的 OWNER
+    Then 回退给最早的 ACTIVE 成员
+
+  Scenario: AC-FR-SYS-018-03 通知中心未读数与标记已读
+    Given 已登录用户有若干未读通知
+    When 调用 GET /api/v1/me/notifications
+    Then 返回 unread_count 与 items 列表
+    When 以 {"ids": [<其中一条通知 id>]} 调用 POST /api/v1/me/notifications/read
+    Then 仅该通知被标记已读，返回 {"updated": 1, "unread_count": <剩余未读数>}
+    When 以同样的 ids 重复调用
+    Then 幂等返回 updated=0，未读数不变
+    When 以空数组或省略 ids 调用
+    Then 该用户的全部未读通知被标记已读，unread_count 变为 0
+    Given 请求体的 ids 不是数组，或数组中含非整数（含布尔值）元素
+    Then 返回 400 INVALID_ARGUMENT，field_errors 指向 ids，不修改任何通知
+    Given ids 中包含其他用户的通知 id
+    Then 这些 id 被忽略，只影响本人的未读通知
+
+  Scenario: AC-FR-SYS-014-01 仅 auth 中 LINE 注册信息录入
+    Given 尚未注册的 LINE 账号完成服务端验证的真实认证，渠道启用 email scope 且用户授权并返回 email
+    When route=auth 且 needsRegistration
+    Then 才显示注册框，邮箱默认取验证后的 LINE id_token 的 email 且可编辑，不采用客户端声明的 LINE 邮箱
+    And 手机号若 LINE 返回则预填且可编辑，昵称与头像预填且可修改，提供验证码输入框
+    Given 用户处于首页、上传或开始 OCR
+    Then 不显示注册框，不强制先完成注册
+    When 用户修改资料，向当前邮箱发送验证码并输入有效码后提交注册
+    Then 保存手机号、邮箱、昵称与头像并完成注册；注册本身不额外发放权益，个人租户的一个月 Kinder 自租户创建时已开通（见 AC-FR-SYS-012-01）
+    And 按 FR-SYS-011 仅回 result（原已 COMPLETED 可 final），不自动 confirm 或跳 plans
+    Given LINE 未提供手机号（LINE 不保证提供）
+    When 用户手填手机号或留空，其他注册资料与邮箱验证码有效并提交
+    Then 均可完成注册，保存手填值或空值，手机号不必填
 
   Scenario: AC-FR-SYS-014-02 注册邮箱与验证码校验
-    Given LINE 未提供邮箱，或用户修改了预填邮箱
+    Given LINE 未提供邮箱（包括 email scope/用户授权条件不满足），或用户修改了预填邮箱
     When 用户未填写邮箱或填写格式错误的邮箱并点击注册
     Then 系统提示邮箱必填或格式错误，不完成注册
     When 用户未向当前填写的邮箱发送验证码，或未输入验证码并点击注册
     Then 系统提示先发送验证码或验证码必填，不完成注册
-    When 用户向有效邮箱发送验证码、输入验证码并提交
-    Then 系统完成注册并保存该邮箱（生产环境校验验证码，开发环境不校验）
+    When 用户修改邮箱后使用发往原邮箱的验证码提交
+    Then 拒绝注册，要求向当前邮箱重新发送验证码
+    When 用户向有效的当前邮箱发送验证码、输入匹配且未过期未使用的验证码并提交
+    Then 系统消费验证码、完成注册并保存该邮箱（生产环境校验验证码，仅 FR-SYS-001 明确启用的本地开发不校验）
 
-  Scenario: AC-FR-SYS-014-03 取消注册与已注册用户登录
-    Given 注册信息框已弹出
+  Scenario: AC-FR-SYS-014-03 取消注册保留任务权限与已注册资料保护
+    Given auth 中注册框已弹出，游客任务已归集到正式账户
     When 用户点击取消
-    Then 本次会话被撤销并回到登录页
-    Given 已注册用户修改过昵称与头像
+    Then 返回原 result，保留已归集任务访问权限与 LINE/应用会话，不调用退出
+    And 清显式 pendingAuth 和 pendingJob 续接标记，不自动续接或 confirm，服务端草稿仍可手动继续
+    Given 已注册用户保存过手机号、邮箱、昵称与头像
     When 用户再次通过 LINE 登录
-    Then 昵称与头像保持用户修改后的值，不再弹出注册信息框
+    Then 这些资料保持用户保存的值，不被 LINE 返回值覆盖，不再弹出注册信息框
+    Given LINE 登录初查时账号尚未注册，但注册请求随后完成提交
+    When 登录刷新取得该用户行锁并重新读取注册状态
+    Then 已注册状态与用户保存的资料保持不变，不按初查旧状态写入 LINE 默认资料
+    And 按 FR-SYS-015 个人中心手机号可在注册后修改或清空（见 AC-FR-SYS-015-02）
+
+  Scenario: AC-FR-SYS-014-04 注册验证码实际发送、有效期与重发
+    Given 生产环境已配置可用的 TLS SMTP，用户已通过真实 LINE 认证但尚未完成注册，填写了有效邮箱
+    When 用户点击发送验证码（POST /api/v1/me/email/code）
+    Then 服务端通过 ssl 或 starttls SMTP 向当前邮箱实际发送 6 位数字验证码，收件邮箱可收到该码，不以日志或写库替代发送
+    And 仅发送成功后记录有效新码的哈希、发送时间及 10 分钟 TTL，按钮进入 60 秒倒计时，发送本身不完成注册
+    When 距上次成功发送不足 60 秒再次请求发送
+    Then 返回 429，不发送、不产生有效新码
+    When 距上次成功发送已满 60 秒再次请求且 SMTP 发送成功
+    Then 发送并记录新的 6 位码，重新计算 10 分钟 TTL 与 60 秒重发间隔，旧码失效
+    When 用户用旧码提交注册
+    Then 拒绝注册（error.email_code_invalid），registered_at 保持为空
+    When 用户在新码的 10 分钟有效期内提交匹配且未使用的新码，其他注册资料有效
+    Then 消费新码并完成注册
+
+  Scenario: AC-FR-SYS-014-05 发信故障与无效验证码不得完成注册
+    Given 生产环境用户尚未完成注册，当前邮箱有效
+    When SMTP 未配置，或连接、TLS、认证、发送、超时等任一环节失败，用户请求发送或重发验证码
+    Then 返回 503 EMAIL_SERVICE_UNAVAILABLE，不记录有效新码，不完成注册，registered_at 保持为空
+    And 不将失败显示为发送成功，不以日志中的码或未发送的新码通过注册校验
+    Given 尚未注册用户的当前邮箱验证码分别为错误、已到期（满 10 分钟）或已使用
+    When 用户提交注册
+    Then 各种情况均拒绝（error.email_code_invalid），registered_at 保持为空，不消费为有效注册、不完成注册
 
   Scenario: AC-FR-SYS-015-01 修改昵称与头像
     Given 已登录用户在个人中心
     When 用户点击资料卡，修改昵称或头像并保存
     Then 个人中心立即显示新的昵称与头像；昵称为空时不可保存
+
+  Scenario: AC-FR-SYS-015-02 修改与清空手机号
+    Given 已注册用户在个人中心资料卡（手机号不再只读）
+    When 用户填入合法手机号并保存（PATCH /api/v1/me 带 phone）
+    Then 保存成功并回显新手机号，校验规则与注册完全一致：长度 ≤ 32、仅允许 `+`、数字、空格、`(`、`)`、`.`、`-`，去掉非数字后为 6–15 位
+    When 用户把手机号清空后保存（phone 传空串）
+    Then 手机号被清空，不报错，个人中心显示为空
+    When 用户填入超长、含非法字符或数字位数不足/超限的手机号并保存
+    Then 返回 400 INVALID_ARGUMENT，field_errors 含 `{field: "phone", message_key: "error.phone_invalid"}`，原手机号不变
+    Given 请求者处于游客会话
+    When 请求携带 phone 调用 PATCH /api/v1/me
+    Then 返回 403 PERMISSION_DENIED，不写入任何联系方式（头像同样受此限制）
 
   Scenario: AC-FR-SYS-016-01 更换邮箱
     Given 已登录用户在个人中心点击邮箱「更换」
@@ -559,26 +786,30 @@ Feature: FR-SYS 身份与配置
     And 未向当前输入的新邮箱发送验证码或未输入验证码时不可确认
     And 生产环境验证码错误或过期时拒绝更换（开发环境不校验验证码）
 
-  Scenario: AC-FR-SYS-017-01 工作空间刷新后保持
-    Given 已登录用户在首页将工作空间切换为已认证企业
+  Scenario: AC-FR-SYS-017-01 租户刷新后保持
+    Given 已登录用户在首页将当前租户切换为已认证企业（租户列表取自 GET /api/v1/me/tenants）
     When 用户刷新页面或重新登录
-    Then 当前工作空间仍为该企业
-    And 若该企业已解绑或不再可用，则回落为个人空间
+    Then 当前租户仍为该企业租户（本地仅存 tenant_id）
+    And 若该企业已解绑或不再可用，则回落为本人个人租户
 
   Scenario: AC-FR-SYS-017-02 个人与企业数据隔离、企业成员共享
-    Given 用户 A（企业 OWNER）与用户 B（企业 MEMBER）各有个人任务，并各在企业空间有任务
-    When A 处于个人空间
+    Given 用户 A（企业 OWNER）与用户 B（企业 MEMBER）各有个人任务，并各在企业租户下有任务
+    When A 处于本人个人租户
     Then 首页最近任务与历史页仅显示 A 的个人任务
-    When A 或 B 切换到企业空间
-    Then 仅显示该企业空间的任务，且包含 A 与 B 在企业空间创建的任务
+    When A 或 B 切换到该企业租户（GET /api/v1/ocr/jobs?tenant_id=…）
+    Then 仅显示该企业租户的任务，且包含 A 与 B 在企业租户下创建的任务
+    Given 请求携带无法解析的 tenant_id 或他人的个人租户
+    Then 分别返回 400 INVALID_ARGUMENT / error.invalid_workspace 与 403 PERMISSION_DENIED（列表接口对不可见租户返回 404）
+    Given 成员关系不再 ACTIVE、企业不再 VERIFIED 或租户非 ACTIVE
+    Then 返回 403 ENTERPRISE_ACCESS_REVOKED / error.enterprise_access_revoked
 
-  Scenario: AC-FR-SYS-017-03 企业空间单独购买套餐
-    Given 企业空间未开通付费套餐，企业 OWNER 处于企业空间
-    When OWNER 在套餐页申请升级 Kinder 并确认
-    Then 创建归属该企业的 PLAN_UPGRADE 申请，个人空间的订阅状态不变
-    And 该企业的 MEMBER 在套餐页看到同一处理中申请，但不能提交升级
-    When 后台批准该申请
-    Then 该企业全体成员在企业空间看到 Kinder 套餐及共享的本月剩余页数，个人空间仍为 Free
+  Scenario: AC-FR-SYS-017-03 企业租户单独申请套餐
+    Given 企业租户订阅已到期（EXPIRED），企业 OWNER 处于该企业租户
+    When OWNER 在套餐页申请 Kinder 并确认
+    Then 创建 target_tenant_id 为该企业租户的 PLAN_UPGRADE 申请，本人个人租户的订阅状态不变
+    And 该企业的 MEMBER 在套餐页看到同一处理中申请，但不能提交（403 plan.enterprise_owner_only）
+    When 后台批准该申请并写入有效期
+    Then 下次读取订阅时惰性同步为 APPROVED Kinder，企业全体 ACTIVE 成员共享该订阅与月页额，个人租户独立计量不受影响
 ```
 
 ## 7. EPIC-08 — 文档格式模板配置
@@ -659,7 +890,7 @@ Feature: NFR V1.0 门槛
 | EPIC-03 | 17 | ✔ | 是 |
 | EPIC-04 | 9 | ✔ | 是 |
 | EPIC-05 | 2（P0 子集） | ✔ | 是 |
-| EPIC-06 | 17 | ✔ | 是 |
+| EPIC-06 | 18 | ✔ | 2026-10-27 已实现并正式发布的部分：334 项隔离后端、final `index-BUTDgRGj.js` 21 项全 mock 浏览器、6 项 OAuth 源码模拟、9 项前端会话边界及类型检查/Vite 构建/OpenAPI 内部引用通过；2026-10-28 新增的 FR-SYS-018 与改写的 FR-SYS-012/013/015/017 相关 AC（AC-FR-SYS-012-01..05、013-01..04、015-02、017-01..03、018-01/02/03）为契约同步，**本轮未运行任何测试**；历史 221/5 与 SMTP 自测非本轮证据，真实 LINE/收件箱/数据库并发/防猜码/提醒邮件实际投递未验证（见 §6） |
 | EPIC-08 | 0（P1，待 OQ-9） | ✔ | 是 |
 | NFR | 门槛 | ✔ | 混合（性能/安全测试工具） |
 
@@ -672,6 +903,12 @@ Feature: NFR V1.0 门槛
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.8.21 | 2026-10-28 | Product Engineering | 新增 AC-FR-SYS-001-07：20 秒有界初始化、显式一次官方恢复、同上下文停止重复跳转、非凭据续接、取消与迟到结果保护；16 项隔离源码检查、25 项冻结构建浏览器与6项源码模块通过；前端22版100%切流及真实域名7静态哈希见Architecture §5，真实手机存储连续性与完整 LINE 授权不视为通过 |
+| 1.8.20 | 2026-10-27 | Product Engineering | FR-SYS-001/010..014：更新当前说明与覆盖矩阵为已真实实现、隔离通过并正式发布；334 项后端、final index-BUTDgRGj.js 的 21 项全 mock 浏览器、6 项 OAuth 源码模拟、9 项会话边界及类型检查/Vite 构建/OpenAPI 283 个内部引用通过；同步 AC-001-03 失败/10 秒超时锁主壳、Back/刷新先 session CSRF-only→logout→guest，成功回 scan 不留旧 My、不自动 LINE 兑换；registered_at 动态默认 Kinder 每泰国月 1,000 页，无新增 schema/默认申请/付款/历史迁移；发布引用 Architecture §5/§6，历史 221/5 与 SMTP 接收非本轮证据，SMTP 模块/秘密版本引用不变、本轮未实发邮件，隔离不连接数据库/真实 LINE/SMTP、不创建生产账户；真实 LINE/收件箱/数据库并发/防猜码仍未验证，保留旧版本事实与原业务规则 |
+| 1.8.19 | 2026-10-27 | Product Engineering | 同步 SYS-001/010..014/017 与 VERIFY-016/017：退出超时/刷新不复登、Cookie/游客主壳、显式 LINE、仅 Continue 到 auth 注册、pending/取消/恢复不自动确认；默认 Kinder 真正月页额与赠送隔离、已批优先/pending 不拦/企业不继承；新增 SYS-011-02 服务端注册门禁无版本写入副作用；与 EPIC-06 代表性 AC 同步，均为本轮待验证目标，历史发布与 SMTP 测试不覆盖本轮 |
+| 1.8.18 | 2026-10-27 | Product Engineering | FR-SYS-014：补充 AC-03 登录刷新与注册并发资料保护；记录 221 项隔离测试、5 项模拟浏览器和 SMTP 自测接收证据，完整验收未宣称通过；发布与收件箱/真实 LINE/数据库并发、防猜码剩余边界见 Architecture §6 |
+| 1.8.17 | 2026-10-27 | Product Engineering | FR-SYS-014：同步 AC-01/02/03 的注册手机号可编辑且可选、验证后的 LINE token 邮箱默认值及 email scope/用户授权；新增 AC-04/05 覆盖 TLS SMTP 实发六位码、10 分钟 TTL、60 秒重发、旧码失效、503 不记有效新码/不注册与错误/过期/已用拒绝；本次验证与发布未完成，保留历史，不改变 SYS-010/011/015 流程 |
+| 1.8.16 | 2026-10-27 | Product Engineering | 新增 AC-FR-SYS-001-04/05/06：生产无开发入口、LINE 按钮仅真实认证、dev 请求在数据库访问前拒绝、旧 dev 会话无效但保留数据、不回退及本地显式启用/生产防绕过；注明 FR-SYS-014/016 发信未支持与真实 LINE 授权联调尚未完成；已收到并配置 LINE/LIFF ID，不改变既有注册及游客 AC |
 | 1.8.15 | 2026-10-20 | Product Engineering | 新增 AC-FR-VERIFY-015-04：核验结果页新增/删除字段与表格增删行（含空卡片继续添加、新增金额值格式化、确认后只读与导出一致）；新增 AC-FR-VERIFY-015-05：Reset 按钮确认后放弃未保存改动 |
 | 1.8.14 | 2026-10-19 | Product Engineering | 新增 AC-FR-VERIFY-015-03：金额数字千分位 + 保留 2 位小数（页面与导出一致），计数字段按原值，编辑后保持数字类型；更新 AC-FR-VERIFY-014-01：结果页/最终结果页原图与公司证书使用全屏查看器 |
 | 1.8.13 | 2026-10-19 | Product Engineering | 新增 AC-FR-VERIFY-014-02：上传确认页预览全屏缩放与双指触控捏合缩放 |

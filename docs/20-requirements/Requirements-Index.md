@@ -3,8 +3,8 @@ doc_id: REQ-INDEX
 title: "SaiFlow — 需求索引与可追溯性矩阵"
 type: index
 status: active
-version: 1.3.7
-updated: 2026-10-20
+version: 1.4.0
+updated: 2026-10-28
 owner: Product Engineering
 ---
 
@@ -104,7 +104,7 @@ owner: Product Engineering
 | FR-MGMT-008 | 关键词搜索 | P2 | §4.5 | OCR-002 | AC-FR-MGMT-008-01 | API-7 | planned |
 | FR-MGMT-009 | 重复检测 | P1 | §4.5 | OCR-002 | AC-FR-MGMT-009-01 | DM-Document | planned |
 | FR-MGMT-010 | 去重 | P2 | §4.5 | MGMT-009 | AC-FR-MGMT-010-01 | DM-Document | planned |
-| FR-SYS-001 | 注册/登录 | P0 | §4.6 | — | AC-FR-SYS-001-01/02/03 | DM-User, API-8 | active |
+| FR-SYS-001 | 注册/登录：线上真实 LINE 联合认证；本地开发明确启用的独立 Developer sign-in | P0 | §4.6；用户认证边界调整 2026-10-27 | — | AC-FR-SYS-001-01/02/03/04/05/06 | DM-User, API-8, Architecture §6 | active |
 | FR-SYS-002 | RBAC 权限 | P0 | §4.6 | SYS-001 | AC-FR-SYS-002-01 | DM-Role | active |
 | FR-SYS-003 | 操作日志 | P0 | §4.6/§5.3 | SYS-001 | AC-FR-SYS-003-01 | DM-OperationLog | active |
 | FR-SYS-004 | 语言切换 | P0 | §4.6 | — | AC-FR-SYS-004-01 | NFR-I18N-003 | active |
@@ -115,8 +115,11 @@ owner: Product Engineering
 | FR-SYS-009 | 配置复核与报表权限 | P0 | §1.2/§4.6 | SYS-002 | AC-FR-SYS-009-01 | DM-Role | active |
 | FR-SYS-010 | 游客试用与数据归集 | P0 | 用户流程调整 2026-10-17 | SYS-001 | AC-FR-SYS-010-01/02 | DM-User | active |
 | FR-SYS-011 | LINE 确认前登录/注册；认证后按任务工作空间订阅恢复，不自动确认 | P0 | 用户流程调整 2026-10-17/18 | SYS-001/SYS-010 | AC-FR-SYS-011-01 | API-8 | active |
-| FR-SYS-012 | LINE 确认前工作空间订阅分流：Free/NONE→plans，未开通付费的 PENDING→plan-pending，ACTIVE→显式确认；恢复未完成任务返回结果页 | P0 | 用户流程调整 2026-10-17/18 | SYS-011 | AC-FR-SYS-012-01/02/03 | DM-ResultVersion, API-8 | active |
-| FR-SYS-017 | 工作空间保持、个人/企业隔离与企业成员共享（含企业单独套餐） | P0 | 用户流程调整 2026-10-18 | SYS-002/SYS-012 | AC-FR-SYS-017-01/02/03 | DM-Application, API-8 | active |
+| FR-SYS-012 | 每租户只开通一个月 Kinder（个人自 tenants.created_at、企业自 enterprises.verified_at，未认证为 NONE），到期硬停 402 plan.expired、历史仍可读；续费/升级由线下审批写入有效期后惰性生效 | P0 | 用户流程调整 2026-10-17/18；套餐到期调整 2026-10-28 | SYS-011 | AC-FR-SYS-012-01/02/03/04/05 | DM-ResultVersion, API-8 | active |
+| FR-SYS-013 | 唯一计量 OCR_PAGE 月页数（按泰国自然月实时统计，FAILED/CANCELLED 不计），无 FREE 档与赠送额度；用尽返回 402 quota.exceeded | P0 | 用户流程调整 2026-10-27；套餐到期调整 2026-10-28 | SYS-012 | AC-FR-SYS-013-01/02/03/04 | API-8 | active |
+| FR-SYS-015 | 个人中心可修改昵称、头像与手机号（可清空，按格式校验，游客不可改） | P0 | 用户流程调整 2026-10-17；资料调整 2026-10-28 | SYS-014 | AC-FR-SYS-015-01/02 | DM-User, API-8 | active |
+| FR-SYS-017 | 租户保持、个人/企业隔离与企业成员共享（含企业单独申请套餐） | P0 | 用户流程调整 2026-10-18；归属调整 2026-10-28 | SYS-002/SYS-012 | AC-FR-SYS-017-01/02/03 | DM-Application, API-8 | active |
+| FR-SYS-018 | 套餐到期提醒（D7/D3/D1/D0/EXPIRED，按 (tenant_id, period_end, stage) 幂等、不回补、游客不提醒）与通知中心未读数/标记已读 | P0 | 套餐到期调整 2026-10-28 | SYS-012 | AC-FR-SYS-018-01/02/03 | API-8 | active |
 | FR-REPORT-001 | 管理层访问运营报表 | P1 | §3.1/§4.7 | SYS-002 | AC-FR-REPORT-001-01 | API-9（待设计） | in-review |
 | FR-REPORT-002 | 展示已配置运营指标 | P1 | §1.2/§4.7 | REPORT-001/OQ-5 | AC-FR-REPORT-002-01 | DM-ReportDefinition（待设计） | in-review |
 | FR-REPORT-003 | 报表授权范围限制 | P1 | §4.7 | SYS-002 | AC-FR-REPORT-003-01 | API-9（待设计） | in-review |
@@ -151,8 +154,8 @@ owner: Product Engineering
 | 指标 | 数量 |
 |------|------|
 | Epics | 8 |
-| 功能需求 | 86 |
-| — P0 | 55 |
+| 功能需求 | 87 |
+| — P0 | 56 |
 | — P1 | 26 |
 | — P2 | 5 |
 | NFR 项目 | 46 |
@@ -167,6 +170,8 @@ owner: Product Engineering
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.4.0 | 2026-10-28 | Product Engineering | 新增 FR-SYS-018（套餐到期提醒与通知中心标记已读）；补录并改写 FR-SYS-012（每租户一个月 Kinder、到期硬停）、FR-SYS-013（唯一 OCR_PAGE 月页计量，无 FREE 与赠送）、FR-SYS-015（个人中心可改手机号）与 FR-SYS-017（按租户隔离）索引行，与 EPIC-06 v1.7.0 对齐 |
+| 1.3.8 | 2026-10-27 | Product Engineering | 仅同步既有 FR-SYS-001：线上真实 LINE 联合认证、本地开发明确启用的独立 Developer sign-in；新增 AC-FR-SYS-001-04/05/06 与 Architecture §6 引用，不补录无关索引项 |
 | 1.3.7 | 2026-10-20 | Product Engineering | FR-VERIFY-015 扩展为字段/表格行增删与 Reset 放弃改动，新增 AC-FR-VERIFY-015-04/05 |
 | 1.3.6 | 2026-10-19 | Product Engineering | FR-VERIFY-015 增加金额千分位 + 2 位小数显示/导出规则，新增 AC-FR-VERIFY-015-03；FR-VERIFY-014 扩展全屏触控缩放至结果页、最终结果页与公司证书 |
 | 1.3.5 | 2026-10-19 | Product Engineering | FR-VERIFY-014 增加上传确认页触控缩放，新增 AC-FR-VERIFY-014-02 |

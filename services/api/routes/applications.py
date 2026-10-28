@@ -32,13 +32,13 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def _member_role(user_id: int, enterprise_id: int) -> str | None:
-    m = Membership.query.filter_by(enterprise_id=enterprise_id, user_id=user_id).first()
+def _member_role(user_id: int, tenant_id: int) -> str | None:
+    m = Membership.query.filter_by(tenant_id=tenant_id, user_id=user_id).first()
     return m.role if m else None
 
 
-def _require_admin(user_id: int, enterprise_id: int) -> Membership:
-    m = Membership.query.filter_by(enterprise_id=enterprise_id, user_id=user_id).first()
+def _require_admin(user_id: int, tenant_id: int) -> Membership:
+    m = Membership.query.filter_by(tenant_id=tenant_id, user_id=user_id).first()
     if m is None or m.status != "ACTIVE" or m.role not in ("OWNER", "ADMIN"):
         raise permission_denied()
     return m
@@ -59,7 +59,7 @@ def submit_membership_application(enterprise_id: int):
     if len(message) > 500:
         raise invalid_argument(field_errors=[{"field": "message", "reason": "too_long"}])
 
-    m = Membership.query.filter_by(enterprise_id=enterprise_id, user_id=user.id).first()
+    m = Membership.query.filter_by(tenant_id=e.tenant_id, user_id=user.id).first()
     if m is not None and m.status in ("PENDING", "ACTIVE"):
         raise state_conflict("application.duplicate_open")
     if m is not None and m.status in ("REJECTED", "REMOVED"):
@@ -68,7 +68,7 @@ def submit_membership_application(enterprise_id: int):
     app_row = Application(
         type="MEMBERSHIP",
         applicant_user_id=user.id,
-        target_enterprise_id=enterprise_id,
+        target_tenant_id=e.tenant_id,
         form={"message": message, "enterprise_code": e.code},
         status="SUBMITTED",
         submitted_at=_now(),
@@ -78,7 +78,7 @@ def submit_membership_application(enterprise_id: int):
     if m is None:
         db.session.add(
             Membership(
-                enterprise_id=enterprise_id,
+                tenant_id=e.tenant_id,
                 user_id=user.id,
                 role="MEMBER",
                 status="PENDING",
@@ -103,7 +103,7 @@ def create_invitation(enterprise_id: int):
     e = db.session.get(Enterprise, enterprise_id)
     if e is None:
         raise not_found()
-    _require_admin(user.id, enterprise_id)
+    _require_admin(user.id, e.tenant_id)
 
     body = request.get_json(silent=True) or {}
     max_uses = body.get("max_uses", 1)
@@ -116,7 +116,7 @@ def create_invitation(enterprise_id: int):
     token = secrets.token_urlsafe(24)
     inv = Invitation(
         token_hash=_hash_token(token),
-        enterprise_id=enterprise_id,
+        tenant_id=e.tenant_id,
         created_by_user_id=user.id,
         max_uses=max_uses,
         expires_at=_now() + timedelta(hours=ttl_hours),
@@ -158,11 +158,11 @@ def redeem_invitation():
         db.session.commit()
         raise state_conflict("invitation.exhausted")
 
-    e = db.session.get(Enterprise, inv.enterprise_id)
+    e = Enterprise.query.filter_by(tenant_id=inv.tenant_id).first()
     if e is None or e.status != "VERIFIED":
         raise state_conflict("invitation.enterprise_unavailable")
 
-    m = Membership.query.filter_by(enterprise_id=inv.enterprise_id, user_id=user.id).first()
+    m = Membership.query.filter_by(tenant_id=inv.tenant_id, user_id=user.id).first()
     if m is not None and m.status in ("ACTIVE", "PENDING"):
         raise state_conflict("membership.already_member")
     if m is not None and m.status in ("REJECTED", "REMOVED"):
@@ -170,7 +170,7 @@ def redeem_invitation():
 
     if m is None:
         m = Membership(
-            enterprise_id=inv.enterprise_id,
+            tenant_id=inv.tenant_id,
             user_id=user.id,
             role="MEMBER",
             status="ACTIVE",
@@ -188,7 +188,7 @@ def redeem_invitation():
     if inv.use_count >= inv.max_uses:
         inv.status = "EXPIRED"
     db.session.commit()
-    audit("invitation.redeem", "invitation", str(inv.id), {"enterprise_id": inv.enterprise_id})
+    audit("invitation.redeem", "invitation", str(inv.id), {"tenant_id": inv.tenant_id})
     notify(user.id, "MEMBERSHIP_ACTIVE", "Workspace joined", e.legal_name)
     return ok({"enterprise": e.to_dict(), "role": m.role}, status=200)
 
@@ -199,7 +199,7 @@ def revoke_invitation(invitation_id: int):
     inv = db.session.get(Invitation, invitation_id)
     if inv is None:
         raise not_found()
-    role = _member_role(user.id, inv.enterprise_id)
+    role = _member_role(user.id, inv.tenant_id)
     if inv.created_by_user_id != user.id and role not in ("OWNER", "ADMIN"):
         raise permission_denied()
     if inv.status != "ACTIVE":

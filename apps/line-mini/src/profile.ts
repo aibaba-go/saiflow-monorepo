@@ -45,6 +45,13 @@ export function isValidEmail(v: string): boolean {
   return v.length <= 254 && EMAIL_RE.test(v);
 }
 
+/** Phone is optional; accept common international/local telephone formatting. */
+export function isValidPhone(v: string): boolean {
+  if (!v) return true;
+  const digits = v.replace(/[^0-9]/g, '');
+  return v.length <= 32 && /^\+?[0-9() .-]+$/.test(v) && digits.length >= 6 && digits.length <= 15;
+}
+
 /** 优先展示字段级错误文案 */
 export function apiErrorText(e: unknown): string {
   if (e instanceof ApiError) {

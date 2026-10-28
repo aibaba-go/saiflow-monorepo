@@ -4,7 +4,8 @@
 · 证明材料照片=cert_file_id→files（purpose=APPLICATION_MATERIAL）· 联系人手机号=contact_phone。
 
 审核：添加/修改后 status=PENDING_VERIFICATION；后台人工把 enterprises.status
-改成 VERIFIED 才生效（绑定与工作空间均要求 VERIFIED）。审核不通过设 DISABLED。
+改成 VERIFIED 才生效（绑定与租户可用性均要求 VERIFIED）。审核不通过设 DISABLED。
+每个公司对应一个企业租户（tenants），成员关系与业务归属都走 tenant_id。
 """
 from __future__ import annotations
 
@@ -15,7 +16,7 @@ from flask import Blueprint, request
 from auth import audit, current_user, notify
 from errors import invalid_argument, not_found, ok, permission_denied, state_conflict
 from extensions import db
-from models import Enterprise, File, Membership, _now
+from models import Enterprise, File, Membership, Tenant, _now
 
 companies_bp = Blueprint("companies", __name__)
 
@@ -55,8 +56,8 @@ def _validate_cert_file(cert_file_id, user_id: int) -> str | None:
     return f.id
 
 
-def _require_owner(user_id: int, enterprise_id: int) -> Membership:
-    m = Membership.query.filter_by(enterprise_id=enterprise_id, user_id=user_id).first()
+def _require_owner(user_id: int, tenant_id: int) -> Membership:
+    m = Membership.query.filter_by(tenant_id=tenant_id, user_id=user_id).first()
     if m is None or m.status != "ACTIVE" or m.role != "OWNER":
         raise permission_denied()
     return m
@@ -70,7 +71,18 @@ def create_company():
     data = _parse_company_payload(body)
     cert_file_id = _validate_cert_file(body.get("cert_file_id"), user.id)
 
+    # 先建企业租户再建企业：业务归属只认 tenant_id，租户必须先有 id。
+    # 租户 status 只表达可用性，是否生效仍看 enterprises.status 的人工审核。
+    tenant = Tenant(
+        tenant_type="ENTERPRISE",
+        display_name=data["legal_name"],
+        status="ACTIVE",
+    )
+    db.session.add(tenant)
+    db.session.flush()
+
     enterprise = Enterprise(
+        tenant_id=tenant.id,
         code=f"ent-{_now().strftime('%y%m%d')}-{secrets.token_hex(3)}",
         legal_name=data["legal_name"],
         registration_no=data["registration_no"],
@@ -83,7 +95,7 @@ def create_company():
     # 添加人即 OWNER；所有访问仍要求企业 VERIFIED，未过审前不影响任何人
     db.session.add(
         Membership(
-            enterprise_id=enterprise.id,
+            tenant_id=tenant.id,
             user_id=user.id,
             role="OWNER",
             status="ACTIVE",
@@ -102,7 +114,7 @@ def my_companies():
     user = current_user()
     rows = (
         db.session.query(Membership, Enterprise)
-        .join(Enterprise, Membership.enterprise_id == Enterprise.id)
+        .join(Enterprise, Membership.tenant_id == Enterprise.tenant_id)
         .filter(
             Membership.user_id == user.id,
             Membership.status.in_(("PENDING", "ACTIVE")),
@@ -124,7 +136,7 @@ def update_company(enterprise_id: int):
     e = db.session.get(Enterprise, enterprise_id)
     if e is None:
         raise not_found()
-    _require_owner(user.id, enterprise_id)
+    _require_owner(user.id, e.tenant_id)
 
     body = request.get_json(silent=True) or {}
     data = _parse_company_payload(body)
@@ -137,6 +149,10 @@ def update_company(enterprise_id: int):
         e.cert_file_id = cert_file_id
     if e.status == "VERIFIED":
         e.status = "PENDING_VERIFICATION"  # 关键信息变更，需重新审核
+    # 租户显示名跟随企业名，避免两处名称漂移
+    tenant = db.session.get(Tenant, e.tenant_id)
+    if tenant is not None:
+        tenant.display_name = data["legal_name"]
     db.session.commit()
     audit("company.update", "enterprise", str(e.id))
     return ok({"enterprise": e.to_dict()})
@@ -155,7 +171,7 @@ def bind_company():
     if e is None or e.status != "VERIFIED":
         raise not_found()  # 不存在或未过审，不区分
 
-    m = Membership.query.filter_by(enterprise_id=e.id, user_id=user.id).first()
+    m = Membership.query.filter_by(tenant_id=e.tenant_id, user_id=user.id).first()
     if m is not None and m.status in ("ACTIVE", "PENDING"):
         raise state_conflict("membership.already_member")
     if m is not None and m.status in ("REJECTED", "REMOVED"):
@@ -163,7 +179,7 @@ def bind_company():
 
     if m is None:
         m = Membership(
-            enterprise_id=e.id,
+            tenant_id=e.tenant_id,
             user_id=user.id,
             role="MEMBER",
             status="ACTIVE",
@@ -186,7 +202,10 @@ def bind_company():
 def unbind_company(enterprise_id: int):
     """解绑公司（解绑后不消失于历史，但不再是有效身份）。"""
     user = current_user()
-    m = Membership.query.filter_by(enterprise_id=enterprise_id, user_id=user.id).first()
+    e = db.session.get(Enterprise, enterprise_id)
+    if e is None:
+        raise not_found()
+    m = Membership.query.filter_by(tenant_id=e.tenant_id, user_id=user.id).first()
     if m is None or m.status not in ("ACTIVE", "PENDING"):
         raise not_found()
     m.status = "LEFT"

@@ -29,7 +29,13 @@ _ADD_COLUMNS = [
     ("users", "registered_at", "TIMESTAMP"),
     ("users", "avatar_path", "VARCHAR(255) NOT NULL DEFAULT ''"),
     ("ocr_jobs", "completed_at", "TIMESTAMP"),
+    ("enterprises", "verified_at", "TIMESTAMP"),
 ]
+# 这里只补「可带默认值的新列」。租户改造的 tenant_id 是 NOT NULL 外键，
+# 旧库无法靠 ADD COLUMN 补齐（没有合法默认值），必须用 setup_db.py 重建结构，
+# 所以不要把归属列加进来；启动流程也不再有 workspace_type/enterprise_id 这类旧归属列。
+# subscriptions / plan_reminders 是新表，由 _ensure_tables 建；已废弃的 quota_ledger
+# 不在 models 里，旧库残留表不会被自动清理（重建或人工 DROP）。
 
 
 def _ensure_tables() -> None:
