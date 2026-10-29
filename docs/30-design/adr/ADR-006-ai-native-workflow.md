@@ -3,7 +3,7 @@ doc_id: ADR-006
 title: "ADR-006 — AI Native 开发模式：OpenSpec 管需求、SuperPowers 管实现，并重建代码"
 type: adr
 status: accepted
-version: 1.0.0
+version: 1.1.0
 updated: 2026-10-30
 owner: Product Engineering
 related: [WF-001, AGENTS, STD-004, STD-005, STD-006, PRD-001]
@@ -117,7 +117,7 @@ accepted（2026-10-30 负责人确认）
 | `AI-WORKFLOW.md` | 按本 ADR 重写为 v2.0.0：阶段表（§2）、分级（§3）、文档分层（§4）；删除 subagent registry 与“你作为 xxx”模板 |
 | `Directory-Structure.md` | 登记 `legacy/`、`.claude/archive/`，以及 change 目录内的 `plan.md`、`verification.md` |
 | 现有 2 个 openspec change | 不合并其 spec（描述的是将被替换的 mock 原型），直接移入 `openspec/changes/archive/`（如 CLI 支持，使用跳过 spec 合并的归档方式） |
-| `services/api/sf-cookies.txt` | **已处理（2026-10-30）**：经核实是本地调试时 curl 生成的 cookie 罐，只含一条 `localhost` 会话，与设计无关；已 `git rm`，并在 `.gitignore` 中加入 `*cookies*.txt`。按负责人要求，该文件与 `services/api/storage/{files,exports}` 下 31 个上传/导出文件已从全部分支历史中清除 |
+| `services/api/sf-cookies.txt` | **已处理（2026-10-30）**：经核实是本地调试时 curl 生成的 cookie 罐，只含一条 `localhost` 会话，与设计无关；已 `git rm`，并在 `.gitignore` 中加入 `*cookies*.txt`。该文件与 `services/api/storage/{files,exports}` 下 31 个上传/导出文件只从**本分支（`chore/ai-workflow-v2`）**的历史中清除；其余分支与 tag 保持原样（负责人决定，2026-10-30） |
 
 ## 6. 技术栈与旧代码处理
 
@@ -160,6 +160,12 @@ B-2 到 B-5 的具体范围、优先级以各自 proposal 经负责人确认的�
 
 届时再决定运行位置（本机 / 云端）、取回 `.claude/archive/agents/` 改写为执行与验证角色、遇到阻塞时的记录与跳过规则、早上验收的报告形式，并另立 ADR。
 
+## 发布分支与凭据（负责人决定，2026-10-30）
+
+- **发布分支**：今后从 `chore/ai-workflow-v2`（及其后续分支）开发与发布；`main`、`docs/*`、`feature_ocr_*` 等其余分支与 tag 保持原样，不改写、不 force push。
+- 本分支的历史经过改写（清除 cookie 文件与 31 个上传/导出文件），与 `main` **没有共同祖先**；如将来需要合并回 `main`，须使用 `--allow-unrelated-histories` 或改用本分支替换 `main`，届时另行决定。
+- **凭据**：`legacy/` 及历史中的 Cloud SQL、Firestore Mongo、MySQL、TextIn 凭据不轮换、不清理历史，风险接受（团队仅 2 人）。当前代码树中已删除两个含明文密码的 sample 文件，并清空其余凭据默认值。新代码一律通过 Secret Manager / 环境变量注入，不得硬编码默认值。
+
 ## 考虑过的方案
 
 | 方案 | 优点 | 缺点 | 结论 |
@@ -200,6 +206,7 @@ B-2 到 B-5 的具体范围、优先级以各自 proposal 经负责人确认的�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.1.0 | 2026-10-30 | Product Engineering | 记录负责人决定：历史清理只作用于本分支，其余分支与 tag 不变，今后从本分支发布；`legacy/` 中发现的数据库与 TextIn 凭据不轮换、不清理历史，风险接受（团队仅 2 人），当前代码树中已清空其默认值；新增“发布分支与凭据”一节 |
 | 1.0.0 | 2026-10-30 | Product Engineering | 负责人审阅通过，状态改为 accepted；`sf-cookies.txt` 与 31 个已入库的上传/导出文件已从全部分支历史中清除 |
 | 0.2.0 | 2026-10-30 | Product Engineering | 纳入审阅答复：线上无真实用户、旧代码不保留部署能力；部署为手工 Docker + gcloud，B-1 写成手动触发脚本；框架内部 subagent 不干预；新 schema 从零建；B-0 边界；`sf-cookies.txt` 已删除 |
 | 0.1.0 | 2026-10-30 | Product Engineering | 初始草案：不使用 subagent；OpenSpec 管需求、SuperPowers 管实现；`openspec/specs/` 为需求唯一正本；三级分级；React + FastAPI 按模块重建 |

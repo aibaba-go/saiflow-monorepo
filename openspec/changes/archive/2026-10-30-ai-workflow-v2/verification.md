@@ -47,3 +47,9 @@
 | I2 `AGENTS.md` 读取顺序与规则 6 仍以 EPIC/AC 为正本 | 改为以 `openspec/specs/` 为正本，未迁移时仅作参考 | — |
 | I3 STD-004 仍有 subagent 措辞与 `design.md` | 改为 `plan.md` 与新描述 | 命中 0 |
 | I4 `apps/`、`services/` 被写成现状 | 标注“B-1 重建的目标结构，当前为空”，禁止在 `legacy/` 执行命令 | — |
+
+## 负责人决定（2026-10-30）
+
+- 凭据不轮换、不清理历史，风险接受。
+- 历史清理只保留在本分支；`main`、`docs/prd-v3`、`docs/zl-add-template-setting` 已从备份恢复为原提交（`main` = `origin/main` = `1dd1e7d`），临时建的本地 `feature_ocr_*` 分支已删除，远端分支与 tag 未改动。上文 C2 关于 tag 的处理因此不再执行。
+- 本分支不推送、不合并，保持现状；今后从本分支发布。
