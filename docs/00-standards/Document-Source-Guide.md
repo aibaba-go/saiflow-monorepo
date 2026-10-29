@@ -3,8 +3,8 @@ doc_id: STD-007
 title: "SaiFlow — 文档来源与可编辑性指南"
 type: standard
 status: active
-version: 1.0.0
-updated: 2026-10-12
+version: 1.1.0
+updated: 2026-10-30
 owner: Product Engineering
 applies_to: [docs, openspec, packages, apps, services]
 doc_source: manual
@@ -92,8 +92,8 @@ generated_by: ""                      # 仅 generated / generated-but-curated �
 | `openspec/specs/<capability>/` | `generated` | OpenSpec sync | 主能力契约，由变更归档后同步 |
 | `openspec/changes/<change>/proposal.md` | `generated` | OpenSpec propose | 变更提案 |
 | `openspec/changes/<change>/specs/<capability>/spec.md` | `generated` | OpenSpec propose | delta spec |
-| `openspec/changes/<change>/design.md` | `generated` | OpenSpec update | 变更级设计 |
-| `openspec/changes/<change>/tasks.md` | `generated` | OpenSpec apply 前派生 | 编码任务列表 |
+| `openspec/changes/<change>/plan.md` | `manual` | SuperPowers writing-plans，负责人确认 | 实施方案与任务（取代 design.md / tasks.md，ADR-006） |
+| `openspec/changes/<change>/verification.md` | `manual` | 实现阶段验证记录 | AC → 测试 → 结果；测试与部署证据只写此处 |
 | `openspec/changes/<change>/archive/*` | `generated` | OpenSpec archive | 已归档变更 |
 
 ### 3.3 代码目录
@@ -106,6 +106,7 @@ generated_by: ""                      # 仅 generated / generated-but-curated �
 | `packages/api-client/**` | `generated` | 由后端 OpenAPI 生成，**禁止手写第二份** |
 | `services/api/**` | `manual` | 后端 FastAPI 代码，是 API 契约的真实来源 |
 | `scripts/**` | `manual` | 仓库级脚本，开发者手写 |
+| `legacy/**` | `manual` | 旧代码只读参考（ADR-006），禁止修改 |
 
 ---
 
@@ -133,4 +134,5 @@ generated_by: ""                      # 仅 generated / generated-but-curated �
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.1.0 | 2026-10-30 | Product Engineering | 按 ADR-006：change 产物以 plan.md、verification.md 取代 design.md、tasks.md；新增 `legacy/**` 行 |
 | 1.0.0 | 2026-10-12 | Product Engineering | 初始文档来源与可编辑性指南 |

@@ -3,8 +3,8 @@ doc_id: STD-004
 title: "SaiFlow monorepo — 目录结构与文档地图"
 type: standard
 status: active
-version: 2.4.6
-updated: 2026-10-12
+version: 2.5.0
+updated: 2026-10-30
 owner: Product Engineering
 doc_source: manual
 ---
@@ -44,7 +44,7 @@ saiflow/
 ├── openspec/                              # 变更流程与行为契约（原生布局；产物多为 generated）
 │   ├── config.yaml                        # OpenSpec 配置（manual）
 │   ├── specs/<capability>/                # 当前行为契约（generated，由 sync 阶段产出）
-│   └── changes/<change>/                  # 进行中变更（proposal/specs/design/tasks，generated）
+│   └── changes/<change>/                  # 进行中变更（proposal.md / specs/ / plan.md / verification.md）
 │       └── archive/                       # 已归档变更
 │
 ├── docs/                                  # 产品级持久文档（SaiFlow 文档唯一根；除 API-Spec 外均为 manual）
@@ -58,9 +58,10 @@ saiflow/
 │   └── 40-acceptance/                     # Gherkin 验收标准（manual）
 │
 ├── scripts/                               # 仓库级脚本（含部署自动化）
+├── legacy/                                # 旧代码只读参考（ADR-006），不参与构建，不被新代码引用
 ├── temp/                                  # 临时产物（禁止作为正式资产）
 └── .claude/                               # Claude Code 配置
-    ├── agents/                            # subagent 定义
+    ├── archive/                           # 已停用的 agent 与 skill（ADR-006），不被加载
     ├── skills/                            # skill 定义
     └── commands/                          # 斜杠命令
 ```
@@ -73,7 +74,6 @@ saiflow/
 |----|------|-----------|------|------|
 | 入口 | `AGENTS.md`、`AI-WORKFLOW.md` | 去哪读、怎么协作 | 人 + AI | 导航 |
 | 能力 | `.claude/skills/` | “怎么做” | AI | 流程与纪律 |
-| 执行 | `.claude/agents/` | “谁来做” | AI | 角色 + 工具范围 |
 | 变更 | `openspec/` | “这次改什么” | AI + 开发 | 提案/规格/任务 |
 | 成果 | `docs/` | “产品是什么” | PM + 开发 | 持久知识 |
 
@@ -97,6 +97,7 @@ saiflow/
     - 作为 **pnpm 工作区成员**：新增顶层 `e2e/` 并写入 `pnpm-workspace.yaml`（保持 JS 依赖可解析）；
     - 或**按应用**建 `apps/<app>-e2e`，由 `apps/*` 天然覆盖。
     > 关键约束：E2E 若为 JS 测试，必须落在 pnpm 工作区 glob（`apps/*`、`packages/*` 或显式新增 `e2e`）之内，否则根 `pnpm install` 与 `pnpm -r test` 都不会触及它。
+12. **旧代码** → `legacy/`：重建前的代码（git tag `legacy-v1`）只读参考，不在 pnpm glob 内，不参与构建、测试与部署；新版本测试通过并运行一段时间后删除（ADR-006 §6）。
 
 ---
 
@@ -121,6 +122,7 @@ saiflow/
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.5.0 | 2026-10-30 | Product Engineering | 按 ADR-006：新增 `legacy/`（规则 12）与 `.claude/archive/`；删除 `.claude/agents/` 执行层；change 目录产物改为 proposal / specs / plan / verification |
 | 2.4.6 | 2026-10-12 | Product Engineering | 新增 `docs/00-standards/Document-Source-Guide.md`（STD-007）；目录树增加 `(manual)` / `(generated)` 标注；引用 STD-001 v1.0.2 的 `doc_source` 字段 |
 | 2.4.5 | 2026-10-12 | Product Engineering | 新增 `docs/00-standards/React-Frontend-Structure.md`（STD-006），定义 `apps/*`、`packages/*` 目录结构与强制约定 |
 | 2.4.4 | 2026-10-12 | Product Engineering | 新增 `docs/00-standards/Python-Backend-Structure.md`（STD-005），定义 `services/api/` 目录结构与强制约定 |
