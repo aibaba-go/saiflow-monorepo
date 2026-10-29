@@ -26,4 +26,4 @@ description: SaiFlow 仓库通用协作约定（入口顺序、工作流、术�
 
 ## 与工具的关系
 - **复用** OpenSpec 与 SuperPowers 官方 skill，只做**叠加约束**，不复制其步骤，不干预其内部定义。
-- 目录结构不得干扰各工具默认命令：`pnpm` 仅覆盖 `apps/*`+`packages/*`；Python 命令在 `services/api/` 内执行。
+- 目录结构不得干扰各工具默认命令：`pnpm` 仅覆盖 `apps/*`+`packages/*`；Python 命令在 `services/api/` 内执行（B-1 重建前该目录为空；不得在 `legacy/` 内执行命令）。

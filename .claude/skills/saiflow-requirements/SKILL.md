@@ -21,7 +21,7 @@ description: SaiFlow 需求分析纪律。在 OpenSpec propose 之上叠加：�
 ## 产物（只有两类）
 - `openspec/changes/<change>/proposal.md`
 - `openspec/changes/<change>/specs/<capability>/spec.md`
-- 完成后执行 `openspec validate --change <change>` 并通过，由负责人逐条确认。
+- 完成后执行 `openspec validate <change>` 并通过，由负责人逐条确认。
 
 ## 不做
 - 不写 `design.md`、`tasks.md`（方案由 SuperPowers `writing-plans` 写入 `plan.md`）。

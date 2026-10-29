@@ -5,8 +5,8 @@ context: |
   SaiFlow — 面向泰国 SME 制造企业的纸质单据 OCR 数字化录入系统（“We turn paper into process.”）。
 
   技术栈：
-  - 后端：Python >=3.12 + FastAPI（services/api，STD-005），Cloud Run 部署；Cloud SQL PostgreSQL、私有 GCS、Firestore、Cloud Functions、Secret Manager。
-  - 前端：React（apps/web-pc：Ant Design；apps/line-mini：Ant Design Mobile，STD-006）；共享库 packages/*。
+  - 后端：Python >=3.12 + FastAPI（services/api，STD-005；B-1 重建前目录为空），Cloud Run 部署；Cloud SQL PostgreSQL、私有 GCS、Firestore、Cloud Functions、Secret Manager。
+  - 前端：React（apps/web-pc：Ant Design；apps/line-mini：Ant Design Mobile，STD-006；B-1 重建前目录为空）；共享库 packages/*。
   - legacy/ 为旧代码只读参考，不参与构建，不被新代码引用。
   - 工具链：pnpm workspace 管理 JS（apps/*、packages/*）；services/ 为独立 Python 工具链，不在 pnpm glob 内。
 

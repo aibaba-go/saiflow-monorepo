@@ -60,7 +60,7 @@ accepted（2026-10-30 负责人确认）
 | 阶段 | 工具 / 命令 | 产物（位置） | 负责人确认点 |
 |------|-------------|--------------|--------------|
 | ① 需求澄清 | `/opsx:explore` | 无文件，或 change 内的笔记 | 需求边界、优先级（P0 限定）是否清楚 |
-| ② 需求规格 | `/opsx:propose`（叠加 `saiflow-requirements`） | `openspec/changes/<change>/proposal.md`、`.../specs/<capability>/spec.md` | **逐条确认** SHALL 语句与 Gherkin AC；`openspec validate --change <change>` 通过 |
+| ② 需求规格 | `/opsx:propose`（叠加 `saiflow-requirements`） | `openspec/changes/<change>/proposal.md`、`.../specs/<capability>/spec.md` | **逐条确认** SHALL 语句与 Gherkin AC；`openspec validate <change>` 通过 |
 | ③ 实施方案 | `superpowers:writing-plans` | `openspec/changes/<change>/plan.md` | **逐项确认** 架构取舍、数据模型/接口变化、任务拆分；含权衡的决策另写 ADR |
 | ④ 隔离环境 | `superpowers:using-git-worktrees` | 分支 `feat/<change>` | — |
 | ⑤ 实现 | `superpowers:test-driven-development` + `superpowers:executing-plans` | `apps/**`、`packages/**`、`services/**` 代码与测试 | 计划内的检查点按 plan 约定确认 |

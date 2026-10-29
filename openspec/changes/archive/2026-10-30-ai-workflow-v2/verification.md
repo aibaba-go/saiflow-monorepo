@@ -34,3 +34,15 @@
 
 - 未推送：分支、tag `legacy-v1`、5 个被改写历史的分支均只在本地，force push 待负责人确认。
 - `pnpm -r build/test/lint`：工作区当前没有应用，未运行（B-1 重建后恢复）。
+
+## 终审后订正（2026-10-30）
+
+| 终审发现 | 处理 | 复查 |
+|----------|------|------|
+| C1 `legacy/services/api/sample/` 两个文件含明文数据库密码（Firestore Mongo、Cloud SQL 公网 IP） | 从当前代码树删除；历史清除与密码轮换待负责人决定 | `git grep` 凭据模式扫描 `legacy/` 为 0 |
+| C2 tag `20261018`、`20261020` 仍指向未清理的旧历史（各 32 个命中），上文“旧对象仅剩 `origin/*` 可达”的表述**不成立** | 待与 C1 一并改写 tag 后 force push | 见负责人确认后的推送记录 |
+| C3 `openspec validate --change` 在 CLI 1.10.0 报 `unknown option` | 全部改为 `openspec validate <change>` | 非归档文档中命中 0 |
+| I1 `/opsx:propose` 官方 skill 会继续生成 design/tasks | `AI-WORKFLOW.md` §6 明确“只生成到 specs 为止”，status/archive 提示属预期 | — |
+| I2 `AGENTS.md` 读取顺序与规则 6 仍以 EPIC/AC 为正本 | 改为以 `openspec/specs/` 为正本，未迁移时仅作参考 | — |
+| I3 STD-004 仍有 subagent 措辞与 `design.md` | 改为 `plan.md` 与新描述 | 命中 0 |
+| I4 `apps/`、`services/` 被写成现状 | 标注“B-1 重建的目标结构，当前为空”，禁止在 `legacy/` 执行命令 | — |

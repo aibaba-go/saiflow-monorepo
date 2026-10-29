@@ -26,7 +26,7 @@ doc_source: manual
 saiflow/
 ├── AGENTS.md                              # AI 仓库入口（优先阅读）
 ├── CLAUDE.md                              # Claude Code 入口（转发 AGENTS.md）
-├── AI-WORKFLOW.md                         # AI 协作工作流（阶段、subagent、提示词）
+├── AI-WORKFLOW.md                         # AI 协作工作流（阶段与确认点、改动分级、框架使用边界）
 ├── README.md
 ├── .claudeignore                          # Claude Code 索引排除列表（node_modules / 构建产物 / 临时文件等）
 ├── pnpm-workspace.yaml  package.json      # JS 工作区根（glob: apps/*, packages/*）
@@ -74,7 +74,7 @@ saiflow/
 |----|------|-----------|------|------|
 | 入口 | `AGENTS.md`、`AI-WORKFLOW.md` | 去哪读、怎么协作 | 人 + AI | 导航 |
 | 能力 | `.claude/skills/` | “怎么做” | AI | 流程与纪律 |
-| 变更 | `openspec/` | “这次改什么” | AI + 开发 | 提案/规格/任务 |
+| 变更 | `openspec/` | “这次改什么” | AI + 开发 | 提案 / 规格 / 方案 / 验证 |
 | 成果 | `docs/` | “产品是什么” | PM + 开发 | 持久知识 |
 
 ---
@@ -82,9 +82,9 @@ saiflow/
 ## 3. 放置规则
 
 1. **新增业务能力** → 通过 OpenSpec 变更（`openspec/changes/<change>/`），能力契约沉淀到 `openspec/specs/`。
-2. **新增数据实体或接口** → 定义在 `docs/30-design/`；变更级增量写在对应变更的 `design.md`。
+2. **新增数据实体或接口** → 定义在 `docs/30-design/`；变更级增量写在对应变更的 `plan.md`。
 3. **产品级设计** → `docs/10-product/`（面向整体产品，非单个需求）。
-4. **单需求设计** → 对应变更内的 `design.md`，不进 `docs/`。
+4. **单需求设计** → 对应变更内的 `plan.md`，不进 `docs/`。
 5. **对外 API 契约** → 由后端 OpenAPI 生成后发布到 `docs/30-design/API-Spec.md`，**禁止手写第二份**。
 6. **含权衡的技术决策** → `docs/30-design/adr/ADR-nnn-*.md`。
 7. **新增术语** → `docs/10-product/Glossary.md`；其余文档链接引用。
@@ -122,7 +122,7 @@ saiflow/
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
-| 2.5.0 | 2026-10-30 | Product Engineering | 按 ADR-006：新增 `legacy/`（规则 12）与 `.claude/archive/`；删除 `.claude/agents/` 执行层；change 目录产物改为 proposal / specs / plan / verification |
+| 2.5.0 | 2026-10-30 | Product Engineering | 按 ADR-006：新增 `legacy/`（规则 12）与 `.claude/archive/`；删除 `.claude/agents/` 执行层；change 目录产物改为 proposal / specs / plan / verification；规则 2、4 的变更级设计改写入 `plan.md` |
 | 2.4.6 | 2026-10-12 | Product Engineering | 新增 `docs/00-standards/Document-Source-Guide.md`（STD-007）；目录树增加 `(manual)` / `(generated)` 标注；引用 STD-001 v1.0.2 的 `doc_source` 字段 |
 | 2.4.5 | 2026-10-12 | Product Engineering | 新增 `docs/00-standards/React-Frontend-Structure.md`（STD-006），定义 `apps/*`、`packages/*` 目录结构与强制约定 |
 | 2.4.4 | 2026-10-12 | Product Engineering | 新增 `docs/00-standards/Python-Backend-Structure.md`（STD-005），定义 `services/api/` 目录结构与强制约定 |

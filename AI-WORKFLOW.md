@@ -23,17 +23,17 @@ doc_source: manual
 
 ## 2. 阶段与工具分工
 
-交接点：delta spec 经负责人确认，且 `openspec validate --change <change>` 通过。
+交接点：delta spec 经负责人确认，且 `openspec validate <change>` 通过。
 
 | 阶段 | 工具 / 命令 | 产物（位置） | 负责人确认点 |
 |------|-------------|--------------|--------------|
 | ① 需求澄清 | `/opsx:explore` | 无文件，或 change 内的笔记 | 需求边界、优先级（P0 限定）是否清楚 |
-| ② 需求规格 | `/opsx:propose`（叠加 `saiflow-requirements`） | `openspec/changes/<change>/proposal.md`、`.../specs/<capability>/spec.md` | **逐条确认** SHALL 语句与 Gherkin AC；`openspec validate --change <change>` 通过 |
+| ② 需求规格 | `/opsx:propose`（叠加 `saiflow-requirements`） | `openspec/changes/<change>/proposal.md`、`.../specs/<capability>/spec.md` | **逐条确认** SHALL 语句与 Gherkin AC；`openspec validate <change>` 通过 |
 | ③ 实施方案 | `superpowers:writing-plans` | `openspec/changes/<change>/plan.md` | **逐项确认** 架构取舍、数据模型/接口变化、任务拆分；含权衡的决策另写 ADR |
 | ④ 隔离环境 | `superpowers:using-git-worktrees` | 分支 `feat/<change>` | — |
 | ⑤ 实现 | `superpowers:test-driven-development` + `superpowers:executing-plans` | `apps/**`、`packages/**`、`services/**` 代码与测试 | 计划内的检查点按 plan 约定确认 |
 | ⑥ 验证与审查 | `superpowers:verification-before-completion`、`superpowers:requesting-code-review` | `openspec/changes/<change>/verification.md`（AC → 测试 → 结果） | 审阅验证结果与审查意见 |
-| ⑦ 收尾 | `superpowers:finishing-a-development-branch` → `/opsx:archive` | 合并分支；delta 合并进 `openspec/specs/`；change 移入 `openspec/changes/archive/` | 确认合并；**归档是必做步骤** |
+| ⑦ 收尾 | `/opsx:archive`（在分支内、合并前完成）→ `superpowers:finishing-a-development-branch` | 合并分支；delta 合并进 `openspec/specs/`；change 移入 `openspec/changes/archive/` | 确认合并；**归档是必做步骤** |
 
 ## 3. 改动分级
 
@@ -83,6 +83,7 @@ openspec/changes/<change>/
 - **需求阶段（①②）只用 OpenSpec**，不调用 `superpowers:brainstorming`。SuperPowers 从 ③ `writing-plans` 开始接手，以已确认的 delta spec 为输入。项目规则优先于 skill 自带的触发要求。
 - SuperPowers 的 plan **不写入** `docs/superpowers/`，固定写入 `openspec/changes/<change>/plan.md`。
 - **不使用项目自定义 subagent**（已停用的定义在 `.claude/archive/`）。SuperPowers、OpenSpec 内部派生的 subagent（如代码审查）及其内部定义照常使用、不干预；仅当框架行为与本文件严重重复（如产出第二份规格或方案）时，才在本节加以约束。
+- **`/opsx:propose` 只生成到 specs 为止**：OpenSpec 官方 skill 与 `openspec status` 会提示继续生成 `design.md`、`tasks.md` 并运行 `/opsx:apply`，本项目忽略这些提示；`openspec status` 显示 `isPlanningComplete: false`、archive 报告 design/tasks 未完成均属预期。
 - 不手改 OpenSpec 生成物：`.claude/commands/opsx/**`、`.claude/skills/openspec-*`。
 
 ## 7. 命令速查
@@ -91,7 +92,7 @@ openspec/changes/<change>/
 # 需求（OpenSpec，主会话）
 /opsx:explore                         # 澄清需求，不写代码
 /opsx:propose                         # 新建 change：proposal + delta spec
-openspec validate --change <change>   # 校验规格
+openspec validate <change>          # 校验规格
 /opsx:archive                         # 合并 delta 到 openspec/specs/ 并归档
 openspec archive <change> --skip-specs   # 纯文档 / 基础设施 change 的归档（其 .openspec.yaml 须含 skip_specs: true）
 
