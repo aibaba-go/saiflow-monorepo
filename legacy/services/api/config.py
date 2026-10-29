@@ -121,8 +121,8 @@ class Config:
     UPLOAD_SESSION_TTL_SECONDS = 24 * 3600
 
     # ---------- TextIn OCR provider（唯一厂商，PRD §12） ----------
-    TEXTIN_APP_ID = os.getenv("TEXTIN_APP_ID", "b3e32c671acc4e3e06bf7decf3ac34f3")
-    TEXTIN_SECRET_CODE = os.getenv("TEXTIN_SECRET_CODE", "19c4b48830795b42b7c0e1b421419ccf")
+    TEXTIN_APP_ID = os.getenv("TEXTIN_APP_ID", "")
+    TEXTIN_SECRET_CODE = os.getenv("TEXTIN_SECRET_CODE", "")
     TEXTIN_ENDPOINT = os.getenv(
         "TEXTIN_ENDPOINT", "https://api.textin.ai/api/v1/xparse/parse/sync"
     )

@@ -39,7 +39,8 @@
 
 | 终审发现 | 处理 | 复查 |
 |----------|------|------|
-| C1 `legacy/services/api/sample/` 两个文件含明文数据库密码（Firestore Mongo、Cloud SQL 公网 IP） | 从当前代码树删除；历史清除与密码轮换待负责人决定 | `git grep` 凭据模式扫描 `legacy/` 为 0 |
+| C1 `legacy/services/api/sample/` 两个文件含明文数据库密码（Firestore Mongo、Cloud SQL 公网 IP） | 从当前代码树删除；历史清除与密码轮换待负责人决定 | 见下一行 |
+| C1 补充：复扫发现 TextIn App ID / Secret Code（`config.py`、`textin/config.py` 默认值）与 MySQL 主机 / 密码（`migrate_mysql_to_pg.py` 默认值）也是真实值 | 当前代码树中默认值改为空字符串；历史清除与轮换待负责人决定 | 32 位十六进制默认值、`AIza`/`sk-`/私钥/URL 内嵌凭据扫描 `legacy/` 均为 0 |
 | C2 tag `20261018`、`20261020` 仍指向未清理的旧历史（各 32 个命中），上文“旧对象仅剩 `origin/*` 可达”的表述**不成立** | 待与 C1 一并改写 tag 后 force push | 见负责人确认后的推送记录 |
 | C3 `openspec validate --change` 在 CLI 1.10.0 报 `unknown option` | 全部改为 `openspec validate <change>` | 非归档文档中命中 0 |
 | I1 `/opsx:propose` 官方 skill 会继续生成 design/tasks | `AI-WORKFLOW.md` §6 明确“只生成到 specs 为止”，status/archive 提示属预期 | — |

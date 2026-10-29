@@ -23,10 +23,10 @@ from psycopg.types.json import Jsonb
 load_dotenv()
 
 MYSQL = {
-    "host": os.getenv("MYSQL_HOST", "gz-cynosdbmysql-grp-g82l5jpt.sql.tencentcdb.com"),
+    "host": os.getenv("MYSQL_HOST", ""),
     "port": int(os.getenv("MYSQL_PORT", "25349")),
     "user": os.getenv("MYSQL_USER", "root"),
-    "password": os.getenv("MYSQL_PASSWORD", "T48m.j{]5xJ!Qp"),
+    "password": os.getenv("MYSQL_PASSWORD", ""),
     "database": os.getenv("MYSQL_DB", "sai-flow"),
 }
 

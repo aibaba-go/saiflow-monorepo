@@ -63,8 +63,8 @@ def build_textin_settings(app_config: Mapping[str, Any]) -> TextInSettings:
     data: dict[str, Any] = {}
 
     candidates = {
-        "textin_app_id": ("TEXTIN_APP_ID", "b3e32c671acc4e3e06bf7decf3ac34f3"),
-        "textin_secret_code": ("TEXTIN_SECRET_CODE", "19c4b48830795b42b7c0e1b421419ccf"),
+        "textin_app_id": ("TEXTIN_APP_ID", ""),
+        "textin_secret_code": ("TEXTIN_SECRET_CODE", ""),
         "textin_endpoint": ("TEXTIN_ENDPOINT", "https://api.textin.ai/api/v1/xparse/parse/sync"),
         "textin_extract_endpoint": (
             "TEXTIN_EXTRACT_ENDPOINT",
