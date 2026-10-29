@@ -69,3 +69,6 @@ temp/
 
 # OpenSpec 本地状态（如后续有生成物再调整）
 openspec/.cache/
+
+# curl cookie jars from local debugging
+*cookies*.txt
