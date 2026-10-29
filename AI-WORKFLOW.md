@@ -93,7 +93,7 @@ openspec/changes/<change>/
 /opsx:propose                         # 新建 change：proposal + delta spec
 openspec validate --change <change>   # 校验规格
 /opsx:archive                         # 合并 delta 到 openspec/specs/ 并归档
-openspec archive <change> --skip-specs   # 纯文档 / 基础设施 change 的归档
+openspec archive <change> --skip-specs   # 纯文档 / 基础设施 change 的归档（其 .openspec.yaml 须含 skip_specs: true）
 
 # 实现（SuperPowers）
 superpowers:writing-plans                       # 写 plan.md
