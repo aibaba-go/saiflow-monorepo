@@ -4,8 +4,7 @@ node_modules/
 
 # ---------- 构建产物 ----------
 # dist/
-apps/web-pc/dist
-apps/line-mini/dist
+**/dist/
 build/
 out/
 *.tsbuildinfo
@@ -72,3 +71,7 @@ openspec/.cache/
 
 # curl cookie jars from local debugging
 *cookies*.txt
+
+# uploaded / exported documents (PDPA, STD-004 rule 9)
+**/storage/files/
+**/storage/exports/
