@@ -13,6 +13,8 @@ related: [DM-Document, DM-ArchiveRecord, API-5, API-6]
 
 # EPIC-04 — 多渠道录入与归档 【核心差异化功能】
 
+> **注意（2026-10-30）：** 本 Epic 尚未按 PRD v3 改写，与 `PRD-SaiFlow.md` v3.1 冲突时以 PRD 为准；将随 ADR-006 §7 的重建步骤迁入 `openspec/specs/`。文中引用的 `Architecture` / `Data-Model` 旧章节细节见 git tag `legacy-v1` 中的版本。
+
 ## 1. Epic 摘要
 - **目标：** 将已核验的数据录入企业现有系统，并在**私有 Google Cloud Storage Bucket**中归档原始图像和结构化数据。
 - **范围内（V1.0 / P0）：** Excel 自动录入、GCS 归档（双重存储、自动命名、分类对象前缀）、合并 PDF 账单包。

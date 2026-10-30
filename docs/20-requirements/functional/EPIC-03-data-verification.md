@@ -13,6 +13,8 @@ related: [DM-Document, DM-ExtractedField, DM-ChangeLog, DM-ReviewRecord, DM-Resu
 
 # EPIC-03 — 数据人工核验与修改
 
+> **注意（2026-10-30）：** 本 Epic 尚未按 PRD v3 改写，与 `PRD-SaiFlow.md` v3.1 冲突时以 PRD 为准；将随 ADR-006 §7 的重建步骤迁入 `openspec/specs/`。文中引用的 `Architecture` / `Data-Model` 旧章节细节见 git tag `legacy-v1` 中的版本。
+
 ## 1. Epic 摘要
 - **目标：** 让人员在录入或归档前确认/更正 OCR 输出（human-in-the-loop），并以可配置的 0/1/2 级复核控制数据是否可正式进入业务流程。
 - **范围内：** 并排展示结果、单字段编辑、批量更正、错误红色标记、缺失字段提醒、核验确认、固定层级复核、变更/复核日志。

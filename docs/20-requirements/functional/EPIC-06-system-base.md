@@ -13,6 +13,8 @@ related: [DM-User, DM-Role, DM-OperationLog, API-8]
 
 # EPIC-06 — 基础系统（账户、权限、配置、i18n）
 
+> **注意（2026-10-30）：** 本 Epic 尚未按 PRD v3 改写，与 `PRD-SaiFlow.md` v3.1 冲突时以 PRD 为准；将随 ADR-006 §7 的重建步骤迁入 `openspec/specs/`。文中引用的 `Architecture` / `Data-Model` 旧章节细节见 git tag `legacy-v1` 中的版本。
+
 ## 1. Epic 摘要
 - **目标：** 提供每个其他 epic 都依赖的基础系统服务：身份、基于角色的访问控制、操作审计、多语言 UI 和本地配置。
 - **范围内：** 注册/登录、RBAC 权限、操作日志、语言切换（泰语/英语/中文）、基础参数配置、本地存储设置。

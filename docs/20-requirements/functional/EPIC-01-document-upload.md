@@ -13,6 +13,8 @@ related: [DM-Document, API-1]
 
 # EPIC-01 — 文档上传与预处理
 
+> **注意（2026-10-30）：** 本 Epic 尚未按 PRD v3 改写，与 `PRD-SaiFlow.md` v3.1 冲突时以 PRD 为准；将随 ADR-006 §7 的重建步骤迁入 `openspec/specs/`。文中引用的 `Architecture` / `Data-Model` 旧章节细节见 git tag `legacy-v1` 中的版本。
+
 ## 1. Epic 摘要
 - **目标：** 让文员以最少操作将纸质单据作为干净、可进行 OCR 的图像录入系统（拍照、扫描或文件导入），支持单个或批量。
 - **范围内：** 采集/导入、格式校验、批量上传、预处理（矫正、去阴影、降噪、裁剪）、上传状态反馈。

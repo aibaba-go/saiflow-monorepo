@@ -13,6 +13,8 @@ related: [DM-DocumentTemplate, DM-TemplateFieldMapping, API-10, OCR-Pipeline]
 
 # EPIC-08 — 文档格式模板配置
 
+> **注意（2026-10-30）：** 本 Epic 尚未按 PRD v3 改写，与 `PRD-SaiFlow.md` v3.1 冲突时以 PRD 为准；将随 ADR-006 §7 的重建步骤迁入 `openspec/specs/`。文中引用的 `Architecture` / `Data-Model` 旧章节细节见 git tag `legacy-v1` 中的版本。
+
 > 管理员通过配置界面维护不同单据版式的识别与转换规则。模板将 TextIn 输出的原始 JSON 映射为 SaiFlow 的规范字段和行项目；它不是通用工作流或业务规则引擎。
 
 ## 1. Epic 摘要

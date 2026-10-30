@@ -13,6 +13,8 @@ related: [DM-Document, DM-LineItem, DM-ExtractedField, DM-ExtractionPayload, DM-
 
 # EPIC-02 — 多类型文档 OCR 识别
 
+> **注意（2026-10-30）：** 本 Epic 尚未按 PRD v3 改写，与 `PRD-SaiFlow.md` v3.1 冲突时以 PRD 为准；将随 ADR-006 §7 的重建步骤迁入 `openspec/specs/`。文中引用的 `Architecture` / `Data-Model` 旧章节细节见 git tag `legacy-v1` 中的版本。
+
 > **核心模块。** 识别每一种支持的文档类型，提取其必需字段，处理泰语/英语/中文混合文本，对置信度评分，并将低置信度输出标记为需要人工核验。字段定义位于 `docs/30-design/Data-Model.md`；本 epic 定义必须识别的内容及规则。
 
 ## 1. Epic 摘要
