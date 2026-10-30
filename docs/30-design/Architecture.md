@@ -3,8 +3,8 @@ doc_id: DES-001
 title: "SaiFlow — 系统架构"
 type: design
 status: active
-version: 2.5.1
-updated: 2026-10-28
+version: 2.5.4
+updated: 2026-10-29
 owner: Product Engineering
 source: "PRD-001 §3.1, §4, §5; ADR-001"
 related: [DM-Document, DM-ExtractionPayload, DM-ConversionJob, OCR-Pipeline, API-Spec, NFR-SEC, ADR-001, ADR-005]
@@ -131,6 +131,9 @@ Browser upload → FastAPI format/size validation → private GCS original objec
 | 文档数据 | 私有 GCS Bucket | 对原件和工件进行持久的双重存储 |
 | 数据库连接 | Cloud Run：Unix 套接字 `/cloudsql/saiflow-509205:asia-southeast1:saiflow-dev`，专用数据库用户 `saiflow_api`，口令经 Secret Manager `saiflow-cloudsql-password` **版本 1** 注入；本地：TLS TCP，`PGSSLMODE=require` | 最小权限数据库用户；未修改 `postgres` 旧密码；ADR-005 回切记录 |
 | 对象访问 | 专用 Cloud Run 服务账号 | 最小权限 GCS 对象访问 |
+| 后端并发容量 | `saiflow-api`：gunicorn `--workers 1 --threads 12`，Cloud Run `--concurrency 12`（二者必须相等），SQLAlchemy 连接池 `pool_size=5 + max_overflow=10 = 15` ≥ 12 请求线程 + 1 个 OCR worker；`test_capacity.py` 守住仓库内约束 | NFR-PERF-005：原 `--threads 8` 对 `--concurrency 80` 时第 9 个起的请求只在进程内排队、不触发扩容；单进程保证每实例仅一个 OCR 轮询线程（认领为原子条件更新），最坏连接数（maxScale 20 × 15 = 300）与调整前相同 |
+| 移动端上传通道 | 预检 POST、原字节 PUT 与完成 POST 均使用同源 XHR，沿用 Cookie/CSRF、120 秒阶段上限、原字节与单调进度 | FR-UPLOAD-001/010；网络错误/中断/超时/状态 0 结束等待，不自动重发写请求；不修改 GCS/TextIn/IAM |
+| 前端读请求合并 | `refreshQuota()`：同会话进行中的 `/me/quota` 复用；成功结果 5 秒内且期间无任何写请求结束时复用；会话切换或任一写请求结束即失效，旧会话迟到响应不覆盖 | NFR-PERF-005：启动、登录与首页挂载原本在数秒内各发一次，跨境链路下每次一个完整往返 |
 | 密钥 | 在运行时注入 Secret Manager | 源码或镜像中不包含密钥 |
 | 区域 | 部署配置 | 必须为 PDPA/数据驻留需求确认 |
 
@@ -142,6 +145,16 @@ Browser upload → FastAPI format/size validation → private GCS original objec
 
 **2026-10-28 LINE 登录兼容修复发布（FR-SYS-001/011）：** 手机出现 `Sign-in failed` 时，06:07/06:13 UTC 的 `/auth/line` 日志返回 200，但真实域名仍服务 `index-BUTDgRGj.js`；旧包认证成功后读取 `workspaces.find`，与新 API 返回 `tenants` 不兼容。前端已切到 `saiflow-line-mini-00022-dlx` 100% 流量，镜像 `sha256:ce5ab92e00493b8a375e552e49b467ce7e943b773f242030cbab0133fe39aaf2`，真实域名 `https://saiflow.zhpulan.cn/` 的 7 个静态文件逐一与本地 `index-Dq5WLJaK.js` 构建 SHA-256 一致；代理健康 200，匿名 session 401 且不发 Cookie。冻结构建的 25 项全 mock 浏览器、6 项真实 App/store/LIFF 源码模块模拟、16 项 LIFF 恢复/取消检查及类型检查/Vite 构建通过。桌面真实 SDK 进入配置 LIFF ID 的官方授权入口，应用 API 全拦截、OAuth 提交截断；未使用用户账号、未创建或删除真实记录、未部署后端或重建数据库。真实手机完整登录及重开 WebView 存储连续性仍由用户验收，不以桌面/模拟替代。生产依赖审计零告警；既有 Vite 开发工具告警不在 Nginx 运行镜像中，本次未升级开发工具。
 
+**2026-10-29 并发对齐与请求合并发布（NFR-PERF-005）：** API `saiflow-api-00032-hvr`（`sha256:f4e018a8df8e3a7a005ac332aab7cf2a31fd4bdf234ccf7edd08aa27e573b799`，`containerConcurrency=12`、gthread）与前端 `saiflow-line-mini-00025-9q6`（`sha256:c0f68d1dd061f5a5abe9d02ae33d54df64a376cdf3d450183c889cb00cd9a967`）均以 `--no-traffic` 部署，经临时标签核验后 API 先切、前端随后切至 100%，临时标签已移除，latestCreated/latestReady/流量一致。切流前将线上 00029 的源码包与本次源码逐文件比对，仅 Dockerfile、config.py、.gcloudignore 与新增 test_capacity.py 不同；上传清单不含 Cookie 罐或 `.env`。标签与线上版本对相同匿名探针（session/plans/quota/dev/line）返回码一致；24 路并行健康检查全部 200。真实域名入口为 `index-6vHEALzW.js`，7 个静态文件 SHA-256 与本地构建一致，代理健康 200，匿名 session 401 且无 Set-Cookie，无效 LINE token 401；01:34Z 查询两新 revision 的 ERROR 级日志为 0。隔离验证：354 项后端回归 + 3 项容量约束、9 项 quota 合并/失效源码模拟、16 项 LIFF 恢复、25 项冻结构建浏览器与 6 项模块检查、类型检查与 Vite 构建通过；未使用真实账户、未写生产数据。上海反向代理跨境链路、gzip/缓存头与最小实例数不在本次范围，仍为主要延迟来源；真实手机体感由用户验收。
+
+**2026-10-29 Cloud Run 直连入口修复发布（FR-SYS-001/011、FR-UPLOAD-001/010）：** 只读 LINE public context 返回已登记 Endpoint `https://saiflow-line-mini-920915040833.asia-southeast1.run.app/`，scope 为 `openid/profile`。旧实现从另一种 Cloud Run 域名或旧业务域名强制当前 URL 为 redirectUri，真实 SDK GET 授权探针复现 `/error400`；登记域名正常进入 LINE Login 200。修复使用默认 Endpoint OAuth，并在 LINE 内无 token/入口不匹配时保持一次官方恢复门禁，23 项隔离源码检查通过。图片上传截图 14:26（06:26Z）前后，session/jobs/notifications/quota 查询均 200，所查窗口内未见对应 POST uploads；13:41（05:41Z）已有一组三段上传 201/200/200。证据支持首先排查客户端上传通道，不支持归因 TextIn/GCS CORS 或断言真机断连原因。三段上传已统一为同源 XHR，增加 120 秒阶段上限、状态 0/异常响应有界失败，保留原始字节、Cookie/CSRF/单调进度，不自动重复写入；14 项源码和 2 项 Chromium 上传检查通过。应用 API 全 mock、真实 SDK 只读 GET 授权入口未提交账号；未修改 LINE 控制台、GCS/IAM、API/数据库或真实业务数据。
+
+本次仅发布前端 `saiflow-line-mini-00036-zij`，镜像 `sha256:3ab6ed3c3c54c805735a8b0d52aefd71a0f0ebcced4ced3a44e0943fd7497ad2`；`--no-traffic` 创建候选，标签核验后于 07:34Z 开始显式切流，已核实 latestCreated/latestReady/100% traffic 一致，`liff-upload-check` 标签已移除。后端仍为 `saiflow-api-00032-hvr` 100% 流量、并发 12，未重部署。候选标签、登记区域域名、Cloud Run 别名及旧业务域名的 7 个静态文件均与冻结构建 `index-z3xqQWTr.js` 一致（入口 JS SHA-256 `9f5c111a122b4bec5596a9787de805efd1f0ae8d2e7d279e6c7db7c6c849cdc3`），各入口代理健康 200、匿名 session 401 且无 Set-Cookie。上传清单 58 个文件哈希固定、不含 `.env` 或 Cookie 罐；类型检查/生产构建、25 项冻结构建浏览器、6 项源模块、9 项 quota 回归通过。最终冻结构建的真实 SDK 只读探针再次确认：登记域名默认 OAuth 无 redirectUri 覆盖并进入 LINE Login 200；另两域名只进入无查询参数的官方 LIFF 恢复入口。07:28:00Z 至 07:40:18Z 对前端新 revision 与既有 API revision 的 ERROR 级日志查询为 0，不代表长期可用性保证。本地核验代理曾间歇断开 TLS，静态 GET 经有界重试通过；未关闭 TLS 校验、未对上传写请求增加自动重试。未使用真实账号、未执行生产上传/OCR；真实 iPhone/LINE WebView 完整授权、存储连续性及同一原图上传仍待用户验收，Chromium UA 模拟与代码审查不替代真机证据。
+
+**2026-10-29 新增字段确认完整性修复发布（FR-VERIFY-015）：** 核验页新增表单原先只保存在 `StructuredDataView.newFields`，未点击小「+」就 Continue 时，父页面只发送 `draft`，因而漏掉已填写输入；并非后端过滤自定义字段。组件现公开 `commitPendingFields()`/`hasPendingFields`，ResultPage 在所有认证/订阅分支及保存/确认之前同步校验并纳入新增输入；任一空名/重名保留所有表单并聚焦提示，不部分提交、不导航。完全未填写或已取消的输入不额外保存，Reset 包含尚未提交的表单输入；新增表单采用有界 grid，避免小屏两个操作按钮被裁。沿用 `addFieldAt` 与现有类型推断、PATCH `structured`/`expected_version`/`confirm`、JSON 快照和最终页重读，不更改后端运行代码、数据库模型、认证/订阅资格，也不补写历史任务。12 项新增隔离后端参数用例验证自定义数字/前导零文本/泰文字段在草稿与确认、GET 重读、真实 XLSX 构造中保留且旧快照不变；完整隔离认证/结果与容量回归 366 项通过，禁用真实数据库/网络/SMTP，未导入 app.py。前端类型检查/构建通过；冻结 `index-DyunDzNw.js`（SHA-256 `e1a0a1eb11ca95698fbcfb1e5e70808474c5866aac02ad6b1010cf466405b5c8`）的 25 项新增字段浏览器场景、25 项原有认证/注册/订阅浏览器回归及 6 项源模块模拟全部通过。截图实际核验 375px 未点小「+」的 `kkk=123` 在最终只读页仍显示，320/375/430px 两按钮均完整可见可点击；覆盖多分区原子校验、en/th 空名/重名、草稿分流、Reset/取消与 503 后显式手动重试。浏览器 API 全合成、外部 HTTP/WebSocket 全阻断，未验证真实 iOS 或生产持久化；后端的真实 XLSX 构造测试同样使用合成快照，不是生产导出。两轮先前 harness 失败证据保留，最终仅修正多输入等待定位与语言 fixture，未改模块 mock、原产品断言或构建。
+
+用户授权后，仅前端 `saiflow-line-mini-00039-xuz` 已发布，镜像 `sha256:848e9bf3e436519ace9b82a68802bb744d08d995d8fd7507ba89e651032a7094`。以 `--no-traffic` 创建候选，`field-check` 标签核验通过后显式切至 100%，最终 latestCreated/latestReady/traffic 一致，临时标签已移除。候选标签、登记区域域名、Cloud Run 别名及旧业务域名的 7 个静态文件均与上述冻结构建逐一 SHA-256 一致，代理健康均 200、匿名 session 均 401 且无 Set-Cookie；58 个白名单上传文件哈希保持不变，不含 `.env` 或 Cookie 罐。后端仍为 `saiflow-api-00032-hvr` 100% 流量、并发 12，未重部署，未修改数据库或真实业务数据。13:09:00Z 至 13:19:19Z 对前端新 revision 与既有 API revision 的 ERROR 级以上日志限定查询为 0，不代表长期可用性保证。真实 iPhone/LINE WebView 新增字段后完整确认及生产持久化仍待用户验收；未恢复历史已丢失字段，本次发布与既有 00036 记录分开。
+
 ## 6. 安全性与可靠性
 
 - **网络：** Cloud Run 服务使用 HTTPS；Cloud SQL、Firestore 和 Cloud Functions 不得向浏览器暴露管理凭据或公共写入权限。
@@ -152,7 +165,7 @@ Browser upload → FastAPI format/size validation → private GCS original objec
   - 不满足上述本地条件时，含 `dev_id` 的认证请求（即使同时携带有效 LINE `id_token`）必须在任何数据库访问前返回 `400 INVALID_ARGUMENT`，消息键 `auth.id_token_required`；不创建用户、会话、配额或业务数据，不触发游客数据归集。生产鉴权拒绝旧 `dev:` 身份的会话，但保留历史用户及业务数据，不批量清理或迁移；明确启用的本地开发仍可使用这些 dev 身份与未过期、未撤销的旧会话。
   - 真实 LINE `id_token` 由服务端验证 issuer（`iss`）、audience（`aud`，匹配配置的 LINE Channel ID）及 expiry（`exp`）；验证失败、LINE 不可用或配置缺失均不得回退至 dev 登录。
   - 本轮 [FR-SYS-001/010/011/014](../20-requirements/functional/EPIC-06-system-base.md) 调整启动/退出及注册触发，不改变生产/本地认证环境边界。启动仅以有效应用 Cookie 或游客会话进入主壳；LIFF SDK 的残留登录态不等于应用登录，绝不自动兑换 token。只有显式 LINE 按钮意图及其 OAuth 回跳可兑换 token，失败不自动 LINE、不回退 dev。
-  - **LIFF 初始化恢复（FR-SYS-001/011，AC-FR-SYS-001-07）：** `liff.ts` 缓存同一初始化 Promise，最多等待 20 秒；只缓存初始化、不缓存 token，超时后迟到成功不复活缓存。失败仅返回 `init/session/timeout` 安全分类。登录按钮显式意图下才可用不带当前查询参数的官方 LIFF 入口重开，`sessionStorage.saiflow_liff_reopen` 按 LIFF ID 防止同一上下文重复恢复，初始化成功清标记；无存储则停止。重开前保留原 `pendingAuth/pendingJob`，不转发 OAuth code/token、不修改草稿或调用开发认证。登录页以请求代次使 Back/卸载后的 SDK 结果失效；已发出的服务端认证不保证撤回，但取消后不再自动导航。此恢复不能证明真实 iOS 根因已消除，手机重开可能切换 WebView，存储连续性与完整授权仍需真实设备验收。
+  - **LIFF 初始化恢复（FR-SYS-001/011，AC-FR-SYS-001-07）：** `liff.ts` 缓存同一初始化 Promise，最多等待 20 秒；只缓存初始化、不缓存 token，超时后迟到成功不复活缓存。失败仅返回 `init/session/timeout` 安全分类。登录按钮显式意图下才可用不带当前查询参数的官方 LIFF 入口重开，`sessionStorage.saiflow_liff_reopen` 按 LIFF ID 防止同一上下文重复恢复，仅取得 SDK token 或外部浏览器位于已登记 Endpoint 下可继续 OAuth 时清标记；无存储则停止。LINE 内初始化成功但无 token 时不调用外部浏览器 `liff.login`，只显式恢复官方入口一次；另一种 Cloud Run 域名或错误路径同样先从官方入口重开，不在错源启动 PKCE。可用的外部 OAuth 调用 `liff.login()` 不覆盖 redirectUri，默认回跳 LINE 已登记 Endpoint，不转发当前 URL 查询参数；旧域名 Cookie、游客草稿与 sessionStorage 不保证跨源续接。重开前保留原 `pendingAuth/pendingJob`，不转发 OAuth code/token、不修改草稿或调用开发认证。登录页以请求代次使 Back/卸载后的 SDK 结果失效；已发出的服务端认证不保证撤回，但取消后不再自动导航。此恢复不能证明真实 iOS 根因已消除，手机重开可能切换 WebView，存储连续性与完整授权仍需真实设备验收。
   - 注册框仅 `route=auth && needsRegistration` 时显示；首页、上传与开始 OCR 不弹。结果核验 Continue 中游客/未注册者仅 dirty 时先 PATCH `confirm:false` 保存后进入 auth，已认证未注册者显示注册框，不进入 plans。`pendingAuth` 显式意图与 `pendingJob` 任务上下文分离，`sessionStorage` 仅存非凭据续接上下文，禁止 token/Cookie/CSRF。认证成功但仍需注册保留任务；注册完成且导航成功后才清任务，保存或恢复异常保留重试上下文、不得误跳 plans。取消登录/注册清显式意图及自动续接标记、返回 result 并保留已归集任务权限、服务端草稿与 LINE/应用会话；用户可在结果页手动继续，不自动恢复或确认。
   - 认证/注册成功重新读取任务，仅返回 result；原已 COMPLETED 才可 final，不自动 confirm 或跳订阅页。运行中试用界面 401 清理失效应用身份并恢复游客首页；认证窗口中的 401 保留可重试入口，不自动 LINE。
   - 退出确认后先写 `localStorage` 非凭据 `logout-pending` 标记，再以 10 秒超时调用 `POST /api/v1/auth/logout` 撤销旧会话与应用 Cookie；清身份、工作空间、CSRF 与待续意图，最佳努力清 LIFF SDK 态。成功清标记并恢复游客首页；失败/超时保留标记并锁定主壳、提示重试，禁止复用正式 Cookie。刷新或点击 Back 重试均先读取旧会话仅取得撤销用 CSRF，不应用旧身份，再撤销旧会话并恢复游客 scan 首页，不保留旧 My 路由；撤销成功前不恢复旧身份，绝不静默复登。取消退出确认不建立标记或撤销会话。
@@ -207,6 +220,9 @@ Browser upload → FastAPI format/size validation → private GCS original objec
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.5.4 | 2026-10-29 | Product Engineering | FR-VERIFY-015：Continue 校验并纳入尚在新增表单中的字段，Reset 包含输入，小屏控件完整可见；不改 API/JSON 或认证订阅资格，366 项隔离后端及 50 项浏览器/6 项源模块通过；仅前端 00039 100% 切流、标签移除、四入口资产/健康/匿名边界核验通过，镜像摘要及真机未验收边界见 §5 |
+| 2.5.3 | 2026-10-29 | Product Engineering | FR-SYS-001/011：Endpoint 同源/路径检查、默认 OAuth 与 LINE 内无 token 的一次恢复；FR-UPLOAD-001/010：三段同源 XHR、原字节/Cookie/CSRF/进度与有界失败；仅前端 00036 100% 切流、临时标签移除，四入口资产/健康/匿名边界核验通过；最终构建回归、真实 SDK 只读入口探针、镜像摘要及真机未验收边界见 §5，后端/数据库未变 |
+| 2.5.2 | 2026-10-29 | Product Engineering | NFR-PERF-005：后端 gunicorn `--threads 12` 与 Cloud Run `--concurrency 12` 对齐（单 worker、连接池 15 显式固定、`test_capacity.py` 约束）；前端 `/me/quota` 同会话同写代次请求合并与 5 秒复用；`.gcloudignore` 排除本地 Cookie 罐（NFR-SEC）；API 00032、前端 00025 100% 切流，发布证据见 §5 |
 | 2.5.1 | 2026-10-28 | Product Engineering | FR-SYS-001/011：记录 LIFF 有界 Promise、20 秒超时、安全分类、一次官方入口恢复与 sessionStorage 限制、Back/卸载请求失效；16 项隔离源码检查、25 项冻结构建浏览器、6 项模块及类型检查/生产构建通过；修复旧前端 workspaces/new API tenants 发布不匹配，新22版100%切流、真实域名7静态哈希一致，真实手机验收状态见 §5 |
 | 2.5.0 | 2026-10-28 | Product Engineering | FR-SYS-012/013/015/017/018：§6 权益章节改写为租户订阅模型（归属只有 `tenant_id`，`subscriptions` 持久化默认一个月 Kinder、个人按 `tenants.created_at`、企业按 `enterprises.verified_at`，审批写有效期、同档续费允许、降档 409），到期硬停 402 `plan.expired` 且历史可读，唯一计量 OCR_PAGE 按泰国自然月统计 `ocr_jobs.page_count`；删除 FREE 档、赠送额度、`quota_ledger` 与 `free_tasks`/`paid_pages`/`OCR_TASK` 计量表述；新增到期提醒五节点（`uq_plan_reminder_stage` 幂等、不回补、游客不提醒、worker 低频扫描、`PLAN_REMINDERS_ENABLED`）与通知中心；FR-SYS-015 手机号改为个人中心可改可清空。本次为文档与已实现代码对齐，未新增线上发布证据 |
 | 2.4.5 | 2026-10-27 | Product Engineering | FR-SYS-001/010..014/017、FR-VERIFY-016/017：记录 334 项隔离后端、21 项最终构建浏览器、6 项 OAuth 模块模拟与 9 项会话边界通过；退出失败锁壳及 Back/刷新撤销后回游客首页；新 API/前端 revision、镜像摘要与 100% 切流、静态哈希/健康/认证/原 Cloud SQL 与 SMTP 引用核验、标签移除及单次 ERROR 日志零条；无真实账户测试/schema 迁移，保留真实 LINE/收件箱/数据库并发/防猜码未验证边界 |

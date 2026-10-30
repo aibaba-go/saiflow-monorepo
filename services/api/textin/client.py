@@ -263,20 +263,29 @@ class TextInClient:
 
     @staticmethod
     def _parse(resp: httpx.Response) -> dict[str, Any]:
+        # FR-OCR-017：业务码与 HTTP 状态均参与失败判定；客户端不叠加重试。
         try:
             payload = resp.json()
         except ValueError as e:
             payload = TextInClient._decode_gbk_payload(resp)
             if payload is None:
-                raise TextInAPIError(-1, f"非 JSON 响应: {resp.text[:200]}") from e
+                raise TextInAPIError(
+                    -1, "TextIn returned a non-JSON response", http_status=resp.status_code,
+                ) from e
+        if not isinstance(payload, dict):
+            raise TextInAPIError(
+                -1, "TextIn response must be a JSON object", http_status=resp.status_code,
+            )
         code = payload.get("code", -1)
-        if code != 200:
-            message = payload.get("message", "unknown")
+        if code != 200 or not resp.is_success:
+            if code == 200:
+                code = resp.status_code
+            message = payload.get("message", f"HTTP {resp.status_code}")
             if isinstance(message, str) and "\ufffd" in message:
                 restored = TextInClient._decode_gbk_payload(resp)
                 if isinstance(restored, dict) and isinstance(restored.get("message"), str):
                     message = restored["message"]
-            raise TextInAPIError(code, message)
+            raise TextInAPIError(code, str(message), http_status=resp.status_code)
         # 把 data 提升到顶层，方便前端统一访问
         if "data" in payload and isinstance(payload["data"], dict):
             return {"code": code, **payload["data"], "message": payload.get("message", "")}

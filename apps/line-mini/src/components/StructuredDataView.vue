@@ -58,6 +58,11 @@ const visibleTableSections = computed<TableSection[]>(() => {
 
 /** 新增字段的临时输入（每个字段分区一份） */
 const newFields = ref<Record<string, { name: string; value: string }>>({});
+const validationRequested = ref(false);
+const fieldForms = new Map<string, HTMLFormElement>();
+const hasPendingFields = computed(() =>
+  Object.values(newFields.value).some((field) => field.name !== '' || field.value !== ''),
+);
 
 watch(
   () => props.data,
@@ -65,6 +70,7 @@ watch(
     emptiedFields.value = [];
     emptiedTables.value = [];
     newFields.value = {};
+    validationRequested.value = false;
   },
 );
 
@@ -84,12 +90,19 @@ function cancelAddField(path: string): void {
   delete newFields.value[path];
 }
 
-function canAddField(section: FieldSection): boolean {
+function fieldError(section: FieldSection): string {
   const state = newFields.value[section.path];
   const name = state?.name.trim() ?? '';
-  if (!name) return false;
+  if (!name) return t('result.fieldNameRequired');
   const node = getAtPath(props.data, section.parts);
-  return !isRecord(node) || !Object.prototype.hasOwnProperty.call(node, name);
+  if (!isRecord(node) || Object.prototype.hasOwnProperty.call(node, name)) {
+    return t('result.fieldNameDuplicate');
+  }
+  return '';
+}
+
+function canAddField(section: FieldSection): boolean {
+  return !fieldError(section);
 }
 
 function submitAddField(section: FieldSection): void {
@@ -98,6 +111,34 @@ function submitAddField(section: FieldSection): void {
   emit('add-field', [...section.parts], state.name.trim(), state.value);
   cancelAddField(section.path);
 }
+
+function setFieldForm(path: string, element: unknown): void {
+  if (element instanceof HTMLFormElement) fieldForms.set(path, element);
+  else fieldForms.delete(path);
+}
+
+/** FR-VERIFY-015：Continue 先校验所有新增输入，再同步加入父草稿；失败时不部分提交或导航。 */
+function commitPendingFields(): boolean {
+  const pending = visibleFieldSections.value.filter((section) => {
+    const field = newFields.value[section.path];
+    return field && (field.name !== '' || field.value !== '');
+  });
+  const invalid = pending.find((section) => !canAddField(section));
+  if (invalid) {
+    validationRequested.value = true;
+    const form = fieldForms.get(invalid.path);
+    form?.scrollIntoView({ block: 'center' });
+    form?.querySelector<HTMLInputElement>('.add-name')?.focus();
+    return false;
+  }
+  pending.forEach(submitAddField);
+  // 未输入的空表单不算改动，不额外创建结果版本。
+  Object.keys(newFields.value).forEach(cancelAddField);
+  validationRequested.value = false;
+  return true;
+}
+
+defineExpose({ commitPendingFields, hasPendingFields });
 
 function removeField(section: FieldSection, row: FieldRow): void {
   if (section.rows.length === 1) {
@@ -189,10 +230,16 @@ function removeRow(table: TableSection, index: number): void {
         </div>
       </dl>
       <div v-if="editable" class="card-footer">
-        <form v-if="newFields[section.path]" class="add-field-form" @submit.prevent="submitAddField(section)">
+        <form
+          v-if="newFields[section.path]"
+          :ref="(element) => setFieldForm(section.path, element)"
+          class="add-field-form"
+          @submit.prevent="submitAddField(section)"
+        >
           <input
             v-model="newFields[section.path].name"
             class="add-name"
+            :aria-invalid="validationRequested && !!fieldError(section)"
             :placeholder="t('result.fieldName')"
             :aria-label="t('result.fieldName')"
           />
@@ -218,6 +265,9 @@ function removeRow(table: TableSection, index: number): void {
           >
             ×
           </button>
+          <p v-if="validationRequested && fieldError(section)" class="field-error" role="alert">
+            {{ fieldError(section) }}
+          </p>
         </form>
         <button v-else type="button" class="add-btn" @click="beginAddField(section.path)">
           + {{ t('result.addField') }}
@@ -490,14 +540,16 @@ td.row-actions {
 }
 
 .add-field-form {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px 36px;
   flex: 1;
+  min-width: 0;
   gap: 6px;
   align-items: center;
 }
 
 .add-field-form input {
-  flex: 1;
+  width: 100%;
   min-width: 0;
   height: 36px;
   padding: 0 10px;
@@ -514,8 +566,11 @@ td.row-actions {
   border-color: var(--primary);
 }
 
-.add-field-form .add-name {
-  flex: 0 0 38%;
+.field-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--danger);
+  font-size: 11px;
 }
 
 .form-btn {

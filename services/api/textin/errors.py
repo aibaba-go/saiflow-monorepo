@@ -22,12 +22,15 @@ class TextInError(RuntimeError):
 
 
 class TextInAPIError(TextInError):
-    """TextIn business error (HTTP 200 but code != 200)."""
+    """TextIn business/protocol error, retaining HTTP status for retry decisions."""
 
-    def __init__(self, code: int | str, message: str) -> None:
+    def __init__(
+        self, code: int | str, message: str, *, http_status: int | None = None,
+    ) -> None:
         super().__init__(f"TextIn API error {code}: {message}")
         self.code = code
         self.message = message
+        self.http_status = http_status
 
 
 class ExtractionNotFound(LookupError):

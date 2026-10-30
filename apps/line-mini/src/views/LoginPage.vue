@@ -70,11 +70,11 @@ async function loginWithLine() {
       redirectToLineLogin(); // 用户显式点击后才跳转 LINE OAuth
       return;
     }
-    // 用户已明确要求登录：SDK/客户端握手失败时从官方入口恢复一次。
+    // LINE 内没有 token 不可调用外部浏览器 liff.login；域名不匹配也先恢复官方入口。
     // 重开前不清 auth intent/待续任务；启动流程仍须验真 token，不能自动确认。
-    if (state.initFailed && reopenLineLogin()) return;
+    if ((state.initFailed || state.needsReopen) && reopenLineLogin()) return;
     clearAuthIntent();
-    const errorKey = !state.initFailed ? 'err.auth.line_not_configured'
+    const errorKey = !state.initFailed && !state.needsReopen ? 'err.auth.line_not_configured'
       : state.failureReason === 'timeout' ? 'err.auth.line_init_timeout'
       : 'err.auth.line_init_failed';
     errorMsg.value = t(errorKey);

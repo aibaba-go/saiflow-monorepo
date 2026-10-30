@@ -3,8 +3,8 @@ doc_id: EPIC-06
 title: "EPIC-06 — 基础系统（账户、权限、配置、i18n）"
 type: epic
 status: active
-version: 1.7.1
-updated: 2026-10-28
+version: 1.7.2
+updated: 2026-10-29
 owner: Product Engineering
 priority: P0
 source: "PRD-001 §4.6"
@@ -67,7 +67,7 @@ related: [DM-User, DM-Role, DM-OperationLog, API-8]
   - 真实 LINE `id_token` 必须由服务端验证 issuer（`iss`）、audience（`aud`，匹配配置的 LINE Channel ID）与 expiry（`exp`）；验证失败、LINE 不可用或配置缺失时拒绝认证，不回退至开发登录。
   - 认证环境、资料与 TLS SMTP 安全边界沿用以上及下文规则；本轮调整启动/退出、结果页认证触发与默认个人权益，不改变 FR-SYS-016 换邮箱业务规则或登录刷新与注册之间的行锁/重读保护。
   - 启动仅恢复有效应用 Cookie 或建立游客会话进入主壳（包括已认证但未注册者），绝不自动以残留 LIFF token 创建应用登录；只有显式 LINE 按钮登录意图及其 OAuth 回跳可兑换 token。运行中试用界面的 401 清理失效应用身份并恢复游客首页；auth 窗口中的 401 保留可重试入口，不自动 LINE 登录。
-  - LIFF 初始化等待上限为 20 秒，错误仅区分初始化失败、SDK 会话读取失败、超时，不暴露原始异常、token 或 URL。只有用户显式点击 LINE 按钮后，失败才可从无查询参数的官方 `https://liff.line.me/<LIFF ID>` 重开一次；重开前不删除非凭据登录意图和待续任务，同一 sessionStorage 上下文重复失败停止跳转并引导关闭窗口后从 LINE 重开。存储不可用或 LIFF 未配置时不重开、不回退开发身份。初始化成功清重开标记；超时后的迟到完成不复活初始化缓存。返回或卸载登录页使仍在等待 SDK 的请求失效，不兑换迟到 token、不跳 OAuth/恢复入口；已发出的认证请求不保证可撤回，但取消后不自动导航或确认结果。真实手机换 WebView 时的存储连续性须单独验收，不以桌面模拟替代。
+  - LIFF 初始化等待上限为 20 秒，错误仅区分初始化失败、SDK 会话读取失败、超时，不暴露原始异常、token 或 URL。只有用户显式点击 LINE 按钮后，失败才可从无查询参数的官方 `https://liff.line.me/<LIFF ID>` 重开一次；重开前不删除非凭据登录意图和待续任务，同一 sessionStorage 上下文重复失败停止跳转并引导关闭窗口后从 LINE 重开。存储不可用或 LIFF 未配置时不重开、不回退开发身份。只有已取得 SDK token，或外部浏览器位于 SDK context 的已登记 Endpoint 同源及路径下可继续 OAuth，才清重开标记；LINE 内初始化成功但没有 token 不清标记、不调用 liff.login，而从官方入口显式恢复一次。外部浏览器 OAuth 使用 liff.login() 的默认 Endpoint，不把当前 URL 查询参数覆盖到 redirectUri；另一种 Cloud Run 域名也视为不同源，先从官方入口重开再初始化，不在错误源创建 PKCE。不承诺跨源自动迁移旧 Cookie、游客草稿或 sessionStorage。超时后的迟到完成不复活初始化缓存。返回或卸载登录页使仍在等待 SDK 的请求失效，不兑换迟到 token、不跳 OAuth/恢复入口；已发出的认证请求不保证可撤回，但取消后不自动导航或确认结果。真实手机换 WebView 时的存储连续性须单独验收，不以桌面模拟替代。
   - 2026-10-28 验证/发布：16 项恢复/取消源码检查、25 项冻结构建浏览器及 6 项真实认证源码模块模拟通过。旧前端 `workspaces` 与新 API `tenants` 不匹配造成认证 200 后显示 Sign-in failed；已发布 `index-Dq5WLJaK.js` 并明确切换前端流量，7 个真实域名静态文件哈希一致，详见 [Architecture §5](../../30-design/Architecture.md#5-部署模型)。未改动用户账号或业务数据，真实手机完整登录仍需用户验收。
 - **登出（FR-SYS-001）：** 个人中心点击 `Sign out` 先弹确认框，取消保持登录。确认后须先在 `localStorage` 建立非凭据 `logout-pending` 标记，再调用 10 秒超时的 `POST /api/v1/auth/logout` 撤销旧会话/应用 Cookie；清身份、当前租户、CSRF 与待续意图，最佳努力清 LIFF SDK 状态。撤销成功后清标记、建立游客会话并返回游客 `scan` 首页，不停留在旧 `My` 页。失败或 10 秒超时保留标记、锁定主壳并提示重试，不得复用正式 Cookie；用户点击 `Back` 重试或刷新时，均先 `session`（CSRF-only，仅取得撤销所需 CSRF，不恢复旧身份）→`logout` 撤销旧会话→成功后 `guest`，清标记并返回游客 `scan` 首页，成功前主壳保持锁定，全程不自动 LINE 兑换。此操作不同于取消登录/注册。
 - **操作日志（FR-SYS-003）：** 仅可追加；采集 `user`、`action`、`target`、`timestamp`、`result`。用于可追溯性和防篡改证据。
@@ -205,6 +205,10 @@ Feature: EPIC-06 基础系统
     When 用户在 SDK 完成前返回或登录页卸载
     Then 迟到成功、失败或超时均不兑换身份、不跳转、不自动导航或确认任务
     And 超时后的迟到成功不复活初始化缓存；真实手机存储连续性须另验，完整条件见汇总 AC
+    Given LINE 内初始化成功但无 token，或浏览器当前域名/路径不在已登记 Endpoint 下
+    Then 仅显式恢复官方 LIFF 入口一次，不调用外部 OAuth，未恢复 token 时不清重开标记
+    Given 外部浏览器在已登记 Endpoint 下且无 token
+    Then 显式调用 liff.login() 使用默认 Endpoint，不转发当前 URL 查询凭据，不启动跨源 PKCE
 
   Scenario: AC-FR-SYS-002-01 权限强制执行
     Given 角色为 "viewer" 的用户
@@ -522,6 +526,7 @@ Feature: EPIC-06 基础系统
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.7.2 | 2026-10-29 | Product Engineering | FR-SYS-001/011：LINE 内无 token 不调用外部 OAuth，保持一次恢复标记；外部 OAuth 仅已登记 Endpoint 同源/路径下可用，不覆盖 redirectUri，不在 Cloud Run 别名域名启动跨源 PKCE；23 项源码检查通过，不以桌面授权入口代替真实手机验收 |
 | 1.7.1 | 2026-10-28 | Product Engineering | FR-SYS-001/011：LIFF 20 秒超时、安全失败分类、显式按钮一次官方入口重开（同一 sessionStorage 上下文）、保留意图/任务、不转发凭据与不回退 dev；取消 SDK 等待失效与迟到结果保护；新增 AC-001-07，真实手机 WebView/授权另验 |
 | 1.7.0 | 2026-10-28 | Product Engineering | 归属改为单一 `tenant_id`（`tenants` / `enterprises.tenant_id` / `applications.target_tenant_id`，保留 `error.invalid_workspace`、`error.enterprise_access_revoked` 等旧 message_key）；重写 FR-SYS-012（每租户只开通一个月 Kinder：个人自 `tenants.created_at`、企业自 `enterprises.verified_at`，未认证为 NONE，到期硬停 402 `plan.expired`、历史仍可读，线下审批写有效期并惰性顺延、同档续费允许、降档 409）与 FR-SYS-013（唯一计量 `OCR_PAGE`，按泰国自然月实时统计 `ocr_jobs.page_count`，FAILED/CANCELLED 不计，页数用尽 402 `quota.exceeded`；删除 FREE 档、赠送额度、额度流水与 `free_tasks`/`paid_pages`）；FR-SYS-015 手机号改为个人中心可改可清空（原「只读」表述全部作废）；FR-SYS-017 改为按租户隔离；新增 FR-SYS-018 到期提醒（D7/D3/D1/D0/EXPIRED，`uq_plan_reminder_stage` 幂等、不回补、游客不提醒、worker 内低频扫描、`PLAN_REMINDERS_ENABLED`）与通知中心标记已读；新增 AC-FR-SYS-012-04/05、015-02、018-01/02/03 并改写 012/013/014-01/014-03/017 相关 AC。本次为文档与 OpenAPI 契约对齐，未运行任何测试 |
 | 1.6.9 | 2026-10-27 | Product Engineering | FR-SYS-001/010..014：认证/退出/注册默认 Kinder 已真实实现并正式发布；334 项隔离后端、final index-BUTDgRGj.js 的 21 项全 mock 浏览器、6 项 OAuth 源码模拟、9 项前端会话边界及类型检查/Vite 构建/OpenAPI 283 个内部引用通过；AC-001-03 明确失败/10 秒超时锁主壳，Back/刷新按 session CSRF-only→logout→guest 重试并回 scan，不留旧 My、不自动 LINE 兑换；registered_at 动态默认每泰国月 1,000 页，无新增 schema/默认申请/付款/历史迁移；发布引用 Architecture §5/§6，历史 221/5 与 SMTP 接收非本轮证据，SMTP 模块/秘密版本引用不变、本轮未实发邮件，隔离不连接数据库/真实 LINE/SMTP、不创建生产账户；真实 LINE/收件箱/数据库并发/防猜码仍未验证，原业务规则不变 |

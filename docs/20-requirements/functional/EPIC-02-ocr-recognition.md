@@ -3,8 +3,8 @@ doc_id: EPIC-02
 title: "EPIC-02 — 多类型文档 OCR 识别"
 type: epic
 status: active
-version: 1.3.0
-updated: 2026-10-18
+version: 1.3.1
+updated: 2026-10-29
 owner: Product Engineering
 priority: P0
 source: "PRD-001 §4.2"
@@ -42,7 +42,7 @@ related: [DM-Document, DM-LineItem, DM-ExtractedField, DM-ExtractionPayload, DM-
 | FR-OCR-014 | 检测并捕获签字区域是否存在 | P1 | §4.2 | FR-OCR-001 | AC-FR-OCR-014-01 |
 | FR-OCR-015 | 将置信度低于阈值的字段标记为需要人工核验 | P0 | §3.1 | FR-OCR-012 | AC-FR-OCR-015-01 |
 | FR-OCR-016 | 将日期、数字和货币（THB）标准化为规范格式 | P0 | §3.1 | FR-OCR-002 | AC-FR-OCR-016-01 |
-| FR-OCR-017 | 将预处理后的文档提交至 TextIn API，并关联文档与所选模板的服务参数 | P0 | §4.2 | FR-UPLOAD-006、FR-TEMPLATE-006 | AC-FR-OCR-017-01 |
+| FR-OCR-017 | 将预处理后的文档提交至 TextIn API，并关联文档与所选模板的服务参数；调用失败时按 §4.5 在同一任务内实施有界自动重试 | P0 | §4.2 | FR-UPLOAD-006、FR-TEMPLATE-006 | AC-FR-OCR-017-01/02 |
 | FR-OCR-018 | 将 TextIn 返回的完整原始 JSON、请求关联信息和处理状态保存至 Firestore | P0 | §4.2 | FR-OCR-017 | AC-FR-OCR-018-01 |
 | FR-OCR-019 | 在 Firestore 原始 JSON 创建后，通过 Cloud Functions 按已发布模板将其转换并写入 Cloud SQL | P0 | §4.2 | FR-OCR-018、FR-TEMPLATE-006 | AC-FR-OCR-019-01 |
 | FR-OCR-020 | 对转换任务实施幂等写入、失败状态记录和可重试处理，且不重复创建关系数据 | P0 | §4.2 | FR-OCR-019 | AC-FR-OCR-020-01 |
@@ -102,6 +102,18 @@ related: [DM-Document, DM-LineItem, DM-ExtractedField, DM-ExtractionPayload, DM-
 - 转换必须以 `document_id` 与原始载荷版本作为幂等键；重试只能更新同一转换结果，不能重复插入字段或行项目。
 - Dataflow 仅用于经批准的批量回填、重处理或高吞吐场景；其输出必须遵守相同的模板版本、幂等和审计规则。
 
+**TextIn 调用失败的有界自动重试（FR-OCR-017；AC-FR-OCR-017-02）：** 上述 FastAPI / Firestore / Cloud Functions 历史架构段保留；当前 Flask `OcrWorker` / Prompt v2 路径见 [OCR-Pipeline §3.1](../../30-design/OCR-Pipeline.md#31-当前-flask--ocrworker--prompt-v2-调用路径)。本次已实现以下契约并通过隔离验证，尚未发布；验证范围和限制见 OCR-Pipeline §3.1。
+
+- 「最多重试 3 次」指首次调用 1 次 + 额外最多 3 次，总调用次数最多 4 次；第 1/2/3 次重试前分别退避 2/4/8 秒。仅在现有 `services/api/worker.py` 的 TextIn 调用循环执行，HTTP 客户端及适配器不另加重试层。
+- 可重试：网络/超时、HTTP 408/429/5xx、业务限流 `429`/`458`/`459`/`40306`、基础服务故障 `30203`、业务 `500..599`、无效响应 JSON、缺失或无效 `llm_json`（`-1`）。不重试：余额不足 `40003`、鉴权/权限/参数等明确永久错误及本地程序异常；明确永久错误优先停止，不被 HTTP 5xx 或限流文案覆盖，不因泛捕获异常就一律重试。
+- HTTP 状态与业务 `code` 分开判断：HTTP 失败即使业务 `code=200` 也不是成功，按 HTTP 错误分类；HTTP 成功（2xx）但业务 `code` 失败仍按业务错误分类。仅 HTTP 成功、业务 `code=200` 且 `llm_json` 有效才是成功。
+- 自动重试沿用同一 job、原件字节、文件名、页参数与 Prompt；不重新上传、不创建新 job/result、不因失败尝试发通知或额外累计 SaiFlow 月页额度。成功后仅一次结果持久化/后处理及既有完成通知，不为各尝试分别写结果。
+- 任何一次成功立即停止重试；额外 3 次重试耗尽只将同一 job 落为 `FAILED`，保留最后一次错误代码和消息，不产生成功结果或完成通知。明确不可重试错误则立即失败，不用尽重试次数。
+- 每次调用 TextIn 前必须重新读取并检查取消请求及既有终态（包括退避期间发生的取消、另一实例已落 CANCELLED/FAILED）；停止后续调用，不覆盖既有终态，不进入成功结果持久化/后处理。状态推进和结果持久化事务须锁行刷新，避免并发取消被覆盖。
+- Worker 启动恢复仅对超过 10 分钟无进展、尚未开始供应商调用的 PREPROCESSING 阶段条件恢复入队；PROCESSING/POSTPROCESSING 的供应商结果不确定，保守标记 FAILED/VENDOR_UNCERTAIN，不自动重新入队以重置重试预算。10 分钟是保守恢复阈值，不是 HTTP 总时长上限；需要时由用户显式 Retry。
+- 供应商 POST 超时可能已受理且扣费；未观察到供应商幂等键，不承诺 TextIn 只受理/扣费一次，只保证本应用自动重试不重复生成结果或额外累计 SaiFlow 月页额度。
+- 自动重试不同于用户手动 Retry/rerun：前者在同一 job 内继续，后者按 AC-FR-OCR-020-02 创建新任务并关联原任务。本轮不改用户手动 rerun、API、数据库、认证、DeepSeek 或部署行为。
+
 ### 4.6 取消任务（FR-OCR-020）
 - 处理页点击「Cancel task」先弹出确认框（「Keep processing」/「Cancel task」），确认后才调用 `POST /api/v1/ocr/jobs/{id}/cancel`；任务在弹框期间结束则确认框自动关闭。
 - 已取消的任务显示为「OCR 处理失败」，可在结果页 Retry 重新识别。
@@ -136,6 +148,34 @@ Feature: EPIC-02 OCR 识别
     Given 一个提取结果的 confidence 为 0.60 的字段
     When 提取完成
     Then 该字段 SHALL 被标记为 needs_review = true（阈值 0.85）
+
+  Scenario: AC-FR-OCR-017-02 TextIn 调用失败的有界自动重试
+    Given 一个已存在的 OCR job，原件、文件名、页参数与 Prompt 已确定
+    When TextIn 调用发生网络/超时、HTTP 408/429/5xx、业务限流 429/458/459/40306、基础服务故障 30203、业务 500..599，或无效响应 JSON/缺失或无效 llm_json（-1）
+    Then 仅 services/api/worker.py 执行首次 1 次加额外最多 3 次重试，总调用次数最多 4 次
+    And 第 1/2/3 次重试前分别退避 2/4/8 秒，HTTP 客户端及适配器不另加重试
+    And 每次沿用同一 job、原件字节、文件名、页参数与 Prompt
+    And 自动重试不重新上传、不创建新 job/result、不因失败尝试发通知或额外累计 SaiFlow 月页额度
+    Given HTTP 成功但业务 code 失败，或 HTTP 失败但业务 code=200
+    Then 均不得视为成功，前者按业务错误分类，后者按 HTTP 错误分类
+    And 仅 HTTP 成功（2xx）、业务 code=200 且 llm_json 有效才是调用成功
+    Given 任一次遇到余额不足 40003、鉴权/权限/参数等明确永久错误，或本地程序异常
+    Then 立即停止自动重试并将同一 job 标记 FAILED，保留该错误，不产生成功结果或完成通知
+    Given 任一次调用成功且任务未被取消
+    Then 立即停止重试，不再调用 TextIn，仅一次结果持久化/后处理及既有完成通知
+    Given 首次及额外 3 次重试均为可重试失败，且任务未被取消
+    Then 只将同一 job 标记 FAILED 并保留最后一次错误代码和消息，不产生成功结果或完成通知
+    Given 任务在退避期间或下一次重试调用前被请求取消
+    When Worker 在每次重试调用 TextIn 前重新读取并检查取消状态
+    Then 沿用既有取消处理，不再调用供应商，不产生成功结果/后处理或完成通知
+    Given 另一实例已将任务标记为 CANCELLED 或其他终态
+    Then 停止本实例的后续调用和结果写入，不覆盖既有终态
+    Given Worker 启动恢复发现超过 10 分钟无进展的 PROCESSING/POSTPROCESSING 任务
+    Then 保守标记 FAILED/VENDOR_UNCERTAIN，不自动重新入队以重置重试预算
+    And 仅尚未开始供应商调用的 PREPROCESSING 阶段允许条件恢复入队；状态推进与结果写入锁行刷新，不覆盖并发取消或终态
+    Given 供应商 POST 超时且没有已确认的供应商幂等键
+    Then 不承诺供应商未受理或只扣费一次，仅保证本应用自动重试不重复生成结果或额外累计 SaiFlow 月页额度
+    And 自动重试不同于用户手动 Retry/rerun，后者仍按 AC-FR-OCR-020-02 创建新任务并关联原任务
 
   Scenario: AC-FR-OCR-018-01 保存 TextIn 原始 JSON
     Given 已完成预处理的 Invoice 和已发布的 INVOICE 模板版本 3
@@ -177,6 +217,7 @@ Feature: EPIC-02 OCR 识别
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.3.1 | 2026-10-29 | Product Engineering | FR-OCR-017 / AC-FR-OCR-017-02：首次+最多 3 次重试、2/4/8 秒、错误分层、取消/终态、保守恢复不重排未知供应商结果、锁行刷新及扣费边界；284 项新增+366 项既有隔离回归通过；不改手动 rerun/API/数据库，未发布，真实厂商与数据库并发未验收 |
 | 1.3.0 | 2026-10-18 | Product Engineering | 取消任务前需确认（AC-FR-OCR-020-03） |
 | 1.2.0 | 2026-10-17 | Product Engineering | 新增失败任务可读原因与重试验收场景（厂商余额不足等失败不再显示 404） |
 | 1.1.0 | 2026-10-07 | Product Engineering | 新增 TextIn 调用、Firestore 原始 JSON、Cloud Functions 转换及幂等重试需求 |

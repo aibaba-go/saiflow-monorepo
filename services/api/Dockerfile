@@ -35,9 +35,12 @@ RUN mkdir -p /app/temp/extractions /app/temp/uploads
 VOLUME ["/app/temp"]
 
 # 用 gunicorn 生产级 WSGI 启动，监听 Cloud Run 注入的 $PORT
-# --workers 1：OCR worker 是进程内线程，多进程会起多个消费者重复抢单
-# --threads 8：gthread 模式，同一进程内并发处理请求
-CMD exec gunicorn --workers 1 --threads 8 --timeout 300 \
+# --workers 1：每个进程各起一个 OCR worker 线程并各自跑启动 DDL；认领虽是原子条件更新，
+#   多进程仍会成倍增加轮询与启动争锁，横向扩容交给 Cloud Run 多实例。
+# --threads 12：gthread 模式，同一进程内并发处理请求（NFR-PERF-005）。
+#   必须与 Cloud Run `--concurrency 12` 相等：并发大于线程数时多出的请求只会在进程内排队，
+#   而不会触发扩容；同时须 ≤ config.py 的连接池上限（pool_size + max_overflow）减去 OCR worker 的 1 个连接。
+CMD exec gunicorn --workers 1 --threads 12 --timeout 300 \
     --bind "0.0.0.0:${PORT}" \
     --access-logfile - --error-logfile - \
     app:app

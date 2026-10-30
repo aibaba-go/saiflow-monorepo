@@ -45,11 +45,15 @@ const errorMsg = ref('');
 const saving = ref(false);
 const retrying = ref(false);
 const confirmingReset = ref(false);
+const structuredView = ref<InstanceType<typeof StructuredDataView> | null>(null);
 
 const locked = computed(() => results.value?.review_status === 'CONFIRMED');
-/** 草稿与当前结果版本有差异（编辑、增删字段或表格行） */
+/** 草稿或尚在新增输入框中的字段有变更；Reset 同样可放弃这些输入。 */
 const dirty = computed(
-  () => !!results.value && JSON.stringify(draft.value) !== JSON.stringify(results.value.structured),
+  () => !!results.value && (
+    JSON.stringify(draft.value) !== JSON.stringify(results.value.structured)
+    || !!structuredView.value?.hasPendingFields
+  ),
 );
 const failed = computed(
   () => job.value?.status === 'FAILED' || job.value?.status === 'CANCELLED',
@@ -162,6 +166,8 @@ async function saveDraft(): Promise<void> {
 async function confirm(): Promise<void> {
   if (!results.value || !job.value || saving.value) return;
   errorMsg.value = '';
+  // 新增输入必须先进入 draft，所有认证/订阅分支的保存及确认才不会遗漏。
+  if (!locked.value && !structuredView.value?.commitPendingFields()) return;
 
   saving.value = true;
   try {
@@ -259,6 +265,7 @@ async function confirm(): Promise<void> {
         </div>
 
         <StructuredDataView
+          ref="structuredView"
           :data="draft"
           :editable="!locked"
           @edit="onEdit"

@@ -12,3 +12,5 @@ sample/
 storage/
 temp/
 uploads/
+# 本地 curl 会话 Cookie 罐不得进入 Cloud Build 源码包（NFR-SEC）
+*cookies*.txt

@@ -8,8 +8,10 @@ import liff from '@line/liff';
 export interface LiffState {
   isInLine: boolean;
   idToken: string | null;
-  /** LIFF 初始化成功但尚未登录：仅此时允许点击跳转 LINE 登录 */
+  /** 仅初始化成功、外部浏览器且位于已登记 Endpoint 下时允许 OAuth。 */
   loginAvailable: boolean;
+  /** SDK 已初始化但客户端握手或入口域名不匹配：仅显式点击时从官方入口恢复。 */
+  needsReopen?: boolean;
   /** 配置了 VITE_LIFF_ID 但初始化/读取 SDK 会话失败：可重试 */
   initFailed: boolean;
   /** 仅返回安全的错误分类，不暴露 token、SDK 原始异常或 URL。 */
@@ -46,8 +48,22 @@ export async function initLiff(): Promise<LiffState> {
     // 只缓存初始化，不缓存 token；退出/重新授权后读取 SDK 当前状态。
     const idToken = liff.isLoggedIn() ? liff.getIDToken() : null;
     const isInLine = liff.isInClient();
-    try { sessionStorage.removeItem(REOPEN_KEY); } catch { /* 不依赖浏览器存储完成初始化 */ }
-    return { isInLine, idToken, loginAvailable: true, initFailed: false };
+    const endpointUrl = !isInLine && !idToken ? liff.getContext()?.endpointUrl : null;
+    let loginAvailable = false;
+    if (!isInLine && endpointUrl) {
+      const endpoint = new URL(endpointUrl);
+      const current = new URL(window.location.href);
+      const prefix = endpoint.pathname.endsWith('/') ? endpoint.pathname : `${endpoint.pathname}/`;
+      // 两种 run.app 地址也不是同源：跨源回调会丢失 PKCE 与游客 Cookie，不能强行 OAuth。
+      loginAvailable = current.origin === endpoint.origin
+        && (current.pathname === endpoint.pathname || current.pathname.startsWith(prefix));
+    }
+    const needsReopen = !idToken && !loginAvailable;
+    // 仅真正可继续认证时清标记；LINE 内“初始化成功但无 token”不能反复重开。
+    if (!needsReopen) {
+      try { sessionStorage.removeItem(REOPEN_KEY); } catch { /* 不依赖浏览器存储完成初始化 */ }
+    }
+    return { isInLine, idToken, loginAvailable, needsReopen, initFailed: false };
   } catch (error) {
     initPromise = null;
     initialized = false;
@@ -91,9 +107,11 @@ export function resetLiffLogin(): void {
   initialized = false;
 }
 
-/** 跳转 LINE 登录（仅在用户点击 LINE 登录按钮后调用；回跳当前页） */
+/** FR-SYS-001/011：仅由 loginAvailable 分支显式调用，使用 LINE 已登记 Endpoint。
+ * 不覆盖 redirectUri，避免把 OAuth 残留参数或未登记的当前 URL 带入授权。
+ */
 export function redirectToLineLogin(): void {
-  liff.login({ redirectUri: window.location.href });
+  liff.login();
 }
 
 /** LINE 内关闭窗口（如不可用则忽略） */

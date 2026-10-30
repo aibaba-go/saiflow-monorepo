@@ -2711,6 +2711,65 @@ def test_registered_continue_can_save_content_and_complete_together(
     modules.results.audit.assert_called_once()
 
 
+@pytest.mark.parametrize(
+    "identity, confirm",
+    [("guest", False), ("unregistered", False), ("registered", False), ("registered", True)],
+)
+@pytest.mark.parametrize("name, value", [("kkk", 123), ("tax_id", "00123"), ("หมายเหตุ", "ทดสอบ")])
+def test_added_fields_survive_save_reload_and_xlsx_without_overwriting_history(
+    client, modules, fake_db, result_store, monkeypatch, identity, confirm, name, value,
+):
+    """FR-VERIFY-015: actual route/serializer/export builder, entirely synthetic storage."""
+    import io
+    from openpyxl import load_workbook
+
+    store = result_store
+    if identity == "guest":
+        store.user.line_provider = "guest"
+    if identity == "registered":
+        store.user.registered_at = FIXED_NOW
+    original = {
+        "document_information": {"remarks": "original"},
+        "seller": {"tel": ["065-205-8258", "065-205-8259"]},
+        "items": [{"quantity": 3, "amount": 29650}],
+    }
+    store.version.structured = copy.deepcopy(original)
+    edited = copy.deepcopy(original)
+    edited["document_information"][name] = value
+    body = {"expected_version": 1, "confirm": confirm, "structured": edited}
+    response = client.patch(f"/api/v1/ocr/jobs/{store.job.id}/results", json=body)
+    assert response.status_code == 200
+    assert response.get_json()["data"]["structured"] == edited
+    assert response.get_json()["data"]["version"] == 2
+    assert store.version.structured == original and store.version.is_current is False
+    assert (store.job.completed_at is not None) is confirm
+
+    saved = next(
+        entry.args[0] for entry in fake_db.session.add.call_args_list
+        if isinstance(entry.args[0], modules.models.ResultVersion)
+    )
+    assert saved.structured == edited and saved.is_current is True
+    assert saved.structured["document_information"][name] == value
+    modules.results._current_version.return_value = saved
+    reloaded = client.get(f"/api/v1/ocr/jobs/{store.job.id}/results")
+    assert reloaded.status_code == 200
+    assert reloaded.get_json()["data"]["structured"] == edited
+    fake_db.session.commit.assert_called_once_with()
+
+    exports = _load_module("field_preservation_exports", "routes/exports.py")
+    output = io.BytesIO()
+    exports._build_xlsx_structured(saved.structured, output, [], language="en")
+    output.seek(0)
+    workbook = load_workbook(output, read_only=True)
+    try:
+        cells = list(workbook.active.iter_rows(values_only=True))
+        expected = exports._format_cell(value, name)
+        assert any(row[:2] == (exports._display_name(name), expected) for row in cells)
+        assert any(row[:2] == (exports._display_name("remarks"), "original") for row in cells)
+    finally:
+        workbook.close()
+
+
 # ---------- 租户归属（PRD §4.1：tenant_id 是唯一归属表达） ----------
 
 

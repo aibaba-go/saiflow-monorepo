@@ -3,8 +3,8 @@ doc_id: DES-004
 title: "SaiFlow — OCR 与提取流水线"
 type: design
 status: active
-version: 1.1.1
-updated: 2026-10-18
+version: 1.1.2
+updated: 2026-10-29
 owner: Product Engineering
 source: "EPIC-01, EPIC-02, EPIC-08"
 related: [DM-ExtractionPayload, DM-ConversionJob, DM-DocumentTemplate, DM-ExtractedField, DM-LineItem, NFR-PERF, NFR-I18N]
@@ -70,6 +70,17 @@ Firestore 不作为业务查询的权威关系库；Cloud SQL 不覆盖或修改
 
 浏览器不直接调用 TextIn，也不获取其凭据。TextIn 的数据跨境和区域合规须在 OQ-7 关闭后才可上线。
 
+### 3.1 当前 Flask / OcrWorker / Prompt v2 调用路径
+
+上文 FastAPI / Firestore / Cloud Functions 为保留的历史架构段；本次 FR-OCR-017 自动重试契约落实于当前 Flask 后端，不以重写历史架构为前提。实际路径为 `services/api/worker.py` 的 `OcrWorker` → `services/api/textin/adapter.py::run_extraction` → `services/api/textin/client.py::extract_with_prompt` → TextIn `POST /ai/service/v2/entity_extraction`。
+
+- Worker 读取已有原件字节与任务参数；Prompt v2 请求体为 base64 文件与 `EXTRACT_PROMPT`，查询参数为 `file_name`、`page_start`（0 基）与 `page_count`。自动重试固定同一原件、文件名、页参数与 Prompt，不重新执行上传或创建任务。
+- 适配器从 `result.llm_json` 取得结构化字段和行项目；可接受对象、数组或解析后为对象/数组的 JSON 字符串。无效响应 JSON、缺失或无效 `llm_json` 属于供应商无效输出（`-1`），不是可泛化重试的本地程序异常。
+- HTTP 状态与响应业务 `code` 必须分离：HTTP 失败即使响应体 `code=200` 也不得返回成功，按 HTTP 错误分类且明确永久业务错误优先停止；仅 HTTP 成功（2xx）、业务 `code=200` 且 `llm_json` 有效时才是调用成功。HTTP 成功但业务 `code` 失败，仍按业务错误处理；具体可重试分类见 §6.1。
+- 重试仅在 Worker 包围 TextIn 调用的单一层执行；HTTP 客户端及适配器不另加重试。成功即退出循环，之后仅一次结果持久化及后处理（现有 `ResultVersion`、审计副本与完成通知路径），失败尝试不进入这些步骤，不改变 DeepSeek 行为。
+
+**本轮已实现并隔离验证，尚未发布。** Worker 使用 `range(MAX_VENDOR_RETRIES + 1)`（额外重试上限 3），以 2/4/8 秒退避，每次调用前刷新取消/终态；客户端保留 HTTP 状态与业务 `code`，不把 HTTP 失败且 `code=200` 当成功。`test_textin_retries.py` 的 284 项新增回归与 `test_auth_modes.py`/`test_capacity.py` 的 366 项既有回归联合运行，650 项通过（2026-10-29，37.98 秒）。新增测试执行真实 `_process_inner`、TextInClient、适配器与 httpx.MockTransport，覆盖四次上限、早成功、固定请求、各类短暂/永久错误、GBK/无效 JSON/llm_json、取消/终态、最后错误、单次持久化与审计/通知；恢复的条件更新及锁行刷新参数也有隔离断言。全部文件/账号/响应合成，网络/真实 DB/SMTP、app.py 导入、Worker 启动与实际 sleep 被禁止；数据库使用替身，未验证真实 PostgreSQL 多实例竞争或供应商 POST 去重/扣费。此前 30203 被测试按初始白名单设为不可重试，核对厂商 v2 文档明确“基础服务故障，请稍后重试”后同步修正契约及测试，保留初始失败日志，不更改产品逻辑以迎合旧断言。
+
 ## 4. 模板映射与转换（FR-OCR-019/020、FR-TEMPLATE-003..006）
 
 Cloud Functions 监听 Firestore 新建载荷事件。函数加载载荷记录的已发布模板版本，而不是读取“当前最新”模板，以确保重试和审计结果确定。
@@ -114,6 +125,27 @@ Cloud Functions 监听 Firestore 新建载荷事件。函数加载载荷记录�
 - 管理员发起重处理时，系统创建新的载荷版本或显式转换任务，不覆盖历史原始 JSON、模板版本或审计记录。
 - Dataflow 不是默认路径，仅可用于获批的批量回填、高吞吐或重处理；必须使用同一映射组件、版本固定和幂等约束。
 
+### 6.1 当前 Worker 的 TextIn 单层自动重试契约（FR-OCR-017）
+
+- 仅重试 §3.1 的 TextIn 提取调用，不重跑上传、创建任务、结果持久化或后处理。首次 1 次 + 额外最多 3 次 = 最多 4 次调用；重试前依次等待 2/4/8 秒，成功立即退出，不再调用供应商。HTTP 客户端及适配器不做独立重试，避免次数相乘。
+- 每次调用复用同一 job、原件字节、文件名、页参数与 Prompt。每次调用前以 `populate_existing=True` 重新读取取消及既有终态；退避期间已取消或被另一实例终结则不再调用 TextIn，不写成功结果或发完成通知。成功返回后仍检查状态；状态推进与结果持久化事务使用 `with_for_update=True` 锁行刷新，已 CANCEL_REQUESTED 则取消，已落终态则回滚释放锁、不覆盖。
+- `_recover_stale_jobs()` 在启动时以状态及 `updated_at` 条件更新：只有超过 10 分钟无进展的 PREPROCESSING 恢复 QUEUED；PROCESSING/POSTPROCESSING 保守置 FAILED/VENDOR_UNCERTAIN，不重置供应商重试预算。CANCEL_REQUESTED 条件落 CANCELLED，其他终态不变。长调用尚未完成也可能触发保守失败，由用户显式 Retry；10 分钟不是供应商墙钟超时。此规则修正原先所有中间阶段一律重新入队的重复调用风险，不通过扩大 stale 阈值声称去重保证。
+
+| 错误层 / 类型 | 处理规则 |
+|---------------|----------|
+| 网络 / 超时 | 可重试供应商传输错误与超时；不将本地程序异常当作网络错误 |
+| HTTP 失败 | 408、429、5xx 可重试；余额不足 `40003`、鉴权/权限/参数等明确永久错误优先不重试，不被 HTTP 5xx 覆盖；响应体 `code=200` 不得覆盖 HTTP 失败 |
+| HTTP 成功但业务失败 | 业务限流 `429`、`458`、`459`、`40306`、基础服务故障 `30203` 及业务 `500..599` 可重试；余额不足 `40003`、鉴权/权限/参数等明确永久错误不重试 |
+| 供应商无效输出 | 无效响应 JSON、缺失或无效 `llm_json`（`-1`）可重试；HTTP 失败仍按 HTTP 类型分类，明确永久错误优先停止 |
+| 本地程序异常 | 不重试；禁止仅凭泛捕获异常或错误消息含限流词重试 |
+
+- 额外 3 次重试耗尽，只将同一 job 标记 `FAILED` 并保留最后错误代码和消息；不可重试错误立即失败。不为失败尝试创建新 job/result、原始识别载荷或完成通知；调用成功后仅一次结果持久化/后处理。复用同一任务的页数，不因调用次数额外累计 SaiFlow 月页额度，既有失败/取消不计月页消耗的规则不变。
+- 用户显式 Retry/rerun 仍按 AC-FR-OCR-020-02 创建新任务（`parent_job_id` 关联原任务），与同一 job 内自动重试不同；历史 Cloud Functions 幂等转换和管理员重处理不是本次供应商调用的额外重试层。本轮不改 API、数据库、认证、DeepSeek、手动 rerun 或部署。
+- **供应商幂等与扣费边界：** POST 超时不能判定 TextIn 是否已经受理或扣费；当前调用未观察到供应商幂等键。重发可能造成重复受理/扣费，不承诺供应商只扣一次；保证仅限本应用自动重试不重复生成结果或额外累计 SaiFlow 月页额度，不等同于供应商侧幂等。
+- **等待边界：** `services/api/textin/config.py` 的 Prompt v2 默认 `prompt_timeout_seconds=180`。按每次 180 秒的等待预算估算，最多 `180 × 4 + (2 + 4 + 8) = 734` 秒（12 分 14 秒）；只含供应商调用等待与退避，不含排队、读取文件、预处理、结果持久化和后处理。现有 `httpx.Timeout` 是分阶段/网络等待超时，并非整个 POST 的严格墙钟截止，因此 734 秒不是已实现的端到端硬上限，也不替代 §7 的正常路径 p95 性能目标。
+
+验收见 [EPIC-02 的 AC-FR-OCR-017-02](../20-requirements/functional/EPIC-02-ocr-recognition.md#5-代表性验收标准p0) 与 [汇总验收标准 EPIC-02 区](../40-acceptance/Acceptance-Criteria.md#2-epic-02--ocr-识别)。本轮 650 项隔离回归通过且未发布，验证及限制见 §3.1，历史部署证据不作为本次上线证据。错误码依据为 [TextIn 旧版 v2 智能抽取文档](https://www.textin.com/document/legacy/open_kie_vlm_engine)（30203：基础服务故障，请稍后重试；40306：qps 超过限制；40003：余额不足；500：内部错误）；未从 v3 文档推断 v2 的幂等保证。超时语义依据 [HTTPX 分阶段超时说明](https://www.python-httpx.org/advanced/timeouts/)。
+
 ## 7. 性能目标（来自 NFR-PERF）
 
 | 指标 | 目标 |
@@ -148,6 +180,7 @@ interface ConversionService {
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.1.2 | 2026-10-29 | Product Engineering | FR-OCR-017：当前 Flask OcrWorker / Prompt v2 的最多 4 次调用与 2/4/8 秒退避、HTTP/业务错误、取消/终态、保守恢复及锁行刷新、结果唯一与供应商扣费边界；284 项新增+366 项既有隔离回归通过，未发布；真实供应商及 PostgreSQL 多实例并发未验收，180×4+14 秒仅估算，见 §3.1/6.1 |
 | 1.1.1 | 2026-10-18 | Product Engineering | 补充接收阶段上传进度：实际字节反馈与文件大小估算，完成确认后才报告 100%（FR-UPLOAD-010） |
 | 1.1.0 | 2026-10-07 | Product Engineering | 改为 TextIn → Firestore → Cloud Functions → Cloud SQL 的模板化转换流水线 |
 | 1.0.1 | 2026-10-02 | Product Engineering | 将人类可读内容翻译为简体中文 |

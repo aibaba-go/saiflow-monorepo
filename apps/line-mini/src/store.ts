@@ -8,6 +8,7 @@ import { signOutLiff } from './liff';
 import {
   ApiError,
   createGuestSession,
+  dataEpochs,
   fetchQuota,
   fetchSession,
   getJob,
@@ -81,13 +82,54 @@ export function applyAuth(payload: AuthPayload): void {
     wantedId == null ? personal : list.find((t) => t.tenant_id === wantedId) ?? personal;
 }
 
-/** 拉取配额视图；静默失败（横幅缺省隐藏，不阻塞主流程） */
-export async function refreshQuota(): Promise<void> {
-  try {
-    quota.value = (await fetchQuota()).tenants ?? [];
-  } catch {
-    quota.value = [];
+/**
+ * 拉取配额视图；静默失败（横幅缺省隐藏，不阻塞主流程）。
+ *
+ * NFR-PERF-005：启动、登录与首页挂载会在数秒内各请求一次 /me/quota，跨境链路下每次都是
+ * 一个完整往返。这里合并为：同一会话内进行中的请求直接复用；成功结果在 QUOTA_REUSE_MS 内
+ * 且期间没有任何写请求结束时直接复用。会话切换或任一写请求（创建任务、套餐申请等）结束
+ * 都会让缓存失效，所以不会展示写操作之前的额度。
+ */
+const QUOTA_REUSE_MS = 5000;
+let quotaSeq = 0;
+let quotaInflight: { session: number; write: number; promise: Promise<void> } | null = null;
+let quotaLoaded: { session: number; write: number; at: number } | null = null;
+
+function resetQuotaCache(): void {
+  quotaSeq += 1; // 进行中的旧请求结果作废
+  quotaInflight = null;
+  quotaLoaded = null;
+}
+
+export function refreshQuota(): Promise<void> {
+  const { session, write } = dataEpochs();
+  if (quotaInflight && quotaInflight.session === session && quotaInflight.write === write) {
+    return quotaInflight.promise;
   }
+  if (
+    quotaLoaded && quotaLoaded.session === session && quotaLoaded.write === write
+    && Date.now() - quotaLoaded.at < QUOTA_REUSE_MS
+  ) {
+    return Promise.resolve();
+  }
+  const seq = ++quotaSeq;
+  const promise = (async () => {
+    try {
+      const data = (await fetchQuota()).tenants ?? [];
+      // 会话已切换或有更新的请求：旧结果不得覆盖
+      if (seq !== quotaSeq || dataEpochs().session !== session) return;
+      quota.value = data;
+      quotaLoaded = { session, write, at: Date.now() };
+    } catch {
+      if (seq !== quotaSeq || dataEpochs().session !== session) return;
+      quota.value = [];
+      quotaLoaded = null;
+    } finally {
+      if (seq === quotaSeq) quotaInflight = null;
+    }
+  })();
+  quotaInflight = { session, write, promise };
+  return promise;
 }
 
 /** 当前租户对应的配额条目 */
@@ -130,6 +172,7 @@ export function signOutLocally(): void {
   tenants.value = [];
   currentTenant.value = null;
   quota.value = [];
+  resetQuotaCache();
   setCsrfToken(null);
 }
 

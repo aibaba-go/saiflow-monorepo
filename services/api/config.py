@@ -60,6 +60,10 @@ class Config:
             "&keepalives=1&keepalives_idle=30&keepalives_interval=10&keepalives_count=3"
         )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # 连接池上限 = 5 + 10 = 15（即 SQLAlchemy 默认值，显式写出以固定容量约束，NFR-PERF-005）：
+    # 须 ≥ gunicorn --threads（12，见 Dockerfile）+ OCR worker 1 个连接；
+    # 实例上限 maxScale=20 时最坏 300 个连接，与改动前相同，不增加共享实例的连接压力。
+    SQLALCHEMY_ENGINE_OPTIONS = {"pool_size": 5, "max_overflow": 10}
 
     # 让 jsonify 直接输出 UTF-8 中文，而非 \uXXXX 转义
     JSON_ENSURE_ASCII = False

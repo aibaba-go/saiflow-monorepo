@@ -21,7 +21,7 @@ from flask import Flask
 logger = logging.getLogger(__name__)
 
 TERMINAL = {"SUCCEEDED", "PARTIAL_SUCCESS", "FAILED", "CANCELLED"}
-MAX_VENDOR_RETRIES = 3  # 限流类错误的有界指数退避（PRD §12.4）
+MAX_VENDOR_RETRIES = 3  # FR-OCR-017：首次调用之外最多 3 次重试，共最多 4 次调用。
 # 到期提醒的调度间隔：仅决定「多久检查一次」，当天是否已跑过由 _reminder_day 判断，
 # 真正的发送唯一性由 plan_reminders 唯一约束保证（多实例并行时内存标记不可信）
 REMINDER_CHECK_SECONDS = 30 * 60
@@ -46,28 +46,38 @@ class OcrWorker:
     def stop(self) -> None:
         self._stop.set()
 
-    def _loop(self) -> None:
+    def _recover_stale_jobs(self) -> None:
+        """FR-OCR-017：未知供应商结果不自动重排，避免重新开启三次重试预算。"""
         from datetime import datetime, timedelta, timezone
 
         from extensions import db
         from models import OcrJob
 
         with self.app.app_context():
-            # 重启恢复：中断的任务重新入队；已请求取消的直接落终态（不再计费）
-            # 库为多实例共享：只回收长时间无进展的任务，避免抢走其他实例正在处理的任务
-            stale_before = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=10)
-            stuck = OcrJob.query.filter(
-                OcrJob.status.in_(["PREPROCESSING", "PROCESSING", "POSTPROCESSING"]),
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            stale_before = now - timedelta(minutes=10)
+            # 只有尚未调用 TextIn 的阶段可以恢复入队；条件更新避免覆盖推进中的任务。
+            OcrJob.query.filter(
+                OcrJob.status == "PREPROCESSING", OcrJob.updated_at < stale_before,
+            ).update({"status": "QUEUED", "progress": 0}, synchronize_session=False)
+            OcrJob.query.filter(
+                OcrJob.status.in_(["PROCESSING", "POSTPROCESSING"]),
                 OcrJob.updated_at < stale_before,
-            ).all()
-            for job in stuck:
-                job.status = "QUEUED"
-                job.progress = 0
-            cancelling = OcrJob.query.filter_by(status="CANCEL_REQUESTED").all()
-            for job in cancelling:
-                job.status = "CANCELLED"
-                job.finished_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            ).update({
+                "status": "FAILED", "error_code": "VENDOR_UNCERTAIN",
+                "error_message": "TextIn result uncertain after worker recovery; use manual Retry.",
+                "finished_at": now,
+            }, synchronize_session=False)
+            OcrJob.query.filter_by(status="CANCEL_REQUESTED").update(
+                {"status": "CANCELLED", "finished_at": now}, synchronize_session=False,
+            )
             db.session.commit()
+
+    def _loop(self) -> None:
+        from extensions import db
+        from models import OcrJob
+
+        self._recover_stale_jobs()
 
         while not self._stop.is_set():
             try:
@@ -123,16 +133,20 @@ class OcrWorker:
         from extensions import db
         from models import OcrJob
 
-        job = db.session.get(OcrJob, job_id)
-        if job is None:
+        job = db.session.get(OcrJob, job_id, with_for_update=True, populate_existing=True)
+        if job is None or job.status in TERMINAL:
+            db.session.rollback()
             return
-        job.status = status
-        if progress is not None:
-            job.progress = progress
-        if error_code:
-            job.error_code = error_code
-        if error_message:
-            job.error_message = error_message[:512]
+        if job.status == "CANCEL_REQUESTED":
+            job.status = "CANCELLED"
+        else:
+            job.status = status
+            if progress is not None:
+                job.progress = progress
+            if error_code:
+                job.error_code = error_code
+            if error_message:
+                job.error_message = error_message[:512]
         # FAILED/CANCELLED 不计入月页额度（pages_used 只统计非终态失败的任务），无需返还
         db.session.commit()
 
@@ -140,8 +154,9 @@ class OcrWorker:
         from extensions import db
         from models import OcrJob
 
-        job = db.session.get(OcrJob, job_id)
-        cancelled = job is not None and job.status == "CANCEL_REQUESTED"
+        job = db.session.get(OcrJob, job_id, populate_existing=True)
+        # 另一实例可能已取消/结束任务或将不确定的供应商结果落为 FAILED。
+        cancelled = job is None or job.status == "CANCEL_REQUESTED" or job.status in TERMINAL
         # 只读检查后立即结束事务：调用方随后可能等待 TextIn/重试退避，不能 idle in transaction 占锁
         db.session.rollback()
         return cancelled
@@ -205,7 +220,11 @@ class OcrWorker:
 
         result: dict[str, Any] | None = None
         last_err: Exception | None = None
-        for attempt in range(MAX_VENDOR_RETRIES):
+        for attempt in range(MAX_VENDOR_RETRIES + 1):
+            # 退避/准备期间用户也可能取消；每次调用供应商前重新检查。
+            if self._cancel_requested(job_id):
+                self._transition(job_id, "CANCELLED")
+                return
             try:
                 from textin.adapter import run_extraction
 
@@ -221,9 +240,12 @@ class OcrWorker:
                 if self._cancel_requested(job_id):
                     self._transition(job_id, "CANCELLED")
                     return
-                if _is_retryable(e) and attempt < MAX_VENDOR_RETRIES - 1:
+                if _is_retryable(e) and attempt < MAX_VENDOR_RETRIES:
                     delay = 2 ** (attempt + 1)
-                    logger.warning("TextIn 可重试错误（%s），%ds 后第 %d 次重试", e, delay, attempt + 2)
+                    logger.warning(
+                        "TextIn 可重试错误 job=%s code=%s，%ds 后第 %d/%d 次重试",
+                        job_id, _error_code(e), delay, attempt + 1, MAX_VENDOR_RETRIES,
+                    )
                     time.sleep(delay)
                 else:
                     break
@@ -255,7 +277,14 @@ class OcrWorker:
                 logger.warning("DeepSeek 整理失败，沿用 TextIn JSON job=%s: %s", job_id, e)
 
         with self.app.app_context():
-            job = db.session.get(OcrJob, job_id)
+            # 持久化事务锁住并刷新任务行，避免恢复/取消已落终态后被成功结果覆盖。
+            job = db.session.get(OcrJob, job_id, with_for_update=True, populate_existing=True)
+            if job is None or job.status in TERMINAL:
+                db.session.rollback()
+                return
+            if job.status == "CANCEL_REQUESTED":
+                self._transition(job_id, "CANCELLED")
+                return
             duration_ms = int((time.monotonic() - started) * 1000)
             version = ResultVersion(
                 job_id=job_id, version=1, is_current=True, created_by_user_id=None,
@@ -317,7 +346,21 @@ def _is_retryable(err: Exception) -> bool:
     from textin.errors import TextInAPIError
 
     if isinstance(err, TextInAPIError):
-        return str(err.code) in {"429", "458", "459"} or "rate" in err.message.lower()
+        code = str(err.code)
+        # 明确的余额/鉴权/参数错误优先，不被 HTTP 5xx 或错误文案误判成限流。
+        transient_codes = {"408", "429", "458", "459", "30203", "40306", "-1"}
+        numeric_code = int(code) if code.isdigit() else None
+        if code not in transient_codes and numeric_code is not None:
+            if 400 <= numeric_code < 500 or 40000 <= numeric_code < 50000:
+                return False
+        status = err.http_status
+        if status is not None and 400 <= status < 500 and status not in {408, 429}:
+            return False
+        return (
+            code in transient_codes
+            or (numeric_code is not None and 500 <= numeric_code < 600)
+            or (status is not None and (status in {408, 429} or 500 <= status < 600))
+        )
     import httpx
 
     return isinstance(err, (httpx.TransportError, httpx.TimeoutException))

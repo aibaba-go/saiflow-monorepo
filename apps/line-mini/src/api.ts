@@ -39,11 +39,18 @@ export class ApiError extends Error {
 
 let csrfToken: string | null = null;
 let sessionEpoch = 0;
+// 每个写请求结束（无论成败）递增：读缓存据此判断期间是否可能有数据变化（NFR-PERF-005）。
+let writeEpoch = 0;
 
 /** 新会话/清理递增代次，旧并发请求的 401 不能清除新会话。 */
 export function setCsrfToken(token: string | null): void {
   csrfToken = token;
   sessionEpoch += 1;
+}
+
+/** 当前会话代次与写代次；只读，用于前端短时读缓存的失效判断。 */
+export function dataEpochs(): { session: number; write: number } {
+  return { session: sessionEpoch, write: writeEpoch };
 }
 
 type UnauthorizedListener = () => void;
@@ -65,12 +72,14 @@ function emitUnauthorized(): void {
 interface RequestOptions {
   method?: string;
   json?: unknown;
-  rawBody?: BodyInit;
+  rawBody?: XMLHttpRequestBodyInit;
   contentType?: string;
   headers?: Record<string, string>;
   idempotencyKey?: string;
   onUploadProgress?: (fraction: number) => void;
   timeoutMs?: number;
+  /** FR-UPLOAD-001/010：三段上传统一使用移动 WebView 的同源 XHR 通道。 */
+  transport?: 'xhr';
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -85,7 +94,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   if (idempotencyKey) {
     h['Idempotency-Key'] = idempotencyKey;
   }
-  let body: BodyInit | undefined;
+  let body: XMLHttpRequestBodyInit | undefined;
   if (json !== undefined) {
     h['Content-Type'] = 'application/json';
     body = JSON.stringify(json);
@@ -95,24 +104,37 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   let res: Response;
-  const controller = options.timeoutMs ? new AbortController() : null;
+  const useXhr = options.transport === 'xhr' || (!!onUploadProgress && rawBody instanceof Blob);
+  const controller = options.timeoutMs && !useXhr ? new AbortController() : null;
   const timer = controller ? window.setTimeout(() => controller.abort(), options.timeoutMs) : null;
   try {
-    if (onUploadProgress && rawBody instanceof Blob) {
+    if (useXhr) {
       res = await new Promise<Response>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open(method, `${API_BASE}${path}`);
+        xhr.withCredentials = true;
+        xhr.timeout = options.timeoutMs ?? 0;
         Object.entries(h).forEach(([key, value]) => xhr.setRequestHeader(key, value));
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) onUploadProgress(event.loaded / event.total);
+        if (onUploadProgress) {
+          xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable && event.total > 0) onUploadProgress(event.loaded / event.total);
+          };
+        }
+        xhr.onload = () => {
+          try {
+            // WebView 中状态 0 或无正文状态不能抛出未捕获异常、让上传永久等待。
+            if (xhr.status === 0) { reject(new Error('Upload unavailable')); return; }
+            const noBody = [204, 205, 304].includes(xhr.status);
+            resolve(new Response(noBody ? null : xhr.responseText, {
+              status: xhr.status,
+              statusText: xhr.statusText,
+            }));
+          } catch (error) { reject(error); }
         };
-        xhr.onload = () => resolve(new Response(xhr.responseText, {
-          status: xhr.status,
-          statusText: xhr.statusText,
-        }));
         xhr.onerror = () => reject(new Error('Upload failed'));
         xhr.onabort = () => reject(new Error('Upload aborted'));
-        xhr.send(rawBody);
+        xhr.ontimeout = () => reject(new Error('Upload timed out'));
+        xhr.send(body);
       });
     } else {
       res = await fetch(`${API_BASE}${path}`, { method, headers: h, body, credentials: 'same-origin', signal: controller?.signal });
@@ -127,6 +149,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     });
   } finally {
     if (timer !== null) window.clearTimeout(timer);
+    // 响应已到达或网络失败：服务端都可能已执行写入，读缓存一律失效
+    if (isWrite) writeEpoch += 1;
   }
 
   if (res.status === 401) {
@@ -524,6 +548,8 @@ export function createUpload(
   return request('/uploads', {
     method: 'POST',
     json: { file_name: fileName, size_bytes: sizeBytes, purpose, ...tenantBody(tenantId) },
+    transport: 'xhr',
+    timeoutMs: 120000,
   });
 }
 
@@ -538,11 +564,13 @@ export function uploadContent(
     rawBody: data,
     contentType,
     onUploadProgress,
+    transport: 'xhr',
+    timeoutMs: 120000,
   });
 }
 
 export function completeUpload(uploadId: string): Promise<{ file: FileInfo }> {
-  return request(`/uploads/${uploadId}/complete`, { method: 'POST' });
+  return request(`/uploads/${uploadId}/complete`, { method: 'POST', transport: 'xhr', timeoutMs: 120000 });
 }
 
 export function importFromUrl(url: string, tenantId?: TenantRef): Promise<{ file: FileInfo }> {

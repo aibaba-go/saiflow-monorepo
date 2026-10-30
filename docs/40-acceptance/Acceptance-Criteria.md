@@ -3,8 +3,8 @@ doc_id: AC-000
 title: "SaiFlow — 汇总验收标准（V1.0 / P0）"
 type: acceptance
 status: active
-version: 1.8.21
-updated: 2026-10-28
+version: 1.8.24
+updated: 2026-10-29
 owner: QA
 verified_requirements: [FR-UPLOAD, FR-OCR, FR-VERIFY, FR-ENTRY, FR-MGMT, FR-SYS, FR-TEMPLATE]
 ---
@@ -60,6 +60,10 @@ Feature: FR-UPLOAD 文档接收
     Then 百分比与进度条按文件大小估算和已上传字节持续更新且不回退
     And 后端确认文件可用前不超过 95%，成功后为 100% 并进入上传确认页
     And 上传失败后停止进度、显示本地化错误并恢复选择入口，再次选择时从 0% 开始
+    And 三段上传使用同源 XHR，既有 Cookie/CSRF 与原始字节保持不变，每阶段等待上限 120 秒
+    Given 上传初始化、内容或完成阶段发生网络错误、中断、超时或状态 0
+    Then 结束等待，不自动重发写请求，不执行后续阶段，不显示 100%
+    And 状态 0 或异常响应不得造成事件回调未捕获异常而永久等待；保留服务端错误消息与旧会话 401 代次保护
 
   Scenario: AC-FR-UPLOAD-011-01 保留原件
     Given 已上传的原始文件
@@ -68,6 +72,8 @@ Feature: FR-UPLOAD 文档接收
 ```
 
 ## 2. EPIC-02 — OCR 识别
+
+> 2026-10-29 AC-FR-OCR-017-02 已实现，284 项新增重试隔离回归及 366 项既有后端回归联合通过（650 项）；未调用真实 TextIn/数据库/SMTP，未启动 Worker、未发布。真实供应商扣费与 PostgreSQL 多实例并发未验收，验证范围见 OCR-Pipeline §3.1。
 
 ```gherkin
 Feature: FR-OCR 多类型识别
@@ -117,6 +123,34 @@ Feature: FR-OCR 多类型识别
     Given 一个泰国佛历日期 "10 ก.ย. 2569"
     When 运行标准化
     Then 存储的 doc_date 为 "2026-09-10"
+
+  Scenario: AC-FR-OCR-017-02 TextIn 调用失败的有界自动重试
+    Given 一个已存在的 OCR job，原件、文件名、页参数与 Prompt 已确定
+    When TextIn 调用发生网络/超时、HTTP 408/429/5xx、业务限流 429/458/459/40306、基础服务故障 30203、业务 500..599，或无效响应 JSON/缺失或无效 llm_json（-1）
+    Then 仅 services/api/worker.py 执行首次 1 次加额外最多 3 次重试，总调用次数最多 4 次
+    And 第 1/2/3 次重试前分别退避 2/4/8 秒，HTTP 客户端及适配器不另加重试
+    And 每次沿用同一 job、原件字节、文件名、页参数与 Prompt
+    And 自动重试不重新上传、不创建新 job/result、不因失败尝试发通知或额外累计 SaiFlow 月页额度
+    Given HTTP 成功但业务 code 失败，或 HTTP 失败但业务 code=200
+    Then 均不得视为成功，前者按业务错误分类，后者按 HTTP 错误分类
+    And 仅 HTTP 成功（2xx）、业务 code=200 且 llm_json 有效才是调用成功
+    Given 任一次遇到余额不足 40003、鉴权/权限/参数等明确永久错误，或本地程序异常
+    Then 立即停止自动重试并将同一 job 标记 FAILED，保留该错误，不产生成功结果或完成通知
+    Given 任一次调用成功且任务未被取消
+    Then 立即停止重试，不再调用 TextIn，仅一次结果持久化/后处理及既有完成通知
+    Given 首次及额外 3 次重试均为可重试失败，且任务未被取消
+    Then 只将同一 job 标记 FAILED 并保留最后一次错误代码和消息，不产生成功结果或完成通知
+    Given 任务在退避期间或下一次重试调用前被请求取消
+    When Worker 在每次重试调用 TextIn 前重新读取并检查取消状态
+    Then 沿用既有取消处理，不再调用供应商，不产生成功结果/后处理或完成通知
+    Given 另一实例已将任务标记为 CANCELLED 或其他终态
+    Then 停止本实例的后续调用和结果写入，不覆盖既有终态
+    Given Worker 启动恢复发现超过 10 分钟无进展的 PROCESSING/POSTPROCESSING 任务
+    Then 保守标记 FAILED/VENDOR_UNCERTAIN，不自动重新入队以重置重试预算
+    And 仅尚未开始供应商调用的 PREPROCESSING 阶段允许条件恢复入队；状态推进与结果写入锁行刷新，不覆盖并发取消或终态
+    Given 供应商 POST 超时且没有已确认的供应商幂等键
+    Then 不承诺供应商未受理或只扣费一次，仅保证本应用自动重试不重复生成结果或额外累计 SaiFlow 月页额度
+    And 自动重试不同于用户手动 Retry/rerun，后者仍按 AC-FR-OCR-020-02 创建新任务并关联原任务
 
   Scenario: AC-FR-OCR-018-01 保存 TextIn 原始 JSON
     Given 已完成预处理的 Invoice 和已发布的 INVOICE 模板版本 3
@@ -275,6 +309,22 @@ Feature: FR-VERIFY Human-in-the-loop
     When 用户确认重置
     Then 页面恢复为当前结果版本的结构与原值，空卡片等临时状态一并清除
     And 未做任何改动时 Reset 按钮不可用；结果已确认锁定时不显示 Reset 按钮
+
+  Scenario: AC-FR-VERIFY-015-06 Continue 保留未点击新增按钮的字段
+    Given 核验结果尚未确认，用户在 document_information 新增表单输入 "kkk" 与 "123"，未点击小 "+"
+    When 用户显式点击 Continue
+    Then 客户端先校验所有有输入的新增表单，再将字段按原分区路径加入草稿，按现有数字类型推断保存
+    And 已注册且订阅 ACTIVE 时，确认请求包含该字段，最终只读结果及重新读取当前版本仍包含该字段
+    And 游客/未完成注册或订阅失效时，原有分流前的 confirm: false 草稿保存同样包含该字段，不自动确认
+    Given 一个或多个新增表单中有输入，但某个名称为空或与该分区现有字段重名
+    When 用户点击 Continue
+    Then 保留所有输入并定位本地化错误，不部分提交、不发起保存/确认请求、不导航
+    And 修正名称后可再次 Continue，全部有效新增字段一起保留；已有字段与数组不变
+    Given 用户只打开未填写的新增表单，或已取消新增输入
+    Then 不因该表单额外保存草稿或创建结果版本
+    Given 只有新增表单中存在未保存输入
+    Then Reset 可用，取消重置保留输入，确认重置清空输入并恢复当前版本
+    And 320/375/430 像素视口下新增与取消按钮均在卡片内完整可见
 
   Scenario: AC-FR-VERIFY-016-01 已注册且订阅 ACTIVE 的用户显式确认
     Given 用户已登录并完成注册，任务所属租户订阅为 ACTIVE（默认 Kinder 或已批档位均可），且必填字段有效
@@ -484,8 +534,14 @@ Feature: FR-SYS 身份与配置
     When SDK 迟到成功、失败或超时
     Then 不兑换身份，不跳 OAuth 或官方恢复入口，不自动导航或确认任务
     And SDK 超时后的迟到成功不能复活初始化缓存
-    Given 初始化成功且用户没有取消
+    Given 初始化成功且用户没有取消，并取得 SDK token 或可在已登记 Endpoint 下继续外部 OAuth
     Then 清重开标记，沿用 SDK token 验真或原有 OAuth，不自动确认任务
+    Given LINE 内初始化成功但没有 token，或外部浏览器当前域名/路径不在已登记 Endpoint 下
+    Then 仅显式点击才恢复无查询参数的官方 LIFF 入口一次，不调用外部 OAuth，不清重开标记导致循环
+    Given 外部浏览器位于已登记 Endpoint 下且没有 token
+    When 用户显式点击 LINE 登录
+    Then 使用 liff.login() 的默认 Endpoint，不把当前 URL 的 code/token/其他查询参数带入 redirectUri
+    And 不在不同 Cloud Run 域名上创建跨源 PKCE，不承诺跨源迁移旧 Cookie/游客草稿/sessionStorage
     And 真实手机重开时的 WebView 与存储连续性须另行验证，桌面模拟不算通过证据
 
   Scenario: AC-FR-SYS-002-01 权限强制执行
@@ -903,6 +959,9 @@ Feature: NFR V1.0 门槛
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.8.24 | 2026-10-29 | Product Engineering | AC-FR-OCR-017-02：TextIn 首次+最多 3 次重试、2/4/8 秒、单层与错误分类、取消/终态、未知结果恢复不重置预算、锁行刷新、结果唯一及供应商扣费边界；284 项新增+366 项既有隔离回归联合通过，未发布，真实厂商/数据库并发未验收，见 OCR-Pipeline §3.1 |
+| 1.8.23 | 2026-10-29 | Product Engineering | 新增 AC-FR-VERIFY-015-06：Continue 纳入未点击小「+」的有效新增输入，空名/重名不部分提交、不导航，认证/订阅分流前草稿保留；空表单/取消不额外写版本，Reset 包含表单输入，小屏控件完整可见；25新增+25原浏览器及6模块、366隔离后端通过，真机未验收；发布状态与验证边界见 Architecture §5 |
+| 1.8.22 | 2026-10-29 | Product Engineering | 扩充 AC-FR-SYS-001-07 的 LINE 内无 token、Endpoint 同源/路径、默认 OAuth 与恢复防循环；扩充 AC-FR-UPLOAD-010-01 的同源 XHR、120 秒上限、状态 0/异常响应/中断与无自动重发；23 项 LIFF 源码、14 项上传源码和 2 项 Chromium 上传检查通过；真实手机登录/上传及底层断连另验，发布状态见 Architecture §5 |
 | 1.8.21 | 2026-10-28 | Product Engineering | 新增 AC-FR-SYS-001-07：20 秒有界初始化、显式一次官方恢复、同上下文停止重复跳转、非凭据续接、取消与迟到结果保护；16 项隔离源码检查、25 项冻结构建浏览器与6项源码模块通过；前端22版100%切流及真实域名7静态哈希见Architecture §5，真实手机存储连续性与完整 LINE 授权不视为通过 |
 | 1.8.20 | 2026-10-27 | Product Engineering | FR-SYS-001/010..014：更新当前说明与覆盖矩阵为已真实实现、隔离通过并正式发布；334 项后端、final index-BUTDgRGj.js 的 21 项全 mock 浏览器、6 项 OAuth 源码模拟、9 项会话边界及类型检查/Vite 构建/OpenAPI 283 个内部引用通过；同步 AC-001-03 失败/10 秒超时锁主壳、Back/刷新先 session CSRF-only→logout→guest，成功回 scan 不留旧 My、不自动 LINE 兑换；registered_at 动态默认 Kinder 每泰国月 1,000 页，无新增 schema/默认申请/付款/历史迁移；发布引用 Architecture §5/§6，历史 221/5 与 SMTP 接收非本轮证据，SMTP 模块/秘密版本引用不变、本轮未实发邮件，隔离不连接数据库/真实 LINE/SMTP、不创建生产账户；真实 LINE/收件箱/数据库并发/防猜码仍未验证，保留旧版本事实与原业务规则 |
 | 1.8.19 | 2026-10-27 | Product Engineering | 同步 SYS-001/010..014/017 与 VERIFY-016/017：退出超时/刷新不复登、Cookie/游客主壳、显式 LINE、仅 Continue 到 auth 注册、pending/取消/恢复不自动确认；默认 Kinder 真正月页额与赠送隔离、已批优先/pending 不拦/企业不继承；新增 SYS-011-02 服务端注册门禁无版本写入副作用；与 EPIC-06 代表性 AC 同步，均为本轮待验证目标，历史发布与 SMTP 测试不覆盖本轮 |
