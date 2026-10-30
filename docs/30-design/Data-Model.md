@@ -6,7 +6,7 @@ status: active
 version: 2.1.0
 updated: 2026-10-30
 owner: Product Engineering
-source: "PRD-001 v3.1 §3, §4, §4.9; ADR-007"
+source: "PRD-001 v3.2 §3, §4, §4.9; ADR-007"
 related: [ADR-007, DM-FormDocument, DM-ExtractionPayload, DM-OcrJob, DM-DocumentTemplate, DM-Tenant, DM-Subscription]
 doc_source: manual
 ---
@@ -54,7 +54,7 @@ erDiagram
 | `DM-User` | 用户；内部唯一用户 ID | Cloud SQL | 全局 | 1:N 关联身份、成员关系、通知 | 游客 → 已注册；游客注册后数据归入个人租户 |
 | `DM-UserIdentity` | 关联身份：LINE 身份 ID、邮箱、手机号、将来的 OAuth | Cloud SQL | 用户 | N:1 用户；同类身份全局唯一 | 绑定 → 验证（邮箱）→ 解绑 |
 | `DM-Tenant` | 租户：业务数据的归属单位 | Cloud SQL | — | 1:N 成员关系、文件、表单文档；0..1 企业认证、订阅 | 游客临时 / 个人 / 团队；开通 → 关闭（平台 admin）；团队租户在付费开通套餐时创建 |
-| `DM-Enterprise` | 团队租户的企业信息与企业认证（可选，只影响身份显示，后续开发票的前提） | Cloud SQL | 租户（1:1） | 1:1 团队租户 | 未认证 → 已认证（审核开通或 admin 直接开通） |
+| `DM-Enterprise` | 团队租户的企业信息与企业认证（可选，只影响身份显示，后续如规划开发票则为其前提） | Cloud SQL | 租户（1:1） | 1:1 团队租户 | 未认证 → 已认证（审核开通或 admin 直接开通） |
 | `DM-Membership` | 用户在租户中的成员关系 | Cloud SQL | 租户 | N:1 用户、N:1 租户、N:M 角色 | 加入 → 移除；个人租户只有本人 |
 | `DM-Role` | 角色：owner、默认角色与 owner 自定义角色，由权限点组合 | Cloud SQL | 租户 | N:M 成员关系 | 创建 → 修改权限点 → 删除（owner 与默认角色不可删除） |
 | `DM-Invitation` | 团队租户的成员邀请（受成员人数上限约束） | Cloud SQL | 租户 | N:1 团队租户 | 待接受 → 已接受 / 已过期 / 已撤销 |

@@ -3,7 +3,7 @@ doc_id: ADR-006
 title: "ADR-006 — AI Native 开发模式：OpenSpec 管需求、SuperPowers 管实现，并重建代码"
 type: adr
 status: accepted
-version: 1.1.0
+version: 1.1.1
 updated: 2026-10-30
 owner: Product Engineering
 related: [WF-001, AGENTS, STD-004, STD-005, STD-006, PRD-001]
@@ -137,7 +137,7 @@ accepted（2026-10-30 负责人确认）
 |------|------------------|------|------|------|
 | B-0 | `prd-v3-doc-sync` | M | 完成 PRD §8 中产品级部分：Glossary、Vision-Scope、NFR（大模型约束）、`AGENTS.md` 第 7 条；Architecture / Data-Model 按 v3 数据边界重写并新增 ADR（关闭 OQ-27） | A 完成 |
 | B-1 | `rebuild-skeleton` | L | 新 `services/api`（FastAPI 骨架、配置、Alembic、pytest）、新 `apps/web-pc` 与 `apps/line-mini` 空壳（React、Vitest）、`packages/api-client` 生成脚本、CI 跑 lint/test/build、`scripts/` 手动触发的部署脚本 | B-0 |
-| B-2 | `rebuild-auth-tenant` | L | LINE 认证、游客会话与归集、租户、订阅与计量、到期提醒（EPIC-06 迁入 capability） | B-1 |
+| B-2 | `rebuild-auth-tenant` | L | LINE 认证、游客会话与归集、租户、订阅与计量（月扫描配额、免费额度、成员人数上限）、用量与到期提醒（EPIC-06 迁入 capability；规则见 PRD §4.9 v3.2） | B-1 |
 | B-3 | `ocr-pipeline-v3` | L | 上传、OCR 引擎抽象、大模型模板匹配与结构化转换、Firestore 存储（EPIC-01/02 迁入） | B-2 |
 | B-4 | `verify-and-export` | L | 人工确认与修正、复核、导出 Excel（EPIC-03/04 迁入） | B-3 |
 | B-5 | `frontend-flows` | L | 两个前端接入真实后端的完整流程（可按页面再拆分） | B-2 起可并行 |
@@ -206,6 +206,7 @@ B-2 到 B-5 的具体范围、优先级以各自 proposal 经负责人确认的�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.1.1 | 2026-10-30 | Product Engineering | §7 B-2 范围按 PRD v3.2 补充用量提醒、免费额度与成员人数上限 |
 | 1.1.0 | 2026-10-30 | Product Engineering | 记录负责人决定：历史清理只作用于本分支，其余分支与 tag 不变，今后从本分支发布；`legacy/` 中发现的数据库与 TextIn 凭据不轮换、不清理历史，风险接受（团队仅 2 人），当前代码树中已清空其默认值；新增“发布分支与凭据”一节 |
 | 1.0.0 | 2026-10-30 | Product Engineering | 负责人审阅通过，状态改为 accepted；`sf-cookies.txt` 与 31 个已入库的上传/导出文件已从全部分支历史中清除 |
 | 0.2.0 | 2026-10-30 | Product Engineering | 纳入审阅答复：线上无真实用户、旧代码不保留部署能力；部署为手工 Docker + gcloud，B-1 写成手动触发脚本；框架内部 subagent 不干预；新 schema 从零建；B-0 边界；`sf-cookies.txt` 已删除 |
