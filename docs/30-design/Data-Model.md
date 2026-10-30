@@ -62,12 +62,12 @@ erDiagram
 | `DM-Subscription` | 租户当前订阅：档位、开通周期（按月 / 按年）与有效期 | Cloud SQL | 租户（一租户一个） | N:1 套餐；1:N 提醒记录 | 未开通 → 有效 → 已到期；续费/升级后重新有效 |
 | `DM-Application` | 续费/升级申请、企业认证申请 | Cloud SQL | 租户 | N:1 目标租户 | 已提交 → 处理中 / 需补充 → 已批准 / 已拒绝 |
 | `DM-PlanReminder` | 用量提醒与到期提醒的发送记录（同一周期同一节点只一次） | Cloud SQL | 租户 | N:1 订阅 | 仅追加 |
-| `DM-FreeQuota` | 注册赠送的一次性免费额度及其余量（OCR 扫描次数） | Cloud SQL | 用户（每个用户至多一份；数量与扣减规则见 PRD OQ-28） | 1:1 用户 | 发放 → 用尽 |
+| `DM-FreeQuota` | 注册赠送的一次性免费额度及其余量（OCR 扫描次数） | Cloud SQL | 用户（每个用户至多一份；数量取系统参数，扣减规则见 PRD OQ-28） | 1:1 用户 | 发放 → 用尽 |
 | `DM-Notification` | 站内通知 | Cloud SQL | 用户 | N:1 用户 | 未读 → 已读 |
 | `DM-File` | 文件元数据：原件、导入、导出、头像 | Cloud SQL | 租户 | 1:1 GCS 对象；1:N 识别任务 | 上传 → 删除（按保留策略） |
 | `DM-OcrJob` | 识别任务：状态、页数、所用引擎；月扫描配额计量与调用观测的依据 | Cloud SQL | 租户 | N:1 文件；1:N 原始载荷；0..1 表单文档 | 排队 → 识别中 → 完成 / 失败 / 取消 |
 | `DM-DocumentTemplate` | 文档格式模板及其版本 | Cloud SQL | 全局（V1.0 由实施人员预置） | 1:N 表单文档 | 草稿 → 已发布 → 停用；发布后版本不可变 |
-| `DM-SystemSetting` | 系统参数：OCR 首选/备用引擎与切换参数、大模型配置引用、各档成员人数上限、置信度阈值 | Cloud SQL | 全局（平台 admin 配置） | — | 修改时写操作日志；密钥本体在 Secret Manager |
+| `DM-SystemSetting` | 系统参数：OCR 首选/备用引擎与切换参数、大模型配置引用、免费额度、各档成员人数上限、置信度阈值 | Cloud SQL | 全局（平台 admin 配置） | — | 修改时写操作日志；密钥本体在 Secret Manager |
 | `DM-OperationLog` | 操作日志（审计） | Cloud SQL | 租户或平台 | N:1 操作者（用户或 admin 账号） | 仅追加 |
 | `DM-AdminAccount` | 平台 admin 账号 | Cloud SQL（与客户账号分表隔离） | 平台 | 1:N 操作日志 | 启用 → 锁定 / 停用 |
 | `DM-FormDocument` | 表单数据：每份单据一个文档，含结构化结果、结果版本、状态、核验修改记录与复核记录 | Firestore | 租户 | N:1 识别任务、模板版本 | 待核验 → 待复核 → 正式业务数据（同一文档的状态字段，OQ-21） |
