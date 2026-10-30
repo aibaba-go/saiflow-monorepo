@@ -3,7 +3,7 @@ doc_id: DES-002
 title: "SaiFlow — 数据模型"
 type: data-model
 status: active
-version: 2.0.0
+version: 2.1.0
 updated: 2026-10-30
 owner: Product Engineering
 source: "PRD-001 v3.1 §3, §4, §4.9; ADR-007"
@@ -24,7 +24,7 @@ erDiagram
     DM-User ||--o{ DM-UserIdentity : "关联身份"
     DM-User ||--o{ DM-Membership : "加入"
     DM-Tenant ||--o{ DM-Membership : "成员"
-    DM-Tenant ||--o| DM-Enterprise : "企业租户扩展"
+    DM-Tenant ||--o| DM-Enterprise : "企业认证（可选）"
     DM-Tenant ||--o{ DM-Role : "定义"
     DM-Membership }o--o{ DM-Role : "分配"
     DM-Tenant ||--o{ DM-Invitation : "邀请"
@@ -32,6 +32,7 @@ erDiagram
     DM-Tenant ||--o| DM-Subscription : "订阅"
     DM-Tenant ||--o{ DM-Application : "申请"
     DM-Subscription ||--o{ DM-PlanReminder : "提醒"
+    DM-User ||--o| DM-FreeQuota : "免费额度"
     DM-User ||--o{ DM-Notification : "接收"
     DM-Tenant ||--o{ DM-File : "拥有"
     DM-File ||--|| DM-StoredObject : "对象"
@@ -52,20 +53,21 @@ erDiagram
 |---------|------|------|------|----------|----------|
 | `DM-User` | 用户；内部唯一用户 ID | Cloud SQL | 全局 | 1:N 关联身份、成员关系、通知 | 游客 → 已注册；游客注册后数据归入个人租户 |
 | `DM-UserIdentity` | 关联身份：LINE 身份 ID、邮箱、手机号、将来的 OAuth | Cloud SQL | 用户 | N:1 用户；同类身份全局唯一 | 绑定 → 验证（邮箱）→ 解绑 |
-| `DM-Tenant` | 租户：业务数据的归属单位 | Cloud SQL | — | 1:N 成员关系、文件、表单文档；0..1 企业、订阅 | 游客临时 / 个人 / 企业；开通 → 关闭（平台 admin） |
-| `DM-Enterprise` | 企业租户的企业信息与认证 | Cloud SQL | 租户（1:1） | 1:1 企业租户 | 未认证 → 已认证（审核开通或 admin 直接开通） |
+| `DM-Tenant` | 租户：业务数据的归属单位 | Cloud SQL | — | 1:N 成员关系、文件、表单文档；0..1 企业认证、订阅 | 游客临时 / 个人 / 团队；开通 → 关闭（平台 admin）；团队租户在付费开通套餐时创建 |
+| `DM-Enterprise` | 团队租户的企业信息与企业认证（可选，只影响身份显示，后续开发票的前提） | Cloud SQL | 租户（1:1） | 1:1 团队租户 | 未认证 → 已认证（审核开通或 admin 直接开通） |
 | `DM-Membership` | 用户在租户中的成员关系 | Cloud SQL | 租户 | N:1 用户、N:1 租户、N:M 角色 | 加入 → 移除；个人租户只有本人 |
 | `DM-Role` | 角色：owner、默认角色与 owner 自定义角色，由权限点组合 | Cloud SQL | 租户 | N:M 成员关系 | 创建 → 修改权限点 → 删除（owner 与默认角色不可删除） |
-| `DM-Invitation` | 企业租户的成员邀请 | Cloud SQL | 租户 | N:1 企业租户 | 待接受 → 已接受 / 已过期 / 已撤销 |
-| `DM-Plan` | 套餐目录：四档及每月页数 | Cloud SQL | 全局 | 1:N 订阅 | 由平台维护 |
-| `DM-Subscription` | 租户当前订阅：档位与有效期 | Cloud SQL | 租户（一租户一个） | N:1 套餐；1:N 到期提醒 | 未开通 → 有效 → 已到期；续费/升级后重新有效 |
+| `DM-Invitation` | 团队租户的成员邀请（受成员人数上限约束） | Cloud SQL | 租户 | N:1 团队租户 | 待接受 → 已接受 / 已过期 / 已撤销 |
+| `DM-Plan` | 套餐目录：四档及月扫描配额 | Cloud SQL | 全局 | 1:N 订阅 | 由平台维护 |
+| `DM-Subscription` | 租户当前订阅：档位、开通周期（按月 / 按年）与有效期 | Cloud SQL | 租户（一租户一个） | N:1 套餐；1:N 提醒记录 | 未开通 → 有效 → 已到期；续费/升级后重新有效 |
 | `DM-Application` | 续费/升级申请、企业认证申请 | Cloud SQL | 租户 | N:1 目标租户 | 已提交 → 处理中 / 需补充 → 已批准 / 已拒绝 |
-| `DM-PlanReminder` | 到期提醒发送记录（同一周期同一节点只一次） | Cloud SQL | 租户 | N:1 订阅 | 仅追加 |
+| `DM-PlanReminder` | 用量提醒与到期提醒的发送记录（同一周期同一节点只一次） | Cloud SQL | 租户 | N:1 订阅 | 仅追加 |
+| `DM-FreeQuota` | 注册赠送的一次性免费额度及其余量（OCR 扫描次数） | Cloud SQL | 用户（每个用户至多一份；数量与扣减规则见 PRD OQ-28） | 1:1 用户 | 发放 → 用尽 |
 | `DM-Notification` | 站内通知 | Cloud SQL | 用户 | N:1 用户 | 未读 → 已读 |
 | `DM-File` | 文件元数据：原件、导入、导出、头像 | Cloud SQL | 租户 | 1:1 GCS 对象；1:N 识别任务 | 上传 → 删除（按保留策略） |
-| `DM-OcrJob` | 识别任务：状态、页数、所用引擎；月页计量与调用观测的依据 | Cloud SQL | 租户 | N:1 文件；1:N 原始载荷；0..1 表单文档 | 排队 → 识别中 → 完成 / 失败 / 取消 |
+| `DM-OcrJob` | 识别任务：状态、页数、所用引擎；月扫描配额计量与调用观测的依据 | Cloud SQL | 租户 | N:1 文件；1:N 原始载荷；0..1 表单文档 | 排队 → 识别中 → 完成 / 失败 / 取消 |
 | `DM-DocumentTemplate` | 文档格式模板及其版本 | Cloud SQL | 全局（V1.0 由实施人员预置） | 1:N 表单文档 | 草稿 → 已发布 → 停用；发布后版本不可变 |
-| `DM-SystemSetting` | 系统参数：OCR 首选/备用引擎与切换参数、大模型配置引用、置信度阈值 | Cloud SQL | 全局（平台 admin 配置） | — | 修改时写操作日志；密钥本体在 Secret Manager |
+| `DM-SystemSetting` | 系统参数：OCR 首选/备用引擎与切换参数、大模型配置引用、各档成员人数上限、置信度阈值 | Cloud SQL | 全局（平台 admin 配置） | — | 修改时写操作日志；密钥本体在 Secret Manager |
 | `DM-OperationLog` | 操作日志（审计） | Cloud SQL | 租户或平台 | N:1 操作者（用户或 admin 账号） | 仅追加 |
 | `DM-AdminAccount` | 平台 admin 账号 | Cloud SQL（与客户账号分表隔离） | 平台 | 1:N 操作日志 | 启用 → 锁定 / 停用 |
 | `DM-FormDocument` | 表单数据：每份单据一个文档，含结构化结果、结果版本、状态、核验修改记录与复核记录 | Firestore | 租户 | N:1 识别任务、模板版本 | 待核验 → 待复核 → 正式业务数据（同一文档的状态字段，OQ-21） |
@@ -98,8 +100,9 @@ erDiagram
 |------|------|
 | `DocumentType` | PO、DELIVERY_NOTE、DELIVERY_INSTRUCTION、INVOICE、RECEIPT、CREDIT_NOTE、TAX_RECEIPT、BILL |
 | 表单状态 | 待核验、待复核（一级 / 二级）、正式业务数据 |
-| 租户类型 | 游客、个人、企业 |
-| 订阅状态 | 未开通（企业未认证）、有效、已到期 |
+| 租户类型 | 游客、个人、团队 |
+| 订阅状态 | 未开通、有效、已到期 |
+| 开通周期 | 按月、按年 |
 | 套餐档位 | Kinder < Starter < Intermediate < Advance |
 | 权限点 | 上传与识别、核验与确认、核验他人单据、一级复核、二级复核、导出、数据浏览、成员管理、角色管理、套餐申请、企业认证申请、模板管理（P1）、报表查看（P1）——见 PRD §4.9 |
 
@@ -121,6 +124,7 @@ erDiagram
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.1.0 | 2026-10-30 | Product Engineering | 按 PRD v3.2：企业租户改称团队租户、企业认证改为可选；新增 DM-FreeQuota（共 22 个实体）；订阅含开通周期；提醒记录含用量提醒；系统参数含成员人数上限 |
 | 2.0.0 | 2026-10-30 | Product Engineering | 改为实体层（字段以代码为唯一来源）；按 ADR-007 的 v3 存储边界重列 21 个实体并给出 v1 实体去向；枚举只保留产品级取值；旧字段级内容见 tag legacy-v1 |
 | 1.6.0 | 2026-10-28 | Product Engineering | 归属改为单一 `tenant_id`：新增 `tenants` 表与 `enterprises.tenant_id` / `verified_at`，files/ocr_jobs/memberships/invitations 改挂 `tenant_id`、applications 改为 `target_tenant_id`，保留 `error.invalid_workspace` / `error.enterprise_access_revoked` 等旧 message_key；新增 `subscriptions`（一租户一行，默认一个月 Kinder、月末夹取、审批惰性续期）与 `plan_reminders`（`uq_plan_reminder_stage` 幂等、不回补节点）；删除 `quota_ledger` 与赠送任务额度、取消 FREE 档与 `free_tasks`/`paid_pages`/`OCR_TASK` 计量，改为按泰国自然月实时统计 `ocr_jobs.page_count`；`users.phone` 在个人中心可改（原「只读」表述作废）；补记无 Alembic、ADD COLUMN 与 `setup_db.py` 重建的 schema 落地方式。未运行测试 |
 | 1.5.8 | 2026-10-27 | Product Engineering | FR-SYS-001/010..014/017、FR-VERIFY-016/017：更新为已真实实现、隔离验证通过并正式发布，334 项后端、final index-BUTDgRGj.js 的 21 项全 mock 浏览器、6 项 OAuth 源码模拟、9 项会话边界及类型检查/Vite 构建/OpenAPI 283 个内部引用通过；registered_at 动态默认 Kinder 每泰国月 1,000 页，无新增 schema/默认申请/付款/历史迁移；发布引用 Architecture §5/§6，历史 221/5 与 SMTP 接收非本轮证据，SMTP 模块/秘密版本引用不变、本轮未实发邮件，隔离不连接数据库/真实 LINE/SMTP、不创建生产账户；真实 LINE/收件箱/数据库并发/防猜码仍未验证，原业务规则不变 |
