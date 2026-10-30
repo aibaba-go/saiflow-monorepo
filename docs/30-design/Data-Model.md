@@ -3,394 +3,125 @@ doc_id: DES-002
 title: "SaiFlow — 数据模型"
 type: data-model
 status: active
-version: 1.6.0
-updated: 2026-10-28
+version: 2.0.0
+updated: 2026-10-30
 owner: Product Engineering
-source: "EPIC-02, EPIC-03, EPIC-04, EPIC-06, EPIC-07, EPIC-08"
-related: [DM-Document, DM-ExtractionPayload, DM-ConversionJob, DM-DocumentTemplate, DM-ExtractedField, DM-LineItem, DM-ReviewRecord, DM-ResultVersion]
+source: "PRD-001 v3.1 §3, §4, §4.9; ADR-007"
+related: [ADR-007, DM-FormDocument, DM-ExtractionPayload, DM-OcrJob, DM-DocumentTemplate, DM-Tenant, DM-Subscription]
+doc_source: manual
 ---
 
 # SaiFlow — 数据模型
 
-> 实体和字段的唯一事实来源。Cloud SQL 保存关系型业务投影；Firestore 保存不可变的 TextIn 原始 JSON 载荷。金额使用 `decimal(14,2)`（NFR-DATA-004）；时间戳使用 ISO-8601 UTC 或带偏移量的本地时间。
+> **本文件只描述实体层**：实体、用途、存储位置、归属、关键关系与生命周期。**字段级结构以代码为唯一来源**（Cloud SQL：ORM 模型 + Alembic 迁移；Firestore：服务端文档模型），不在文档中重复（ADR-007、STD-004 规则 2）。存储位置以 [`adr/ADR-007-v3-storage-boundary.md`](./adr/ADR-007-v3-storage-boundary.md) 为准。v1 的字段级内容见 git tag `legacy-v1` 中的版本。
+>
+> 本文件仅在新增实体、实体更换存储位置、关系或生命周期变化时更新。
 
 ## 1. 实体关系概览
 
 ```mermaid
 erDiagram
-  USER ||--o{ OPERATION_LOG : performs
-  USER }o--o{ ROLE : has
-  DOCUMENT_TEMPLATE ||--o{ TEMPLATE_FIELD_MAPPING : defines
-  DOCUMENT_TEMPLATE ||--o{ DOCUMENT : selected_for
-  DOCUMENT ||--o{ EXTRACTION_PAYLOAD : has
-  EXTRACTION_PAYLOAD ||--o{ CONVERSION_JOB : triggers
-  DOCUMENT ||--o{ EXTRACTED_FIELD : has
-  DOCUMENT ||--o{ LINE_ITEM : contains
-  DOCUMENT ||--o{ CHANGE_LOG : tracks
-  DOCUMENT ||--o{ REVIEW_RECORD : has
-  REVIEW_POLICY ||--o{ DOCUMENT : governs
-  DOCUMENT ||--o| ARCHIVE_RECORD : archived_as
-  DOCUMENT }o--o{ DOCUMENT : matched_with
-  EXPORT_JOB }o--o{ DOCUMENT : includes
+    DM-User ||--o{ DM-UserIdentity : "关联身份"
+    DM-User ||--o{ DM-Membership : "加入"
+    DM-Tenant ||--o{ DM-Membership : "成员"
+    DM-Tenant ||--o| DM-Enterprise : "企业租户扩展"
+    DM-Tenant ||--o{ DM-Role : "定义"
+    DM-Membership }o--o{ DM-Role : "分配"
+    DM-Tenant ||--o{ DM-Invitation : "邀请"
+    DM-Plan ||--o{ DM-Subscription : "档位"
+    DM-Tenant ||--o| DM-Subscription : "订阅"
+    DM-Tenant ||--o{ DM-Application : "申请"
+    DM-Subscription ||--o{ DM-PlanReminder : "提醒"
+    DM-User ||--o{ DM-Notification : "接收"
+    DM-Tenant ||--o{ DM-File : "拥有"
+    DM-File ||--|| DM-StoredObject : "对象"
+    DM-File ||--o{ DM-OcrJob : "识别"
+    DM-OcrJob ||--o{ DM-ExtractionPayload : "原始载荷"
+    DM-OcrJob ||--o| DM-FormDocument : "生成"
+    DM-DocumentTemplate ||--o{ DM-FormDocument : "按模板"
+    DM-Tenant ||--o{ DM-FormDocument : "拥有"
+    DM-Tenant ||--o{ DM-OperationLog : "审计"
+    DM-AdminAccount ||--o{ DM-OperationLog : "admin 操作"
 ```
 
-## 2. 实体
-
-### 2.1 `DM-Document`
-
-**用途：** 一份已上传的文档（或多页 PDF 的一页）的 Cloud SQL 关系记录。
-
-| 字段 | 类型 | 必填 | 约束 | 示例 | 说明 |
-|------|------|:----:|------|------|------|
-| id | uuid | Y | PK | 3f9a… | |
-| doc_type | enum DocumentType | Y | 见第 3 节 | DELIVERY_NOTE | FR-OCR-001 |
-| status | enum DocStatus | Y | 见第 3 节 | in_review | 生命周期 |
-| original_file_uri | string | Y | 不可变 GCS URI | gs://<bucket>/documents/…/original/… | 双重存储 |
-| derivative_file_uri | string | N | GCS URI | gs://<bucket>/documents/…/derived/… | 预处理图像 |
-| source_channel | enum | Y | camera/scan/file/email/portal/api | camera | |
-| upload_user_id | uuid | Y | FK→User | | |
-| template_id | uuid | N | FK→DocumentTemplate | | 转换所选模板 |
-| template_version | integer | N | ≥ 1 | 3 | 固定用于该文档的模板版本 |
-| enterprise_name | string | N | | ACME Co. | 交易对手 |
-| doc_number | string | N | len ≤ 64 | INV-2026-001 | 特定类型编号 |
-| doc_date | date | N | | 2026-09-10 | 已标准化 |
-| total_amount | decimal(14,2) | N | ≥ 0 | 12500.00 | THB |
-| amount_mismatch | boolean | Y | 默认 false | false | FR-OCR-013 |
-| needs_review | boolean | Y | 默认 false | true | FR-OCR-015 |
-| confidence_avg | decimal(3,2) | N | 0.00–1.00 | 0.91 | 汇总值 |
-| created_at / updated_at | timestamptz | Y | | | |
-
-**状态（`DocStatus`）：** `uploaded → preprocessed → extraction_requested → payload_stored → converting → extracted → in_review → verified → pending_review_level_1 → pending_review_level_2 → approved_for_business → entered → archived`（另有 `failed`）。复核策略为 `0` 时，核验确认后直接进入 `approved_for_business`；复核策略为 `1` 或 `2` 时，必须经最终复核通过。
-
-### 2.2 `DM-ExtractionPayload`
-
-**用途：** Firestore `extraction_payloads/{payload_id}` 中的原始 TextIn 响应及其关联元数据（FR-OCR-018）。这不是 Cloud SQL 关系表；其字段定义在此处以维持跨存储一致性。
-
-| 字段 | 类型 | 必填 | 约束 | 说明 |
-|------|------|:----:|------|------|
-| id | uuid | Y | Firestore 文档 ID | 载荷唯一标识 |
-| document_id | uuid | Y | 对应 `DM-Document.id` | 关联文档 |
-| payload_version | integer | Y | 每文档递增，≥ 1 | 幂等键的一部分 |
-| provider | string | Y | `textin` | OCR 服务提供方 |
-| provider_request_id | string | N | 供应商请求/任务标识 | 排障与审计 |
-| template_id / template_version | uuid / integer | Y | 已发布模板版本 | 固定映射版本 |
-| raw_json | map | Y | 完整原始响应 | 不得由转换过程修改 |
-| status | enum ExtractionPayloadStatus | Y | 见第 3 节 | 载荷处理状态 |
-| error_code / error_message | string | N | 本地化前的技术错误 | 失败诊断 |
-| created_at / processed_at | timestamptz | Y / N | | 创建与完成时间 |
-
-### 2.3 `DM-ConversionJob`
-
-**用途：** Cloud SQL 中记录一次原始载荷到关系投影的转换、重试和幂等结果（FR-OCR-019/020）。
-
-| 字段 | 类型 | 必填 | 约束 | 说明 |
-|------|------|:----:|------|------|
-| id | uuid | Y | PK | |
-| document_id | uuid | Y | FK→Document | |
-| payload_id | uuid | Y | Firestore 载荷 ID | |
-| payload_version | integer | Y | 与载荷匹配 | |
-| template_id / template_version | uuid / integer | Y | 固定版本 | |
-| idempotency_key | string | Y | unique；`document_id:payload_version` | 防止重复投影 |
-| status | enum ConversionStatus | Y | 见第 3 节 | |
-| attempt_count | integer | Y | 默认 0，≥ 0 | |
-| error_code / error_message | string | N | | 失败诊断 |
-| started_at / completed_at | timestamptz | N | | |
-| created_at / updated_at | timestamptz | Y | | |
-
-### 2.4 `DM-DocumentTemplate`
-
-**用途：** 管理员维护的文档格式模板版本（FR-TEMPLATE-001、002、005、006）。
-
-| 字段 | 类型 | 必填 | 约束 | 说明 |
-|------|------|:----:|------|------|
-| id | uuid | Y | PK | 模板族标识 |
-| version | integer | Y | 每个 `id` 递增，≥ 1 | 不可变版本 |
-| name | string | Y | len ≤ 128 | 管理界面显示名称 |
-| doc_type | enum DocumentType | Y | | 适用表单类型 |
-| textin_template_ref | string | N | 不含密钥 | TextIn 解析模板/服务参数引用 |
-| status | enum TemplateStatus | Y | draft/published/disabled | |
-| created_by / published_by | uuid | Y / N | FK→User | |
-| created_at / published_at | timestamptz | Y / N | | |
-
-> 发布后不能原地修改 `doc_type`、`version` 或映射；变更须创建新的草稿版本。一个 `doc_type` 可有多个已发布模板，但每次转换必须明确选择其具体版本。
-
-### 2.5 `DM-TemplateFieldMapping`
-
-**用途：** 模板的单字段或行项目 JSON 映射（FR-TEMPLATE-003/004）。
-
-| 字段 | 类型 | 必填 | 约束 | 说明 |
-|------|------|:----:|------|------|
-| id | uuid | Y | PK | |
-| template_id / template_version | uuid / integer | Y | FK→DocumentTemplate 版本 | |
-| mapping_scope | enum | Y | document / line_item | 映射范围 |
-| array_json_path | string | N | 仅 `line_item` 必填 | 行项目数组路径 |
-| source_json_path | string | Y | 受支持 JSONPath | 源字段路径 |
-| target_field_key | string | Y | 规范字段或行项目列 | 目标字段 |
-| data_type | enum | Y | string/decimal/date/boolean | 目标转换类型 |
-| required | boolean | Y | 默认 false | 必填校验 |
-| normalization_rule | string | N | 受支持规则标识 | 日期、数字、货币等 |
-| position | integer | Y | ≥ 1 | 稳定排序 |
-
-### 2.6 `DM-ExtractedField`
-
-**用途：** 单个已识别字段及其来源和置信度。
-
-| 字段 | 类型 | 必填 | 约束 | 示例 |
-|------|------|:----:|------|------|
-| id | uuid | Y | PK | |
-| document_id | uuid | Y | FK→Document | |
-| field_key | string | Y | 见 EPIC-02 第 3 节 | receiving_enterprise |
-| value | string | N | 已标准化 | "บริษัท เอบีซี จำกัด" |
-| raw_text | string | N | 原始文字系统 | "บจก.เอบีซี" |
-| confidence | decimal(3,2) | Y | 0.00–1.00 | 0.87 |
-| source_bbox | json | N | {x,y,w,h} | {"x":120,"y":40,"w":300,"h":24} |
-| needs_review | boolean | Y | 默认 false | false |
-| verified | boolean | Y | 默认 false | true |
-
-### 2.7 `DM-LineItem`
-
-**用途：** 文档项目表中的一行（FR-OCR-010）。
-
-| 字段 | 类型 | 必填 | 约束 | 示例 |
-|------|------|:----:|------|------|
-| id | uuid | Y | PK | |
-| document_id | uuid | Y | FK→Document | |
-| line_no | integer | Y | ≥ 1 | 1 |
-| product_name | string | N | | "Widget A" |
-| product_code | string | N | | SKU-1001 |
-| quantity | decimal(12,3) | N | ≥ 0 | 10.000 |
-| unit_price | decimal(14,2) | N | ≥ 0 | 100.00 |
-| line_total | decimal(14,2) | N | 计算值 | 1000.00 |
-| discount | decimal(14,2) | N | ≥ 0 | 0.00 |
-| tax_amount | decimal(14,2) | N | ≥ 0 | 70.00 |
-| confidence | decimal(3,2) | Y | 0.00–1.00 | 0.93 |
-
-### 2.8 `DM-ChangeLog`
-
-**用途：** 对每个字段修改的仅可追加审计记录（FR-VERIFY-007）。
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|:----:|------|
-| id | uuid | Y | PK |
-| document_id | uuid | Y | FK→Document |
-| field_key | string | Y | 已变更的字段 |
-| old_value / new_value | string | Y | 修改前/后 |
-| user_id | uuid | Y | FK→User |
-| timestamp | timestamptz | Y | |
-| reason | string | N | 可选 |
-| integrity_hash | string | Y | 防篡改证据 |
-
-### 2.9 `DM-ReviewPolicy`
-
-**用途：** 定义某类单据处理流程在数据正式进入业务流程前所需的固定复核级别（FR-VERIFY-010）。
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|:----:|------|
-| id | uuid | Y | PK |
-| process_key | string | Y | 单据处理流程标识，例如 invoice_entry |
-| review_level | smallint | Y | 仅允许 0、1 或 2 |
-| scope | json | N | 适用单据类型、企业或业务范围 |
-| configured_by | uuid | Y | FK→User；需要配置权限 |
-| updated_at | timestamptz | Y | |
-
-### 2.10 `DM-ReviewRecord`
-
-**用途：** 记录一次固定层级复核决定（FR-VERIFY-011..013）。
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|:----:|------|
-| id | uuid | Y | PK |
-| document_id | uuid | Y | FK→Document |
-| review_level | smallint | Y | 仅允许 1 或 2 |
-| reviewer_id | uuid | Y | FK→User |
-| decision | enum | Y | approved / rejected |
-| comment | string | N | 复核意见 |
-| reviewed_at | timestamptz | Y | |
-| integrity_hash | string | Y | 防篡改证据 |
-
-### 2.11 `DM-ArchiveRecord`
-
-**用途：** 双重存储归档的结果（FR-ENTRY-005..008）。
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|:----:|------|
-| id | uuid | Y | PK |
-| document_id | uuid | Y | FK→Document |
-| original_uri | string | Y | 不可变原始对象的 GCS URI |
-| data_uri | string | Y | 结构化数据或导出工件的 GCS URI |
-| archive_prefix | string | Y | 分类 GCS 对象前缀 |
-| file_name | string | Y | 按命名规则 |
-| storage_mode | enum | Y | gcs |
-| archived_at | timestamptz | Y | |
-
-### 2.12 `DM-ExportJob`
-
-**用途：** 一次导出/录入至 Excel/CSV/JSON/ERP 的操作（EPIC-04）。
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|:----:|------|
-| id | uuid | Y | PK |
-| format | enum | Y | xlsx/csv/json/erp_api |
-| document_ids | uuid[] | Y | 包含的文档 |
-| template_id | string | N | 所用 Excel 模板 |
-| save_path | string | N | 自定义路径 |
-| status | enum | Y | pending/running/done/failed |
-| created_by | uuid | Y | FK→User |
-
-### 2.13 `DM-User`、`DM-Role`、`DM-OperationLog`、`DM-Settings`（EPIC-06）
-
-| 实体 | 关键字段 |
-|------|----------|
-| `DM-User` | id、username、password_hash、status(active/locked)、line_provider(line/guest)、display_name（取自 LINE，可改）、avatar_url（text：仅外部 https 头像 URL，如 LINE）、avatar_path（Firebase Storage 头像对象名 `avatars/<user_id>/<name>.<ext>`，优先于 avatar_url；图片不入库）、phone（可选：默认取服务端验证的 LINE 返回值，LINE 不保证提供；注册时可编辑或手填并保存，也可留空；注册后在个人中心经 `PATCH /me` 可改可清空，见下文手机号校验）、email（注册必填：默认取服务端验证的 LINE id_token 的 email 声明，需 email scope/用户授权，可编辑或手填并凭验证码确认；注册后经验证码更换）、registered_at（null = 未完成注册信息录入）、prefs(json)、created_at |
-| `DM-EmailVerificationCode` | id、user_id、email（注册时的当前邮箱或更换邮箱时的目标新邮箱）、code_hash（6 位数字码的 sha256）、expires_at（10 分钟 TTL）、consumed_at（非空 = 已用/失效）、created_at（用于 60 秒重发间隔） |
-| `DM-Role` | id、name(clerk/finance/warehouse/reviewer/viewer/admin)、permissions(json) |
-| `DM-OperationLog` | id、user_id、action、target_type、target_id、result、timestamp |
-| `DM-Settings` | key、value(json)、scope(system/user)、updated_by、updated_at |
-
-> 注册/换邮箱验证码共用 `email_verification_codes`（FR-SYS-014/016），按当前用户与目标邮箱校验；注册邮箱默认值只取服务端验证后的 LINE token，不信任客户端声明。TLS SMTP 发送成功后才记录有效新码与 10 分钟有效期；60 秒内重发拒绝，成功重发使该用户此前的验证码失效。未配置或发送失败返回 `503 EMAIL_SERVICE_UNAVAILABLE`，不记录有效新码、不完成注册；错误、过期、已用或目标邮箱不匹配均拒绝。注册成功时在同一事务中消费验证码、保存用户提交的可选手机号与必填邮箱并设置 `registered_at`；换邮箱沿用消费验证码后更新邮箱的规则。本地开发例外仅按 FR-SYS-001 明确启用，见 EPIC-06 §4；本次不扩展换邮箱业务规则，SMTP 设计见 Architecture §6。登录刷新已有用户前仍须锁定并重新读取注册状态，与注册提交串行，避免旧状态覆盖用户保存值。
->
-> **本轮实现、验证与发布（2026-10-27，权益部分已于 2026-10-28 被租户/订阅模型取代，仅作历史保留）：** 启动/认证、退出、注册触发、默认 Kinder 与服务端确认门禁已真实实现并正式发布，不再仅为契约/待验证目标。334 项隔离后端回归、最终生产构建 `index-BUTDgRGj.js` 的 21 项全 mock 浏览器场景、6 项 OAuth 源码模块模拟与 9 项前端会话边界测试均通过，类型检查、Vite 构建及 OpenAPI 283 个内部引用校验通过。当时的默认 Kinder 由既有 `registered_at` 动态推导（现已改为 `subscriptions` 持久化行，见 §2.13「租户、订阅与到期提醒」）。正式发布、生产只读核验及单次日志审查（非长期保证）见 [Architecture §5](Architecture.md#5-部署模型) / [§6](Architecture.md#6-安全性与可靠性) 本轮记录；Cloud SQL `postgres.saiflow`、SMTP 模块及 Secret Manager 版本引用未改变，本轮未发送真实测试邮件。隔离测试从未连接数据库、真实 LINE 或 SMTP，也未创建生产账户记录；不宣称真实 LINE OAuth/完整注册、收件箱、真实数据库并发或验证码防猜码已验证。
->
-> **历史证据（仅保留，不作为本轮证据）：** SMTP/资料代码的 221 项后端与 5 项模拟浏览器测试曾通过，隔离用例不连接真实数据库或 SMTP；历史本地/Cloud Run Gmail 自测获 SMTP 确认接收，未独立核验收件箱、真实 LINE 注册或真实数据库并发。这些历史测试、SMTP 自测与历史发布不覆盖本轮；既有 phone/email、TLS SMTP、资料锁后重读与换邮箱规则及未验证边界保留。个人中心手机号只读的旧约束已作废（见 §2.13 手机号校验）。
-
-> `line_provider = guest` 表示游客试用会话，不是正式角色；显式登录/注册后其名下全部关联记录改挂正式用户，游客的会话、验证码、游客个人租户上的 `subscriptions` / `plan_reminders` 行与 `users` 行在同一事务内删除，游客提交过的 `applications.target_tenant_id` 改指向正式用户的个人租户。取消注册不回滚已归集任务、不撤销正式会话。游客与正式用户一样在创建个人租户时获得一个月默认 Kinder 订阅，但不接收到期提醒邮件与站内提醒。
-
-### 2.13.1 租户、订阅与到期提醒（EPIC-06）
-
-**归属主体只有 `tenant_id`。** 不再有 `workspace_type` + `enterprise_id` 组合键；个人用户（含游客）与企业各自对应一行 `tenants`，所有业务行只带一个 `tenant_id` 外键。
-
-#### `tenants`（租户，归属唯一入口）
-
-| 字段 | 类型 | 必填 | 约束 | 说明 |
-|------|------|:----:|------|------|
-| id | bigint | Y | PK，自增 | 租户 ID |
-| tenant_type | varchar(16) | Y | PERSONAL / ENTERPRISE | 个人租户含游客 |
-| owner_user_id | bigint | N | FK→users.id；唯一约束 `uq_tenants_owner_user` | 个人租户与 user 严格 1:1；企业租户为 NULL（PostgreSQL 唯一约束不约束 NULL） |
-| display_name | varchar(255) | Y | 默认空串 | 个人=昵称快照 / 企业=法定名称 |
-| status | varchar(16) | Y | ACTIVE / SUSPENDED / DISABLED | 只表达「该租户是否还能用」；企业审核语义仍在 `enterprises.status` |
-| created_at / updated_at | timestamp | Y | UTC | 个人租户的默认订阅自 `created_at` 起算 |
-
-#### `enterprises`（企业租户的 1:1 扩展）
-
-在原有字段（`code`、`country`、`legal_name`、`registration_no`、`contact_phone`、`cert_file_id`、`status`）之外新增：
-
-| 字段 | 类型 | 必填 | 约束 | 说明 |
-|------|------|:----:|------|------|
-| tenant_id | bigint | Y | FK→tenants.id，唯一 | 对应的企业租户；企业的业务归属一律用它，`enterprises.id` 只用于标识企业档案本身（路径参数 `/enterprises/{enterprise_id}` 保持不变） |
-| verified_at | timestamp | N | UTC | 认证通过时间；`status` 首次被读到为 `VERIFIED` 时由服务端补填。企业默认订阅自此起算；为 NULL 表示尚未认证，该租户没有订阅行 |
-
-#### 归属列改挂 `tenant_id`
-
-| 表 | 原字段 | 现字段 | 约束 |
-|----|--------|--------|------|
-| `files` | workspace_type + enterprise_id | `tenant_id` | FK→tenants.id，NOT NULL，带索引 |
-| `ocr_jobs` | workspace_type + enterprise_id | `tenant_id` | FK→tenants.id，NOT NULL，带索引；与源文件同租户 |
-| `memberships` | enterprise_id | `tenant_id` | FK→tenants.id，NOT NULL；唯一约束 `uq_membership_tenant_user(tenant_id, user_id)` |
-| `invitations` | enterprise_id | `tenant_id` | FK→tenants.id，NOT NULL（邀请加入的企业租户） |
-| `applications` | target_enterprise_id | `target_tenant_id` | FK→tenants.id，NOT NULL；个人套餐申请指向本人个人租户，入企/企业套餐申请指向企业租户 |
-
-**租户解析与错误语义（沿用旧 message_key，便于前端不改文案）：** 请求省略或传空 `tenant_id` 时落到调用者本人的个人租户；无法转成整数、租户不存在、或类型不是 `ENTERPRISE` 却按企业路径访问 → `400 INVALID_ARGUMENT` / `error.invalid_workspace`；指向他人的个人租户 → `403 PERMISSION_DENIED`；本人个人租户非 ACTIVE → `403 ACCOUNT_DISABLED`；成员关系非 ACTIVE、企业非 VERIFIED 或租户非 ACTIVE → `403 ENTERPRISE_ACCESS_REVOKED` / `error.enterprise_access_revoked`。
-
-#### `subscriptions`（租户订阅，一租户一行）
-
-| 字段 | 类型 | 必填 | 约束 | 说明 |
-|------|------|:----:|------|------|
-| id | bigint | Y | PK，自增 | |
-| tenant_id | bigint | Y | FK→tenants.id，**唯一** | 唯一约束即幂等开通的保证：并发插入由 IntegrityError 回滚后重读 |
-| plan_code | varchar(32) | Y | 默认 KINDER | KINDER / STARTER / INTERMEDIATE / ADVANCE，**无 FREE 档** |
-| source | varchar(16) | Y | 默认 DEFAULT | DEFAULT=系统默认开通的一个月 / APPROVED=人工审批续费开通 |
-| starts_at | timestamp | Y | UTC | 个人租户取 `tenants.created_at`；企业租户取 `enterprises.verified_at` |
-| expires_at | timestamp | Y | UTC | 按自然月推进并做月末夹取（2026-01-31 + 1 月 = 2026-02-28）；过期即不允许新建 OCR 任务 |
-| application_id | bigint | N | FK→applications.id | 最近一次据以续期的申请；默认开通为 NULL，用于保证同一申请只生效一次 |
-| created_at / updated_at | timestamp | Y | UTC | |
-
-**语义：** 企业未通过认证时没有订阅行，订阅状态为 `NONE`；有行时 `expires_at > now` 为 `ACTIVE`，否则 `EXPIRED`。续费为线下流程：运营批准 `PLAN_UPGRADE` 申请并在 `form` 写 `valid_from` / `valid_to`（或 `period_months`，1~120，缺省 12），读取订阅时据 `application_id` 惰性同步一次；未给 `valid_from` 时新周期从 `max(now, 当前 expires_at)` 起算，即未到期时顺延而非截断。`days_remaining` 按泰国时区（UTC+7）日历日计算，0 = 当天到期，负数 = 已过期。
-
-#### `plan_reminders`（到期提醒发送记录）
-
-| 字段 | 类型 | 必填 | 约束 | 说明 |
-|------|------|:----:|------|------|
-| id | bigint | Y | PK，自增 | |
-| tenant_id | bigint | Y | FK→tenants.id，带索引 | |
-| period_end | timestamp | Y | UTC | 本条提醒对应的 `subscriptions.expires_at` |
-| stage | varchar(16) | Y | D7 / D3 / D1 / D0 / EXPIRED | 到期前 7/3/1 天、到期当天、已到期 |
-| email_sent | boolean | Y | 默认 false | 站内通知先落库提交，邮件结果只回写这一列 |
-| created_at | timestamp | Y | UTC | 发送时间 |
-
-唯一约束 `uq_plan_reminder_stage(tenant_id, period_end, stage)` 即幂等键：同一周期同一节点只发一次；续费后 `period_end` 变化，新周期重新按节点提醒。扫描只在命中 D7/D3/D1/D0/EXPIRED 节点当天写入，**不回补**已错过的节点。站内通知类型为 `PLAN_EXPIRING`（D7/D3/D1/D0）与 `PLAN_EXPIRED`。
-
-#### 计量：无账本，实时统计
-
-`quota_ledger` 表与模型已删除，赠送任务流水（首登 1,000 次、企业认证 1,000 次）一并取消。唯一计量单位为 `OCR_PAGE`：按泰国时区（UTC+7）自然月实时 `SUM(ocr_jobs.page_count)`，`FAILED` 与 `CANCELLED` 的任务不计（因此取消任务天然不计入，没有返还步骤）。各档每月页数：KINDER 1,000 / STARTER 5,000 / INTERMEDIATE 10,000 / ADVANCE 100,000。新建或重跑 OCR 任务时先判订阅：非 `ACTIVE` → `402 PLAN_EXPIRED` / `plan.expired`；`ACTIVE` 但本月页数已用尽 → `402 QUOTA_EXCEEDED` / `quota.exceeded`。查询历史任务与结果不受订阅状态影响。
-
-#### 手机号校验（`users.phone`）
-
-`PATCH /me` 接受 `phone`：空串表示清空；长度 ≤ 32；只允许 `+`、数字、空格、`(`、`)`、`.`、`-`；剔除非数字后须为 6–15 位数字。不合法返回 `400 INVALID_ARGUMENT` 且 `field_errors = [{field: "phone", message_key: "error.phone_invalid"}]`；游客返回 `403 PERMISSION_DENIED`。
-
-#### schema 落地方式（无 Alembic）
-
-项目没有迁移框架：启动时 `app.py::_ensure_tables` 建缺失表，`_patch_columns` 只能 **ADD COLUMN**（`enterprises.verified_at` 走这条路径）。`tenant_id` 这类 NOT NULL 外键无法用 ADD COLUMN 补齐，必须用 `setup_db.py` 整库重建；重建时 `LEGACY_TABLES = ("quota_ledger",)` 会显式 `DROP TABLE IF EXISTS ... CASCADE`——因为该表已不在 `models.py`，自动建表逻辑不会再清理它。
-
-**工作空间有效权益视图已废止。** 原按 `registered_at` 动态推导默认 Kinder、`free_tasks` / `paid_pages` 双计量、`OCR_TASK` 计量单位与赠送账本的那张表整体删除，相关响应字段（`free_tasks`、`paid_pages`、`free_unit`、`paid_unit`）不再返回。
-
-### 2.14 `DM-ResultVersion`（结果版本快照）
-
-**用途：** 保存一次识别任务的结构化结果快照，供核验编辑、最终结果查看与 Excel 导出（FR-VERIFY-015、FR-ENTRY-015）。
-
-| 字段 | 类型 | 必填 | 约束 | 说明 |
-|------|------|:----:|------|------|
-| id | uuid | Y | PK | |
-| job_id | uuid | Y | FK→识别任务 | 同一任务内版本唯一 |
-| version | integer | Y | ≥ 1；`(job_id, version)` 唯一 | 乐观并发版本号 |
-| is_current | boolean | Y | 每任务仅一条为 true | 当前版本标记 |
-| structured | json | N | ≤ 2 MB | Prompt 模式结构化字段/表格 |
-| created_by_user_id | uuid | N | FK→User | 游客编辑时可为游客用户 |
-| created_at | timestamptz | Y | | |
-
-> 每次结构化结果保存都会新增一个 `DM-ResultVersion`，旧版本 `is_current = false` 但保留为历史快照；逐页任务的页面结果按版本归属保存，编辑不覆盖原始识别输出。
-
-**结构化数组编辑（FR-VERIFY-002/015）：** `structured` 中电话号码等标量数组叶字段（含表格单元格）保留 JSON 数组类型。数组元素按原字段路径追加索引（`path + [index]`）接收 `string` 编辑值，仅替换对应元素；数组顺序、长度及所有未编辑元素保持不变，不转成逗号或换行分隔字符串，不修改旧版本快照。单一字符串电话号码仍按标量字段编辑，确认锁定后只读；本修复不改变确认、认证或订阅流程。
-
-**结果确认与版本写入边界（FR-VERIFY-016/017、FR-SYS-011/012）：** 仅结果核验 `Continue` 检查认证/注册；游客或未注册者有 dirty 变更时先 PATCH `confirm:false` 保存，无变更不保存，随后到 `auth`，不跳 `plans`。草稿保存不锁定、不记录 `ocr_jobs.completed_at`，`VERIFYING` 保持未完成。服务端所有 `confirm:true` 路径强制 `_registered`，guest 401、已认证未注册 403 `PERMISSION_DENIED` / `registration.required`；拒绝在新增 `DM-ResultVersion`、旧版本 `is_current` 切换及完成状态写入之前，无版本/状态副作用。`confirm:false` 仍可试用，沿用既有任务权限与校验。
-
-订阅为 `ACTIVE` 的租户（默认一个月 Kinder 或已批套餐）均可显式确认，独立 `pending` 申请不拦；企业租户在通过认证后才有订阅行，未认证时为 `NONE`，仅在用户显式 Continue 时保留 plans/plan-pending 分流。认证/注册成功重新读取任务仅返回 result；原已 COMPLETED 才可 final，不自动确认。注册成功与导航完成后才清 pendingJob；取消保留已归集任务权限与服务端草稿并回 result，清 pendingAuth/pendingJob 续接标记，不撤销 LINE/应用会话或自动续接；续接与退出存储边界见 Architecture §6。历史 VERIFIED（completed_at 为空）保留兼容，不批量转换；已注册且任务所属租户订阅为 `ACTIVE`（包括默认 Kinder）者显式完成才记录 completed_at。
+`DM-SystemSetting` 为全系统配置，不与租户关联，图中省略。
+
+## 2. 实体清单
+
+| 实体 ID | 用途 | 存储 | 归属 | 关键关系 | 生命周期 |
+|---------|------|------|------|----------|----------|
+| `DM-User` | 用户；内部唯一用户 ID | Cloud SQL | 全局 | 1:N 关联身份、成员关系、通知 | 游客 → 已注册；游客注册后数据归入个人租户 |
+| `DM-UserIdentity` | 关联身份：LINE 身份 ID、邮箱、手机号、将来的 OAuth | Cloud SQL | 用户 | N:1 用户；同类身份全局唯一 | 绑定 → 验证（邮箱）→ 解绑 |
+| `DM-Tenant` | 租户：业务数据的归属单位 | Cloud SQL | — | 1:N 成员关系、文件、表单文档；0..1 企业、订阅 | 游客临时 / 个人 / 企业；开通 → 关闭（平台 admin） |
+| `DM-Enterprise` | 企业租户的企业信息与认证 | Cloud SQL | 租户（1:1） | 1:1 企业租户 | 未认证 → 已认证（审核开通或 admin 直接开通） |
+| `DM-Membership` | 用户在租户中的成员关系 | Cloud SQL | 租户 | N:1 用户、N:1 租户、N:M 角色 | 加入 → 移除；个人租户只有本人 |
+| `DM-Role` | 角色：owner、默认角色与 owner 自定义角色，由权限点组合 | Cloud SQL | 租户 | N:M 成员关系 | 创建 → 修改权限点 → 删除（owner 与默认角色不可删除） |
+| `DM-Invitation` | 企业租户的成员邀请 | Cloud SQL | 租户 | N:1 企业租户 | 待接受 → 已接受 / 已过期 / 已撤销 |
+| `DM-Plan` | 套餐目录：四档及每月页数 | Cloud SQL | 全局 | 1:N 订阅 | 由平台维护 |
+| `DM-Subscription` | 租户当前订阅：档位与有效期 | Cloud SQL | 租户（一租户一个） | N:1 套餐；1:N 到期提醒 | 未开通 → 有效 → 已到期；续费/升级后重新有效 |
+| `DM-Application` | 续费/升级申请、企业认证申请 | Cloud SQL | 租户 | N:1 目标租户 | 已提交 → 处理中 / 需补充 → 已批准 / 已拒绝 |
+| `DM-PlanReminder` | 到期提醒发送记录（同一周期同一节点只一次） | Cloud SQL | 租户 | N:1 订阅 | 仅追加 |
+| `DM-Notification` | 站内通知 | Cloud SQL | 用户 | N:1 用户 | 未读 → 已读 |
+| `DM-File` | 文件元数据：原件、导入、导出、头像 | Cloud SQL | 租户 | 1:1 GCS 对象；1:N 识别任务 | 上传 → 删除（按保留策略） |
+| `DM-OcrJob` | 识别任务：状态、页数、所用引擎；月页计量与调用观测的依据 | Cloud SQL | 租户 | N:1 文件；1:N 原始载荷；0..1 表单文档 | 排队 → 识别中 → 完成 / 失败 / 取消 |
+| `DM-DocumentTemplate` | 文档格式模板及其版本 | Cloud SQL | 全局（V1.0 由实施人员预置） | 1:N 表单文档 | 草稿 → 已发布 → 停用；发布后版本不可变 |
+| `DM-SystemSetting` | 系统参数：OCR 首选/备用引擎与切换参数、大模型配置引用、置信度阈值 | Cloud SQL | 全局（平台 admin 配置） | — | 修改时写操作日志；密钥本体在 Secret Manager |
+| `DM-OperationLog` | 操作日志（审计） | Cloud SQL | 租户或平台 | N:1 操作者（用户或 admin 账号） | 仅追加 |
+| `DM-AdminAccount` | 平台 admin 账号 | Cloud SQL（与客户账号分表隔离） | 平台 | 1:N 操作日志 | 启用 → 锁定 / 停用 |
+| `DM-FormDocument` | 表单数据：每份单据一个文档，含结构化结果、结果版本、状态、核验修改记录与复核记录 | Firestore | 租户 | N:1 识别任务、模板版本 | 待核验 → 待复核 → 正式业务数据（同一文档的状态字段，OQ-21） |
+| `DM-ExtractionPayload` | 原始识别载荷：OCR 引擎原始 JSON | Firestore | 租户 | N:1 识别任务 | 按载荷版本不可变 |
+| `DM-StoredObject` | 对象：原始单据、导入文件、导出文件、头像 | 私有 GCS | 租户 | 1:1 文件元数据 | 原件不可变；按保留策略删除 |
+
+- 登录会话、邮箱验证码等短期技术数据不作为实体登记，在 B-2 的 `plan.md` 中设计。
+- 报表数据（方式 B，经 Dataflow ETL 进入 Cloud SQL）为后续能力（OQ-8），实现时再登记实体。
+
+### 2.1 v1 实体去向
+
+`OCR-Pipeline.md`、`API-Spec.md` 与 `EPIC-*` 仍可能引用 v1 实体 ID，对照如下：
+
+| v1 实体 | v3 去向 |
+|---------|---------|
+| `DM-Document` | `DM-File`（元数据）+ `DM-FormDocument`（表单数据） |
+| `DM-ExtractionPayload` | 保留，仍在 Firestore |
+| `DM-ConversionJob` | 取消（不再有 Cloud SQL 关系投影）；处理状态见 `DM-OcrJob` |
+| `DM-TemplateFieldMapping` | 取消（JSONPath 映射由大模型结构化转换取代） |
+| `DM-ExtractedField`、`DM-LineItem`、`DM-ResultVersion`、`DM-ChangeLog`、`DM-ReviewRecord` | 并入 `DM-FormDocument` |
+| `DM-ReviewPolicy`、`DM-Settings` | `DM-SystemSetting`（复核配置的具体形式在 B-4 确定） |
+| `DM-ArchiveRecord`、`DM-ExportJob` | `DM-File` + `DM-StoredObject`（导出文件） |
+| `DM-User`、`DM-Role`、`DM-OperationLog`、`DM-DocumentTemplate` | 保留 |
 
 ## 3. 枚举
 
-| 枚举 | 值 |
-|------|----|
+只列产品级枚举的取值名称；代码中的取值以代码为准。
+
+| 枚举 | 取值 |
+|------|------|
 | `DocumentType` | PO、DELIVERY_NOTE、DELIVERY_INSTRUCTION、INVOICE、RECEIPT、CREDIT_NOTE、TAX_RECEIPT、BILL |
-| `DocStatus` | uploaded、preprocessed、extraction_requested、payload_stored、converting、extracted、in_review、verified、pending_review_level_1、pending_review_level_2、approved_for_business、entered、archived、failed |
-| `ExtractionPayloadStatus` | stored、conversion_pending、converted、failed |
-| `ConversionStatus` | pending、running、succeeded、failed、retrying |
-| `TemplateStatus` | draft、published、disabled |
-| `MappingScope` | document、line_item |
-| `ReviewDecision` | approved、rejected |
-| `StorageMode` | gcs |
-| `ExportFormat` | xlsx、csv、json、erp_api |
-| `Role` | clerk、finance、warehouse、reviewer、viewer、admin |
+| 表单状态 | 待核验、待复核（一级 / 二级）、正式业务数据 |
+| 租户类型 | 游客、个人、企业 |
+| 订阅状态 | 未开通（企业未认证）、有效、已到期 |
+| 套餐档位 | Kinder < Starter < Intermediate < Advance |
+| 权限点 | 上传与识别、核验与确认、核验他人单据、一级复核、二级复核、导出、数据浏览、成员管理、角色管理、套餐申请、企业认证申请、模板管理（P1）、报表查看（P1）——见 PRD §4.9 |
 
-## 4. 字段到文档类型的映射
+## 4. 数据保留与隐私
 
-每种文档类型的规范 `field_key` 值列于 `EPIC-02` 第 3 节，并作为 `DM-ExtractedField.field_key` 存储。模板仅将外部 JSON 映射至这些既定规范字段；新字段须先经需求与数据模型变更，不得由模板任意创建。
-
-## 5. 数据保留与隐私
-
-- Cloud SQL、Firestore 和私有 GCS 对象采用静态加密。
-- Firestore `raw_json` 是可追溯原始记录；转换、核验和重试均不得覆盖它。
-- 保留/删除策略可配置（NFR-DATA-003；PRD OQ-4 / PDPA）；删除须同时协调 GCS、Firestore 和 Cloud SQL，并记录审计日志。
-- `original_file_uri` 指向 GCS 中不可变的原始字节；浏览器客户端永远不会获得 GCS、Firestore、Cloud SQL 或 TextIn 凭据。
+- Cloud SQL、Firestore 和私有 GCS 对象均启用静态加密。
+- 原始识别载荷是可追溯的原始记录；转换、核验和重试均不得覆盖它。
+- 保留/删除策略可配置（NFR-DATA-003；PRD OQ-4 / PDPA）；删除须同时协调 GCS、Firestore 和 Cloud SQL，并记录操作日志。
+- 原件在 GCS 中不可变；浏览器客户端永远不会获得 GCS、Firestore、Cloud SQL、OCR 引擎或大模型凭据。
 
 ## 链接
 
-- OCR 需求：`docs/20-requirements/functional/EPIC-02-ocr-recognition.md`
-- 模板需求：`docs/20-requirements/functional/EPIC-08-document-template-configuration.md`
-- API：`docs/30-design/API-Spec.md`
+- 存储边界：[`adr/ADR-007-v3-storage-boundary.md`](./adr/ADR-007-v3-storage-boundary.md)
+- 架构：[`Architecture.md`](./Architecture.md)
+- PRD：[`../10-product/PRD-SaiFlow.md`](../10-product/PRD-SaiFlow.md)
+- 术语：[`../10-product/Glossary.md`](../10-product/Glossary.md)
 
 ## 版本历史
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.0.0 | 2026-10-30 | Product Engineering | 改为实体层（字段以代码为唯一来源）；按 ADR-007 的 v3 存储边界重列 21 个实体并给出 v1 实体去向；枚举只保留产品级取值；旧字段级内容见 tag legacy-v1 |
 | 1.6.0 | 2026-10-28 | Product Engineering | 归属改为单一 `tenant_id`：新增 `tenants` 表与 `enterprises.tenant_id` / `verified_at`，files/ocr_jobs/memberships/invitations 改挂 `tenant_id`、applications 改为 `target_tenant_id`，保留 `error.invalid_workspace` / `error.enterprise_access_revoked` 等旧 message_key；新增 `subscriptions`（一租户一行，默认一个月 Kinder、月末夹取、审批惰性续期）与 `plan_reminders`（`uq_plan_reminder_stage` 幂等、不回补节点）；删除 `quota_ledger` 与赠送任务额度、取消 FREE 档与 `free_tasks`/`paid_pages`/`OCR_TASK` 计量，改为按泰国自然月实时统计 `ocr_jobs.page_count`；`users.phone` 在个人中心可改（原「只读」表述作废）；补记无 Alembic、ADD COLUMN 与 `setup_db.py` 重建的 schema 落地方式。未运行测试 |
 | 1.5.8 | 2026-10-27 | Product Engineering | FR-SYS-001/010..014/017、FR-VERIFY-016/017：更新为已真实实现、隔离验证通过并正式发布，334 项后端、final index-BUTDgRGj.js 的 21 项全 mock 浏览器、6 项 OAuth 源码模拟、9 项会话边界及类型检查/Vite 构建/OpenAPI 283 个内部引用通过；registered_at 动态默认 Kinder 每泰国月 1,000 页，无新增 schema/默认申请/付款/历史迁移；发布引用 Architecture §5/§6，历史 221/5 与 SMTP 接收非本轮证据，SMTP 模块/秘密版本引用不变、本轮未实发邮件，隔离不连接数据库/真实 LINE/SMTP、不创建生产账户；真实 LINE/收件箱/数据库并发/防猜码仍未验证，原业务规则不变 |
 | 1.5.7 | 2026-10-27 | Product Engineering | FR-SYS-010..014/017、FR-VERIFY-016/017：补充动态 DEFAULT ACTIVE KINDER 与 APPROVED 优先、pending 独立、OCR_PAGE/月 paid_pages 和 OCR_TASK 赠送隔离；企业不继承个人默认；确认注册门禁须在版本/完成状态写入前拒绝，认证成功仅回 result、取消保留归集权限、legacy VERIFIED 显式完成；无新增字段或 schema 迁移，本轮待验证，SMTP/锁历史证据不覆盖本轮 |
