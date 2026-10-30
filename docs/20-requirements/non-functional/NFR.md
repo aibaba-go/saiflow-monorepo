@@ -3,8 +3,8 @@ doc_id: NFR-000
 title: "SaiFlow — 非功能需求"
 type: nfr
 status: active
-version: 1.1.1
-updated: 2026-10-18
+version: 1.2.0
+updated: 2026-10-30
 owner: Product Engineering
 source: "PRD-001 §5"
 ---
@@ -17,14 +17,15 @@ source: "PRD-001 §5"
 
 | ID | 需求 | 目标 | 优先级 |
 |----|------|------|--------|
-| NFR-PERF-001 | 单份文档端到端识别与转换时间 | 从预处理完成至 TextIn、Firestore 载荷保存和 Cloud SQL 投影完成 ≤ **5 s**（p95；不含人工核验） | P0 |
+| NFR-PERF-001 | 单份文档端到端识别与转换时间 | 从预处理完成至 OCR 引擎、Firestore 载荷保存和大模型结构化结果保存完成 ≤ **5 s**（p95；不含人工核验） | P0 |
 | NFR-PERF-002 | 每张图像预处理（矫正/裁剪）时间 | ≤ **1 s**（p95） | P0 |
-| NFR-PERF-008 | Firestore 载荷到 Cloud SQL 转换延迟 | 单份载荷创建后 ≤ **2 s**（p95）完成 Cloud Functions 关系投影 | P0 |
+| NFR-PERF-008 | Firestore 载荷到 Cloud SQL 转换延迟 | v3 已废弃：不再有 Cloud SQL 关系投影（PRD OQ-19、ADR-007）；保留 ID 以便追溯 | — |
 | NFR-PERF-003 | 批量吞吐量 | 批量模式下 ≥ **200 份文档/小时** | P1 |
 | NFR-PERF-004 | 字段级 OCR 准确率（V1.0 基线） | 样本集上 ≥ **85%**；各字段目标 = PRD OQ-1 | P0 |
 | NFR-PERF-005 | UI 对用户操作的响应 | 本地操作 ≤ **200 ms** | P0 |
 | NFR-PERF-006 | 搜索/检索响应（V2.0+） | 筛选查询 ≤ **2 s** | P1 |
 | NFR-PERF-007 | 本地存储读/写 | 导出 ≤ 1000 行 Excel 时无可感知延迟 | P0 |
+| NFR-PERF-009 | 调用次数与耗时可观测 | 记录每份单据的 OCR 与大模型调用次数与耗时，供 OQ-20 设定成本上限与性能基线 | P0 |
 
 ## 2. 安全与隐私（`NFR-SEC`）
 
@@ -35,6 +36,8 @@ source: "PRD-001 §5"
 | NFR-SEC-003 | 隔离的操作权限 | 在服务端强制实施 RBAC；Cloud Run 与 Cloud Functions 使用职责分离的最小权限服务账号 | P0 |
 | NFR-SEC-009 | TextIn 密钥与跨境控制 | TextIn 凭据仅存储于 Secret Manager；生产调用须在 OQ-7 的 PDPA 与跨境评估通过后启用 | P0 |
 | NFR-SEC-010 | 原始识别载荷保护 | Firestore 原始 JSON 按载荷版本不可变；浏览器不得直接读写，访问必须经服务端授权 | P0 |
+| NFR-SEC-011 | admin 后台认证 | 平台 admin 后台使用与客户账号隔离的独立账号；口令以强单向哈希存储，连续失败达到阈值后锁定；admin 的每次写操作写入操作日志。短信 OTP 在接入短信平台后补充 | P0 |
+| NFR-SEC-012 | 大模型与 OCR 服务的数据处理 | 发送到大模型与 OCR 服务的单据内容仅由服务端调用；更换模型或引擎时由人工确认其 PDPA 合规（PRD §3.6） | P0 |
 | NFR-SEC-004 | 记录防篡改 | 变更日志与操作日志仅可追加且经过完整性检查 | P0 |
 | NFR-SEC-005 | 可追溯操作日志 | 每项改变状态的操作均记录用户、时间、目标和结果 | P0 |
 | NFR-SEC-006 | 密码存储 | 使用强单向哈希（bcrypt/argon2）；不得存储明文 | P0 |
@@ -52,6 +55,7 @@ source: "PRD-001 §5"
 | NFR-COMPAT-005 | 显示分辨率 | 从 1366×768 到 4K 均可用；响应式布局 | P1 |
 | NFR-COMPAT-006 | 非标准纸张格式 | 容忍不同的泰国文档版式/尺寸（A4、A5、连续打印纸） | P0 |
 | NFR-COMPAT-007 | ERP 兼容性（V2.0） | 为主流泰国本地 SME ERP 版本提供适配器 | P1 |
+| NFR-COMPAT-008 | 同一 LINE Provider | LINE OA、LIFF 小程序与 web-pc 的 LINE 登录必须属于同一个 LINE Provider，使同一用户在各入口得到相同的 LINE 身份 ID | P0 |
 
 ## 4. 易用性与无障碍性（`NFR-USAB`）
 
@@ -70,7 +74,8 @@ source: "PRD-001 §5"
 | NFR-REL-001 | 云服务依赖反馈 | 当 Google Cloud 或 TextIn 不可用时，系统必须显示可操作的失败状态，不得声称离线完成 | P0 |
 | NFR-REL-002 | 优雅失败 | 一份失败文档不得中止批次；应标记为失败且可重试 | P0 |
 | NFR-REL-003 | 数据持久性 | 处理期间崩溃不得损坏 GCS 原件、Firestore 原始载荷或已归档文档 | P0 |
-| NFR-REL-004 | 恢复 | 重启或事件重放后恢复待处理任务，并通过幂等键避免重复关系投影 | P1 |
+| NFR-REL-004 | 恢复 | 重启或事件重放后恢复待处理任务，并通过幂等键避免重复的结构化结果 | P1 |
+| NFR-REL-005 | OCR 引擎切换 | OCR 引擎按 PRD §4.6 与 OQ-12 决议执行两层切换：单据级重试后改用备用引擎；首选引擎全局连续失败达到阈值时整体切换并按间隔试探恢复；只统计服务层面的失败 | P0 |
 
 ## 6. 数据完整性、存储与保留（`NFR-DATA`）
 
@@ -111,6 +116,7 @@ source: "PRD-001 §5"
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.2.0 | 2026-10-30 | Product Engineering | 按 PRD v3.1：新增 NFR-SEC-011（admin 后台认证）、NFR-SEC-012（大模型与 OCR 服务的数据处理）、NFR-REL-005（OCR 引擎两层切换）、NFR-PERF-009（调用次数与耗时可观测）、NFR-COMPAT-008（同一 LINE Provider）；NFR-PERF-008 随 Cloud SQL 关系投影废弃，NFR-PERF-001、NFR-REL-004 去掉关系投影表述 |
 | 1.1.1 | 2026-10-18 | Product Engineering | 补充 NFR-USAB-004：LINE Mini App 统一品牌等待反馈，保留操作文案、上传进度与 OCR 阶段，支持减少动态效果；套餐审核不作为网络加载 |
 | 1.1.0 | 2026-10-07 | Product Engineering | 新增 TextIn、Firestore 原始载荷、Cloud Functions 转换延迟、幂等性与云端可靠性约束 |
 | 1.0.1 | 2026-10-02 | Product Engineering | 将人类可读内容翻译为简体中文 |
