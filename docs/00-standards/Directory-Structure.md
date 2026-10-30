@@ -3,7 +3,7 @@ doc_id: STD-004
 title: "SaiFlow monorepo — 目录结构与文档地图"
 type: standard
 status: active
-version: 2.5.0
+version: 2.6.0
 updated: 2026-10-30
 owner: Product Engineering
 doc_source: manual
@@ -82,7 +82,7 @@ saiflow/
 ## 3. 放置规则
 
 1. **新增业务能力** → 通过 OpenSpec 变更（`openspec/changes/<change>/`），能力契约沉淀到 `openspec/specs/`。
-2. **新增数据实体或接口** → 定义在 `docs/30-design/`；变更级增量写在对应变更的 `plan.md`。
+2. **新增数据实体或接口** → 新增数据实体在 `docs/30-design/Data-Model.md` 登记实体层；字段级结构以代码（ORM 模型 + Alembic）为唯一来源，不在文档中重复；接口契约见规则 5；变更级设计写在对应变更的 `plan.md`。
 3. **产品级设计** → `docs/10-product/`（面向整体产品，非单个需求）。
 4. **单需求设计** → 对应变更内的 `plan.md`，不进 `docs/`。
 5. **对外 API 契约** → 由后端 OpenAPI 生成后发布到 `docs/30-design/API-Spec.md`，**禁止手写第二份**。
@@ -122,6 +122,7 @@ saiflow/
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.6.0 | 2026-10-30 | Product Engineering | 规则 2：数据模型只登记实体层，字段以代码为唯一来源（ADR-007） |
 | 2.5.0 | 2026-10-30 | Product Engineering | 按 ADR-006：新增 `legacy/`（规则 12）与 `.claude/archive/`；删除 `.claude/agents/` 执行层；change 目录产物改为 proposal / specs / plan / verification；规则 2、4 的变更级设计改写入 `plan.md` |
 | 2.4.6 | 2026-10-12 | Product Engineering | 新增 `docs/00-standards/Document-Source-Guide.md`（STD-007）；目录树增加 `(manual)` / `(generated)` 标注；引用 STD-001 v1.0.2 的 `doc_source` 字段 |
 | 2.4.5 | 2026-10-12 | Product Engineering | 新增 `docs/00-standards/React-Frontend-Structure.md`（STD-006），定义 `apps/*`、`packages/*` 目录结构与强制约定 |

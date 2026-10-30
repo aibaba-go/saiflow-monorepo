@@ -3,13 +3,13 @@ doc_id: TPL-04
 title: "模板 — 数据模型规范"
 type: standard
 status: active
-version: 1.0.2
-updated: 2026-10-02
+version: 1.1.0
+updated: 2026-10-30
 ---
 
 # 模板 — 数据模型规范
 
-> 定义实体、字段、类型、约束和关系。这是数据的唯一事实来源；需求文档应链接至此，而不应重复定义字段。
+> 只定义**实体层**：实体、用途、存储位置、归属、关键关系与生命周期。**字段级结构以代码为唯一来源**（ORM 模型 + Alembic 迁移；Firestore 为服务端文档模型），文档中不写字段表（ADR-007、STD-004 规则 2）。
 
 ```markdown
 ---
@@ -24,29 +24,26 @@ owner: <团队>
 
 # 数据模型 — <领域>
 
+> 本文件只描述实体层；字段级结构以代码为唯一来源。存储位置以 ADR-nnn 为准。
+
 ## 1. 实体关系概览
+（只画实体与关系，不带属性）
 ```mermaid
 erDiagram
-  DOCUMENT ||--o{ LINE_ITEM : 包含
-  DOCUMENT }o--|| VENDOR : 引用
+  DM-Tenant ||--o{ DM-File : 拥有
+  DM-File ||--o{ DM-OcrJob : 识别
 ```
 
-## 2. 实体：DM-<实体>
-**用途：** …    **来源需求：** FR-…
-
-| 字段 | 类型 | 必填 | 约束 | 示例 | 备注 |
-|------|------|------|------|------|------|
-| id | uuid | Y | PK | 3f9a… | |
-| po_number | string | N | len ≤ 64 | PO-2026-001 | 来自 OCR |
-| total_amount | decimal(14,2) | Y | ≥ 0 | 12500.00 | THB |
-
-**索引 / 键：** …
-**生命周期 / 状态：** draft → verified → archived
+## 2. 实体清单
+| 实体 ID | 用途 | 存储 | 归属 | 关键关系 | 生命周期 |
+|---------|------|------|------|----------|----------|
+| `DM-<实体>` | … | Cloud SQL / Firestore / GCS | 租户 / 用户 / 全局 | … | 状态 A → 状态 B |
 
 ## 3. 枚举
-| 枚举 | 值 |
-|------|----|
-| DocumentType | PO, DELIVERY_NOTE, INVOICE, RECEIPT, CREDIT_NOTE, TAX_RECEIPT |
+只列产品级枚举的取值名称。
+| 枚举 | 取值 |
+|------|------|
+| DocumentType | PO、DELIVERY_NOTE、INVOICE、RECEIPT、CREDIT_NOTE、TAX_RECEIPT |
 
 ## 4. 数据保留与隐私
 链接至 NFR-SEC / NFR-DATA。说明存储位置和加密方式。
@@ -60,6 +57,7 @@ erDiagram
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.1.0 | 2026-10-30 | Product Engineering | 改为实体层模板：删除字段表示例，改为实体清单表、不带属性的 erDiagram 与枚举名称；字段以代码为唯一来源（ADR-007） |
 | 1.0.2 | 2026-10-02 | Product Engineering | 完成模板面向读者内容的第二轮中文化 |
 | 1.0.1 | 2026-10-02 | Product Engineering | 将人类可读内容翻译为简体中文 |
 | 1.0.0 | 2026-09-10 | Product Engineering | 初始数据模型规范模板 |

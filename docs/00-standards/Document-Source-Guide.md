@@ -3,7 +3,7 @@ doc_id: STD-007
 title: "SaiFlow — 文档来源与可编辑性指南"
 type: standard
 status: active
-version: 1.1.0
+version: 1.2.0
 updated: 2026-10-30
 owner: Product Engineering
 applies_to: [docs, openspec, packages, apps, services]
@@ -78,7 +78,7 @@ generated_by: ""                      # 仅 generated / generated-but-curated �
 | `docs/10-product/*.md` | `manual` | Product / PM | PRD、Vision、Glossary、Personas |
 | `docs/20-requirements/**/*.md` | `manual` | Product / 需求分析 | EPIC、FR、NFR |
 | `docs/30-design/API-Spec.md` | `generated` | 后端 OpenAPI → OpenSpec sync | **唯一 API 契约发布点，禁止手写** |
-| `docs/30-design/Data-Model.md` | `manual` | 架构师 | 数据模型设计 |
+| `docs/30-design/Data-Model.md` | `manual` | 架构师 | 实体层，人工维护；字段以代码为唯一来源 |
 | `docs/30-design/OCR-Pipeline.md` | `manual` | 架构师 | OCR 流程设计 |
 | `docs/30-design/Architecture.md` | `manual` | 架构师 | 系统架构 |
 | `docs/30-design/adr/*.md` | `manual` | 架构师 | 架构决策记录 |
@@ -134,5 +134,6 @@ generated_by: ""                      # 仅 generated / generated-but-curated �
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.2.0 | 2026-10-30 | Product Engineering | `Data-Model.md` 改为实体层，字段以代码为唯一来源（ADR-007） |
 | 1.1.0 | 2026-10-30 | Product Engineering | 按 ADR-006：change 产物以 plan.md、verification.md 取代 design.md、tasks.md；新增 `legacy/**` 行 |
 | 1.0.0 | 2026-10-12 | Product Engineering | 初始文档来源与可编辑性指南 |

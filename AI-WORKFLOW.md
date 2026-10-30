@@ -3,7 +3,7 @@ doc_id: WF-001
 title: "SaiFlow — AI 协作工作流"
 type: standard
 status: active
-version: 2.0.0
+version: 2.1.0
 updated: 2026-10-30
 owner: Product Engineering
 audience: [ai-agent, engineer, pm]
@@ -53,7 +53,7 @@ doc_source: manual
 | 术语 | `docs/10-product/Glossary.md` | 术语唯一来源 |
 | 行为需求（FR + Gherkin AC） | `openspec/specs/<capability>/spec.md` | 保留原 `FR-*`、`AC-*` ID，追溯不断链 |
 | 非功能需求 | `docs/20-requirements/non-functional/NFR.md` | 按 capability 引用 |
-| 架构、数据模型、ADR | `docs/30-design/` | 只写当前结构与决策，不写测试与部署记录 |
+| 架构、数据模型、ADR | `docs/30-design/` | 只写当前结构与决策，不写测试与部署记录；数据模型只写实体层，字段以代码为唯一来源 |
 | API 契约 | 后端 OpenAPI → `docs/30-design/API-Spec.md`（generated） | 禁止手写第二份 |
 | 一次变更的过程（规格增量、方案、验证） | `openspec/changes/<change>/` | 归档后保留在 `archive/` |
 
@@ -110,6 +110,7 @@ superpowers:finishing-a-development-branch      # 合并收尾
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 2.1.0 | 2026-10-30 | Product Engineering | §4：数据模型只写实体层，字段以代码为唯一来源（ADR-007） |
 | 2.0.0 | 2026-10-30 | Product Engineering | 按 ADR-006 重写：取消 subagent 阶段划分、subagent registry 与统一提示词模板；OpenSpec 管需求、SuperPowers 管实现；新增三级分级、文档分层与需求正本（`openspec/specs/`）、change 目录约定、框架使用边界 |
 | 1.1.0 | 2026-10-12 | Product Engineering | 随 saiflow-docs 迁移更新所有文档路径：`docs/product` → `docs/10-product`，`docs/architecture` → `docs/30-design` |
 | 1.0.0 | 2026-10-12 | Product Engineering | 初始 AI 协作工作流：分层、阶段↔OpenSpec 映射、subagent registry、统一提示词模板 |
