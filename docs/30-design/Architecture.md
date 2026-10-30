@@ -117,7 +117,7 @@ graph TB
 | 方面 | 选择 |
 |------|------|
 | 后端 | 一个 Cloud Run 服务（后端 API） |
-| 前端 | LINE 小程序与 web-pc 各为独立的 Cloud Run 服务；web-pc 企业版与 admin 后台的拆分方式在 B-5 确定 |
+| 前端 | LINE 小程序与 web-pc 各为独立的 Cloud Run 服务；web-pc 企业版与 admin 后台的拆分方式在对应前端 change 中确定 |
 | 数据 | Cloud SQL PostgreSQL（实例 `saiflow-dev` / `postgres.saiflow`，ADR-001）、Firestore、私有 GCS Bucket |
 | 密钥 | Secret Manager 在运行时注入，不写入源码或镜像 |
 | 发布 | 由仓库 `scripts/` 下的部署脚本手动触发（ADR-006 §6）；发布记录写入对应 change 的 `verification.md`，不写入本文件 |

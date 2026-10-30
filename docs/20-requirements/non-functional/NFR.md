@@ -17,7 +17,7 @@ source: "PRD-001 §5"
 
 | ID | 需求 | 目标 | 优先级 |
 |----|------|------|--------|
-| NFR-PERF-001 | 单份文档端到端识别与转换时间 | 从预处理完成至 OCR 引擎、Firestore 载荷保存和大模型结构化结果保存完成 ≤ **5 s**（p95；不含人工核验） | P0 |
+| NFR-PERF-001 | 单份文档端到端识别与转换时间 | 从预处理完成至 OCR 引擎返回与 Firestore 载荷保存完成 ≤ **5 s**（p95；不含人工核验）；大模型模板匹配与结构化转换的性能目标见 PRD OQ-20 | P0 |
 | NFR-PERF-002 | 每张图像预处理（矫正/裁剪）时间 | ≤ **1 s**（p95） | P0 |
 | NFR-PERF-008 | Firestore 载荷到 Cloud SQL 转换延迟 | v3 已废弃：不再有 Cloud SQL 关系投影（PRD OQ-19、ADR-007）；保留 ID 以便追溯 | — |
 | NFR-PERF-003 | 批量吞吐量 | 批量模式下 ≥ **200 份文档/小时** | P1 |
@@ -116,7 +116,7 @@ source: "PRD-001 §5"
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
-| 1.2.0 | 2026-10-30 | Product Engineering | 按 PRD v3.1：新增 NFR-SEC-011（admin 后台认证）、NFR-SEC-012（大模型与 OCR 服务的数据处理）、NFR-REL-005（OCR 引擎两层切换）、NFR-PERF-009（调用次数与耗时可观测）、NFR-COMPAT-008（同一 LINE Provider）；NFR-PERF-008 随 Cloud SQL 关系投影废弃，NFR-PERF-001、NFR-REL-004 去掉关系投影表述 |
+| 1.2.0 | 2026-10-30 | Product Engineering | 按 PRD v3.1：新增 NFR-SEC-011（admin 后台认证）、NFR-SEC-012（大模型与 OCR 服务的数据处理）、NFR-REL-005（OCR 引擎两层切换）、NFR-PERF-009（调用次数与耗时可观测）、NFR-COMPAT-008（同一 LINE Provider）；NFR-PERF-008 随 Cloud SQL 关系投影废弃，NFR-PERF-001、NFR-REL-004 去掉关系投影表述（PERF-001 不扩大承诺范围，大模型环节目标见 OQ-20） |
 | 1.1.1 | 2026-10-18 | Product Engineering | 补充 NFR-USAB-004：LINE Mini App 统一品牌等待反馈，保留操作文案、上传进度与 OCR 阶段，支持减少动态效果；套餐审核不作为网络加载 |
 | 1.1.0 | 2026-10-07 | Product Engineering | 新增 TextIn、Firestore 原始载荷、Cloud Functions 转换延迟、幂等性与云端可靠性约束 |
 | 1.0.1 | 2026-10-02 | Product Engineering | 将人类可读内容翻译为简体中文 |

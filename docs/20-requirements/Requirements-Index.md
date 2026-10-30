@@ -10,6 +10,8 @@ owner: Product Engineering
 
 # SaiFlow — 需求索引与可追溯性矩阵
 
+> **注意（2026-10-30）：** 本文件尚未按 PRD v3 改写，与 `PRD-SaiFlow.md` v3.1 冲突时以 PRD 为准；将随 ADR-006 §7 的重建步骤迁入 `openspec/specs/`。文中引用的 `Architecture` / `Data-Model` 旧章节细节见 git tag `legacy-v1` 中的版本。
+
 > 所有需求的主索引。用于保持 PRD → 需求 → 设计 → 验收链路可导航且可审计。每当需求变更时更新本文件（见 `ID-Conventions.md` 第 6 节）。
 
 ## 1. Epic 概览

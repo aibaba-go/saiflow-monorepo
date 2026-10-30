@@ -11,6 +11,8 @@ verified_requirements: [FR-UPLOAD, FR-OCR, FR-VERIFY, FR-ENTRY, FR-MGMT, FR-SYS,
 
 # SaiFlow — 汇总验收标准（V1.0 / P0）
 
+> **注意（2026-10-30）：** 本文件尚未按 PRD v3 改写，与 `PRD-SaiFlow.md` v3.1 冲突时以 PRD 为准；将随 ADR-006 §7 的重建步骤迁入 `openspec/specs/`。文中引用的 `Architecture` / `Data-Model` 旧章节细节见 git tag `legacy-v1` 中的版本。
+
 > 验证层。每个 `AC-*` 与测试用例 `TC-*` 和 `docs/20-requirements/` 中的一项需求一一对应。将这些标准作为 V1.0 的完成定义。适用时，场景使用 `thai-sample-forms-for-ocr/` 中的真实样本。
 
 ## 0. 测试数据引用

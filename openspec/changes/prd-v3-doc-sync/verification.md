@@ -54,3 +54,22 @@
 - Data-Model 新增 §2.1“v1 实体去向”，因 `OCR-Pipeline.md`、`API-Spec.md` 与 EPIC 仍引用 v1 实体 ID。
 - 登录会话、邮箱验证码不作为实体登记，留到 B-2 的 `plan.md`。
 - 归档放在最终审查之后，使本记录能包含审查结论。
+
+## 最终审查
+
+独立审查者检查了 `d7e5fa3..94c3a30`，没有 Critical。修复后检查结果如下。
+
+| 发现 | 处理 | 修复后检查 |
+|------|------|------------|
+| PRD §1.3 仍列“系统管理员” | 改为平台管理员、租户所有者、游客三行 | `grep -c '系统管理员'` PRD → `0` |
+| Acceptance-Criteria、Requirements-Index 没有提示框 | 加同样的“以 PRD 为准”提示框 | `grep -L '以 PRD 为准'` 两份 → 无输出 |
+| “企业所有者”有两种含义 | P-08 改名“租户所有者（owner）”；Glossary 的“企业所有者”注明是业务岗位，通常担任 owner | `grep '企业所有者（owner）'` Personas → 无命中 |
+| 入口相关术语未定义 | Glossary 新增 LINE 小程序、web-pc 企业版、web-pc admin 后台、LINE OA、LINE Provider、到期提醒 | 6 个术语全部命中 |
+| 开放问题的推迟去向未写入（proposal 第 3 项） | §7 的“是否阻塞”列标注 B-3 / B-4 / P1 / P2 | `grep -c '推迟到'` PRD → `8` |
+| NFR-PERF-001 把大模型环节纳入 5 s 目标（未经决定的承诺） | 恢复为只覆盖 OCR 与载荷保存；大模型目标见 OQ-20 | 人工核对 `NFR.md:20` |
+| Architecture §5 写“在 B-5 确定”，与 ADR-006 对 B-5 的定义不符 | 改为“在对应前端 change 中确定” | `grep -c 'B-5'` Architecture → `0` |
+
+暂缓的小问题（待负责人决定）：
+- §4.9 中部分细则（游客数据仅本人可见、企业自认证开通起算、按泰国时区统计、失败不计、提醒不补发）来自现有 EPIC-06，不在 proposal 中。
+- `AGENTS.md` 第 7 条仍只写“TextIn 凭据”。计划要求其余句子不变，所以没有改。
+- NFR-SEC-003 仍写 Cloud Functions；NFR-DATA-007 中有旧字段名。

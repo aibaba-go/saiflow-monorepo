@@ -31,6 +31,12 @@ owner: Product
 | **关联身份（Linked identity）** | 指向内部唯一用户 ID 的外部或联系身份：LINE 身份 ID、邮箱、手机号，以及将来的 Google / Facebook OAuth。 |
 | **套餐（Plan）** | 按月页额度划分的四个档位：Kinder / Starter / Intermediate / Advance。续费与升级线下办理。 |
 | **月页额度（Monthly page quota）** | 套餐每月可识别的页数（Kinder 1,000 / Starter 5,000 / Intermediate 10,000 / Advance 100,000）；按泰国时区自然月统计，失败或取消的识别不计入。 |
+| **到期提醒** | 在套餐到期前 7 天、3 天、1 天、到期当天与到期后各一次的站内通知（有邮箱的已注册用户同时发邮件）；同一周期同一节点只一次，不补发。 |
+| **LINE OA** | LINE Official Account（官方账号）；底部菜单提供 `register` 注册入口。 |
+| **LINE Provider** | LINE 开发者平台中的服务提供方；同一 Provider 下的渠道对同一用户给出相同的 LINE 身份 ID（NFR-COMPAT-008）。 |
+| **LINE 小程序** | 运行于 LINE LIFF 的移动端入口：游客试用、上传、核验、确认与管理操作。 |
+| **web-pc 企业版** | 面向企业管理层的 PC 端入口：浏览结构化数据与管理操作。 |
+| **web-pc admin 后台** | 平台管理员使用的 PC 端运营后台，以独立账号登录。 |
 | **到期即停（Hard stop on expiry）** | 套餐到期后不能新建识别，历史单据与结果仍可查看、导出。 |
 
 ## 2. 文档类型（规范枚举 `DocumentType`）
@@ -98,7 +104,7 @@ owner: Product
 | 术语 | 定义 |
 |------|------|
 | **平台管理员（Platform admin，简称平台 admin）** | 由维护系统的技术团队担任的跨租户角色：开通/关闭租户、修改租户信息、线下收款后修改余额与有效期、审核企业认证、配置 OCR 引擎与大模型。使用独立的 admin 后台账号登录；其能力不能分配给租户内角色。 |
-| **owner** | 一个租户的所有者，拥有本租户全部权限，可定义角色、分配角色、修改默认角色。 |
+| **owner（租户所有者）** | 一个租户的所有者（个人租户的 owner 即本人），拥有本租户全部权限，可定义角色、分配角色、修改默认角色。 |
 | **默认角色（Default role）** | 成员加入企业租户后自动获得的角色；owner 可修改其权限。 |
 | **权限点（Permission）** | 设计期确定、可组合进自定义角色的最小授权单位，清单见 PRD §4.9。 |
 
@@ -112,7 +118,7 @@ owner: Product
 | **财务人员（Financial staff）** | 处理发票、AR/AP、对账和税务单据。 |
 | **仓库管理员（Warehouse administrator）** | 处理 Delivery Note 和库存同步。 |
 | **采购专员（Procurement specialist）** | 处理供应商 PO 和收货。 |
-| **企业所有者（Enterprise owner）** | 间接用户；负责监督和审批。 |
+| **企业所有者（Enterprise owner）** | 业务岗位：企业主，负责监督和审批；在系统中通常担任其企业租户的 owner（§4.1）。 |
 | **业务协调员（Business coordinator）** | 上游/下游合作伙伴处的间接用户。 |
 
 ## 5. 标准与缩写
@@ -132,7 +138,7 @@ owner: Product
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
-| 1.2.0 | 2026-10-30 | Product Engineering | 按 PRD v3.1：新增数据录入入口、OCR 引擎切换、大模型与置信度术语；新增租户、游客、关联身份、套餐与月页额度术语；角色分为系统角色（平台管理员、owner、默认角色、权限点）与业务角色；修订原始识别载荷、文档格式模板，JSONPath 映射标注为 v3 不再使用 |
+| 1.2.0 | 2026-10-30 | Product Engineering | 按 PRD v3.1：新增数据录入入口、OCR 引擎切换、大模型与置信度术语；新增租户、游客、关联身份、套餐与月页额度术语；角色分为系统角色（平台管理员、owner、默认角色、权限点）与业务角色；新增三个使用入口、LINE OA、LINE Provider、到期提醒术语；修订原始识别载荷、文档格式模板，JSONPath 映射标注为 v3 不再使用 |
 | 1.1.0 | 2026-10-07 | Product Engineering | 新增 TextIn、Firestore 原始识别载荷、模板映射和幂等转换术语 |
 | 1.0.1 | 2026-10-02 | Product Engineering | 将人类可读内容翻译为简体中文 |
 | 1.0.0 | 2026-09-10 | Product Engineering | 根据 PRD v2 生成初始术语表 |
