@@ -3,15 +3,19 @@ doc_id: AC-000
 title: "SaiFlow — 汇总验收标准（V1.0 / P0）"
 type: acceptance
 status: active
-version: 1.8.24
-updated: 2026-10-29
+version: 1.9.6
+updated: 2026-11-01
 owner: QA
 verified_requirements: [FR-UPLOAD, FR-OCR, FR-VERIFY, FR-ENTRY, FR-MGMT, FR-SYS, FR-TEMPLATE]
 ---
 
 # SaiFlow — 汇总验收标准（V1.0 / P0）
 
-> 验证层。每个 `AC-*` 与测试用例 `TC-*` 和 `docs/20-requirements/` 中的一项需求一一对应。将这些标准作为 V1.0 的完成定义。适用时，场景使用 `thai-sample-forms-for-ocr/` 中的真实样本。
+> 验证层。AC 是完成定义，不等于全量 TC 已通过。模板路径以 OCR-018..021、VERIFY-018..020、ENTRY-002 和 TEMPLATE 场景为准；旧分类、confidence/重算/佛历、通用字段删除/数字存储场景不适用于新模板链路。最终契约核对见 [API-Spec §4](../30-design/API-Spec.md#4-尚未对齐的契约差异)，合法历史 Firestore 完整原文归档保留。
+>
+> **已确认验证（2026-10-31）：** 最终隔离 SQLite/mock 后端 **822 项通过**（93.15 秒），包含 JSON 内容/MIME/.json 下载、显式通用选择审计、增量迁移规划补测；此前 816/819 是历史批次。真实视图/状态/CSS、全合成 API 的浏览器 **32/32 场景通过**，覆盖手机 320/375/430 与宽屏 430 iframe、已有 READY 的 force 失败重试、422 输入聚焦；源码漂移/未知 API/pageerror/未处理服务请求均为 0。另有 35 离线结构断言、14 双语后端错误文案检查、vue-tsc/Vite 构建及新增模板模块/测试 Ruff py310 通过。删除保留 job、同任务锁清理关联与 Worker 阶段中止均有隔离测试。两份获批系统种子正式 CLI validate 通过；共享库仅 transaction_read_only=on 下 SELECT，重复当前版本任务数 0，无 DDL/写入。
+>
+> **验证边界：** 追溯、复现与证据入口为 [变更任务记录](../../openspec/changes/document-template-mapping/tasks.md)。SQLite/纯迁移规划不等于真实 PostgreSQL 迁移/多实例并发；浏览器为冻结合成 harness 构建，非真实 LINE/iOS/Safari 或供应商端到端，前端合成下载不代表工作簿内容验收（后端另用 openpyxl 检查）。真实 LLM 质量/耗时/token 基线未运行，0.7 未经实测校准；不得用单候选 UI score=1.0 充当模型质量。**2026-10-31 正式发布：** 经用户授权，后端 `saiflow-api-00049-pux`（开关关闭）启动迁移建出模板 4 表/3 列/索引，CLI seed 写入 `system.billing_note`（6 组/22 项）与 `system.tax_invoice`（7 组/34 项）版本 1，前端 `saiflow-line-mini-00043-wuh` 与开关开启的 `saiflow-api-00052-fal` 均已承接 100% 流量；镜像、哈希与核验见 [Architecture §5](../30-design/Architecture.md#5-部署模型)。这只是发布与匿名探针证据，不是真实上传→映射→确认或模型质量验收。
 
 ## 0. 测试数据引用
 
@@ -152,20 +156,62 @@ Feature: FR-OCR 多类型识别
     Then 不承诺供应商未受理或只扣费一次，仅保证本应用自动重试不重复生成结果或额外累计 SaiFlow 月页额度
     And 自动重试不同于用户手动 Retry/rerun，后者仍按 AC-FR-OCR-020-02 创建新任务并关联原任务
 
-  Scenario: AC-FR-OCR-018-01 保存 TextIn 原始 JSON
-    Given 已完成预处理的 Invoice 和已发布的 INVOICE 模板版本 3
-    When TextIn 返回结构化 JSON
-    Then Firestore 保存完整原始 JSON、document_id、模板版本和供应商请求标识
+  Scenario: AC-FR-OCR-018-01 多候选自动匹配最高合法分
+    Given 开关开启且存在本任务可见的启用未删除模板当前版本
+    When 多候选DeepSeek排名含合法项、非法ID和越界score
+    Then 只接受候选白名单ID，score钳制0到1，保留top-3并选择最高合法分
+    And 目录最多50模板按更新时间截取、描述最多120字符，超额记日志，不记录单据内容
 
-  Scenario: AC-FR-OCR-019-01 Cloud Functions 关系转换
-    Given Firestore 中存在一个 INVOICE 原始载荷和已发布模板版本 3
-    When Firestore 创建事件触发 Cloud Functions
-    Then Cloud SQL 写入该文档的规范字段和行项目，并记录成功的 DM-ConversionJob
+  Scenario: AC-FR-OCR-018-02 零与单候选
+    Given 开关开启且OCR成功
+    When 可用候选为0
+    Then 不创建AUTO映射，通用结果可用并提示暂无模板
+    When 可用候选为1
+    Then 直选该版本，match_score=null、reason=single_candidate，不调用匹配模型
 
-  Scenario: AC-FR-OCR-020-01 幂等转换重试
-    Given 同一 document_id 和 payload_version 的转换已经成功
-    When Cloud Functions 再次接收该 Firestore 事件
-    Then Cloud SQL 不新增重复字段或行项目
+  Scenario: AC-FR-OCR-018-03 低分仍映射与非法排名修复
+    Given 至少一项合法排名最高分为0.62且阈值为默认0.7
+    When 匹配完成
+    Then 仍选择该模板并提示低匹配度，不标记匹配失败
+    Given 排名全部非法
+    When 一次修复重试后仍无合法项
+    Then 映射FAILED/MATCH_FAILED，保留通用结果
+
+  Scenario: AC-FR-OCR-018-04 超大输入不截断
+    Given 原始llm_json紧凑JSON超过60000字符
+    When 处理映射
+    Then FAILED/RAW_TOO_LARGE，不截断发送，不改原始快照或当前通用结果
+
+  Scenario: AC-FR-OCR-019-01 严格模板提取且不推算
+    Given 固定模板含字段和表格，原件缺少某字段与合计
+    When DeepSeek输出JSON并带模板外键
+    Then 仅提取源信息，缺字段/列补null，不推算或计算合计，每行对应源行
+    And 结果为分组对象内标量和对象数组，模板外键丢弃并计数，原始快照不变
+
+  Scenario: AC-FR-OCR-019-02 四类型无浮点漂移
+    Given type分别为string、integer、decimal、amount
+    When 输出含空白、千分位/币种、整数和小数
+    Then parse_float=str，string去首尾空白且空串变null
+    And integer仅接受绝对值不超过2^53-1的整数，decimal为规范字符串不舍入
+    And amount不足2位补齐，超过2位保留并告警amount_precision，日期保持字符串不转佛历
+
+  Scenario: AC-FR-OCR-019-03 类型不匹配与空值
+    Given 某数值字段无法转换或integer超安全范围，另一字段为null
+    When 标准化
+    Then 失败字段保留原文并记录type_mismatch，null不记类型错误
+    And 不将警告或required缺失当作OCR失败，仍可核验
+
+  Scenario: AC-FR-OCR-019-04 非法结构有界修复
+    Given 输出不是顶层对象、表格不是对象数组或单表超过500行
+    When 首次转换校验失败
+    Then 仅修复重试一次，仍非法则FAILED/LLM_INVALID_OUTPUT
+    And 不发布非法版本、不覆盖当前结果
+
+  Scenario: AC-FR-OCR-020-01 独立Worker与条件认领
+    Given 开关开启且有PENDING映射，多实例可能同时取到它
+    When MappingWorker每2秒轮询并以id及PENDING状态条件更新认领
+    Then 只有更新1行者处理，AUTO先MATCHING再CONVERTING，MANUAL跳过MATCHING
+    And 独立线程不占Web请求或阻塞OcrWorker，成功READY，失败FAILED
 
   Scenario: AC-FR-OCR-020-02 失败任务可读原因与重试
     Given 一个 status=FAILED 且 error_code=TEXTIN_ERROR_40003 的 OCR 任务
@@ -182,6 +228,77 @@ Feature: FR-OCR 多类型识别
     Then 对话框关闭，任务继续处理
     When 用户在对话框中确认 Cancel task
     Then 任务被取消并标记为失败
+
+  Scenario: AC-FR-OCR-020-04 READY复用与次数额度
+    Given 同模板版本已有READY映射且force不为true
+    When 用户请求套用
+    Then 同步复用200，不新调用模型或增加映射次数
+    Given 已有5个映射含AUTO与FAILED
+    When 请求新增或force重做
+    Then 返回409 MAPPING_LIMIT_REACHED，不新建映射
+    And 映射不消耗SaiFlow月OCR页额度，force不保证结果相同
+
+  Scenario: AC-FR-OCR-020-05 模型调用预算
+    Given 匹配或转换发生网络、超时、429、5xx或非法输出
+    When 当前阶段调用失败
+    Then 该阶段最多首次加1次重试、间隔2秒，连接10秒、读取默认120秒
+    And 复用现有DeepSeek，temperature=0，不设response_format，不引入新供应商
+    And 耗尽按错误记录FAILED，不把约524秒估算当作端到端实测或硬上限
+
+  Scenario: AC-FR-OCR-020-06 卡住恢复
+    Given MATCHING或CONVERTING超过10分钟未更新
+    When 启动恢复或每5分钟恢复执行
+    Then FAILED/MAPPING_INTERRUPTED并清理仍指向该映射的pending，不覆盖其他pending
+
+  Scenario: AC-FR-OCR-020-07 READY不覆盖编辑或新请求
+    Given 映射创建时base版本为v1
+    When 生成READY期间用户已保存新版本、切换或请求另一pending映射
+    Then 仍生成本映射的分支版本，但不自动设为当前、不覆盖编辑或新pending
+    Given pending仍为本映射且base仍当前且任务未确认
+    Then READY可自动生效并记录template.applied
+
+  Scenario: AC-FR-OCR-020-08 确认及删除竞态
+    Given 映射处理中任务被确认，或删除结果保留job行且在同任务锁事务内清理results/raw/mappings与指针
+    When Worker阶段前后重读任务、原始快照、映射及基础结果关联
+    Then 已确认可保留生成结果但不自动生效，关联被清理则中止，不生成或迟到写回结果
+    And 不以任务行不存在为唯一删除判据，不恢复已清理的raw/mapping或指针
+
+  Scenario: AC-FR-OCR-020-09 处理中复用、显式重试与失败记录
+    Given 同模板版本有处理中映射
+    When 再次请求套用
+    Then pending指向它并返回202，不重复创建
+    Given 映射失败且同模板版本可能保留旧READY
+    When 用户点击重试映射
+    Then apply-template显式传force=true，不复用旧READY，按处理中复用或新建规则返回202并受次数上限约束
+    And 保留FAILED摘要和错误，当前结果不变，仍提供其他模板/通用
+    And 审计template.mapping_failed，日志仅调用/用量/模型/提示版本/耗时，不含单据内容
+
+  Scenario: AC-FR-OCR-021-01 原始快照同事务不可变
+    Given TextIn成功返回llm_json
+    When OcrWorker在整理或映射前深拷贝并最终持久化
+    Then 每job一份ocr_raw_results与通用v1同事务保存，id即raw_result_id
+    And 后续整理、映射、编辑均不改快照，无修改API，失败尝试不生成成功快照
+
+  Scenario: AC-FR-OCR-021-02 关闭开关仍保存快照
+    Given TEMPLATE_MAPPING_ENABLED缺省或false
+    When OCR成功
+    Then 保存快照并返回非空raw_result_id，保留既有可选DeepSeek整理，不建AUTO、不启动MappingWorker
+    When 对自己的有效任务请求apply-template
+    Then 返回409 TEMPLATE_MAPPING_DISABLED
+    And 不可访问任务先返回404，不泄漏任务存在性
+
+  Scenario: AC-FR-OCR-021-03 开启跳整理与回滚历史可用
+    Given 开关开启
+    When OCR成功
+    Then 通用v1直接使用TextIn结构，跳过整理但匹配/转换仍复用DeepSeek
+    When 此后关闭开关
+    Then 已有映射仍可读取、编辑、导出，通用切换无需开启开关
+
+  Scenario: AC-FR-OCR-021-04 无历史回填与本地关闭
+    Given 历史任务没有raw快照且本地与生产共享数据库
+    When 读取历史任务或启动本地配置
+    Then 仅无快照历史任务的raw_result_id为空，只能通用结果且不回填；本地保持开关关闭，不启动MappingWorker
+    And 共享库seed、迁移、开启开关及部署必须另行授权
 ```
 
 ## 3. EPIC-03 — 核验
@@ -380,10 +497,99 @@ Feature: FR-VERIFY Human-in-the-loop
     When 用户点击 "最终完成" 的任务
     Then 直接进入该任务的最终结果页，不再显示需要 Continue 确认的结果页
     And 最终结果页仅显示任务阶段标签，不再重复显示 Confirmed 标签，结果保持只读且可导出
-    When 用户点击 "OCR 处理中" 的任务
+    When 用户点击 "OCR 处理中" 或 "模板匹配中" 的任务
     Then 进入处理进度页
     When 用户点击其余阶段的任务
     Then 进入结果页
+
+  Scenario: AC-FR-VERIFY-017-05 处理进度三步流程与模板匹配阶段
+    Given 用户提交识别任务，且任务所属租户存在可用模板
+    When OCR 任务处于排队/预处理/识别/后处理中
+    Then 处理进度页显示 "上传"（完成）→ "OCR 处理"（进行中）→ "模板匹配"（未开始）三步
+    And 任务阶段为 "OCR 处理中"
+    When OCR 成功且自动模板映射仍在进行（pending_mapping_id 非空）
+    Then "OCR 处理" 显示完成，"模板匹配" 显示进行中，并提示正在匹配模板
+    And 任务阶段为 "模板匹配中"，历史页按 "模板匹配中" 筛选可查到该任务，按 "数据验证中" 查不到
+    When 映射完成或失败（pending_mapping_id 清空），或等待超过 90 秒
+    Then 三步均显示完成并进入结果页，任务阶段回到 "数据验证中"
+    When OCR 任务 FAILED 或 CANCELLED
+    Then "OCR 处理" 显示失败，"模板匹配" 不开始，任务阶段为 "OCR 处理失败"
+
+  Scenario: AC-FR-VERIFY-018-01 选择与预览
+    Given 可见启用模板、历史映射和raw_result_id
+    When 打开结果页选择框
+    Then 显示当前模板或不套用模板（通用结果），推荐/得分/已生成标记及字段分组预览
+    And 系统模板对有效会话可读，租户模板只向该租户成员提供，历史版本可读
+
+  Scenario: AC-FR-VERIFY-018-02 无模型切换恢复分支编辑及通用选择审计
+    Given READY映射和通用分支各有最近保存的编辑
+    When 以正确expected_version切回任一分支
+    Then 200，只移动当前标记/指针并清pending，不复制数据、调用模型或新增结果版本，恢复该分支最新保存值并可返回旧号
+    And 模板实际切换记录template.switched，每次显式use-generic记录template.generic_selected
+    Given 当前已为通用结果且expected_version正确
+    When 用户再次显式use-generic，包括失败映射后选择通用
+    Then 仍返回当前通用版本、不新增结果版本，但记录template.generic_selected
+
+  Scenario: AC-FR-VERIFY-018-03 未保存修改先保存与等待
+    Given 选择其他模板前存在未保存编辑
+    When 选择保存并切换或取消
+    Then 保存并切换先成功保存草稿再提交，取消则保留编辑且不切换
+    Given pending映射存在
+    Then 禁止编辑且每2秒轮询最多10分钟，处理页额外等待最多90秒后进入结果页继续轮询
+
+  Scenario: AC-FR-VERIFY-018-04 锁与全任务版本序列
+    Given 任务历史最高版本为8，切回旧分支当前版本为3
+    When PATCH或READY创建版本，与另一切换请求并发
+    Then 在任务行锁下串行，新版本为max(version)+1而非当前+1，PATCH继承当前mapping
+    And expected_version过期返回409 VERSION_CONFLICT，无错误分支写入
+
+  Scenario: AC-FR-VERIFY-018-05 确认与归属拒绝
+    Given 任务已确认、raw_result_id属于其他任务或模板不可见/已停用/已删除
+    When 请求新套用、切换或通用
+    Then 已确认返回409 results.already_confirmed；外任务raw返回404；新不可用模板409 TEMPLATE_UNAVAILABLE
+    And 原认证、注册、租户与CSRF规则保持，历史READY可追溯不被模板状态改写
+
+  Scenario: AC-FR-VERIFY-018-06 异步套用与反馈
+    Given 可用模板无READY或处理中映射且未达上限
+    When 用户请求套用
+    Then 返回202并创建MANUAL/pending，mapping_id切换只接受READY否则409 MAPPING_NOT_READY
+    When 用户最终确认模板结果
+    Then 记录一次template.match_feedback关联自动推荐版本与最终版本，不记录内容
+
+  Scenario: AC-FR-VERIFY-019-01 按schema渲染与金额类型
+    Given 当前mapping固定历史版本含有序分组/字段/表格列
+    When 打开核验页
+    Then 按schema顺序和显示名渲染，必填标识/缺失高亮，数值键盘适配类型
+    And 金额按type加千分位且至少2位，超过2位不舍入，不按key名称猜测模板金额
+
+  Scenario: AC-FR-VERIFY-019-02 模板补齐保留人工扩展
+    Given 草稿缺模板字段/列，并新增模板外字段、分组、列和行
+    When 保存草稿
+    Then 模板缺项补null而用户extras保留，模板字段仅可清空不可删除，extras仍可增删
+    And 表格行可添加/删除，历史版本和原始快照不变
+
+  Scenario: AC-FR-VERIFY-019-03 通用兼容与最终展示
+    Given 当前为通用或已确认模板结果
+    When 读取results并打开结果/最终/历史页
+    Then 通用current_mapping/template_schema为null且沿用旧渲染，模板结果返回schema与validation
+    And 最终页只读并显示模板名，历史摘要显示template_name，缺新字段可走原路径
+
+  Scenario: AC-FR-VERIFY-020-01 缺必填确认422无副作用
+    Given 已通过既有认证/注册的用户提交confirm:true且模板required字段或已有行required列为空
+    When 客户端检查或后端处理提交内容
+    Then 前端高亮并定位首个缺项，后端422 INVALID_ARGUMENT/results.required_missing
+    And field_errors为structured.<path>及reason=required，不新增版本、不切当前、不写确认/完成状态
+
+  Scenario: AC-FR-VERIFY-020-02 草稿通用与空表豁免
+    Given required为空且confirm:false，或当前为通用结果，或required列所在表无行
+    When 保存或按既有规则确认
+    Then 草稿与通用不受本模板门禁，空表不虚造行或因不存在行的required列阻止确认
+    And 缺数据仍可保存并提示，不作为OCR失败，既有认证/注册/租户边界不变
+
+  Scenario: AC-FR-VERIFY-020-03 类型警告不阻止确认
+    Given required均非空但存在type_mismatch或amount_precision
+    When 显式确认并通过既有确认规则
+    Then 警告可见但不因类型警告拦截，成功后只读并保留保存内容
 ```
 
 ## 4. EPIC-04 — 录入与归档
@@ -396,10 +602,25 @@ Feature: FR-ENTRY 导出与归档
     When 请求导出
     Then 使用适用于 Delivery Note 的标准化 .xlsx 模板
 
-  Scenario: AC-FR-ENTRY-002-01 一键填充
-    Given 一份已核验的 Delivery Note
-    When 文员点击 "Export to Excel"
-    Then 创建的 .xlsx 中已填充所有映射字段
+  Scenario: AC-FR-ENTRY-002-01 一键填充与通用兼容
+    Given 一份已核验通用结果
+    When 文员点击Export to Excel
+    Then 沿用既有XLSX导出并包含当前已保存内容
+
+  Scenario: AC-FR-ENTRY-002-02 模板顺序名称与金额精度
+    Given 已确认模板结果含人工编辑与extras，模板之后已升版
+    When 导出XLSX或CSV
+    Then 按mapping固定历史版本的分组/字段/列顺序和显示名输出，extras追加且保留已保存编辑
+    And 金额按type加千分位且至少2位，超过2位不舍入，XLSX沿用单Result工作表与既有防公式注入规则
+    And 不新增导入标记或Excel往返承诺
+
+  Scenario: AC-FR-ENTRY-002-03 正式JSON原样导出与TXT兼容
+    Given 指定已保存结果版本为通用或模板结果，含人工extras、前导零字符串及多位小数
+    When 以format=JSON创建导出并下载
+    Then 下载MIME为application/json、文件扩展名为.json，内容原样为指定版本structured
+    And 保留键顺序、JSON类型、数值精度及extras，不加信封、不替换显示名或格式化金额
+    When 以format=TXT导出同一结果
+    Then 沿用旧TXT行为，不改为JSON格式别名，既有通用XLSX/CSV导出亦不变
 
   Scenario: AC-FR-ENTRY-003-01 批量导出
     Given 20 份已核验文档
@@ -751,6 +972,59 @@ Feature: FR-SYS 身份与配置
     Given ids 中包含其他用户的通知 id
     Then 这些 id 被忽略，只影响本人的未读通知
 
+  Scenario: AC-FR-SYS-018-04 通知中心只显示账户变动类通知
+    Given 用户名下同时有账户变动类通知（如 PLAN_EXPIRING、MEMBERSHIP_ACTIVE）与历史 OCR_DONE / INFO 通知
+    When 调用 GET /api/v1/me/notifications
+    Then items 只包含账户变动类通知，unread_count 只统计其中的未读行
+    When 以空数组调用 POST /api/v1/me/notifications/read
+    Then 只标记账户变动类通知，OCR_DONE / INFO 行不被修改
+    When OCR 任务成功或失败结束
+    Then 不产生任何站内通知
+
+  Scenario: AC-FR-SYS-018-05 账户与公司首次开通通知
+    Given 已注册用户的个人租户首次开通默认 Kinder
+    Then 该用户收到一条 ACCOUNT_ACTIVATED 通知，按其语言（th/en）显示套餐名与泰国时区到期日
+    Given 企业租户首次被看到为 VERIFIED 并开通订阅
+    Then 该企业的 ACTIVE OWNER 收到一条 COMPANY_ACTIVATED 通知，正文含公司法定名称
+    When 再次读取订阅状态
+    Then 不重复发送
+    Given 游客租户开通、企业未认证，或租户已有订阅行
+    Then 不产生开通通知
+
+  Scenario: AC-FR-SYS-019-01 默认开通套餐与试用时长可配置
+    Given 套餐配置将 STARTER 设为默认套餐、trial_months 为 2
+    When 新个人租户首次开通订阅
+    Then 订阅为 STARTER、source=DEFAULT，有效期为开通时刻起 2 个月
+    And 已有订阅行的租户起止日期不变
+
+  Scenario: AC-FR-SYS-019-02 修改月页数对存量订阅立即生效
+    Given 租户已订阅 KINDER（每月 1,000 页）
+    When 运维用 manage_plans.py 将 KINDER 每月页数改为 2,000 且缓存窗口已过
+    Then GET /api/v1/me/quota 的 monthly_total 为 2,000，新建识别任务按 2,000 页校验
+
+  Scenario: AC-FR-SYS-019-03 停用套餐
+    Given INTERMEDIATE 被设为 DISABLED
+    Then GET /api/v1/plans 不再返回 INTERMEDIATE，申请 INTERMEDIATE 返回 400 INVALID_ARGUMENT
+    And 已订阅 INTERMEDIATE 的租户仍按其配置计量
+    When 尝试停用默认套餐或把停用套餐设为默认
+    Then 命令拒绝执行，不写库
+
+  Scenario: AC-FR-SYS-019-04 泰英双语展示与审批缺省续期
+    Given 用户界面语言为泰语
+    Then 套餐页的名称、价格文案与特性显示 th 配置，缺失时回退 en；当前套餐卡与首页横幅使用 name_i18n
+    And 账户开通通知按收件人语言使用对应套餐名
+    Given 某套餐 approved_period_months 为 6，批准申请未写 valid_to 与 period_months
+    Then 惰性同步后新周期为 6 个月
+
+  Scenario: AC-FR-SYS-019-05 命令行维护的校验、确认与审计
+    Given 导入文件存在未知字段、缺少 th 文案、en/th 特性条数不一致、code 或 sort_order 重复、或默认套餐不唯一
+    When 执行 manage_plans.py validate 或 import
+    Then 列出全部错误并以退出码 2 结束，不连库（validate）或不写库（import）
+    When 合法导入并确认
+    Then 按 code 新增或更新（文件外的套餐不动），写审计 plan_config.import，缓存失效
+    When 后端启动时 plans 表为空
+    Then 自动从 plans_seed.json 写入与原目录一致的 4 个套餐；表非空时不覆盖
+
   Scenario: AC-FR-SYS-014-01 仅 auth 中 LINE 注册信息录入
     Given 尚未注册的 LINE 账号完成服务端验证的真实认证，渠道启用 email scope 且用户授权并返回 email
     When route=auth 且 needsRegistration
@@ -870,23 +1144,98 @@ Feature: FR-SYS 身份与配置
 
 ## 7. EPIC-08 — 文档格式模板配置
 
+> FR-TEMPLATE-001..005/007 为 P0，006 管理 UI 为 P1，非本期交付。以下为批准验收定义，隔离后端及两种子正式 CLI validate 的已确认记录见文首；不等于共享库 seed 或真实 LLM 验收。无草稿发布、路径映射或 REST 写接口。
+
 ```gherkin
-Feature: FR-TEMPLATE 文档格式模板配置
+Feature: FR-TEMPLATE 后台CLI与有序模板
 
-  Scenario: AC-FR-TEMPLATE-003-01 配置字段映射
-    Given 管理员创建了一个 INVOICE 模板草稿
-    When 将 JSONPath "$.invoice.no" 映射至字段 "invoice_number" 并设为必填字符串
-    Then 草稿保存该字段映射，且尚未用于转换任务
+  Scenario: AC-FR-TEMPLATE-001-01 CLI读取与导出
+    Given 系统和租户作用域有模板及历史版本
+    When 使用list/show/export及作用域或include-deleted筛选
+    Then 列出id/code/显示名/作用域/状态/当前版本/更新时间，show可指定版本，export输出当前模板JSON
+    And 不打印凭据，不提供本期模板管理UI或REST写接口
 
-  Scenario: AC-FR-TEMPLATE-005-01 发布校验失败
-    Given 模板草稿将两个 JSONPath 映射到同一个非重复目标字段
-    When 管理员尝试发布模板
-    Then 系统拒绝发布并指出重复的目标字段
+  Scenario: AC-FR-TEMPLATE-002-01 幂等不可变导入
+    Given 同作用域code已有版本和规范化name/description/groups哈希
+    When import相同内容
+    Then 无数据变更、无新版本、无审计
+    When import变更内容
+    Then 追加不可变版本并更新current_version_id，旧版本不变，无draft/publish
 
-  Scenario: AC-FR-TEMPLATE-006-01 使用已发布版本
-    Given INVOICE 模板版本 3 已发布并启用，版本 4 仍为草稿
-    When 新的 Invoice JSON 进入转换任务
-    Then 任务使用版本 3，且记录 template_version = 3
+  Scenario: AC-FR-TEMPLATE-002-02 dry-run与写入确认
+    Given 有效模板文件且写操作默认需要二次确认
+    When import或seed使用dry-run
+    Then 不写入，不能据此假设不连接数据库
+    When 实际写操作未确认或显式yes
+    Then 未确认不写入，yes可跳确认，校验失败均先于写入退出
+
+  Scenario: AC-FR-TEMPLATE-002-03 两个系统种子
+    Given system.billing_note和system.tax_invoice种子已获业务批准（后者含合并送货单），正式CLI validate均通过
+    When 在隔离测试库执行seed，或获得共享库seed的单独授权后执行
+    Then 按系统作用域幂等导入，仅这两个首批模板
+    And 其他单据待样本，业务批准与validate通过不等于共享库seed完成
+
+  Scenario: AC-FR-TEMPLATE-003-01 有序KV与描述
+    Given 模板含groups和kind=field的key/name/description/type/required
+    When 校验并导入
+    Then 分组/items顺序保留，类型缺省string、required缺省false，一个显示名可为English / ไทย
+    And 不配置doc_type、TextIn引用、路径、计算、标准化规则或主要字段
+
+  Scenario: AC-FR-TEMPLATE-003-02 四类型与日期字符串
+    Given 字段或列type为string/integer/decimal/amount或不支持类型
+    When validate
+    Then 仅四类型合法，不支持number/date/boolean，日期以string保留不转佛历
+    And 字段与列的API YAML及JSON镜像type枚举均为string/integer/decimal/amount
+
+  Scenario: AC-FR-TEMPLATE-004-01 有序表格列
+    Given kind=table项具有key/name/description及有序columns，每列含字段属性
+    When 校验导入并生成模板结果
+    Then columns顺序保留，结果表格为对象数组，每列按key取值且required仅检查已有行
+
+  Scenario: AC-FR-TEMPLATE-005-01 格式与命名空间全量错误
+    Given code或key不符合正则，或组重复、组内字段/表格重名、表内列重名
+    When validate
+    Then 一次返回全部带路径错误，不连接数据库
+    And code遵循^[a-z0-9][a-z0-9._-]{0,63}$，key遵循^[a-z][a-z0-9_]{0,63}$
+
+  Scenario: AC-FR-TEMPLATE-005-02 结构与长度上限
+    Given 模板无组、组无item、表无列或超过20组/200字段加列/10表
+    And name超过100或description超过500（模板级1000）
+    When validate或import前校验
+    Then 返回所有相关路径错误且不写入
+
+  Scenario: AC-FR-TEMPLATE-006-01 管理UI延后（P1）
+    Given 本期仅后台CLI维护且006为P1
+    When 检查本期交付边界
+    Then web-pc和line-mini不提供模板创建/编辑管理UI，结果选择框仍是P0核验能力
+    And 后续管理UI须按获批P1范围再验收，当前不宣称已交付
+
+  Scenario: AC-FR-TEMPLATE-007-01 作用域与未删code唯一
+    Given 同code系统模板与租户N模板，以及另一个租户模板
+    When 导入和选择任务模板
+    Then 系统与不同租户作用域可各有该code，同作用域未删除code唯一
+    And 任务只能使用系统或本租户模板，索引使用COALESCE(tenant_id,0)与deleted_at IS NULL
+
+  Scenario: AC-FR-TEMPLATE-007-02 停用删除升版保留历史
+    Given mapping引用固定模板版本
+    When CLI停用、软删除或升版模板
+    Then 新选择仅启用未删除当前版本，已有mapping仍可读取、编辑、导出原历史版本
+    And 模板状态为ENABLED/DISABLED加deleted_at，旧内容不被改写
+
+  Scenario: AC-FR-TEMPLATE-007-03 版本读取隔离与描述裁剪
+    Given 系统历史版本和租户历史版本内部含完整name/description/groups不可变快照
+    When 持有效会话含游客请求GET模板版本
+    Then 系统版本可读，租户版本只对本租户成员可读，跨租户返回404，历史停用删除不破坏追溯
+    And 对前端裁剪模板/分组/项/列各层description，保留渲染所需名称、顺序、类型与required
+    And 内部不可变快照仍保留完整description供模型使用，不因公开裁剪而变更，无公开description需求
+
+  Scenario: AC-FR-TEMPLATE-007-04 CLI审计与共享库安全
+    Given 已授权实际CLI写操作
+    When 创建/升版/启用/停用/删除成功
+    Then 记录template.created/versioned/enabled/disabled/deleted、source=cli、actor可空
+    And 不打印凭据，本地共享数据库保持映射关闭，共享库写入与部署须单独授权
+    Given 2026-10-31共享库只读核查
+    Then transaction_read_only=on且仅SELECT，重复当前版本任务数0，无DDL/写入，不视为索引补建或seed完成
 ```
 
 ## 8. 非功能验收（V1.0 门槛）
@@ -942,12 +1291,12 @@ Feature: NFR V1.0 门槛
 | Epic | P0 需求 | 已有 AC | 自动化？ |
 |------|---------|---------|----------|
 | EPIC-01 | 8 | ✔ | 是（相机硬件除外，人工） |
-| EPIC-02 | 16 | ✔ | 是（基于样本与集成桩） |
-| EPIC-03 | 17 | ✔ | 是 |
-| EPIC-04 | 9 | ✔ | 是 |
+| EPIC-02 | 16（含新增021，按Epic主FR行） | 本期018..021已定义 | 最终822项隔离后端批次（非本Epic逐项数），含删除关联中止与迁移规划；真实LLM/数据库多实例另验，见文首 |
+| EPIC-03 | 18（含新增018..020） | 本期018..020已定义 | 显式通用审计后端补测、32场景浏览器及35离线断言通过；有旧READY的force重试、422聚焦覆盖，真机另验，见文首 |
+| EPIC-04 | 9 | 本期002已定义，JSON为正式验收 | 模板/通用JSON内容、MIME/.json下载与TXT兼容补测通过；XLSX/CSV后端内容另验，前端合成下载不代表工件验收，见文首 |
 | EPIC-05 | 2（P0 子集） | ✔ | 是 |
-| EPIC-06 | 18 | ✔ | 2026-10-27 已实现并正式发布的部分：334 项隔离后端、final `index-BUTDgRGj.js` 21 项全 mock 浏览器、6 项 OAuth 源码模拟、9 项前端会话边界及类型检查/Vite 构建/OpenAPI 内部引用通过；2026-10-28 新增的 FR-SYS-018 与改写的 FR-SYS-012/013/015/017 相关 AC（AC-FR-SYS-012-01..05、013-01..04、015-02、017-01..03、018-01/02/03）为契约同步，**本轮未运行任何测试**；历史 221/5 与 SMTP 自测非本轮证据，真实 LINE/收件箱/数据库并发/防猜码/提醒邮件实际投递未验证（见 §6） |
-| EPIC-08 | 0（P1，待 OQ-9） | ✔ | 是 |
+| EPIC-06 | 19 | ✔ | 2026-11-01 新增 FR-SYS-019 套餐配置化（AC-FR-SYS-019-01..05）：后端 863 项隔离测试、前端类型检查与 Vite 构建通过，已于 2026-11-01 发布（后端 saiflow-api-00056-ril、前端 saiflow-line-mini-00048-max），共享库只读核验 plans 已播种 4 个套餐，未做真实账号/真机验证；2026-10-27 已实现并正式发布的部分：334 项隔离后端、final `index-BUTDgRGj.js` 21 项全 mock 浏览器、6 项 OAuth 源码模拟、9 项前端会话边界及类型检查/Vite 构建/OpenAPI 内部引用通过；2026-10-28 新增的 FR-SYS-018 与改写的 FR-SYS-012/013/015/017 相关 AC（AC-FR-SYS-012-01..05、013-01..04、015-02、017-01..03、018-01/02/03）为契约同步，**本轮未运行任何测试**；历史 221/5 与 SMTP 自测非本轮证据，真实 LINE/收件箱/数据库并发/防猜码/提醒邮件实际投递未验证（见 §6） |
+| EPIC-08 | 6（001..005/007）；006为P1 | 7项FR场景已定义，006不纳入P0交付 | 两种子业务批准且正式CLI validate通过；2026-10-31 已 seed 至共享库并随开关开启上线；真实端到端/模型基线待验 |
 | NFR | 门槛 | ✔ | 混合（性能/安全测试工具） |
 
 > 每项需求完整的 AC ID 列于每个 epic 的“验证方式”列以及 `Requirements-Index.md` 中。
@@ -959,6 +1308,13 @@ Feature: NFR V1.0 门槛
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.9.6 | 2026-11-01 | Product Engineering | 新增 AC-FR-SYS-019-01..05（默认套餐/试用月数可配、月页数修改对存量订阅 ≤60 秒生效、停用套餐、泰英双语与审批缺省续期、CLI 校验/确认/审计与空表播种）；EPIC-06 计数 19；后端 863 项隔离测试、前端类型检查与构建通过，2026-11-01 正式发布：后端 saiflow-api-00056-ril、前端 saiflow-line-mini-00048-max（bundle index-SFvaHz8q.js）no-traffic 部署→tag 核验 /api/health 200、未登录接口 401、bundle 哈希一致→只读核验共享库自动建表并播种 4 个套餐（属主 saiflow_api，与种子一致）→手动切 100%，环境变量（22 项）与并发 12 与上一版一致；未建游客会话、未用真实账号做端到端核验 |
+| 1.9.5 | 2026-10-31 | Product Engineering | 新增 AC-FR-SYS-018-04（通知中心只显示账户变动类、OCR 完成不通知）与 AC-FR-SYS-018-05（个人/公司账户首次开通通知）；后端 831 项隔离测试通过；2026-10-31 正式发布：后端 saiflow-api-00054-mol、前端 saiflow-line-mini-00046-god（bundle index-IPu3DEpl.js）no-traffic 部署→tag 核验 /api/health 200、通知接口未登录 401→手动切 100%，环境变量与并发 12 与上一版一致，切流后 15 分钟内无 5xx；含同日 TEMPLATE_MATCHING 三步流程；未用真实账号做端到端核验 |
+| 1.9.4 | 2026-10-31 | Product Engineering | AC-FR-VERIFY-017-04 增加「模板匹配中」任务打开处理页；新增 AC-FR-VERIFY-017-05：处理进度三步流程（上传/OCR 处理/模板匹配）与 TEMPLATE_MATCHING 阶段筛选 |
+| 1.9.3 | 2026-10-31 | Product Engineering | 记录模板映射正式发布：迁移建表、两个系统模板 seed、前端与开关开启 revision 切流及匿名核验；真实端到端、模型基线与多实例并发仍未验收 |
+| 1.9.2 | 2026-10-31 | Product Engineering | 记录最终822隔离后端、32浏览器/35离线/14双语、构建与新增Ruff通过，包含JSON/显式通用审计/增量迁移补测及force/422修复；不将其视为真实模型/供应商/真机/PostgreSQL多实例或共享库seed/部署验收 |
+| 1.9.1 | 2026-10-31 | Product Engineering | 收尾修正JSON正式导出/MIME/.json与TXT兼容、内部描述/公开裁剪、raw返回、旧号切回/通用审计、force重试与删除关联中止AC；记录816隔离后端、两种子批准/正式validate和共享库只读重复数0，不预填补测数，真实基线/seed/部署边界保留 |
+| 1.9.0 | 2026-10-31 | Product Engineering | 重写模板与OCR018..020并新增OCR021/VERIFY018..020/ENTRY002场景，覆盖P0 CLI/P1 UI、schema/四类型、开关/分支并发/422/导出；保留历史TextIn与通用AC |
 | 1.8.24 | 2026-10-29 | Product Engineering | AC-FR-OCR-017-02：TextIn 首次+最多 3 次重试、2/4/8 秒、单层与错误分类、取消/终态、未知结果恢复不重置预算、锁行刷新、结果唯一及供应商扣费边界；284 项新增+366 项既有隔离回归联合通过，未发布，真实厂商/数据库并发未验收，见 OCR-Pipeline §3.1 |
 | 1.8.23 | 2026-10-29 | Product Engineering | 新增 AC-FR-VERIFY-015-06：Continue 纳入未点击小「+」的有效新增输入，空名/重名不部分提交、不导航，认证/订阅分流前草稿保留；空表单/取消不额外写版本，Reset 包含表单输入，小屏控件完整可见；25新增+25原浏览器及6模块、366隔离后端通过，真机未验收；发布状态与验证边界见 Architecture §5 |
 | 1.8.22 | 2026-10-29 | Product Engineering | 扩充 AC-FR-SYS-001-07 的 LINE 内无 token、Endpoint 同源/路径、默认 OAuth 与恢复防循环；扩充 AC-FR-UPLOAD-010-01 的同源 XHR、120 秒上限、状态 0/异常响应/中断与无自动重发；23 项 LIFF 源码、14 项上传源码和 2 项 Chromium 上传检查通过；真实手机登录/上传及底层断连另验，发布状态见 Architecture §5 |

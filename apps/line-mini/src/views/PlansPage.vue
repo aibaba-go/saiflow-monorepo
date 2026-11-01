@@ -8,6 +8,7 @@ import {
   getJob,
   submitPlanApplication,
   type Plan,
+  type PlanText,
   type QuotaTenant,
   type Subscription,
   type SubscriptionStatus,
@@ -26,7 +27,7 @@ import {
 import alibabaLogo from '../assets/alibaba-logo.png';
 import BrandLoading from '../components/BrandLoading.vue';
 
-const { t: tt, d } = useT();
+const { t: tt, d, locale } = useT();
 
 const props = withDefaults(
   defineProps<{
@@ -153,7 +154,7 @@ onMounted(async () => {
     sub.value = s;
     const [p, q] = await Promise.all([fetchPlans(), isAuthenticated.value ? fetchQuota() : null]);
     plans.value = p.items;
-    selectedCode.value = p.items.find((plan) => plan.code === 'KINDER')?.code ?? p.items[0]?.code ?? '';
+    selectedCode.value = p.items.find((plan) => plan.is_default)?.code ?? p.items[0]?.code ?? '';
     myQuota.value = q
       ? q.tenants.find((x) => x.tenant_id === tenantId.value) ?? q.tenants[0] ?? null
       : null;
@@ -238,17 +239,43 @@ function seatsLabel(p: Plan): string {
   return p.seats === 1 ? tt('plans.seat') : tt('plans.seats', { n: p.seats });
 }
 
+// FR-SYS-019：套餐文案由后台按语言配置，当前语言缺失时回退英文字段
+function planText(p: Plan): PlanText | undefined {
+  return p.i18n?.[locale.value];
+}
+
+function planName(p: Plan): string {
+  return planText(p)?.name || p.name;
+}
+
+function planFeatures(p: Plan): string[] {
+  return planText(p)?.features ?? p.features;
+}
+
+const currentPlanName = computed(() => {
+  const plan = myQuota.value?.plan;
+  if (!plan) return '';
+  return plan.name_i18n?.[locale.value] || plan.name || '';
+});
+
+/** 在审申请的套餐名按当前语言取目录文案，目录里找不到时用接口返回的英文名 */
+const pendingPlanName = computed(() => {
+  const target = plans.value.find((p) => p.code === pendingCode.value);
+  return target ? planName(target) : sub.value?.pending?.plan_name ?? '';
+});
+
 function priceLabel(p: Plan): string {
-  if (p.price.monthly_thb == null && p.price.yearly_thb == null) return 'Contact us';
-  return p.price.display;
+  // 无标价套餐的“Contact us / ติดต่อเรา”同样来自配置
+  return planText(p)?.price_display || p.price.display || 'Contact us';
 }
 
 function priceSub(p: Plan): string {
-  if (p.price.monthly_thb == null && p.price.yearly_thb == null) return '';
-  if (p.price.monthly_thb != null && p.price.yearly_thb != null) {
-    return `THB ${p.price.yearly_thb.toLocaleString('en-US')} / yr`;
-  }
-  return '';
+  const { monthly_thb: monthly, yearly_thb: yearly } = p.price;
+  if (monthly == null || yearly == null) return '';
+  const yearlyText = yearly.toLocaleString('en-US');
+  // 展示文案已含年价（如 “THB 599 / mo · THB 5,990 / yr”）时不再重复副标题
+  if (priceLabel(p).includes(yearlyText)) return '';
+  return `THB ${yearlyText} / yr`;
 }
 </script>
 
@@ -283,9 +310,9 @@ function priceSub(p: Plan): string {
           <div class="pending-content">
             <div class="pending-title">
               <span class="pending-dot" />
-              {{ tt('plans.pendingTitle', { plan: sub?.pending?.plan_name ?? '' }) }}
+              {{ tt('plans.pendingTitle', { plan: pendingPlanName }) }}
             </div>
-            <div class="pending-body">{{ tt('plans.pendingNotice', { plan: sub?.pending?.plan_name ?? '' }) }}</div>
+            <div class="pending-body">{{ tt('plans.pendingNotice', { plan: pendingPlanName }) }}</div>
             <div v-if="pendingSubmittedAt" class="pending-meta">
               {{ tt('planPending.submittedAt') }} · {{ pendingSubmittedAt }}
             </div>
@@ -306,7 +333,7 @@ function priceSub(p: Plan): string {
         <div v-if="myQuota" class="current-card">
           <div class="current-top">
             <div class="current-name">
-              {{ myQuota.plan.name }} · <span class="current-free">{{ statusLabel }}</span>
+              {{ currentPlanName }} · <span class="current-free">{{ statusLabel }}</span>
             </div>
             <span v-if="expired || expiringSoon" class="current-badge" :class="{ danger: expired }">
               {{ expired ? tt('sub.expired') : tt('sub.expiringSoon') }}
@@ -337,7 +364,7 @@ function priceSub(p: Plan): string {
             :class="{
               default: !checkMode && isCurrentPlan(p),
               pending: !checkMode && ctaKind(p) === 'pending',
-              dark: p.code === 'ADVANCE',
+              dark: p.theme === 'DARK',
               selectable: checkMode,
               selected: checkMode && selectedCode === p.code,
             }"
@@ -352,20 +379,20 @@ function priceSub(p: Plan): string {
             <div v-else-if="!checkMode && ctaKind(p) === 'pending'" class="plan-flag pending-flag">
               {{ tt('plans.inReview') }}
             </div>
-            <div class="plan-name">{{ p.name }}</div>
+            <div class="plan-name">{{ planName(p) }}</div>
             <div class="plan-price">{{ priceLabel(p) }}</div>
             <div v-if="priceSub(p)" class="plan-price-sub">{{ priceSub(p) }}</div>
             <ul class="plan-features">
               <li>{{ tt('plans.pagesPerMonth', { n: p.quota_pages_per_month.toLocaleString('en-US') }) }}</li>
               <li>{{ seatsLabel(p) }}</li>
-              <li v-for="f in p.features" :key="f">{{ f }}</li>
+              <li v-for="f in planFeatures(p)" :key="f">{{ f }}</li>
             </ul>
             <button
               v-if="!checkMode && ctaKind(p) !== 'lower'"
               class="plan-cta"
               :class="{
                 primary: ctaActionable(p) || (ctaKind(p) === 'contact' && hasPrice(p)),
-                dark: p.code === 'ADVANCE',
+                dark: p.theme === 'DARK',
               }"
               :disabled="!ctaActionable(p) || submitting"
               :title="ctaKind(p) === 'contact' ? tt('plans.offlineTitle') : undefined"
@@ -408,7 +435,7 @@ function priceSub(p: Plan): string {
         @click="askUpgrade(selectedPlan?.code)"
       >
         <BrandLoading v-if="submitting" variant="button" :label="tt('plans.submitting')" :announce="false" />
-        <template v-else>{{ tt('plans.upgradeTo', { plan: selectedPlan?.name ?? '' }) }}</template>
+        <template v-else>{{ tt('plans.upgradeTo', { plan: selectedPlan ? planName(selectedPlan) : '' }) }}</template>
       </button>
     </div>
 
@@ -416,7 +443,7 @@ function priceSub(p: Plan): string {
       <div class="dialog">
         <div class="dialog-title">{{ confirmIsRenew ? tt('sub.renewTitle') : tt('plans.confirmTitle') }}</div>
         <p class="dialog-body">
-          {{ confirmIsRenew ? tt('sub.renewBody', { plan: confirmPlan.name }) : tt('plans.confirmBody', { plan: confirmPlan.name }) }}
+          {{ confirmIsRenew ? tt('sub.renewBody', { plan: planName(confirmPlan) }) : tt('plans.confirmBody', { plan: planName(confirmPlan) }) }}
         </p>
         <div class="dialog-actions">
           <button class="dialog-cancel" :disabled="submitting" @click="confirmCode = null">{{ tt('common.cancel') }}</button>

@@ -26,7 +26,8 @@ defineProps<{
   white-space: nowrap;
 }
 
-.chip.ocr_processing {
+.chip.ocr_processing,
+.chip.template_matching {
   background: var(--processing-bg);
   color: var(--processing);
 }

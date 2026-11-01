@@ -3,6 +3,7 @@
 支付完全线下（联系销售）：申请仅登记意向工单（applications.type=PLAN_UPGRADE），
 由后台人工审核开通（APPROVED 即视为已购买/已续费），无下单、无回调、无在线支付。
 审批时在 form.valid_from / valid_to 写有效期，订阅状态由 subscriptions.py 据此同步。
+套餐目录、档位顺序与双语文案来自 plans 表配置（FR-SYS-019，经 plans.py 缓存读取）。
 
 订阅按租户计：applications.target_tenant_id 既可以是个人租户（本人专属），
 也可以是企业租户（任一成员提交，全体成员共享），查询只需单条件。
@@ -16,7 +17,7 @@ from auth import audit, current_user, notify
 from errors import auth_required, invalid_argument, ok, permission_denied, state_conflict
 from extensions import db
 from models import Application, Membership, Tenant, _now
-from plans import PLAN_CATALOG
+import plans as plan_config
 from workspace import resolve_tenant
 
 bp = Blueprint("plans", __name__)
@@ -26,7 +27,7 @@ _PLAN_MANAGER_ROLES = ("OWNER",)
 
 
 def plan_rank(code: str | None) -> int:
-    return next((i for i, p in enumerate(PLAN_CATALOG) if p["code"] == code), -1)
+    return plan_config.plan_rank(code)
 
 
 def subscription_state(tenant_id: int, *, commit: bool = True) -> dict:
@@ -58,7 +59,7 @@ def list_plans():
         {
             "currency": "THB",
             "payment": "OFFLINE",
-            "items": PLAN_CATALOG,
+            "items": [plan_config.public_view(p) for p in plan_config.catalog()],
         }
     )
 
@@ -80,7 +81,8 @@ def submit_plan_application():
     if not isinstance(body, dict):
         raise invalid_argument()
     code = body.get("plan_code")
-    plan = next((p for p in PLAN_CATALOG if p["code"] == code), None)
+    # 只能申请目录中启用的套餐；停用套餐仅对存量订阅继续生效
+    plan = next((p for p in plan_config.catalog() if p["code"] == code), None)
     if plan is None:
         raise invalid_argument(field_errors=[{"field": "plan_code", "reason": "invalid"}])
 
@@ -107,7 +109,7 @@ def submit_plan_application():
             "plan_name": plan["name"],
             "tenant_id": tenant.id,
             "tenant_type": tenant.tenant_type,
-            # 人工审批时填写有效期；留空则按 plans.APPROVED_PERIOD_MONTHS 续期
+            # 人工审批时填写有效期；留空则按该套餐配置的 approved_period_months 续期
             "valid_from": "",
             "valid_to": "",
         },

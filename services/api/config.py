@@ -142,3 +142,11 @@ class Config:
     DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
     DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-flash")
     DEEPSEEK_TIMEOUT_SECONDS = float(os.getenv("DEEPSEEK_TIMEOUT_SECONDS", "120"))
+
+    # ---------- 模板映射（EPIC-08 / FR-OCR-018..021，design D6/D9/D11） ----------
+    # 缺省关闭：关闭时只保存 OCR 解析结果，其余行为与现状一致（DeepSeek 整理照旧）。
+    # 开启时跳过 DeepSeek 整理、启动映射 Worker。本地与线上共用数据库，本地必须保持关闭，
+    # 否则本地 Worker 会处理线上任务的映射。
+    TEMPLATE_MAPPING_ENABLED = _bool("TEMPLATE_MAPPING_ENABLED", False)
+    TEMPLATE_LOW_SCORE_THRESHOLD = float(os.getenv("TEMPLATE_LOW_SCORE_THRESHOLD", "0.7"))
+    TEMPLATE_MAX_MAPPINGS_PER_JOB = int(os.getenv("TEMPLATE_MAX_MAPPINGS_PER_JOB", "5"))

@@ -18,6 +18,7 @@ import {
   onUnauthorized,
   setCsrfToken,
   type AuthPayload,
+  type JobStage,
   type QuotaTenant,
   type Tenant,
   type User,
@@ -262,6 +263,12 @@ export const route = reactive<Route>({ name: 'scan' });
 export function navigate(name: Route['name'], params?: Record<string, string>): void {
   route.name = name;
   route.params = params;
+}
+
+/** 任务列表点击目标：OCR 处理中 / 模板匹配中回处理页，最终完成去结果终页，其余去核验页 */
+export function jobRoute(stage: JobStage): Route['name'] {
+  if (stage === 'OCR_PROCESSING' || stage === 'TEMPLATE_MATCHING') return 'processing';
+  return stage === 'COMPLETED' ? 'final' : 'result';
 }
 
 /** 任务所属租户（订阅/配额按租户计） */

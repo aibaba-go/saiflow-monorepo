@@ -19,6 +19,7 @@ import sys
 import threading
 import time
 from contextlib import nullcontext
+from datetime import timezone
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest.mock import Mock, call
@@ -130,10 +131,11 @@ def harness(implementation, isolated_io, monkeypatch):
         file_model = type("File", (), {})
         user_model = type("User", (), {})
         version_model = Mock(name="ResultVersion", side_effect=lambda **kw: SimpleNamespace(**kw))
+        raw_model = Mock(name="OcrRawResult", side_effect=lambda **kw: SimpleNamespace(**kw))
         session = Mock(name="session")
         state = SimpleNamespace(
             job=job, file=file, user=user, session=session, requests=[], events=[],
-            pending=[], persisted=[], commits=[], version_model=version_model,
+            pending=[], persisted=[], commits=[], version_model=version_model, raw_model=raw_model,
             sleep=isolated_io.sleep, implementation=implementation,
         )
 
@@ -170,6 +172,7 @@ def harness(implementation, isolated_io, monkeypatch):
             "extensions": _module("extensions", db=SimpleNamespace(session=session)),
             "models": _module(
                 "models", OcrJob=job_model, File=file_model, User=user_model, ResultVersion=version_model,
+                OcrRawResult=raw_model,
             ),
             "storage": state.storage,
             "auth": _module("auth", notify=state.notify),
@@ -310,11 +313,15 @@ def _assert_success(state, count):
     state.version_model.assert_called_once_with(
         job_id=state.job.id, version=1, is_current=True, created_by_user_id=None, structured=STRUCTURED,
     )
-    assert len(state.persisted) == 1
-    state.session.add.assert_called_once_with(state.persisted[0])
-    assert state.persisted[0].structured == STRUCTURED
-    assert state.persisted[0].is_current is True
-    assert [entry for entry in state.commits if entry[0] == "SUCCEEDED"] == [("SUCCEEDED", 1)]
+    # FR-OCR-021：原始结果与 v1 在同一事务中写入（原始结果为 DeepSeek 之前的深拷贝）
+    assert len(state.persisted) == 2
+    raw, version = state.persisted
+    assert state.session.add.call_args_list == [call(raw), call(version)]
+    state.raw_model.assert_called_once()
+    assert raw.job_id == state.job.id and raw.payload == STRUCTURED and len(raw.id) == 32
+    assert version.structured == STRUCTURED
+    assert version.is_current is True
+    assert [entry for entry in state.commits if entry[0] == "SUCCEEDED"] == [("SUCCEEDED", 2)]
     assert state.job.duration_ms == 17 and state.job.page_count == 3
     assert (state.job.table_count, state.job.field_count) == (1, 1)
     assert state.job.capability == {"vendor": "textin", "field_source": "prompt", "refiner": "synthetic-refiner"}
@@ -329,9 +336,8 @@ def _assert_success(state, count):
         "page_count": 3, "table_count": 1, "field_count": 1, "missing_pages": [],
         "duration_ms": 17, "field_source": "prompt", "vendor": "textin",
     }
-    state.notify.assert_called_once_with(
-        state.user.id, "OCR_DONE", "OCR task finished", f"job {state.job.id} -> SUCCEEDED",
-    )
+    # OCR 完成不再发站内通知（通知中心只承载账户变动，FR-SYS-018）
+    state.notify.assert_not_called()
 
 
 def _assert_no_success(state, *, status="FAILED"):
@@ -354,6 +360,38 @@ def test_earliest_success_breaks_without_an_extra_call(harness, failed_calls):
     state.process()
     _assert_success(state, failed_calls + 1)
     assert state.sleep.call_args_list == [call(delay) for delay in [2, 4, 8][:failed_calls]]
+
+
+def test_raw_result_is_a_copy_taken_before_deepseek(harness):
+    """FR-OCR-021：DeepSeek 改写 v1 时，原始结果仍是 TextIn llm_json 原样。"""
+    state = harness([_success()])
+    state.deepseek.refine_json.side_effect = lambda structured, config: {"refined": True}
+    state.process()
+    raw, version = state.persisted
+    assert raw.payload == STRUCTURED
+    assert version.structured == {"refined": True}
+
+
+def test_mapping_enabled_skips_deepseek_and_creates_auto_mapping(harness, monkeypatch):
+    """design D6：开关开启时 v1 = 原始结果，不调用 DeepSeek，并在同一事务创建自动映射。"""
+    state = harness([_success()])
+    state.worker.app.config["TEMPLATE_MAPPING_ENABLED"] = True
+    created = []
+    service = _module(
+        "doc_templates.service",
+        create_auto_mapping=Mock(side_effect=lambda job, raw_id, version: created.append((job, raw_id, version))),
+    )
+    monkeypatch.setitem(sys.modules, "doc_templates.service", service)
+    monkeypatch.setitem(sys.modules, "doc_templates", _module("doc_templates", service=service))
+    state.process()
+    state.deepseek.is_configured.assert_not_called()
+    state.deepseek.refine_json.assert_not_called()
+    raw, version = state.persisted
+    assert raw.payload == STRUCTURED and version.structured == STRUCTURED
+    assert created == [(state.job, raw.id, version)]
+    state.session.flush.assert_called_once()
+    assert state.job.status == "SUCCEEDED"
+    assert "refiner" not in state.job.capability
 
 
 @pytest.mark.parametrize("kind", RETRYABLE_KINDS)
@@ -660,7 +698,8 @@ def test_cancel_during_file_read_prevents_even_first_vendor_call(harness):
 
 
 def test_stale_recovery_uses_conditional_updates_and_never_requeues_vendor_stages(harness, monkeypatch):
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
+
     from sqlalchemy import column
 
     state = harness([])

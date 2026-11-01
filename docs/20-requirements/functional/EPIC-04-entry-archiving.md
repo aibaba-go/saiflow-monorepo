@@ -3,8 +3,8 @@ doc_id: EPIC-04
 title: "EPIC-04 — 多渠道录入与归档"
 type: epic
 status: active
-version: 1.2.2
-updated: 2026-10-18
+version: 1.3.1
+updated: 2026-10-31
 owner: Product Engineering
 priority: P0
 source: "PRD-001 §4.4"
@@ -26,7 +26,7 @@ related: [DM-Document, DM-ArchiveRecord, API-5, API-6]
 | ID | 陈述（系统必须……） | 优先级 | 来源 | 依赖项 | 验证方式 |
 |----|--------------------|--------|------|--------|----------|
 | FR-ENTRY-001 | 按文档类型生成标准化 Excel 模板 | P0 | §4.4 | FR-VERIFY-006 | AC-FR-ENTRY-001-01 |
-| FR-ENTRY-002 | 一键将已核验数据填入 Excel 模板 | P0 | §4.4 | FR-ENTRY-001 | AC-FR-ENTRY-002-01 |
+| FR-ENTRY-002 | 一键导出当前已保存核验数据；模板结果 XLSX/CSV 按固定模板分组、项与列顺序及显示名、金额类型输出，模板外字段追加；正式 format=JSON 原样输出 structured，application/json MIME、.json 下载；通用及 TXT 旧行为不变 | P0 | §4.4；模板映射批准 D15 | FR-ENTRY-001、FR-VERIFY-019 | AC-FR-ENTRY-002-01/02/03 |
 | FR-ENTRY-003 | 将多份已核验文档批量导出至 Excel | P0 | §4.4 | FR-ENTRY-002 | AC-FR-ENTRY-003-01 |
 | FR-ENTRY-004 | 允许为导出文件指定自定义保存路径 | P0 | §4.4 | FR-ENTRY-002 | AC-FR-ENTRY-004-01 |
 | FR-ENTRY-005 | 同时归档原始图像和结构化数据（双重存储） | P0 | §4.4 | FR-UPLOAD-011 | AC-FR-ENTRY-005-01 |
@@ -71,6 +71,13 @@ related: [DM-Document, DM-ArchiveRecord, API-5, API-6]
 - OCR 部分成功时，在工作表末尾注明缺失页。
 - 所有单元格按文本写入以保留前导零；以 `=`、`+`、`-`、`@` 开头的用户可编辑文本须做公式注入防护。
 
+### 3.6 按模板导出（FR-ENTRY-002）
+
+- 当前 ResultVersion.mapping_id 非空时，读取映射固定引用的模板版本，不使用模板族最新版本；XLSX/CSV 按分组、项、列顺序输出模板显示名称，字段为「显示名称 | 值」，表头为列显示名。
+- amount 按类型而非键名显示千分位与至少两位小数，超过两位不舍入，原始存储值不改；模板外字段追加所在组末尾，导出含用户已保存编辑。XLSX 延续单一 Result 工作表与既有样式/公式防护；通用结果继续 §3.5 原规则。
+- 创建导出正式支持 `format=JSON`，下载 MIME 为 `application/json`、扩展名为 `.json`；原样输出指定结果版本的 structured，包含已保存 extras，保留键顺序、JSON 类型与数值精度，不加信封、显示名替换或金额格式化。TXT 仍沿用旧行为，不作为 JSON 别名。本期不交付 Excel 导入、隐藏导入标识或导出回导流程，见 [API-Spec §4](../../30-design/API-Spec.md#4-尚未对齐的契约差异)。
+- 已确认验证范围及尚待补测的导出场景见 [汇总验收](../../40-acceptance/Acceptance-Criteria.md)，不以验收定义代替测试或部署结果。
+
 ## 4. 代表性验收标准（P0）
 
 ```gherkin
@@ -80,6 +87,20 @@ Feature: EPIC-04 录入与归档
     Given 一份已核验的 Delivery Note
     When 文员点击 "Export to Excel"
     Then 创建一个标准化 .xlsx，其中所有映射字段均已填充
+
+  Scenario: AC-FR-ENTRY-002-02 按固定模板导出已保存编辑
+    Given 当前结果为模板版本 2，用户已保存合计金额为 "1234.50"
+    When 导出 XLSX 或 CSV
+    Then 按版本 2 分组/项/列顺序及显示名输出，金额为 "1,234.50"
+    And 模板外字段追加所在组末尾，模板升版不改变此次导出
+
+  Scenario: AC-FR-ENTRY-002-03 正式 JSON 导出与 TXT 兼容
+    Given 指定已保存结果版本为通用或模板结果，含人工 extras、前导零字符串及多位小数
+    When 以 format=JSON 创建导出并下载
+    Then 下载 MIME 为 application/json、文件扩展名为 .json，内容原样为该版本 structured
+    And 保留键顺序、JSON 类型、数值精度与 extras，不加信封、不替换显示名或格式化金额
+    When 以 format=TXT 导出同一结果
+    Then 沿用旧 TXT 行为，不改成 JSON 格式别名，既有通用 XLSX/CSV 导出亦不变
 
   Scenario: AC-FR-ENTRY-005-01 双重存储归档
     Given 一份已核验的 Invoice
@@ -111,6 +132,8 @@ Feature: EPIC-04 录入与归档
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.3.1 | 2026-10-31 | Product Engineering | FR-ENTRY-002/AC-03改为正式JSON格式、application/json MIME与.json下载；原样structured保留类型/精度/顺序/extras，不改TXT旧行为，验证与补测边界单列 |
+| 1.3.0 | 2026-10-31 | Product Engineering | FR-ENTRY-002同步固定模板版本顺序/显示名/金额类型、保存extras、通用兼容与JSON原样；不新增Excel导入/隐藏标记 |
 | 1.2.2 | 2026-10-18 | Product Engineering | FR-ENTRY-015：XLSX 样式按产品样例 sample-format.xlsx 细化（标题合并、字体、对齐、列宽、行高） |
 | 1.2.1 | 2026-10-18 | Product Engineering | FR-ENTRY-015：XLSX 导出改为单工作表，版式与解析结果页一致；更新 AC-FR-ENTRY-015-01 |
 | 1.2.0 | 2026-10-17 | Product Engineering | 新增最终结果页结构化查看与 XLSX 导出（含公式注入防护） |

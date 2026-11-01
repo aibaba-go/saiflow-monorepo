@@ -1,8 +1,9 @@
 """额度计量（PRD v1.4 §20）。
 
 只有一种计量：**OCR_PAGE 月页额度**。没有 Free 档位、没有赠送次数流水——
-每个租户默认开通 Kinder 一个月（见 `subscriptions.py`），按套餐的
-`quota_pages_per_month` 在泰国自然月内计页；企业租户天然汇总全体成员。
+每个租户默认开通配置的默认套餐（见 `subscriptions.py`），按套餐配置的
+`quota_pages_per_month`（plans 表，实时查询、改动对存量订阅立即生效，FR-SYS-019）
+在泰国自然月内计页；企业租户天然汇总全体成员。
 
 - 订阅非 ACTIVE（到期或企业未认证）→ 不能新建任务（`plan.expired` 硬停）；
 - 订阅 ACTIVE 但本月页数用尽 → `QUOTA_EXCEEDED`；
@@ -99,6 +100,8 @@ def quota_summary(user) -> list[dict]:
                 "plan": {
                     "code": sub["plan_code"],
                     "name": sub["plan_name"],
+                    # 前端按界面语言取名称（FR-SYS-019）；未开通时为 null
+                    "name_i18n": {lang: v["name"] for lang, v in plan["i18n"].items()} if plan else None,
                     "is_paid": sub["source"] == "APPROVED",
                     "source": sub["source"],
                     "metering": "OCR_PAGE",

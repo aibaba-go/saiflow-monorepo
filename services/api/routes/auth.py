@@ -227,7 +227,7 @@ def _finish_login(
         db.session.commit()
         storage.delete(guest_avatar)
     resp = _issue_session_response(user, language)
-    subscriptions.ensure_subscription(tenant, commit=True)  # 默认开通 Kinder 一个月（幂等）
+    subscriptions.ensure_subscription(tenant, commit=True)  # 默认开通配置的默认套餐（当前 Kinder 一个月，幂等）
     return resp
 
 
@@ -339,7 +339,7 @@ def auth_guest():
     # 游客同样是一个个人租户：试用期的文件/任务也必须有 tenant_id 归属
     tenant = ensure_personal_tenant(guest)
     resp = _issue_session_response(guest, language)
-    subscriptions.ensure_subscription(tenant, commit=True)  # 游客试用同样是 Kinder 一个月
+    subscriptions.ensure_subscription(tenant, commit=True)  # 游客试用同样开通默认套餐（FR-SYS-019 配置）
     return resp
 
 

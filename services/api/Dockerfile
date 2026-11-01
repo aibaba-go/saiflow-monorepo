@@ -21,8 +21,13 @@ RUN pip install --no-cache-dir \
     -r requirements.txt
 
 # 复制应用代码（模块白名单；email_sender.py 为 FR-SYS-014/016 TLS 验证码发送）
-COPY app.py config.py extensions.py models.py auth.py errors.py fileaccess.py middleware.py worker.py workspace.py storage.py quota.py plans.py deepseek.py avatars.py email_sender.py subscriptions.py reminders.py ./
+COPY app.py config.py extensions.py models.py auth.py errors.py fileaccess.py middleware.py worker.py workspace.py storage.py quota.py plans.py deepseek.py avatars.py email_sender.py subscriptions.py reminders.py mapping_worker.py manage_templates.py manage_plans.py ./
+# FR-SYS-019：套餐配置种子（plans 表为空时导入，也是数据库不可用时的内置兜底目录）
+COPY plans_seed.json ./
 COPY routes ./routes
+# FR-OCR-018..021 / FR-TEMPLATE-001..006：模板映射模块、后台维护脚本与已审批系统模板种子
+COPY doc_templates ./doc_templates
+COPY templates_seed ./templates_seed
 # TextIn OCR provider（唯一厂商，PRD §12）
 COPY textin ./textin
 

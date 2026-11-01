@@ -33,6 +33,7 @@ function formatTime(iso: string | null): string {
       <div class="task-meta">
         {{ t('result.meta', { pages: job.page_count, tables: job.table_count }) }} · {{ formatTime(job.created_at) }}
       </div>
+      <div v-if="job.template_name" class="task-template">{{ job.template_name }}</div>
     </div>
     <StatusChip :stage="job.stage" />
   </button>
@@ -74,6 +75,20 @@ function formatTime(iso: string | null): string {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.task-template {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 5px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 9px;
 }
 
 .task-meta {

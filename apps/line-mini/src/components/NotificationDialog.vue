@@ -3,7 +3,7 @@
  * 通知中心（首页铃铛入口）。
  * - 打开即拉取 GET /me/notifications，渲染后立刻 POST /me/notifications/read 全部标记已读；
  * - 标记前的未读项保留「新」标记，让用户看清这次新增了什么，父组件据回调清掉红点；
- * - 到期提醒（PLAN_EXPIRING/PLAN_EXPIRED）文案由后端按用户语言下发，前端只做类型配色。
+ * - 只展示账户变动类通知（后端已过滤）；文案由后端下发，前端只做类型配色。
  */
 import { onMounted, ref } from 'vue';
 import { ApiError, fetchNotifications, markNotificationsRead, type NotificationItem } from '../api';
@@ -52,7 +52,7 @@ onMounted(load);
 /** 类型 → 圆点配色（到期相关用警示色，其余用主色） */
 function dotClass(type: string): string {
   if (type === 'PLAN_EXPIRED') return 'danger';
-  if (type === 'PLAN_EXPIRING') return 'warn';
+  if (type === 'PLAN_EXPIRING' || type === 'PLAN_UPGRADE_REJECTED') return 'warn';
   return 'info';
 }
 </script>

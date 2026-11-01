@@ -3,3 +3,7 @@ node_modules
 .git
 .gcloudignore
 *.log
+# NFR-SEC：本地环境文件与 Cookie 罐不得进入 Cloud Build 上下文（镜像只用本地已构建的 dist）
+.env
+.env.*
+*cookies*.txt

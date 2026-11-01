@@ -2,14 +2,10 @@
   "openapi": "3.0.3",
   "info": {
     "title": "SaiFlow API",
-    "version": "1.1.0",
-    "description": "SaiFlow 后端接口（Flask，`services/api`）。本文件是对外接口契约的唯一来源，\n`docs/30-design/API-Spec.md` 由其生成发布，请勿手写第二份。\n\n## 通用约定\n- 所有业务接口位于 `/api/v1`；未启用版本（如 `/api/v2/...`）与旧的无版本 `/api/...` 业务路径一律 404。\n- 成功响应：`{\"code\": \"OK\", \"data\": ...}`（见 `OkEnvelope`）。\n- 失败响应：`{\"code\", \"message_key\", \"request_id\", \"retryable\", \"field_errors\"}`（见 `Error`），\n  `message_key` 为前端 i18n 文案键。\n- 时间字段为 UTC 的 ISO 8601 字符串（无时区后缀）。\n\n## 归属：只有 tenant_id\n- 业务归属的唯一表达是 `tenant_id`（`tenants` 表）。个人用户（含游客）各占一个 PERSONAL 租户，\n  每个公司各占一个 ENTERPRISE 租户（`enterprises.tenant_id` 一对一扩展）。\n- 请求侧：`POST /uploads`、`POST /file-imports`、`POST /me/plan-applications` 在 JSON body 中接受可选\n  `tenant_id`；`GET /me/subscription`、`GET /ocr/jobs` 以查询参数接受 `tenant_id`。\n  缺省或空值 = 调用者本人的个人租户。\n- 响应侧：身份/租户列表与业务对象一律返回 `tenant_id`（企业租户另给 `tenant_type` / `name` / `role`）。\n\n## 套餐与计量\n- 没有 FREE 档位、没有赠送任务额度。每个租户恰好一行订阅：个人租户（含游客）自 `tenants.created_at`\n  起默认开通 Kinder 一个月；企业租户自 `enterprises.verified_at` 起算，未认证时无订阅（`status=NONE`）。\n- 唯一计量单位是 `OCR_PAGE`（每月页数），按泰国时间（UTC+7）自然月实时统计 `ocr_jobs.page_count`，\n  FAILED / CANCELLED 的任务不计，因此没有消耗流水、也没有取消返还。\n- 订阅到期后新建任务被硬停（402 `PLAN_EXPIRED`）；订阅仍 ACTIVE 但本月页数用尽为 402 `QUOTA_EXCEEDED`。\n  已有任务、结果与导出在任何情况下都可继续查看与导出。\n\n## 认证与 CSRF\n- 免登录白名单（精确匹配）：`POST /auth/line`、`POST /auth/guest`；其余接口必须携带会话 Cookie `saiflow_session`（HttpOnly，path=/api）。\n- 写请求（POST/PUT/PATCH/DELETE）还必须携带请求头 `X-CSRF-Token`，其值来自登录 / `GET /auth/session` 响应中的 `csrf_token`。\n- 跨用户 / 跨租户访问不存在或无权的对象统一返回 404，不泄露资源存在性。\n\n## 错误码\n| HTTP | code | 说明 |\n|------|------|------|\n| 400 | INVALID_ARGUMENT | 参数校验失败，`field_errors` 给出字段级原因 |\n| 401 | AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED | 未登录 / 会话过期 / 会话已吊销 |\n| 402 | PLAN_EXPIRED / QUOTA_EXCEEDED | 订阅已到期或未开通（`plan.expired`）/ 本月页数已用尽（`quota.exceeded`） |\n| 403 | ACCOUNT_DISABLED / PERMISSION_DENIED / CSRF_INVALID / ENTERPRISE_ACCESS_REVOKED | 账号禁用 / 无权限 / CSRF 校验失败 / 企业访问权已撤销 |\n| 404 | RESOURCE_NOT_FOUND | 资源不存在或无权访问 |\n| 409 | STATE_CONFLICT / VERSION_CONFLICT | 状态不允许 / 乐观并发版本冲突 |\n| 429 | RATE_LIMITED | 请求过于频繁（retryable=true） |\n| 503 | SERVICE_UNAVAILABLE / AUTH_SERVICE_UNAVAILABLE / OCR_VENDOR_UNAVAILABLE / EMAIL_SERVICE_UNAVAILABLE / STORAGE_UNAVAILABLE / EXPORT_UNAVAILABLE / EXPORT_FAILED | 依赖服务不可用 |\n"
+    "version": "1.3.0",
+    "description": "SaiFlow 后端接口（Flask，`services/api`）。本文件是对外接口契约的唯一来源，\n`docs/30-design/API-Spec.md` 由其生成发布，请勿手写第二份。\n\n## 通用约定\n- 所有业务接口位于 `/api/v1`；未启用版本（如 `/api/v2/...`）与旧的无版本 `/api/...` 业务路径一律 404。\n- 成功响应：`{\"code\": \"OK\", \"data\": ...}`（见 `OkEnvelope`）。\n- 失败响应：`{\"code\", \"message_key\", \"request_id\", \"retryable\", \"field_errors\"}`（见 `Error`），\n  `message_key` 为前端 i18n 文案键。\n- 时间字段为 UTC 的 ISO 8601 字符串（无时区后缀）。\n\n## 归属：只有 tenant_id\n- 业务归属的唯一表达是 `tenant_id`（`tenants` 表）。个人用户（含游客）各占一个 PERSONAL 租户，\n  每个公司各占一个 ENTERPRISE 租户（`enterprises.tenant_id` 一对一扩展）。\n- 请求侧：`POST /uploads`、`POST /file-imports`、`POST /me/plan-applications` 在 JSON body 中接受可选\n  `tenant_id`；`GET /me/subscription`、`GET /ocr/jobs` 以查询参数接受 `tenant_id`。\n  缺省或空值 = 调用者本人的个人租户。\n- 响应侧：身份/租户列表与业务对象一律返回 `tenant_id`（企业租户另给 `tenant_type` / `name` / `role`）。\n\n## 套餐与计量\n- 没有 FREE 档位、没有赠送任务额度。每个租户恰好一行订阅：个人租户（含游客）自 `tenants.created_at`\n  起默认开通默认套餐（`plans.is_default`，当前为 Kinder）`trial_months` 个月（当前 1）；企业租户自 `enterprises.verified_at` 起算，未认证时无订阅（`status=NONE`）。\n- 套餐目录、价格展示、月页数、席位、泰英文案与审批续期月数均来自 `plans` 表配置（FR-SYS-019，CLI `manage_plans.py` 维护），\n  修改立即对所有租户生效（不做订阅快照）。\n- 唯一计量单位是 `OCR_PAGE`（每月页数），按泰国时间（UTC+7）自然月实时统计 `ocr_jobs.page_count`，\n  FAILED / CANCELLED 的任务不计，因此没有消耗流水、也没有取消返还。\n- 订阅到期后新建任务被硬停（402 `PLAN_EXPIRED`）；订阅仍 ACTIVE 但本月页数用尽为 402 `QUOTA_EXCEEDED`。\n  已有任务、结果与导出在任何情况下都可继续查看与导出。\n\n## 认证与 CSRF\n- 免登录白名单（精确匹配）：`POST /auth/line`、`POST /auth/guest`；其余接口必须携带会话 Cookie `saiflow_session`（HttpOnly，path=/api）。\n- 写请求（POST/PUT/PATCH/DELETE）还必须携带请求头 `X-CSRF-Token`，其值来自登录 / `GET /auth/session` 响应中的 `csrf_token`。\n- 跨用户 / 跨租户访问不存在或无权的对象统一返回 404，不泄露资源存在性。\n\n## 错误码\n| HTTP | code | 说明 |\n|------|------|------|\n| 400 | INVALID_ARGUMENT | 参数校验失败，`field_errors` 给出字段级原因 |\n| 401 | AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED | 未登录 / 会话过期 / 会话已吊销 |\n| 402 | PLAN_EXPIRED / QUOTA_EXCEEDED | 订阅已到期或未开通（`plan.expired`）/ 本月页数已用尽（`quota.exceeded`） |\n| 403 | ACCOUNT_DISABLED / PERMISSION_DENIED / CSRF_INVALID / ENTERPRISE_ACCESS_REVOKED | 账号禁用 / 无权限 / CSRF 校验失败 / 企业访问权已撤销 |\n| 404 | RESOURCE_NOT_FOUND | 资源不存在或无权访问 |\n| 409 | STATE_CONFLICT / VERSION_CONFLICT | 状态不允许 / 乐观并发版本冲突 |\n| 409 | TEMPLATE_MAPPING_DISABLED / RAW_RESULT_MISSING / TEMPLATE_UNAVAILABLE / MAPPING_NOT_READY / MAPPING_LIMIT_REACHED | 模板映射：功能关闭 / 无 OCR 解析结果 / 模板不可用 / 映射未成功 / 达到每任务映射上限 |\n| 422 | INVALID_ARGUMENT（`results.required_missing`） | 模板结果确认时必填字段缺失，`field_errors` 给出 `structured.<路径>` |\n| 429 | RATE_LIMITED | 请求过于频繁（retryable=true） |\n| 503 | SERVICE_UNAVAILABLE / AUTH_SERVICE_UNAVAILABLE / OCR_VENDOR_UNAVAILABLE / EMAIL_SERVICE_UNAVAILABLE / STORAGE_UNAVAILABLE / EXPORT_UNAVAILABLE / EXPORT_FAILED | 依赖服务不可用 |\n"
   },
   "servers": [
-    {
-      "url": "https://saiflow.zhpulan.cn/api/v1",
-      "description": "正式域名（推荐）"
-    },
     {
       "url": "/api/v1",
       "description": "当前部署（相对路径）"
@@ -52,6 +48,10 @@
     {
       "name": "Results",
       "description": "识别结果查询与人工核验修改"
+    },
+    {
+      "name": "Templates",
+      "description": "文档格式模板（只读）与任务的模板选择、切换"
     },
     {
       "name": "Exports",
@@ -898,7 +898,7 @@
           "Me"
         ],
         "summary": "列出我的通知",
-        "description": "返回本人最近 50 条通知（按创建时间倒序，无分页参数）与未读总数 `unread_count`\n（未读数统计本人全部未读通知，不受 50 条截断影响）。\n套餐到期提醒（type=PLAN_EXPIRING / PLAN_EXPIRED）也通过本接口下发。\n错误：401 AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED；403 ACCOUNT_DISABLED。\n",
+        "description": "返回本人最近 50 条**账户变动类**通知（按创建时间倒序，无分页参数）与未读总数 `unread_count`\n（未读数统计本人全部未读的账户变动类通知，不受 50 条截断影响）。\n账户变动类即 `Notification.type` 枚举：套餐到期/已到期、升级申请提交/批准/拒绝、\n个人账户开通、公司账户开通、加入公司。其他类型（如历史遗留的 OCR_DONE、INFO）不返回也不计未读；\nOCR 任务完成不再产生通知，任务进度看历史列表的 `stage`。\n错误：401 AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED；403 ACCOUNT_DISABLED。\n",
         "operationId": "listMeNotifications",
         "security": [
           {
@@ -961,7 +961,7 @@
           "Me"
         ],
         "summary": "标记通知已读",
-        "description": "把指定通知标记为已读。`ids` 为非空整数数组时只标记这些通知；`ids` 缺省、为 null 或为空数组时\n标记本人全部未读通知。幂等（已读的通知不会被重复更新），且只会影响调用者本人的通知行——\n传入他人或不存在的 ID 不报错，只是不计入 `updated`。\n\n错误：\n- 400 INVALID_ARGUMENT `error.invalid_argument`，field_errors `{field: ids, message_key: error.invalid_argument}`\n  （`ids` 不是数组，或数组中含非整数元素；JSON 布尔值不算整数）\n- 401 AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED；403 ACCOUNT_DISABLED / CSRF_INVALID\n",
+        "description": "把指定通知标记为已读。`ids` 为非空整数数组时只标记这些通知；`ids` 缺省、为 null 或为空数组时\n标记本人全部未读通知。与列表同一口径，只作用于账户变动类通知。幂等（已读的通知不会被重复更新），且只会影响调用者本人的通知行——\n传入他人或不存在的 ID 不报错，只是不计入 `updated`。\n\n错误：\n- 400 INVALID_ARGUMENT `error.invalid_argument`，field_errors `{field: ids, message_key: error.invalid_argument}`\n  （`ids` 不是数组，或数组中含非整数元素；JSON 布尔值不算整数）\n- 401 AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED；403 ACCOUNT_DISABLED / CSRF_INVALID\n",
         "operationId": "markMeNotificationsRead",
         "security": [
           {
@@ -1188,7 +1188,7 @@
           "Plans"
         ],
         "summary": "获取套餐目录",
-        "description": "返回套餐目录（KINDER/STARTER/INTERMEDIATE/ADVANCE，按档位从低到高，无 FREE 档）。\n每月页数：Kinder 1,000 / Starter 5,000 / Intermediate 10,000 / Advance 100,000。\n币种 THB，支付完全线下（payment=OFFLINE，联系销售开通/续费），无在线下单、无回调、无自动续费。\n本接口只返回目录，不接受 `tenant_id`，也不含任何租户状态。需登录态。\n错误：401 AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED；403 ACCOUNT_DISABLED。\n",
+        "description": "返回启用中的套餐目录（按配置的 sort_order 从低到高，无 FREE 档）。套餐由后台 `plans` 表配置\n（FR-SYS-019，`manage_plans.py` 维护），停用套餐不返回；当前为 KINDER / STARTER / INTERMEDIATE / ADVANCE，\n每月页数 Kinder 1,000 / Starter 5,000 / Intermediate 10,000 / Advance 100,000。配置修改最迟 60 秒内生效。\n每项除英文 `name`/`price.display`/`features` 外，`i18n` 给出 en/th 双语文案，`theme` 给出卡片样式，\n`is_default` 标记默认开通套餐。\n币种 THB，支付完全线下（payment=OFFLINE，联系销售开通/续费），无在线下单、无回调、无自动续费。\n本接口只返回目录，不接受 `tenant_id`，也不含任何租户状态。需登录态。\n错误：401 AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED；403 ACCOUNT_DISABLED。\n",
         "operationId": "listPlans",
         "security": [
           {
@@ -1998,7 +1998,7 @@
           "OCR"
         ],
         "summary": "分页查询 OCR 任务",
-        "description": "列出当前用户可见的任务：本人个人租户任务 + 当前用户为 ACTIVE 成员的所有企业租户任务（含其他成员创建的）。按 created_at 倒序。\n过滤条件可组合：\n- `status`：逗号分隔，大小写不敏感；取值须属于 QUEUED/PREPROCESSING/PROCESSING/POSTPROCESSING/SUCCEEDED/PARTIAL_SUCCESS/FAILED/CANCELLED（CANCEL_REQUESTED 不可作为筛选值），否则 400（field=status）。\n- `tenant_id`：只看该租户的任务。无法解析为整数 → 400（field=tenant_id）；不在当前用户可访问租户列表内 → 404（不泄露存在性）。\n- `stage`：OCR_PROCESSING（非终态）/ OCR_FAILED（FAILED、CANCELLED）/ VERIFYING（成功但未确认）/ VERIFIED（已确认但 completed_at 为空）/ COMPLETED（已确认且 completed_at 非空）；非法值 400（field=stage）。\n- `q`：按源文件名（original_name）不区分大小写子串匹配。\n- 分页：`page` ≥ 1，`page_size` 1~100，非法时 400（field=page）。\n订阅到期（402 `plan.expired`）只拦截新建任务，不影响本接口：历史任务始终可查。\n",
+        "description": "列出当前用户可见的任务：本人个人租户任务 + 当前用户为 ACTIVE 成员的所有企业租户任务（含其他成员创建的）。按 created_at 倒序。\n过滤条件可组合：\n- `status`：逗号分隔，大小写不敏感；取值须属于 QUEUED/PREPROCESSING/PROCESSING/POSTPROCESSING/SUCCEEDED/PARTIAL_SUCCESS/FAILED/CANCELLED（CANCEL_REQUESTED 不可作为筛选值），否则 400（field=status）。\n- `tenant_id`：只看该租户的任务。无法解析为整数 → 400（field=tenant_id）；不在当前用户可访问租户列表内 → 404（不泄露存在性）。\n- `stage`：OCR_PROCESSING（非终态）/ OCR_FAILED（FAILED、CANCELLED）/ TEMPLATE_MATCHING（成功、未确认且有进行中的模板映射 pending_mapping_id）/ VERIFYING（成功、未确认且无进行中的映射）/ VERIFIED（已确认但 completed_at 为空）/ COMPLETED（已确认且 completed_at 非空）；非法值 400（field=stage）。\n- `q`：按源文件名（original_name）不区分大小写子串匹配。\n- 分页：`page` ≥ 1，`page_size` 1~100，非法时 400（field=page）。\n订阅到期（402 `plan.expired`）只拦截新建任务，不影响本接口：历史任务始终可查。\n",
         "operationId": "listOcrJobs",
         "security": [
           {
@@ -2035,6 +2035,7 @@
               "enum": [
                 "OCR_PROCESSING",
                 "OCR_FAILED",
+                "TEMPLATE_MATCHING",
                 "VERIFYING",
                 "VERIFIED",
                 "COMPLETED"
@@ -2167,7 +2168,7 @@
           "OCR"
         ],
         "summary": "删除任务结果",
-        "description": "删除任务的全部结果数据：所有 ResultVersion、PageResult 以及关联导出（含对象存储中的导出文件）。任务记录本身保留。\n- 任务须为终态（SUCCEEDED/PARTIAL_SUCCESS/FAILED/CANCELLED），否则 409 STATE_CONFLICT `job.not_terminal`。\n- 可见性同 GET /ocr/jobs/{job_id}，不可见 → 404。\n",
+        "description": "删除任务的全部结果数据：所有 ResultVersion、PageResult、关联导出（含对象存储中的导出文件），以及该任务的模板映射与 OCR 解析结果（ocr_raw_results）；任务的 current_mapping_id / pending_mapping_id 清空。任务记录本身保留。\n- 任务须为终态（SUCCEEDED/PARTIAL_SUCCESS/FAILED/CANCELLED），否则 409 STATE_CONFLICT `job.not_terminal`。\n- 可见性同 GET /ocr/jobs/{job_id}，不可见 → 404。\n",
         "operationId": "deleteOcrJobResults",
         "security": [
           {
@@ -2359,7 +2360,7 @@
           "Results"
         ],
         "summary": "获取当前识别结果",
-        "description": "返回任务当前结果版本（is_current=true）。`structured` 为 TextIn Prompt 模式结构化 JSON；旧版逐页结果没有 structured 时折算为 `{fields: {名称: 值}, tables: [[[单元格文本]]]}`。`pages` 为旧版逐页数据（Prompt 任务为空数组）。\n- 尚无结果且任务非终态 → 409 STATE_CONFLICT `results.not_ready`；任务已终态但无结果（如失败或结果已删除）→ 404。\n- 可见性同 GET /ocr/jobs/{job_id}。\n",
+        "description": "返回任务当前结果版本（is_current=true）。`structured` 为 TextIn Prompt 模式结构化 JSON；旧版逐页结果没有 structured 时折算为 `{fields: {名称: 值}, tables: [[[单元格文本]]]}`。`pages` 为旧版逐页数据（Prompt 任务为空数组）。\n- 尚无结果且任务非终态 → 409 STATE_CONFLICT `results.not_ready`；任务已终态但无结果（如失败或结果已删除）→ 404。\n- 可见性同 GET /ocr/jobs/{job_id}。\n- 模板映射附加字段（FR-VERIFY-018..020）：`raw_result_id`、`current_mapping`（当前版本所属映射，通用结果为 null）、`template_schema`（模板分组定义，前端按其渲染）、`pending_mapping`（正在进行的映射）、`latest_failed_mapping`（最近一次映射失败且之后没有成功）、`template_available`（功能开启、有 OCR 解析结果且有可用模板）、`validation`（模板结果的必填缺失与类型提示）。\n",
         "operationId": "getOcrJobResults",
         "security": [
           {
@@ -2416,7 +2417,7 @@
           "Results"
         ],
         "summary": "复核编辑或确认结果",
-        "description": "乐观并发：`expected_version` 必须等于当前版本号，否则 409 VERSION_CONFLICT（`error.version_conflict`）。\n两种编辑方式（互斥）：\n- `structured`：提交完整结构化 JSON（对象或数组，紧凑 UTF-8 序列化后 ≤ 2,000,000 字节）。与当前内容不同时生成新版本（version+1），并按新 JSON 重算 table_count / field_count；与非空 `edits` 同时提交 → 400（reason=mutually_exclusive_with_structured）。\n- `edits`：旧版逐页结果按单元格修改 current_text（单元格 review_status 置 EDITED，raw_text 保留），生成新版本并复制全部页结果；目标单元格不存在 → 400，field_errors 含 `reason=cell_not_found` 及 page_number/table_id/row_index/column_index。\n`confirm` 为真时仅允许非游客且已完成注册的用户：在任何结果版本、单元格或任务状态写入前，\n游客拒绝为 401 AUTH_REQUIRED `auth.login_required`，已登录未注册拒绝为 403 PERMISSION_DENIED `registration.required`。\n已注册确认将任务 review_status 置 CONFIRMED，completed_at 为空时写入（阶段 COMPLETED）；\n历史 VERIFIED 任务在注册后显式 confirm 也可完成。仅确认且无内容变化时不生成新版本，并将当前版本所有单元格置 CONFIRMED。\n`confirm=false` 的草稿编辑仍允许游客/未注册用户；内容有变化且任务尚未 CONFIRMED 时，review_status 置 EDITED。不额外校验套餐订阅。\n其他错误：结果未就绪 409 `results.not_ready`；无结果 404；参数非法 400（field: expected_version reason=required；edits/edits[i] reason=invalid；structured reason=invalid|too_large）。\n",
+        "description": "乐观并发：`expected_version` 必须等于当前版本号，否则 409 VERSION_CONFLICT（`error.version_conflict`）。\n两种编辑方式（互斥）：\n- `structured`：提交完整结构化 JSON（对象或数组，紧凑 UTF-8 序列化后 ≤ 2,000,000 字节）。与当前内容不同时按任务 max(version)+1 生成新版本，并按新 JSON 重算 table_count / field_count；与非空 `edits` 同时提交 → 400（reason=mutually_exclusive_with_structured）。\n- `edits`：旧版逐页结果按单元格修改 current_text（单元格 review_status 置 EDITED，raw_text 保留），生成新版本并复制全部页结果；目标单元格不存在 → 400，field_errors 含 `reason=cell_not_found` 及 page_number/table_id/row_index/column_index。\n`confirm` 为真时仅允许非游客且已完成注册的用户：在任何结果版本、单元格或任务状态写入前，\n游客拒绝为 401 AUTH_REQUIRED `auth.login_required`，已登录未注册拒绝为 403 PERMISSION_DENIED `registration.required`。\n已注册确认将任务 review_status 置 CONFIRMED，completed_at 为空时写入（阶段 COMPLETED）；\n历史 VERIFIED 任务在注册后显式 confirm 也可完成。仅确认且无内容变化时不生成新版本，并将当前版本所有单元格置 CONFIRMED。\n`confirm=false` 的草稿编辑仍允许游客/未注册用户；内容有变化且任务尚未 CONFIRMED 时，review_status 置 EDITED。不额外校验套餐订阅。\n其他错误：结果未就绪 409 `results.not_ready`；无结果 404；参数非法 400（field: expected_version reason=required；edits/edits[i] reason=invalid；structured reason=invalid|too_large）。\n模板结果（当前版本属于某个模板映射）：\n- 新版本号 = 任务内 max(version)+1，并继承当前版本的映射归属；PATCH 与模板切换在任务行锁下串行。\n- 保存前按模板补齐结构：缺失的模板字段补 null、表格行补齐列；模板外的字段、列与分组原样保留。\n- `confirm=true` 时按保存后的内容做必填校验，缺失 → 422 INVALID_ARGUMENT `results.required_missing`（field_errors: `structured.<group>.<field>` 或 `structured.<group>.<table>[i].<column>`，reason=required），不写入任何内容；草稿保存不校验。\n- 首次确认时，若任务有自动匹配映射，记录一次 `template.match_feedback` 审计（自动匹配模板与最终确认模板是否一致）。\n",
         "operationId": "updateOcrJobResults",
         "security": [
           {
@@ -2482,6 +2483,301 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          }
+        }
+      }
+    },
+    "/templates/versions/{version_id}": {
+      "get": {
+        "tags": [
+          "Templates"
+        ],
+        "summary": "获取模板版本快照",
+        "description": "返回某个模板版本的分组定义（用于预览与按模板渲染结果）。版本只增不改；模板停用或删除后，已有映射引用的版本仍可读取（`status` / `deleted` 标明当前状态）。\n- 系统模板所有登录用户（含游客）可读；租户模板仅该租户可访问的用户可读，否则 404。\n- 不下发 `description`（仅供大模型匹配使用）。\n",
+        "operationId": "getTemplateVersion",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "description": "模板版本 ID（document_template_versions.id）。",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "模板版本快照。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/OkEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/TemplateVersionSnapshot"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/ocr/jobs/{job_id}/template-options": {
+      "get": {
+        "tags": [
+          "Templates"
+        ],
+        "summary": "获取任务可选模板与已有映射",
+        "description": "模板选择框数据：任务租户可用的模板（系统模板 + 本租户启用模板，各取当前版本），按最近一次自动匹配的得分降序排列，第一项有得分时标记 `recommended`；单候选直接选中且成功的自动映射记为 1.0。另返回该任务 READY / FAILED 的映射列表。\n功能关闭（TEMPLATE_MAPPING_ENABLED=false）时 `enabled=false`、`templates` 为空数组。可见性同 GET /ocr/jobs/{job_id}。\n",
+        "operationId": "getTemplateOptions",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "description": "OCR 任务 ID（32 位十六进制 UUID）。",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "可选模板与已有映射。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/OkEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/TemplateOptions"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/ocr/jobs/{job_id}/apply-template": {
+      "post": {
+        "tags": [
+          "Templates"
+        ],
+        "summary": "套用模板或切换到已有映射",
+        "description": "两种用法（都需 `expected_version` 等于当前版本号，否则 409 VERSION_CONFLICT）：\n- 传 `mapping_id`：切换到该任务一个 READY 映射最近保存的版本，返回 200 + 结果；映射不属于该任务 → 404；非 READY → 409 MAPPING_NOT_READY。\n- 传 `raw_result_id` + `template_id`：同一模板版本已有 READY 映射且未传 `force=true` → 直接切换，200 + 结果；同一模板版本已有进行中的映射 → 不新建，把 pending 指向它，202 + `{mapping}`；否则新建 MANUAL 映射（基准为当前版本），202 + `{mapping}`，由后台 Worker 转换，成功且期间结果未被修改、未确认时自动生效。\n切换只移动当前版本指针，不调用大模型、不复制数据，记录 `template.switched` 审计。\n错误：功能关闭 409 TEMPLATE_MAPPING_DISABLED（归属校验优先，他人任务一律 404）；识别未成功 409 `results.not_ready`；已确认 409 `results.already_confirmed`；无 OCR 解析结果 409 RAW_RESULT_MISSING；raw_result_id 不匹配 404；模板不存在、停用、删除或不属于该租户 409 TEMPLATE_UNAVAILABLE；映射数达到上限（TEMPLATE_MAX_MAPPINGS_PER_JOB，默认 5）409 MAPPING_LIMIT_REACHED；参数缺失或类型错误 400。\n",
+        "operationId": "applyTemplate",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "description": "OCR 任务 ID（32 位十六进制 UUID）。",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyTemplateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已切换到 READY 映射，返回切换后的当前结果。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/OkEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ResultVersion"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "映射已排队或正在进行；前端轮询 GET results 的 pending_mapping。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/OkEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "mapping": {
+                              "$ref": "#/components/schemas/TemplateMappingSummary"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/ocr/jobs/{job_id}/use-generic": {
+      "post": {
+        "tags": [
+          "Templates"
+        ],
+        "summary": "不套用模板（切回通用结果）",
+        "description": "把当前版本切回通用结果最近保存的版本，并清除进行中的模板请求（pending）；已是通用结果时不新增结果版本。每次显式选择均记录 `template.generic_selected` 审计。不要求功能开关开启。\n错误：`expected_version` 不等于当前版本号 409 VERSION_CONFLICT；识别未成功 409 `results.not_ready`；已确认 409 `results.already_confirmed`；无通用结果 404。\n",
+        "operationId": "useGenericResult",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "description": "OCR 任务 ID（32 位十六进制 UUID）。",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UseGenericRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "切换后的当前结果。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/OkEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ResultVersion"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
           }
         }
       }
@@ -2492,7 +2788,7 @@
           "Exports"
         ],
         "summary": "创建结果导出",
-        "description": "基于任务当前结果版本同步生成导出文件，创建即 READY，返回 201；有效期 24 小时。\n- 格式（大小写不敏感）：XLSX（全部单元格按字符串写入、保留前导零；结构化结果按“文档信息/表格”版式，分区标题语言取用户 language，th 或 en）、CSV（UTF-8 BOM）、TXT（结构化结果为缩进 JSON 文本，旧版为逐页文本）。\n- 以 `=`、`+`、`-`、`@` 开头的单元格文本在 XLSX/CSV 中前置 `'` 防公式注入。\n- 任务非终态 → 409 STATE_CONFLICT `job.not_terminal`；无当前结果版本 → 404；format 非法 → 400（field=format, reason=invalid）。\n- 生成依赖缺失 → 503 EXPORT_UNAVAILABLE（`error.export_unavailable`）；生成/存储失败 → 导出记录置 FAILED，返回 503 EXPORT_FAILED（`error.export_failed`，retryable=true）。\n",
+        "description": "基于任务当前结果版本同步生成导出文件，创建即 READY，返回 201；有效期 24 小时。\n- 格式（大小写不敏感）：XLSX（全部单元格按字符串写入、保留前导零；结构化结果按“文档信息/表格”版式，分区标题语言取用户 language，th 或 en）、CSV（UTF-8 BOM）、TXT（结构化结果为缩进 JSON 文本，旧版为逐页文本）、JSON（当前 structured 原样输出，不替换键名或格式化值；application/json、.json 下载）。\n- 以 `=`、`+`、`-`、`@` 开头的单元格文本在 XLSX/CSV 中前置 `'` 防公式注入。\n- 模板结果（当前版本属于某个模板映射）：XLSX 标题为模板名称，按模板分组 / 字段 / 列的顺序与显示名称排版，金额类型字段按千分位两位小数显示；CSV 表头为 `section,name,value`，名称为「分组名 / 字段名」；模板外内容追加在对应分组末尾。通用结果的导出格式不变（CSV 表头 `section,path,value`）。\n- 任务非终态 → 409 STATE_CONFLICT `job.not_terminal`；无当前结果版本 → 404；format 非法 → 400（field=format, reason=invalid）。\n- 生成依赖缺失 → 503 EXPORT_UNAVAILABLE（`error.export_unavailable`）；生成/存储失败 → 导出记录置 FAILED，返回 503 EXPORT_FAILED（`error.export_failed`，retryable=true）。\n",
         "operationId": "createExport",
         "security": [
           {
@@ -3477,6 +3773,28 @@
           }
         }
       },
+      "UnprocessableEntity": {
+        "description": "模板结果确认时必填字段缺失（INVALID_ARGUMENT / results.required_missing），未写入任何内容",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "code": "INVALID_ARGUMENT",
+              "message_key": "results.required_missing",
+              "request_id": "3f9c2a1b7d4e5f60",
+              "retryable": false,
+              "field_errors": [
+                {
+                  "field": "structured.summary.net_total",
+                  "reason": "required"
+                }
+              ]
+            }
+          }
+        }
+      },
       "TooManyRequests": {
         "description": "请求过于频繁（RATE_LIMITED）",
         "content": {
@@ -3885,6 +4203,7 @@
             "required": [
               "code",
               "name",
+              "name_i18n",
               "is_paid",
               "source",
               "metering"
@@ -3893,22 +4212,29 @@
               "code": {
                 "type": "string",
                 "nullable": true,
-                "enum": [
-                  "KINDER",
-                  "STARTER",
-                  "INTERMEDIATE",
-                  "ADVANCE",
-                  null
-                ],
-                "description": "无订阅（企业未认证）时为 null；不存在 FREE 档位"
+                "description": "无订阅（企业未认证）时为 null；不存在 FREE 档位。套餐代码，取自 `plans` 配置表（FR-SYS-019），当前为 KINDER / STARTER / INTERMEDIATE / ADVANCE；可新增，客户端不得写死枚举。"
               },
               "name": {
                 "type": "string",
-                "nullable": true
+                "nullable": true,
+                "description": "英文名称"
+              },
+              "name_i18n": {
+                "type": "object",
+                "nullable": true,
+                "description": "套餐名称双语（FR-SYS-019）；无订阅时为 null",
+                "properties": {
+                  "en": {
+                    "type": "string"
+                  },
+                  "th": {
+                    "type": "string"
+                  }
+                }
               },
               "is_paid": {
                 "type": "boolean",
-                "description": "仅 source=APPROVED 为 true；系统默认开通的一个月 Kinder 为 false，ACTIVE 不代表已付款。"
+                "description": "仅 source=APPROVED 为 true；系统默认开通的默认套餐（当前一个月 Kinder）为 false，ACTIVE 不代表已付款。"
               },
               "source": {
                 "type": "string",
@@ -3918,7 +4244,7 @@
                   "APPROVED",
                   null
                 ],
-                "description": "DEFAULT=系统默认开通一个月 / APPROVED=人工审批续费 / null=无订阅。"
+                "description": "DEFAULT=系统默认开通（时长取默认套餐的 trial_months，当前一个月）/ APPROVED=人工审批续费 / null=无订阅。"
               },
               "metering": {
                 "type": "string",
@@ -4108,7 +4434,17 @@
           "type": {
             "type": "string",
             "maxLength": 32,
-            "description": "通知类型，如 INFO、PLAN_UPGRADE_SUBMITTED、PLAN_EXPIRING（到期前 D7/D3/D1/D0 提醒）、 PLAN_EXPIRED（到期后提醒）。"
+            "enum": [
+              "PLAN_EXPIRING",
+              "PLAN_EXPIRED",
+              "PLAN_UPGRADE_SUBMITTED",
+              "PLAN_UPGRADE_APPROVED",
+              "PLAN_UPGRADE_REJECTED",
+              "ACCOUNT_ACTIVATED",
+              "COMPANY_ACTIVATED",
+              "MEMBERSHIP_ACTIVE"
+            ],
+            "description": "账户变动类通知类型：PLAN_EXPIRING（到期前 D7/D3/D1/D0 提醒）、PLAN_EXPIRED（到期后提醒）、 PLAN_UPGRADE_SUBMITTED / PLAN_UPGRADE_APPROVED / PLAN_UPGRADE_REJECTED（升级申请提交/批准/拒绝）、 ACCOUNT_ACTIVATED（个人账户首次开通 Kinder，游客不发）、COMPANY_ACTIVATED（公司认证后首次开通， 发给 ACTIVE OWNER）、MEMBERSHIP_ACTIVE（加入公司）。"
           },
           "title": {
             "type": "string",
@@ -4200,20 +4536,19 @@
           "price",
           "quota_pages_per_month",
           "seats",
-          "features"
+          "features",
+          "theme",
+          "is_default",
+          "i18n"
         ],
         "properties": {
           "code": {
             "type": "string",
-            "enum": [
-              "KINDER",
-              "STARTER",
-              "INTERMEDIATE",
-              "ADVANCE"
-            ]
+            "description": "套餐代码，取自 `plans` 配置表（FR-SYS-019），当前为 KINDER / STARTER / INTERMEDIATE / ADVANCE；可新增，客户端不得写死枚举。"
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "英文名称（其他语言见 i18n）"
           },
           "price": {
             "type": "object",
@@ -4235,16 +4570,67 @@
               },
               "display": {
                 "type": "string",
-                "description": "展示文案，如 \"THB 888 / year\"、\"Contact us\""
+                "description": "英文展示文案，如 \"THB 888 / year\"、\"Contact us\"（其他语言见 i18n）"
               }
             }
           },
           "quota_pages_per_month": {
             "type": "integer",
-            "description": "每月可识别页数"
+            "description": "每月可识别页数（配置值，修改后对存量订阅即时生效）"
           },
           "seats": {
             "type": "integer"
+          },
+          "features": {
+            "type": "array",
+            "description": "英文卖点列表（其他语言见 i18n）",
+            "items": {
+              "type": "string"
+            }
+          },
+          "theme": {
+            "type": "string",
+            "enum": [
+              "DEFAULT",
+              "DARK"
+            ],
+            "description": "卡片样式；DARK=深色强调卡"
+          },
+          "is_default": {
+            "type": "boolean",
+            "description": "是否默认开通套餐（新租户/企业认证后自动开通；目录中恰好一个）"
+          },
+          "i18n": {
+            "type": "object",
+            "description": "双语展示文案（FR-SYS-019），键为语言代码",
+            "required": [
+              "en",
+              "th"
+            ],
+            "properties": {
+              "en": {
+                "$ref": "#/components/schemas/PlanText"
+              },
+              "th": {
+                "$ref": "#/components/schemas/PlanText"
+              }
+            }
+          }
+        }
+      },
+      "PlanText": {
+        "type": "object",
+        "required": [
+          "name",
+          "price_display",
+          "features"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "price_display": {
+            "type": "string"
           },
           "features": {
             "type": "array",
@@ -4266,13 +4652,7 @@
           "plan_code": {
             "type": "string",
             "nullable": true,
-            "enum": [
-              "KINDER",
-              "STARTER",
-              "INTERMEDIATE",
-              "ADVANCE",
-              null
-            ]
+            "description": "套餐代码，取自 `plans` 配置表（FR-SYS-019），当前为 KINDER / STARTER / INTERMEDIATE / ADVANCE；可新增，客户端不得写死枚举。"
           },
           "plan_name": {
             "type": "string",
@@ -4320,14 +4700,7 @@
           "plan_code": {
             "type": "string",
             "nullable": true,
-            "enum": [
-              "KINDER",
-              "STARTER",
-              "INTERMEDIATE",
-              "ADVANCE",
-              null
-            ],
-            "description": "NONE 时为 null。"
+            "description": "NONE 时为 null。套餐代码，取自 `plans` 配置表（FR-SYS-019），当前为 KINDER / STARTER / INTERMEDIATE / ADVANCE；可新增，客户端不得写死枚举。"
           },
           "plan_name": {
             "type": "string",
@@ -4341,7 +4714,7 @@
               "APPROVED",
               null
             ],
-            "description": "DEFAULT 为系统默认开通的一个月 Kinder；APPROVED 为运营批准申请后生成的区间；NONE 时为 null。"
+            "description": "DEFAULT 为系统默认开通的默认套餐区间（当前一个月 Kinder）；APPROVED 为运营批准申请后生成的区间；NONE 时为 null。"
           },
           "application_id": {
             "type": "integer",
@@ -4399,12 +4772,7 @@
         "properties": {
           "plan_code": {
             "type": "string",
-            "enum": [
-              "KINDER",
-              "STARTER",
-              "INTERMEDIATE",
-              "ADVANCE"
-            ]
+            "description": "目标套餐代码，须为启用中的套餐（停用或不存在返回 400 INVALID_ARGUMENT）"
           },
           "tenant_id": {
             "type": "integer",
@@ -4761,11 +5129,12 @@
             "enum": [
               "OCR_PROCESSING",
               "OCR_FAILED",
+              "TEMPLATE_MATCHING",
               "VERIFYING",
               "VERIFIED",
               "COMPLETED"
             ],
-            "description": "流程阶段：FAILED/CANCELLED → OCR_FAILED；其余非成功状态 → OCR_PROCESSING；成功（SUCCEEDED/PARTIAL_SUCCESS）未确认 → VERIFYING；历史已确认且 completed_at 为空 → VERIFIED（注册后显式 confirm 可完成）；已确认且 completed_at 非空 → COMPLETED。新确认请求必须先登录注册。\n"
+            "description": "流程阶段：FAILED/CANCELLED → OCR_FAILED；其余非成功状态 → OCR_PROCESSING；成功（SUCCEEDED/PARTIAL_SUCCESS）未确认且存在进行中的模板映射（pending_mapping_id 非空）→ TEMPLATE_MATCHING；成功未确认且无进行中的映射 → VERIFYING；历史已确认且 completed_at 为空 → VERIFIED（注册后显式 confirm 可完成）；已确认且 completed_at 非空 → COMPLETED。新确认请求必须先登录注册。\n"
           },
           "error_code": {
             "type": "string",
@@ -4778,6 +5147,11 @@
             "type": "string",
             "nullable": true,
             "description": "由 rerun 产生时指向原任务。"
+          },
+          "template_name": {
+            "type": "string",
+            "nullable": true,
+            "description": "当前结果所套用模板的显示名称；通用结果为 null。"
           },
           "created_at": {
             "type": "string",
@@ -4940,7 +5314,7 @@
           },
           "version": {
             "type": "integer",
-            "description": "当前版本号（每次内容修改 +1），PATCH 时作为 expected_version。"
+            "description": "当前版本号；新内容版本取整个任务 max(version)+1，切回已有分支可返回旧号。PATCH 时作为 expected_version。"
           },
           "review_status": {
             "type": "string",
@@ -4974,6 +5348,131 @@
             "description": "旧版逐页数据；TextIn Prompt 任务为空数组。",
             "items": {
               "$ref": "#/components/schemas/ResultPage"
+            }
+          },
+          "raw_result_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "该任务的 OCR 解析结果 ID（套用模板时回传）；开关关闭时新任务仍保存，只有无原始快照的历史任务为 null。"
+          },
+          "current_mapping": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TemplateMappingSummary"
+              }
+            ],
+            "nullable": true,
+            "description": "当前版本所属的模板映射；通用结果为 null。"
+          },
+          "template_schema": {
+            "type": "object",
+            "nullable": true,
+            "description": "当前模板结果的分组定义（前端按其顺序与名称渲染）；通用结果为 null。",
+            "properties": {
+              "template_version_id": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "name": {
+                "type": "string"
+              },
+              "groups": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/TemplateGroup"
+                }
+              }
+            }
+          },
+          "pending_mapping": {
+            "type": "object",
+            "nullable": true,
+            "description": "用户最近一次请求、仍在进行（PENDING/MATCHING/CONVERTING）的映射；没有则为 null。",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "PENDING",
+                  "MATCHING",
+                  "CONVERTING"
+                ]
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "AUTO",
+                  "MANUAL"
+                ]
+              },
+              "template_name": {
+                "type": "string",
+                "nullable": true,
+                "description": "AUTO 映射匹配完成前为 null。"
+              }
+            }
+          },
+          "latest_failed_mapping": {
+            "type": "object",
+            "nullable": true,
+            "description": "最近一次结束的映射为 FAILED 时给出（之后有成功映射则为 null）。",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "template_name": {
+                "type": "string",
+                "nullable": true
+              },
+              "error_code": {
+                "type": "string",
+                "description": "MATCH_FAILED / LLM_TIMEOUT / LLM_UNAVAILABLE / LLM_INVALID_OUTPUT / RAW_TOO_LARGE / RAW_RESULT_MISSING / TEMPLATE_UNAVAILABLE / MAPPING_INTERRUPTED"
+              },
+              "error_message": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "AUTO",
+                  "MANUAL"
+                ]
+              }
+            }
+          },
+          "template_available": {
+            "type": "boolean",
+            "description": "功能开启、有 OCR 解析结果且任务租户有可用模板时为 true（显示模板选择入口）。"
+          },
+          "validation": {
+            "type": "object",
+            "nullable": true,
+            "description": "模板结果的校验提示；通用结果为 null。",
+            "properties": {
+              "required_missing": {
+                "type": "array",
+                "description": "必填缺失路径（如 `summary.net_total`、`goods.line_items[0].description`），确认前必须补齐。",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "type_warnings": {
+                "type": "array",
+                "description": "与模板类型不符的值（仅提示，不阻断保存或确认）。",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -5037,6 +5536,354 @@
           }
         }
       },
+      "TemplateColumn": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "显示名称（建议「English / ไทย」）。"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "string",
+              "integer",
+              "decimal",
+              "amount"
+            ]
+          },
+          "required": {
+            "type": "boolean"
+          }
+        }
+      },
+      "TemplateItem": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "field",
+              "table"
+            ]
+          },
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "string",
+              "integer",
+              "decimal",
+              "amount"
+            ],
+            "description": "仅 field。"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "columns": {
+            "type": "array",
+            "description": "仅 table。",
+            "items": {
+              "$ref": "#/components/schemas/TemplateColumn"
+            }
+          }
+        }
+      },
+      "TemplateGroup": {
+        "type": "object",
+        "description": "模板分组；items 的顺序即界面与导出顺序。分组 / 字段 / 列的 description 为大模型提示，前端不必展示。",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TemplateItem"
+            }
+          }
+        }
+      },
+      "TemplateVersionSnapshot": {
+        "type": "object",
+        "properties": {
+          "template_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "template_version_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string",
+            "example": "system.tax_invoice"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "system",
+              "tenant"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "example": "Tax Invoice / ใบกำกับภาษี"
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TemplateGroup"
+            }
+          },
+          "is_current_version": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ENABLED",
+              "DISABLED"
+            ]
+          },
+          "deleted": {
+            "type": "boolean"
+          }
+        }
+      },
+      "TemplateMappingSummary": {
+        "type": "object",
+        "description": "一次「任务 + 模板版本」的映射尝试。",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "MATCHING",
+              "CONVERTING",
+              "READY",
+              "FAILED"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "AUTO",
+              "MANUAL"
+            ]
+          },
+          "template_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "template_version_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "template_version": {
+            "type": "integer",
+            "nullable": true
+          },
+          "template_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "match_score": {
+            "type": "number",
+            "nullable": true,
+            "description": "自动匹配得分 0~1；单候选直接选中或手动选择为 null。"
+          },
+          "low_score": {
+            "type": "boolean",
+            "description": "得分低于 TEMPLATE_LOW_SCORE_THRESHOLD（默认 0.7）时为 true，前端提示「匹配度较低，请核对模板」。"
+          },
+          "error_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "error_message": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "nullable": true
+          },
+          "finished_at": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "TemplateOption": {
+        "type": "object",
+        "properties": {
+          "template_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "template_version_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "template_version": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "system",
+              "tenant"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number",
+            "nullable": true,
+            "description": "最近一次自动匹配给出的得分；没有为 null。"
+          },
+          "low_score": {
+            "type": "boolean"
+          },
+          "recommended": {
+            "type": "boolean",
+            "description": "排序第一且有得分。"
+          },
+          "generated": {
+            "type": "boolean",
+            "description": "该模板版本已有 READY 映射（切换无需等待）。"
+          },
+          "ready_mapping_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "in_progress_mapping_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "is_current": {
+            "type": "boolean"
+          }
+        }
+      },
+      "TemplateOptions": {
+        "type": "object",
+        "properties": {
+          "raw_result_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "current_mapping_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "pending_mapping_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "max_mappings": {
+            "type": "integer",
+            "description": "每个任务最多映射次数（含失败）。"
+          },
+          "mapping_count": {
+            "type": "integer"
+          },
+          "templates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TemplateOption"
+            }
+          },
+          "mappings": {
+            "type": "array",
+            "description": "该任务 READY / FAILED 的映射（按创建时间升序）。",
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/TemplateMappingSummary"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "is_current": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "ApplyTemplateRequest": {
+        "type": "object",
+        "required": [
+          "expected_version"
+        ],
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "description": "客户端所见的当前版本号。"
+          },
+          "mapping_id": {
+            "type": "string",
+            "description": "切换到该任务一个 READY 映射；传了则忽略其余字段。"
+          },
+          "raw_result_id": {
+            "type": "string",
+            "description": "按模板套用时必填，取自 GET results 的 raw_result_id。"
+          },
+          "template_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "按模板套用时必填；使用该模板的当前版本。"
+          },
+          "force": {
+            "type": "boolean",
+            "default": false,
+            "description": "已有 READY 映射时仍重新生成。"
+          }
+        }
+      },
+      "UseGenericRequest": {
+        "type": "object",
+        "required": [
+          "expected_version"
+        ],
+        "properties": {
+          "expected_version": {
+            "type": "integer"
+          }
+        }
+      },
       "ExportCreateRequest": {
         "type": "object",
         "required": [
@@ -5048,7 +5895,8 @@
             "enum": [
               "XLSX",
               "CSV",
-              "TXT"
+              "TXT",
+              "JSON"
             ],
             "description": "大小写不敏感。"
           }
@@ -5073,7 +5921,8 @@
             "enum": [
               "XLSX",
               "CSV",
-              "TXT"
+              "TXT",
+              "JSON"
             ]
           },
           "status": {

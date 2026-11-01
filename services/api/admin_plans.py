@@ -206,15 +206,15 @@ def cmd_show(args) -> int:
 def cmd_approve(args) -> int:
     from auth import notify
     from models import _now
-    from plans import APPROVED_PERIOD_MONTHS
+    from plans import approved_period_months, default_plan
 
     valid_from, valid_to, months = _validate_period(args)
     application = _load_application(args.application_id)
     if application.status == "APPROVED":
         raise SystemExit(f"申请 {application.id} 已是 APPROVED，不重复审批")
     form = dict(application.form or {})
-    plan_code = form.get("plan_code") or "KINDER"
-    span = months if months is not None else APPROVED_PERIOD_MONTHS
+    plan_code = form.get("plan_code") or default_plan()["code"]
+    span = months if months is not None else approved_period_months(plan_code)
     period = (
         f"valid_to={valid_to}" if valid_to else f"{span} 个月"
     )
@@ -307,7 +307,9 @@ def build_parser() -> argparse.ArgumentParser:
     approve.add_argument("--application-id", type=int, required=True)
     approve.add_argument("--valid-from", default=None, help="起算日 YYYY-MM-DD（缺省接续当期到期日）")
     approve.add_argument("--valid-to", default=None, help="到期日 YYYY-MM-DD（缺省按 --months）")
-    approve.add_argument("--months", type=int, default=None, help="续期月数 1~120（缺省 12）")
+    approve.add_argument(
+        "--months", type=int, default=None, help="续期月数 1~120（缺省取该套餐配置的 approved_period_months）"
+    )
     approve.add_argument("--note", default="", help="审批备注（写入 review_note 与审计）")
     approve.add_argument("--yes", action="store_true", help="跳过二次确认")
     approve.set_defaults(handler=cmd_approve)

@@ -13,6 +13,7 @@ from routes.me import bp as me_bp
 from routes.ocr import ocr_bp
 from routes.plans import bp as plans_bp
 from routes.results import results_bp
+from routes.templates import templates_bp
 
 v1_bp = Blueprint("api_v1", __name__)
 
@@ -28,6 +29,7 @@ for bp in (
     files_bp,
     ocr_bp,
     results_bp,
+    templates_bp,
     exports_bp,
     applications_bp,
     companies_bp,

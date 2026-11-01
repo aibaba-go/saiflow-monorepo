@@ -3,8 +3,8 @@ doc_id: EPIC-06
 title: "EPIC-06 — 基础系统（账户、权限、配置、i18n）"
 type: epic
 status: active
-version: 1.7.2
-updated: 2026-10-29
+version: 1.8.0
+updated: 2026-11-01
 owner: Product Engineering
 priority: P0
 source: "PRD-001 §4.6"
@@ -17,7 +17,7 @@ related: [DM-User, DM-Role, DM-OperationLog, API-8]
 - **目标：** 提供每个其他 epic 都依赖的基础系统服务：身份、基于角色的访问控制、操作审计、多语言 UI 和本地配置。
 - **范围内：** 注册/登录、RBAC 权限、操作日志、语言切换（泰语/英语/中文）、基础参数配置、本地存储设置。
 - **主要参与者：** P-07 系统管理员（配置）；所有用户（登录/语言）。
-- **关键实体：** `DM-User`、`DM-Role`、`DM-OperationLog`、`DM-Settings`；租户与订阅相关表 `tenants`、`enterprises`、`subscriptions`、`plan_reminders`（见 [Data-Model §2.13.1](../../30-design/Data-Model.md)）。
+- **关键实体：** `DM-User`、`DM-Role`、`DM-OperationLog`、`DM-Settings`；租户与订阅相关表 `tenants`、`enterprises`、`subscriptions`、`plan_reminders`、`plans`（套餐配置）（见 [Data-Model §2.13.1](../../30-design/Data-Model.md)）。
 
 ## 2. 需求
 
@@ -34,13 +34,14 @@ related: [DM-User, DM-Role, DM-OperationLog, API-8]
 | FR-SYS-008 | 保留每位用户的偏好（语言、默认导出路径） | P1 | §4.6 | FR-SYS-001 | AC-FR-SYS-008-01 |
 | FR-SYS-010 | 启动以有效应用 Cookie 或游客会话进入主壳，不以残留 LIFF token 自动登录；游客可上传、识别、编辑核验草稿，显式登录后归集其数据 | P0 | 用户流程调整 2026-10-17/27 | FR-SYS-001 | AC-FR-SYS-010-01/02 |
 | FR-SYS-011 | 仅结果核验页 Continue 在确认前要求游客或未注册用户进入 auth 登录/注册；有 dirty 变更先保存 confirm:false，不跳订阅页；成功仅恢复 result（原已 COMPLETED 可 final），取消保留任务权限且不自动续接或确认；服务端 confirm:true 强制已注册 | P0 | 用户流程调整 2026-10-27 | FR-SYS-001, FR-SYS-010 | AC-FR-SYS-011-01/02 |
-| FR-SYS-012 | 每个租户（个人、游客、已认证企业）自动开通且只开通一个月 Kinder：个人自 `tenants.created_at` 起算，企业自 `enterprises.verified_at` 起算，未认证企业无订阅行为 `NONE`；到期即硬停，新建识别任务返回 `402 PLAN_EXPIRED`，历史任务与结果仍可查看；续费/升级由线下审批写入有效期后惰性生效 | P0 | 用户流程调整 2026-10-27；套餐到期调整 2026-10-28 | FR-SYS-011 | AC-FR-SYS-012-01/02/03/04/05 |
-| FR-SYS-013 | 唯一计量单位为 `OCR_PAGE` 每月页数：按泰国自然月实时统计该租户非 FAILED/CANCELLED 任务的页数，各档 KINDER 1,000 / STARTER 5,000 / INTERMEDIATE 10,000 / ADVANCE 100,000；没有 FREE 档位、没有赠送任务额度、没有额度流水表；订阅有效但页数用尽返回 `402 QUOTA_EXCEEDED`；游客首页不显示套餐横幅 | P0 | 用户流程调整 2026-10-27；套餐到期调整 2026-10-28 | FR-SYS-012 | AC-FR-SYS-013-01/02/03/04 |
+| FR-SYS-012 | 每个租户（个人、游客、已认证企业）自动开通且只开通一次默认套餐（按 FR-SYS-019 配置，当前为 Kinder、1 个月）：个人自 `tenants.created_at` 起算，企业自 `enterprises.verified_at` 起算，未认证企业无订阅行为 `NONE`；到期即硬停，新建识别任务返回 `402 PLAN_EXPIRED`，历史任务与结果仍可查看；续费/升级由线下审批写入有效期后惰性生效 | P0 | 用户流程调整 2026-10-27；套餐到期调整 2026-10-28 | FR-SYS-011 | AC-FR-SYS-012-01/02/03/04/05 |
+| FR-SYS-013 | 唯一计量单位为 `OCR_PAGE` 每月页数：按泰国自然月实时统计该租户非 FAILED/CANCELLED 任务的页数，各档月页数按 FR-SYS-019 套餐配置实时读取（当前 KINDER 1,000 / STARTER 5,000 / INTERMEDIATE 10,000 / ADVANCE 100,000）；没有 FREE 档位、没有赠送任务额度、没有额度流水表；订阅有效但页数用尽返回 `402 QUOTA_EXCEEDED`；游客首页不显示套餐横幅 | P0 | 用户流程调整 2026-10-27；套餐到期调整 2026-10-28 | FR-SYS-012 | AC-FR-SYS-013-01/02/03/04 |
 | FR-SYS-014 | 通过 LINE 注册：仅 route=auth 且 needsRegistration 时显示注册框，首页/上传/开始 OCR 不弹；手机号默认取 LINE 返回值，可编辑保存或手填且可选；邮箱默认取服务端验证的 LINE token（email scope/用户授权），可编辑且必填，须凭 TLS SMTP 实发验证码确认；昵称、头像取 LINE 且可改，校验后完成注册 | P0 | 用户流程调整 2026-10-17/18/27 | FR-SYS-001 | AC-FR-SYS-014-01/02/03/04/05 |
 | FR-SYS-015 | 个人中心（My）可修改用户昵称、头像与手机号（手机号可清空，按格式校验，游客不可修改） | P0 | 用户流程调整 2026-10-17；资料调整 2026-10-28 | FR-SYS-014 | AC-FR-SYS-015-01/02 |
 | FR-SYS-016 | 个人中心（My）可更换邮箱：输入新邮箱，系统向新邮箱发送验证码，凭验证码确认更换 | P0 | 用户流程调整 2026-10-17 | FR-SYS-014 | AC-FR-SYS-016-01/02 |
 | FR-SYS-017 | 租户（个人 / 已认证企业）可切换且刷新后保持；各租户的任务数据、订阅与月页计量相互隔离，企业租户的数据、订阅与月页由该企业全体有效成员共享 | P0 | 用户流程调整 2026-10-18；归属调整 2026-10-28 | FR-SYS-002, FR-SYS-012 | AC-FR-SYS-017-01/02/03 |
-| FR-SYS-018 | 在到期前 7/3/1 天、到期当天与到期后各发一次站内通知（并在有邮箱的已注册用户上附带邮件），同一租户同一周期同一节点不重复、错过的节点不回补，游客不提醒；通知中心可查询未读数并将通知标记已读 | P0 | 套餐到期调整 2026-10-28 | FR-SYS-012 | AC-FR-SYS-018-01/02/03 |
+| FR-SYS-018 | 在到期前 7/3/1 天、到期当天与到期后各发一次站内通知（并在有邮箱的已注册用户上附带邮件），同一租户同一周期同一节点不重复、错过的节点不回补，游客不提醒；通知中心只显示账户变动类通知（套餐到期/已到期、升级申请提交/批准/拒绝、个人账户开通、公司账户开通、加入公司），可查询未读数并将通知标记已读；OCR 任务完成不发通知 | P0 | 套餐到期调整 2026-10-28；通知收敛 2026-10-31 | FR-SYS-012 | AC-FR-SYS-018-01/02/03/04/05 |
+| FR-SYS-019 | 套餐目录为后台配置（`plans` 表 + `manage_plans.py` 命令行维护，PC 管理端延后）：每个套餐的 code、档位顺序、启用/停用、泰英双语名称/价格文案/特性、月/年价、每月页数、席位、卡片主题，以及默认开通套餐、试用月数与审批缺省续期月数均可配置；修改对所有租户（含存量订阅）在缓存窗口（≤60 秒）内生效，不做快照；停用套餐不在目录展示、不可新申请，但存量订阅仍按其配置计量 | P0 | 用户需求 2026-11-01 | FR-SYS-012, FR-SYS-013 | AC-FR-SYS-019-01/02/03/04/05 |
 
 ## 3. 角色与权限（RBAC）
 
@@ -85,10 +86,10 @@ related: [DM-User, DM-Role, DM-OperationLog, API-8]
   - 指向他人的个人租户 → `403 PERMISSION_DENIED`；本人个人租户非 `ACTIVE` → `403 ACCOUNT_DISABLED`；
   - 成员关系非 `ACTIVE`、企业非 `VERIFIED` 或租户非 `ACTIVE` → `403 ENTERPRISE_ACCESS_REVOKED` / `error.enterprise_access_revoked`。
 - **默认开通与到期硬停（FR-SYS-012）：** 每个租户在 `subscriptions` 中最多一行（`tenant_id` 唯一约束即幂等保证）。
-  - 个人租户（含游客）在首次登录/建立游客会话时自 `tenants.created_at` 起开通一个月 `KINDER`，`source=DEFAULT`。企业租户在 `enterprises.status` 首次被读到为 `VERIFIED` 时由服务端补填 `verified_at`，并自该时刻起开通一个月 `KINDER`；未认证企业没有订阅行，订阅状态为 `NONE`。
+  - 个人租户（含游客）在首次登录/建立游客会话时自 `tenants.created_at` 起开通默认套餐（FR-SYS-019 的 `is_default`，当前 `KINDER`），时长为其 `trial_months`（当前 1 个月），`source=DEFAULT`。企业租户在 `enterprises.status` 首次被读到为 `VERIFIED` 时由服务端补填 `verified_at`，并自该时刻起同样开通默认套餐；未认证企业没有订阅行，订阅状态为 `NONE`。
   - 有效期按自然月推进并做月末夹取：2026-01-31 + 1 个月 = 2026-02-28。`days_remaining` 按泰国时区（UTC+7）日历日计算，`0` = 当天到期，负数 = 已过期。
   - 到期即硬停，没有 Free 档位或赠送次数兜底：`expires_at` 之后新建或重跑识别任务返回 `402 PAYMENT_REQUIRED` / `PLAN_EXPIRED` / `plan.expired`；查询历史任务、结果与导出不受影响。
-  - 续费与升级完全线下：`PLAN_UPGRADE` 申请（`applications`，`target_tenant_id` 指向目标租户，`form` 含 `plan_code`、`plan_name`、`tenant_id`、`tenant_type`、`valid_from`、`valid_to`）由运营审批；批准后写入有效期（也可用 `period_months`，1~120，缺省 12），读取订阅时据 `application_id` **惰性同步且同一申请只生效一次**。未指定 `valid_from` 时新周期自 `max(now, 当前 expires_at)` 起算，即未到期时顺延而非截断。
+  - 续费与升级完全线下：`PLAN_UPGRADE` 申请（`applications`，`target_tenant_id` 指向目标租户，`form` 含 `plan_code`、`plan_name`、`tenant_id`、`tenant_type`、`valid_from`、`valid_to`）由运营审批；批准后写入有效期（也可用 `period_months`，1~120，缺省取目标套餐配置的 `approved_period_months`，当前均为 12），读取订阅时据 `application_id` **惰性同步且同一申请只生效一次**。未指定 `valid_from` 时新周期自 `max(now, 当前 expires_at)` 起算，即未到期时顺延而非截断。
   - 申请约束：存在处理中（`SUBMITTED` / `UNDER_REVIEW` / `NEEDS_INFO`）申请时再提交返回 `409 STATE_CONFLICT` / `plan.application_pending`；订阅为 `ACTIVE` 时目标档位低于当前档位返回 `409 STATE_CONFLICT` / `plan.not_upgrade`，**同档续费允许**；订阅为 `EXPIRED` 或 `NONE` 时任意档位均可申请。企业租户仅 `OWNER` 可提交（否则 `403 PERMISSION_DENIED` / `plan.enterprise_owner_only`），游客提交返回 `401`。
 - **确认前订阅分流（FR-SYS-012）：** 按**任务所属租户**取得订阅状态，而非其他租户。`ACTIVE`（`DEFAULT` 或 `APPROVED`，含另有独立 `pending` 申请）允许已注册用户在结果页显式 Continue，经核验校验后提交 `confirm: true`；成功后才锁定结果、记录 `completed_at` 并进入 `final`。
   - `NONE`（企业未认证）或 `EXPIRED`：不确认，进入 `plans`，默认选中 `Kinder`；已有处理中申请时进入 `plan-pending` 显示申请与时间，可返回首页。游客或未注册者优先按 FR-SYS-011 进入 `auth`，不能用 `NONE`/`EXPIRED` 替代注册门禁。
@@ -96,19 +97,28 @@ related: [DM-User, DM-Role, DM-OperationLog, API-8]
   - 登录/注册或套餐恢复不自动确认；未完成 `VERIFYING` 或 legacy `VERIFIED` 返回 `result`，只有原已 `COMPLETED` 可 `final`。历史 `VERIFIED` 保留兼容，不批量转换，已注册且任务所属租户订阅为 `ACTIVE`（含默认 Kinder）的用户可显式继续完成。
   - 提交申请后提示“您的申请已经收到，我们会尽快联系您”，确认提示返回首页，不等于核验确认；提交记录审计 `plan_application.submit` 与站内通知 `PLAN_UPGRADE_SUBMITTED`。
 - **套餐展示与月页计量（FR-SYS-013）：** 唯一计量单位为 `OCR_PAGE`（`plan.metering` 恒为 `OCR_PAGE`）；不存在 FREE 档位、赠送任务额度（原首登 1,000 次与企业认证 1,000 次均已取消）与额度流水表。
-  - 月页用量按泰国时区（`Asia/Bangkok`）自然月实时统计该租户 `ocr_jobs.page_count` 之和，`FAILED` 与 `CANCELLED` 的任务不计——因此取消任务天然不计入，没有返还步骤。各档每月页数：Kinder 1,000 / Starter 5,000 / Intermediate 10,000 / Advance 100,000。
+  - 月页用量按泰国时区（`Asia/Bangkok`）自然月实时统计该租户 `ocr_jobs.page_count` 之和，`FAILED` 与 `CANCELLED` 的任务不计——因此取消任务天然不计入，没有返还步骤。各档每月页数取自 FR-SYS-019 套餐配置（当前 Kinder 1,000 / Starter 5,000 / Intermediate 10,000 / Advance 100,000），修改后存量订阅立即按新值计量。
   - 展示 “套餐名 · 剩余 / 每月页数 pages left this month”，不显示 Free 或 Sign-in bonus；`is_paid=false`（默认 Kinder）不代表无权益。订阅非 `ACTIVE` 时剩余页数按 0 展示。
   - 新建或重跑识别任务时先判订阅再判页数：非 `ACTIVE` → `402 PLAN_EXPIRED` / `plan.expired`；`ACTIVE` 但本月页数已用尽 → `402 QUOTA_EXCEEDED` / `quota.exceeded`。字段语义见 Data-Model §2.13.1。
   - 企业成员仅有两种角色：所有者 `OWNER` 与普通成员 `MEMBER`。企业租户的套餐申请仅 `OWNER` 可提交；`MEMBER` 可查看企业当前套餐与处理中申请，套餐页显示“仅公司所有者可申请升级”提示，升级按钮不可用，服务端拒绝其提交（`403 PERMISSION_DENIED`，`plan.enterprise_owner_only`）。
   - 套餐页（已登录）：当前套餐标记“Current plan”；可申请的档位显示 `Upgrade`，点击即提交升级申请，提示“您的申请已经收到，我们会尽快联系您”，确认后返回首页；订阅 `ACTIVE` 时更低档位不提供操作；有处理中申请时该套餐显示 `Upgrade in progress` 并以橙色描边与 `IN REVIEW` 角标突出，其他升级按钮禁用；页面最顶部（当前套餐卡之上）显示醒目的橙色处理中卡片（图标、标题 `Upgrade to {套餐名} in progress`、销售联系说明与提交时间）。
-  - 档位顺序 `Kinder < Starter < Intermediate < Advance`；订阅 `ACTIVE` 时降档申请被拒（`409 STATE_CONFLICT`，`plan.not_upgrade`），同档续费允许；`EXPIRED` / `NONE` 时任意档位可申请。后台批准后按写入的有效期切换。
+  - 档位顺序按套餐配置的 `sort_order`（当前 `Kinder < Starter < Intermediate < Advance`）；订阅 `ACTIVE` 时降档申请被拒（`409 STATE_CONFLICT`，`plan.not_upgrade`），同档续费允许；`EXPIRED` / `NONE` 时任意档位可申请。后台批准后按写入的有效期切换。
   - 提交任一套餐申请（订阅计划检查页的 `Upgrade to {套餐名}` 或套餐页的 `Upgrade`）前，必须先弹出确认框（显示目标套餐，可取消）；取消不产生申请，确认后才提交。
   - `GET /api/v1/plans` 只返回目录，不接受 `tenant_id`；租户维度的订阅与页数分别由 `GET /api/v1/me/subscription?tenant_id` 与 `GET /api/v1/me/quota` 返回。未登录（游客）首页不显示套餐横幅；游客的套餐页不显示当前套餐卡，套餐按钮仅为线下联系说明且不可提交。
+- **套餐配置（FR-SYS-019）：** 套餐目录不再硬编码，存于 `plans` 表（字段见 [Data-Model §2.13.1](../../30-design/Data-Model.md)），由 `services/api/manage_plans.py` 命令行维护；PC 管理端（REST 管理接口与界面）延后，不在本期范围。
+  - 可配置项：`code`（`^[A-Z][A-Z0-9_]{1,31}$`，创建后不改）、`sort_order`（档位顺序，唯一）、`status`（`ENABLED`/`DISABLED`）、`name` / `price_display` / `features`（`{en, th}` 双语，en 与 th 特性条数一致）、`monthly_thb` / `yearly_thb`（整数或空，空=无标价“Contact us”）、`quota_pages_per_month`、`seats`、`theme`（`DEFAULT`/`DARK` 卡片主题）、`is_default`（默认开通套餐，有且仅有一个且须启用）、`trial_months`（默认开通时长，1~120）、`approved_period_months`（审批未写有效期时的缺省续期月数，1~120）。
+  - 生效：后端进程缓存 60 秒，修改后最迟一个缓存窗口内对所有租户生效，包括存量订阅（不做快照）；`subscriptions.plan_code` 只是逻辑引用。已开通订阅的起止日期不因修改 `trial_months` 而改变。
+  - 停用：`DISABLED` 套餐不出现在 `GET /api/v1/plans`，新申请返回 `400 INVALID_ARGUMENT`；已订阅该套餐的租户仍按其配置计量与显示。默认套餐不可停用。套餐只停用不删除；万一订阅引用了不存在的 code，按默认套餐计量并记警告日志。
+  - 初始化：后端启动时 `plans` 表为空则从 `plans_seed.json` 写入（内容与原硬编码目录一致）；数据库读取失败时退回种子文件，保证目录可用。
+  - 维护：每次写入先校验合并后的完整目录（任一错误则全部列出并退出、不写库），默认二次确认（`--yes` 跳过）、支持 `--dry-run`；写操作记审计（`plan_config.import` / `plan_config.update` / `plan_config.status` / `plan_config.default` / `plan_config.seed`，`user_id` 为空，`detail.source = "cli"`）。
+  - 展示：`GET /api/v1/plans` 每项增加 `theme`、`is_default` 与 `i18n.{en,th}.{name, price_display, features}`；`GET /api/v1/me/quota` 的 `plan` 增加 `name_i18n`。LINE Mini App 按当前语言显示，缺失时回退英文；订阅计划检查页预选 `is_default` 套餐；展示文案已含年价时不再重复年价副标题。
 - **到期提醒与通知中心（FR-SYS-018）：** 提醒节点为 `D7` / `D3` / `D1` / `D0` / `EXPIRED`（到期前 7/3/1 天、到期当天、已到期），按泰国时区日历日判定。
   - 幂等：`plan_reminders` 以 `(tenant_id, period_end, stage)` 唯一约束作为幂等键，同一周期同一节点只发一次；续费后 `period_end` 变化，新周期重新按节点提醒。只在命中节点的当天写入，**不回补**已错过的节点（例如 D5 当天扫描不补发 D7）。
   - 投递：站内通知先落库提交（类型 `PLAN_EXPIRING` 用于 D7/D3/D1/D0，`PLAN_EXPIRED` 用于到期后），随后尽力发送邮件，邮件结果只回写 `plan_reminders.email_sent`，发信失败不影响站内通知。仅对有邮箱且已完成注册的用户发邮件；游客不产生提醒。
   - 收件人：个人租户为其所属用户；企业租户为 `ACTIVE` 的 `OWNER`，若没有 `OWNER` 则取最早的 `ACTIVE` 成员兜底。
   - 执行位置：由 OCR worker 进程内的低频扫描驱动（约每 30 分钟检查一次，每个泰国日历日只扫一次），受 `PLAN_REMINDERS_ENABLED` 开关控制；不额外部署调度服务，也不提供运营界面或 SLA 承诺。
+  - 通知范围（2026-10-31 收敛）：通知中心只承载**账户变动类**通知，类型白名单为 `PLAN_EXPIRING`、`PLAN_EXPIRED`（欠费/到期）、`PLAN_UPGRADE_SUBMITTED` / `PLAN_UPGRADE_APPROVED` / `PLAN_UPGRADE_REJECTED`（升级）、`ACCOUNT_ACTIVATED`（个人账户开通）、`COMPANY_ACTIVATED`（公司账户开通）、`MEMBERSHIP_ACTIVE`（个人加入公司）。OCR 任务完成不再产生通知，任务进度只看历史列表的阶段（FR-VERIFY-017）；历史遗留的 `OCR_DONE` / `INFO` 行保留在库中，但列表、未读数与标记已读都不包含它们。
+  - 开通通知：租户首次写入订阅行时（`ensure_subscription` 新建行，与订阅同一事务提交）给收件人发一条站内通知，无邮件。个人租户发 `ACCOUNT_ACTIVATED`，游客不发；企业租户在首次看到 `VERIFIED` 并开通时发 `COMPANY_ACTIVATED`，收件人与到期提醒相同（ACTIVE OWNER，无则最早 ACTIVE 成员），正文公司名取 `enterprises.legal_name`。标题与正文按收件人语言 th/en 生成（其他语言用 en），包含套餐名与泰国时区到期日。已有订阅不补发，重复读取订阅也不重复发送。
   - 通知中心：`GET /api/v1/me/notifications` 返回 `{"unread_count": n, "items": [...]}`；`POST /api/v1/me/notifications/read` 以 `{"ids": [整数,...]}` 将指定通知标记已读，`ids` 为空数组或省略表示全部标记，重复调用幂等，只影响本人的未读行，返回 `{"updated": n, "unread_count": n}`。`ids` 不是数组或含非整数（含布尔值）元素时返回 `400 INVALID_ARGUMENT` 且 `field_errors` 指向 `ids`。
 - **LINE 注册信息录入（FR-SYS-014）：** 线上注册仅通过真实 LINE 联合认证完成；本地模拟身份仅来自 FR-SYS-001 规定的独立 Developer sign-in。注册框只在 `route=auth` 且 `needsRegistration`（已认证非 guest、`users.registered_at` 为空）时显示；启动与进入主壳、首页、上传和开始 OCR 均不强制注册。结果 Continue 按 FR-SYS-011 进入 auth 后才弹注册框：
   - 手机号（可选）：默认使用服务端验证的 LINE 返回值（若提供 `phone_number`）；注册时可编辑并保存用户提交的值。LINE 不保证提供手机号，未提供时可手填，也可留空；不得将手机号设为必填。注册后仍可在个人中心修改（FR-SYS-015）。
@@ -401,6 +411,25 @@ Feature: EPIC-06 基础系统
     Given ids 中包含其他用户的通知 id
     Then 这些 id 被忽略，只影响本人的未读通知
 
+  Scenario: AC-FR-SYS-018-04 通知中心只显示账户变动类通知
+    Given 用户名下同时有账户变动类通知（如 PLAN_EXPIRING、MEMBERSHIP_ACTIVE）与历史 OCR_DONE / INFO 通知
+    When 调用 GET /api/v1/me/notifications
+    Then items 只包含账户变动类通知，unread_count 只统计其中的未读行
+    When 以空数组调用 POST /api/v1/me/notifications/read
+    Then 只标记账户变动类通知，OCR_DONE / INFO 行不被修改
+    When OCR 任务成功或失败结束
+    Then 不产生任何站内通知
+
+  Scenario: AC-FR-SYS-018-05 账户与公司首次开通通知
+    Given 已注册用户的个人租户首次开通默认 Kinder
+    Then 该用户收到一条 ACCOUNT_ACTIVATED 通知，按其语言（th/en）显示套餐名与泰国时区到期日
+    Given 企业租户首次被看到为 VERIFIED 并开通订阅
+    Then 该企业的 ACTIVE OWNER 收到一条 COMPANY_ACTIVATED 通知，正文含公司法定名称
+    When 再次读取订阅状态
+    Then 不重复发送
+    Given 游客租户开通、企业未认证，或租户已有订阅行
+    Then 不产生开通通知
+
   Scenario: AC-FR-SYS-014-01 仅 auth 中 LINE 注册信息录入
     Given 尚未注册的 LINE 账号完成服务端验证的真实认证，渠道启用 email scope 且用户授权并返回 email
     When route=auth 且 needsRegistration
@@ -516,16 +545,52 @@ Feature: EPIC-06 基础系统
     And 该企业的 MEMBER 在套餐页看到同一处理中申请，但不能提交（403 plan.enterprise_owner_only）
     When 后台批准该申请并写入有效期
     Then 下次读取订阅时惰性同步为 APPROVED Kinder，企业全体 ACTIVE 成员共享该订阅与月页额，个人租户独立计量不受影响
+
+  Scenario: AC-FR-SYS-019-01 默认开通套餐与试用时长可配置
+    Given 套餐配置将 STARTER 设为默认套餐、trial_months 为 2
+    When 新个人租户首次开通订阅
+    Then 订阅为 STARTER、source=DEFAULT，有效期为开通时刻起 2 个月
+    And 已有订阅行的租户起止日期不变
+
+  Scenario: AC-FR-SYS-019-02 修改月页数对存量订阅立即生效
+    Given 租户已订阅 KINDER（每月 1,000 页）
+    When 运维用 manage_plans.py 将 KINDER 每月页数改为 2,000 且缓存窗口已过
+    Then GET /api/v1/me/quota 的 monthly_total 为 2,000，新建识别任务按 2,000 页校验
+
+  Scenario: AC-FR-SYS-019-03 停用套餐
+    Given INTERMEDIATE 被设为 DISABLED
+    Then GET /api/v1/plans 不再返回 INTERMEDIATE，申请 INTERMEDIATE 返回 400 INVALID_ARGUMENT
+    And 已订阅 INTERMEDIATE 的租户仍按其配置计量
+    When 尝试停用默认套餐或把停用套餐设为默认
+    Then 命令拒绝执行，不写库
+
+  Scenario: AC-FR-SYS-019-04 泰英双语展示与审批缺省续期
+    Given 用户界面语言为泰语
+    Then 套餐页的名称、价格文案与特性显示 th 配置，缺失时回退 en；当前套餐卡与首页横幅使用 name_i18n
+    And 账户开通通知按收件人语言使用对应套餐名
+    Given 某套餐 approved_period_months 为 6，批准申请未写 valid_to 与 period_months
+    Then 惰性同步后新周期为 6 个月
+
+  Scenario: AC-FR-SYS-019-05 命令行维护的校验、确认与审计
+    Given 导入文件存在未知字段、缺少 th 文案、en/th 特性条数不一致、code 或 sort_order 重复、或默认套餐不唯一
+    When 执行 manage_plans.py validate 或 import
+    Then 列出全部错误并以退出码 2 结束，不连库（validate）或不写库（import）
+    When 合法导入并确认
+    Then 按 code 新增或更新（文件外的套餐不动），写审计 plan_config.import，缓存失效
+    When 后端启动时 plans 表为空
+    Then 自动从 plans_seed.json 写入与原目录一致的 4 个套餐；表非空时不覆盖
 ```
 
 ## 6. 可追溯性
 | FR ID | 验证方式 | 设计引用 |
 |-------|----------|----------|
-| FR-SYS-001..018 | AC-FR-SYS-*（含 AC-FR-SYS-001-04/05/06、AC-FR-SYS-011-02、AC-FR-SYS-012-04/05、AC-FR-SYS-014-04/05、AC-FR-SYS-015-02、AC-FR-SYS-018-01/02/03） | `DM-User`、`DM-Role`、`DM-OperationLog`、`DM-Settings`、`API-8`；FR-SYS-001/014：[Architecture §6](../../30-design/Architecture.md#6-安全性与可靠性)；FR-SYS-012/013/017：`GET /api/v1/me/subscription?tenant_id`、`POST /api/v1/me/plan-applications`（body 可选 `tenant_id`）、`GET /api/v1/plans`（仅目录）、`GET /api/v1/me/quota`、`GET /api/v1/me/tenants`、`GET /api/v1/ocr/jobs?tenant_id`、`tenants` / `subscriptions` 表、`applications.target_tenant_id`、`enterprises.tenant_id` / `verified_at`（Data-Model §2.13.1）；FR-SYS-018：`plan_reminders` 表、`GET /api/v1/me/notifications`、`POST /api/v1/me/notifications/read`、`PLAN_REMINDERS_ENABLED`、[Architecture §4](../../30-design/Architecture.md)；FR-SYS-014/015/016：`POST /api/v1/me/registration`、`PATCH /api/v1/me`（`display_name`/`phone`/`language`/`avatar_url`）、`POST /api/v1/me/email/code`、`POST /api/v1/me/email`、`DM-User`（`phone`/`email`/`registered_at`）、`email_verification_codes` |
+| FR-SYS-001..019 | AC-FR-SYS-*（含 AC-FR-SYS-001-04/05/06、AC-FR-SYS-011-02、AC-FR-SYS-012-04/05、AC-FR-SYS-014-04/05、AC-FR-SYS-015-02、AC-FR-SYS-018-01/02/03） | `DM-User`、`DM-Role`、`DM-OperationLog`、`DM-Settings`、`API-8`；FR-SYS-001/014：[Architecture §6](../../30-design/Architecture.md#6-安全性与可靠性)；FR-SYS-012/013/017：`GET /api/v1/me/subscription?tenant_id`、`POST /api/v1/me/plan-applications`（body 可选 `tenant_id`）、`GET /api/v1/plans`（仅目录）、`GET /api/v1/me/quota`、`GET /api/v1/me/tenants`、`GET /api/v1/ocr/jobs?tenant_id`、`tenants` / `subscriptions` 表、`applications.target_tenant_id`、`enterprises.tenant_id` / `verified_at`（Data-Model §2.13.1）；FR-SYS-019：`plans` 表、`plans_seed.json`、`services/api/manage_plans.py`、`GET /api/v1/plans`（`theme`/`is_default`/`i18n`）、`GET /api/v1/me/quota`（`plan.name_i18n`）；FR-SYS-018：`plan_reminders` 表、`GET /api/v1/me/notifications`、`POST /api/v1/me/notifications/read`、`PLAN_REMINDERS_ENABLED`、[Architecture §4](../../30-design/Architecture.md)；FR-SYS-014/015/016：`POST /api/v1/me/registration`、`PATCH /api/v1/me`（`display_name`/`phone`/`language`/`avatar_url`）、`POST /api/v1/me/email/code`、`POST /api/v1/me/email`、`DM-User`（`phone`/`email`/`registered_at`）、`email_verification_codes` |
 
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.8.0 | 2026-11-01 | Product Engineering | 新增 FR-SYS-019：套餐目录改为 `plans` 表配置 + `manage_plans.py` 命令行维护（PC 管理端延后）；名称/价格/特性泰英双语，月页数/席位/价格/主题/档位/启停及默认套餐、试用月数、审批缺省续期月数均可配置，修改对存量订阅即时生效（≤60 秒缓存）；FR-SYS-012/013 的 Kinder 与各档页数改为引用配置；新增 AC-FR-SYS-019-01..05；后端 863 项隔离测试、前端类型检查与构建通过，2026-11-01 正式发布：后端 saiflow-api-00056-ril、前端 saiflow-line-mini-00048-max（bundle index-SFvaHz8q.js）no-traffic 部署→tag 核验 /api/health 200、未登录接口 401、bundle 哈希一致→只读核验共享库自动建表并播种 4 个套餐（属主 saiflow_api，与种子一致）→手动切 100%，环境变量（22 项）与并发 12 与上一版一致；未建游客会话、未用真实账号做端到端核验 |
+| 1.7.3 | 2026-10-31 | Product Engineering | FR-SYS-018：通知中心只显示账户变动类通知（8 类白名单，新增个人账户开通 ACCOUNT_ACTIVATED、公司账户开通 COMPANY_ACTIVATED）；OCR 完成不再通知，历史 OCR_DONE/INFO 不返回不计未读；新增 AC-FR-SYS-018-04/05；后端 831 项隔离测试通过 |
 | 1.7.2 | 2026-10-29 | Product Engineering | FR-SYS-001/011：LINE 内无 token 不调用外部 OAuth，保持一次恢复标记；外部 OAuth 仅已登记 Endpoint 同源/路径下可用，不覆盖 redirectUri，不在 Cloud Run 别名域名启动跨源 PKCE；23 项源码检查通过，不以桌面授权入口代替真实手机验收 |
 | 1.7.1 | 2026-10-28 | Product Engineering | FR-SYS-001/011：LIFF 20 秒超时、安全失败分类、显式按钮一次官方入口重开（同一 sessionStorage 上下文）、保留意图/任务、不转发凭据与不回退 dev；取消 SDK 等待失效与迟到结果保护；新增 AC-001-07，真实手机 WebView/授权另验 |
 | 1.7.0 | 2026-10-28 | Product Engineering | 归属改为单一 `tenant_id`（`tenants` / `enterprises.tenant_id` / `applications.target_tenant_id`，保留 `error.invalid_workspace`、`error.enterprise_access_revoked` 等旧 message_key）；重写 FR-SYS-012（每租户只开通一个月 Kinder：个人自 `tenants.created_at`、企业自 `enterprises.verified_at`，未认证为 NONE，到期硬停 402 `plan.expired`、历史仍可读，线下审批写有效期并惰性顺延、同档续费允许、降档 409）与 FR-SYS-013（唯一计量 `OCR_PAGE`，按泰国自然月实时统计 `ocr_jobs.page_count`，FAILED/CANCELLED 不计，页数用尽 402 `quota.exceeded`；删除 FREE 档、赠送额度、额度流水与 `free_tasks`/`paid_pages`）；FR-SYS-015 手机号改为个人中心可改可清空（原「只读」表述全部作废）；FR-SYS-017 改为按租户隔离；新增 FR-SYS-018 到期提醒（D7/D3/D1/D0/EXPIRED，`uq_plan_reminder_stage` 幂等、不回补、游客不提醒、worker 内低频扫描、`PLAN_REMINDERS_ENABLED`）与通知中心标记已读；新增 AC-FR-SYS-012-04/05、015-02、018-01/02/03 并改写 012/013/014-01/014-03/017 相关 AC。本次为文档与 OpenAPI 契约对齐，未运行任何测试 |

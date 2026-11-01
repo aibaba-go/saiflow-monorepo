@@ -14,6 +14,7 @@ import {
   currentTenant,
   currentTenantId,
   isAuthenticated,
+  jobRoute,
   navigate,
   quotaForTenant,
   refreshQuota,
@@ -25,7 +26,7 @@ import BrandLoading from '../components/BrandLoading.vue';
 import JobListItem from '../components/JobListItem.vue';
 import NotificationDialog from '../components/NotificationDialog.vue';
 
-const { t: tt, d } = useT();
+const { t: tt, d, locale } = useT();
 
 const recentJobs = ref<JobSummary[]>([]);
 const loading = ref(true);
@@ -163,9 +164,7 @@ async function submitUrl() {
 }
 
 function openJob(job: JobSummary) {
-  const route =
-    job.stage === 'OCR_PROCESSING' ? 'processing' : job.stage === 'COMPLETED' ? 'final' : 'result';
-  navigate(route, { jobId: job.id });
+  navigate(jobRoute(job.stage), { jobId: job.id });
 }
 
 // 隐藏 input 由卡片点击触发
@@ -252,7 +251,7 @@ function pick(kind: 'camera' | 'photos' | 'files') {
         <div class="quota-body">
           <div class="quota-text">
             {{ tt('home.quotaPages', {
-              plan: quotaView.plan.name || tt('sub.notActive'),
+              plan: quotaView.plan.name_i18n?.[locale] || quotaView.plan.name || tt('sub.notActive'),
               left: quotaView.pages.remaining.toLocaleString('en-US'),
               total: quotaView.pages.monthly_total.toLocaleString('en-US'),
             }) }}

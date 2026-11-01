@@ -2,8 +2,9 @@
 
 覆盖：users / sessions / tenants / enterprises / memberships / applications /
 invitations / files（含 upload_sessions 生命周期）/ ocr_jobs /
-result_versions / page_results / exports / subscriptions / plan_reminders /
-notifications / audit_events / data_requests / review_sync_cursors。
+result_versions / page_results / exports / subscriptions / plan_reminders / plans /
+notifications / audit_events / data_requests / review_sync_cursors /
+document_templates / document_template_versions / ocr_raw_results / template_mappings。
 大型结果 JSON 存 page_results.tables/text/fields（PostgreSQL JSON 列），
 原件字节存私有存储目录，库中只保存引用与索引。
 表/字段说明写在 comment=，是数据库 COMMENT 的唯一来源。
@@ -16,6 +17,8 @@ from __future__ import annotations
 import uuid
 
 from datetime import datetime, timezone
+
+from sqlalchemy import func, text
 
 import avatars
 from extensions import db
@@ -212,7 +215,7 @@ class Enterprise(db.Model, TimestampMixin):
     )
     verified_at = db.Column(
         db.DateTime, nullable=True,
-        comment="认证通过时间（UTC）；企业默认 Kinder 一个月自此起算，人工改 status 后由服务端补填",
+        comment="认证通过时间（UTC）；企业默认套餐自此起算，人工改 status 后由服务端补填",
     )
     external_ref = db.Column(db.String(64), nullable=False, default="", comment="外部系统引用号（预留）")
     policy_version = db.Column(db.Integer, nullable=False, default=1, comment="企业策略版本号（预留）")
@@ -426,23 +429,34 @@ class OcrJob(db.Model, TimestampMixin):
         db.DateTime, nullable=True,
         comment="已注册用户确认结果的时间（最终完成）；游客/未注册用户确认后为空（数据已验证）",
     )
+    # 模板映射指针（FR-VERIFY-018）：不加外键，避免 ocr_jobs ↔ template_mappings 循环依赖
+    current_mapping_id = db.Column(
+        db.String(36), nullable=True,
+        comment="当前结果版本所属的模板映射 → template_mappings.id；NULL=通用结果（不套用模板）",
+    )
+    pending_mapping_id = db.Column(
+        db.String(36), nullable=True,
+        comment="用户最近一次请求、尚未完成的模板映射 → template_mappings.id；NULL=无",
+    )
 
     def stage(self) -> str:
-        """流程阶段：OCR 处理中/失败 → 数据验证中 → 数据已验证（未注册时确认）/ 最终完成。"""
+        """流程阶段：OCR 处理中/失败 → 模板匹配中 → 数据验证中 → 数据已验证（未注册时确认）/ 最终完成。"""
         if self.status in ("FAILED", "CANCELLED"):
             return "OCR_FAILED"
         if self.status not in ("SUCCEEDED", "PARTIAL_SUCCESS"):
             return "OCR_PROCESSING"
         if self.review_status != "CONFIRMED":
-            return "VERIFYING"
+            # 映射结束（READY/FAILED/中断回收）时 pending_mapping_id 必被清空，非空即仍在匹配/转换
+            return "TEMPLATE_MATCHING" if self.pending_mapping_id else "VERIFYING"
         return "COMPLETED" if self.completed_at else "VERIFIED"
 
-    def to_summary(self, file_name: str = "") -> dict:
+    def to_summary(self, file_name: str = "", template_name: str | None = None) -> dict:
         return {
             "id": self.id,
             "tenant_id": self.tenant_id,
             "file_id": self.file_id,
             "file_name": file_name,
+            "template_name": template_name,  # 当前结果所属模板的显示名称；通用结果为 None
             "status": self.status,
             "progress": self.progress,
             "page_count": self.page_count,
@@ -466,7 +480,12 @@ class ResultVersion(db.Model):
     __tablename__ = "result_versions"
     __table_args__ = (
         db.UniqueConstraint("job_id", "version", name="uq_result_version_job_version"),
-        {"comment": "识别结果版本（OCR 原始结果为 v1，每次人工修改保存生成新版本）"},
+        # 每个任务最多一个当前版本（部分唯一索引；旧库由 app._patch_columns 核查无重复后补建）
+        db.Index(
+            "uq_result_versions_job_current", "job_id", unique=True,
+            postgresql_where=text("is_current"), sqlite_where=text("is_current"),
+        ),
+        {"comment": "识别结果版本（通用结果 v1 + 人工修改版本 + 模板映射版本，任务内版本号单一递增）"},
     )
 
     id = db.Column(db.String(36), primary_key=True, default=_uuid, comment="结果版本 ID（UUID hex）")
@@ -481,6 +500,10 @@ class ResultVersion(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=_now, comment="创建时间（UTC）")
     structured = db.Column(
         db.JSON, nullable=True, comment="TextIn Prompt 模式返回的结构化 JSON（字段 + 表格）；旧版逐页结果为 NULL"
+    )
+    mapping_id = db.Column(
+        db.String(36), nullable=True, index=True,
+        comment="该版本所属的模板映射 → template_mappings.id；NULL=通用结果（不套用模板）",
     )
 
 
@@ -570,7 +593,8 @@ class AuditEvent(db.Model):
 
     id = db.Column(_bigint_pk(), primary_key=True, autoincrement=True, comment="主键")
     user_id = db.Column(
-        db.BigInteger, db.ForeignKey("users.id"), nullable=False, index=True, comment="操作用户 → users.id"
+        db.BigInteger, db.ForeignKey("users.id"), nullable=True, index=True,
+        comment="操作用户 → users.id；NULL=系统或后台脚本（如模板维护脚本、映射 Worker）",
     )
     action = db.Column(db.String(64), nullable=False, comment="操作动作（如 user.register）")
     object_type = db.Column(db.String(32), nullable=False, default="", comment="操作对象类型")
@@ -614,8 +638,8 @@ class ReviewSyncCursor(db.Model):
 class Subscription(db.Model, TimestampMixin):
     """租户订阅（一个租户恰好一行）：套餐档位 + 有效期。
 
-    默认开通：个人租户（含游客）建租户即 DEFAULT KINDER 一个月；企业租户在
-    enterprises.status=VERIFIED 后按 verified_at 起算一个月。到期即硬停，
+    默认开通：个人租户（含游客）建租户即 DEFAULT 默认套餐（plans.is_default，当前 KINDER）
+    trial_months 个月；企业租户在 enterprises.status=VERIFIED 后按 verified_at 起算。到期即硬停，
     不再有 Free 档位与赠送次数兜底；续费由人工审批 PLAN_UPGRADE 申请时
     写入 form.valid_from / valid_to，读取订阅时据 application_id 惰性同步。
     """
@@ -630,7 +654,7 @@ class Subscription(db.Model, TimestampMixin):
     )
     plan_code = db.Column(
         db.String(32), nullable=False, default="KINDER",
-        comment="套餐代码：KINDER / STARTER / INTERMEDIATE / ADVANCE（无 FREE 档）",
+        comment="套餐代码 → plans.code（逻辑引用不加外键）：如 KINDER / STARTER / INTERMEDIATE / ADVANCE",
     )
     source = db.Column(
         db.String(16), nullable=False, default="DEFAULT",
@@ -668,3 +692,193 @@ class PlanReminder(db.Model):
     )
     email_sent = db.Column(db.Boolean, nullable=False, default=False, comment="邮件是否发送成功")
     created_at = db.Column(db.DateTime, nullable=False, default=_now, comment="发送时间（UTC）")
+
+
+class Plan(db.Model, TimestampMixin):
+    """套餐配置（FR-SYS-019）：套餐目录、额度与默认开通规则的唯一来源。
+
+    由 manage_plans.py 维护（PC 管理端后续接入），读取方经 plans.py 的进程内
+    短缓存实时查询，改动对所有租户（含存量订阅）立即生效；不做订阅快照。
+    多语言文案用 {en, th} JSON；只停用不删除，存量订阅引用的 code 恒可解析。
+    """
+
+    __tablename__ = "plans"
+    __table_args__ = {"comment": "套餐配置（目录/价格展示/月页额度/席位/默认开通与续期规则，泰英双语）"}
+
+    id = db.Column(_bigint_pk(), primary_key=True, autoincrement=True, comment="主键")
+    code = db.Column(
+        db.String(32), nullable=False, unique=True,
+        comment="套餐代码（唯一，订阅与申请按此引用，创建后不可改）：如 KINDER / STARTER",
+    )
+    sort_order = db.Column(
+        db.Integer, nullable=False, default=0,
+        comment="展示与档位顺序（升序）；有效期内只允许申请不低于当前档位的套餐",
+    )
+    status = db.Column(
+        db.String(16), nullable=False, default="ENABLED",
+        comment="状态：ENABLED=在目录中展示且可申请 / DISABLED=停用（存量订阅照常按其额度计量）",
+    )
+    name = db.Column(db.JSON, nullable=False, comment="显示名称 JSON：{en, th}")
+    price_display = db.Column(
+        db.JSON, nullable=False, comment="价格展示文案 JSON：{en, th}（如 THB 888 / year、Contact us）"
+    )
+    monthly_thb = db.Column(db.Integer, nullable=True, comment="月付价格（泰铢）；NULL=无月付/面议")
+    yearly_thb = db.Column(db.Integer, nullable=True, comment="年付价格（泰铢）；NULL=无年付/面议")
+    quota_pages_per_month = db.Column(db.Integer, nullable=False, comment="每自然月 OCR 页数额度（OCR_PAGE）")
+    seats = db.Column(db.Integer, nullable=False, default=1, comment="席位数（P0 仅展示，不做强制）")
+    features = db.Column(
+        db.JSON, nullable=False, comment="卖点列表 JSON：{en: [..], th: [..]}（json 列保留顺序）"
+    )
+    theme = db.Column(
+        db.String(16), nullable=False, default="DEFAULT", comment="卡片样式：DEFAULT=浅色 / DARK=深色强调"
+    )
+    is_default = db.Column(
+        db.Boolean, nullable=False, default=False,
+        comment="是否默认开通套餐（新租户/企业认证后自动开通；启用套餐中恰好一个）",
+    )
+    trial_months = db.Column(
+        db.Integer, nullable=False, default=1, comment="作为默认套餐时的默认开通月数（1~120）"
+    )
+    approved_period_months = db.Column(
+        db.Integer, nullable=False, default=12,
+        comment="人工审批未写有效期时的默认续期月数（1~120）",
+    )
+
+
+# ---------- 文档格式模板与模板映射（EPIC-08 / FR-OCR-018..021 / FR-VERIFY-018..020） ----------
+
+
+class DocumentTemplate(db.Model, TimestampMixin):
+    """文档格式模板：tenant_id 为 NULL 是系统模板，否则为租户模板。
+
+    内容只存在不可变的 document_template_versions 中；本表只记录作用域、code、
+    状态与当前版本指针。同一作用域内未删除的 code 唯一（部分唯一索引，COALESCE 让
+    NULL 作用域也参与唯一判断）。
+    """
+
+    __tablename__ = "document_templates"
+    __table_args__ = {"comment": "文档格式模板（系统模板 tenant_id 为 NULL；内容见 document_template_versions）"}
+
+    id = db.Column(_bigint_pk(), primary_key=True, autoincrement=True, comment="模板 ID（自增主键）")
+    tenant_id = db.Column(
+        db.BigInteger, db.ForeignKey("tenants.id"), nullable=True, index=True,
+        comment="所属租户 → tenants.id；NULL=系统模板（所有租户可用、只读）",
+    )
+    code = db.Column(db.String(64), nullable=False, comment="模板代码（作用域内唯一，脚本幂等导入的键）")
+    name = db.Column(db.String(100), nullable=False, default="", comment="当前版本的显示名称快照（列表用）")
+    status = db.Column(
+        db.String(16), nullable=False, default="ENABLED",
+        comment="模板状态：ENABLED=启用（参与匹配与选择） / DISABLED=停用（已有映射仍可读写）",
+    )
+    current_version_id = db.Column(
+        db.BigInteger, nullable=True,
+        comment="当前版本 → document_template_versions.id（不加外键，避免循环依赖）",
+    )
+    deleted_at = db.Column(db.DateTime, nullable=True, comment="软删除时间；NULL=未删除")
+
+
+db.Index(
+    "uq_document_templates_scope_code",
+    func.coalesce(DocumentTemplate.tenant_id, 0), DocumentTemplate.code,
+    unique=True,
+    postgresql_where=DocumentTemplate.deleted_at.is_(None),
+    sqlite_where=DocumentTemplate.deleted_at.is_(None),
+)
+
+
+class DocumentTemplateVersion(db.Model):
+    __tablename__ = "document_template_versions"
+    __table_args__ = (
+        db.UniqueConstraint("template_id", "version", name="uq_template_version_no"),
+        {"comment": "模板版本快照（只增不改；映射固定引用某个版本）"},
+    )
+
+    id = db.Column(_bigint_pk(), primary_key=True, autoincrement=True, comment="模板版本 ID（自增主键）")
+    template_id = db.Column(
+        db.BigInteger, db.ForeignKey("document_templates.id"), nullable=False, index=True,
+        comment="所属模板 → document_templates.id",
+    )
+    version = db.Column(db.Integer, nullable=False, comment="模板内版本号（从 1 递增）")
+    name = db.Column(db.String(100), nullable=False, comment="显示名称（建议「English / ไทย」）")
+    description = db.Column(db.Text, nullable=False, default="", comment="模板描述（供大模型匹配）")
+    groups = db.Column(
+        db.JSON, nullable=False,
+        comment="分组定义 JSON：[{key,name,description,items:[{kind:field|table,key,name,description,"
+                "type,required,columns}]}]（json 列保留顺序）",
+    )
+    content_hash = db.Column(
+        db.String(64), nullable=False, comment="规范化 name+description+groups 的 SHA-256（内容未变不升版）"
+    )
+    created_at = db.Column(db.DateTime, nullable=False, default=_now, comment="创建时间（UTC）")
+
+
+class OcrRawResult(db.Model):
+    """OCR 解析结果（原始结果）：TextIn llm_json 的不可变副本，一个任务一行。"""
+
+    __tablename__ = "ocr_raw_results"
+    __table_args__ = {"comment": "OCR 解析结果（TextIn llm_json 原样副本，只写一次，模板映射的唯一输入）"}
+
+    id = db.Column(db.String(36), primary_key=True, default=_uuid, comment="OCR 解析结果 ID（UUID hex）")
+    job_id = db.Column(
+        db.String(36), db.ForeignKey("ocr_jobs.id"), nullable=False, unique=True,
+        comment="所属任务 → ocr_jobs.id（一对一）",
+    )
+    payload = db.Column(db.JSON, nullable=True, comment="TextIn Prompt 模式 llm_json 原样（DeepSeek 整理之前）")
+    created_at = db.Column(db.DateTime, nullable=False, default=_now, comment="创建时间（UTC）")
+
+
+class TemplateMapping(db.Model, TimestampMixin):
+    """一次「任务 + 模板版本」的映射尝试（PENDING→MATCHING→CONVERTING→READY/FAILED）。"""
+
+    __tablename__ = "template_mappings"
+    __table_args__ = {"comment": "模板映射（基于模板的解析结果的生成记录，READY 可复用、FAILED 保留）"}
+
+    id = db.Column(db.String(36), primary_key=True, default=_uuid, comment="映射 ID（UUID hex）")
+    job_id = db.Column(
+        db.String(36), db.ForeignKey("ocr_jobs.id"), nullable=False, index=True, comment="所属任务 → ocr_jobs.id"
+    )
+    raw_result_id = db.Column(
+        db.String(36), db.ForeignKey("ocr_raw_results.id"), nullable=False,
+        comment="映射输入的 OCR 解析结果 → ocr_raw_results.id",
+    )
+    template_id = db.Column(
+        db.BigInteger, db.ForeignKey("document_templates.id"), nullable=True,
+        comment="使用的模板 → document_templates.id；AUTO 映射在匹配前为 NULL",
+    )
+    template_version_id = db.Column(
+        db.BigInteger, db.ForeignKey("document_template_versions.id"), nullable=True, index=True,
+        comment="固定使用的模板版本 → document_template_versions.id；AUTO 映射在匹配前为 NULL",
+    )
+    source = db.Column(db.String(16), nullable=False, comment="来源：AUTO=OCR 后自动匹配 / MANUAL=用户选择")
+    status = db.Column(
+        db.String(16), nullable=False, default="PENDING", index=True,
+        comment="状态：PENDING=排队 / MATCHING=匹配中 / CONVERTING=转换中 / READY=成功 / FAILED=失败",
+    )
+    created_by_user_id = db.Column(
+        db.BigInteger, db.ForeignKey("users.id"), nullable=True, comment="发起用户 → users.id；AUTO 为 NULL"
+    )
+    base_version_id = db.Column(
+        db.String(36), nullable=True,
+        comment="创建时任务的当前结果版本 → result_versions.id（自动生效条件；不加外键）",
+    )
+    result_version_id = db.Column(
+        db.String(36), nullable=True,
+        comment="转换成功后生成的结果版本 → result_versions.id（不加外键）",
+    )
+    match_score = db.Column(db.Float, nullable=True, comment="匹配得分 0~1；单候选直接选中或手动选择为 NULL")
+    match_reason = db.Column(db.String(255), nullable=False, default="", comment="匹配理由（single_candidate / 模型理由）")
+    candidates = db.Column(
+        db.JSON, nullable=True, comment="匹配候选 top-3 JSON：[{template_id,template_version_id,score,reason}]"
+    )
+    warnings = db.Column(db.JSON, nullable=True, comment="类型标准化警告 JSON：[{path,code}]")
+    dropped_keys = db.Column(db.Integer, nullable=False, default=0, comment="大模型输出中被丢弃的模板外键数")
+    error_code = db.Column(db.String(64), nullable=False, default="", comment="失败错误码（MATCH_FAILED 等）")
+    error_message = db.Column(db.String(512), nullable=False, default="", comment="失败原因（不含单据内容）")
+    llm_calls = db.Column(db.Integer, nullable=False, default=0, comment="大模型调用次数（匹配 + 转换）")
+    prompt_tokens = db.Column(db.Integer, nullable=False, default=0, comment="累计输入 token")
+    completion_tokens = db.Column(db.Integer, nullable=False, default=0, comment="累计输出 token")
+    model = db.Column(db.String(64), nullable=False, default="", comment="使用的大模型")
+    prompt_version = db.Column(db.String(32), nullable=False, default="", comment="提示词版本（match-v1 / convert-v1）")
+    duration_ms = db.Column(db.BigInteger, nullable=False, default=0, comment="映射耗时（毫秒）")
+    started_at = db.Column(db.DateTime, nullable=True, comment="Worker 认领时间")
+    finished_at = db.Column(db.DateTime, nullable=True, comment="结束（READY / FAILED）时间")

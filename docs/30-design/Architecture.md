@@ -3,16 +3,16 @@ doc_id: DES-001
 title: "SaiFlow — 系统架构"
 type: design
 status: active
-version: 2.5.4
-updated: 2026-10-29
+version: 2.7.0
+updated: 2026-11-01
 owner: Product Engineering
-source: "PRD-001 §3.1, §4, §5; ADR-001"
-related: [DM-Document, DM-ExtractionPayload, DM-ConversionJob, OCR-Pipeline, API-Spec, NFR-SEC, ADR-001, ADR-005]
+source: "PRD-001 §3.1, §4, §5；document-template-mapping v2 R1–R6；ADR-001/006/007"
+related: [DM-Document, DM-ExtractionPayload, DM-DocumentTemplate, DM-OcrRawResult, DM-TemplateMapping, DM-ResultVersion, OCR-Pipeline, API-Spec, NFR-SEC, ADR-001, ADR-005, ADR-006, ADR-007]
 ---
 
 # SaiFlow — 系统架构
 
-> SaiFlow 是运行于 Google Cloud 的云原生系统。React 前端和 Python/FastAPI API 作为独立 Cloud Run 服务运行；私有 GCS 保存文档对象；TextIn 提供外部 OCR 结构化识别；Firestore 保存不可变的原始识别 JSON；Cloud Functions 按已发布模板将 JSON 转换至 Cloud SQL PostgreSQL 18.6。决策理由见 `ADR-001-cloud-native-deployment.md`。
+> SaiFlow 运行于 Google Cloud：当前后端为 Flask + Flask-SQLAlchemy，LINE Mini App 为 Vue，PC Web 的 React 定位保留；前后端独立部署于 Cloud Run，原件存私有 GCS，实际 OCR 实现为 TextIn。2026-10-31 已发布的模板 v2 路径由 OcrWorker 保存不可变 llm_json 快照，再由独立 MappingWorker 复用既有 DeepSeek 匹配/转换；raw、模板、版本、映射与 ResultVersion 的 JSON 内容存 Cloud SQL PostgreSQL 18.6 的 `json`，保留键及数组顺序，见 [ADR-006](adr/ADR-006-relational-template-storage.md)、[ADR-007](adr/ADR-007-llm-only-template-mapping.md)。历史 Firestore 完整 TextIn 原文归档仍合法，与 llm_json 快照不同，不是模板执行状态来源；Cloud Functions/Dataflow 仅属 ADR-004 旧方案或另行批准范围，不是新 FR-OCR-018..021 的依赖。云部署理由仍见 [ADR-001](ADR-001-cloud-native-deployment.md)。
 
 ## 0. 技术基线
 
@@ -21,27 +21,27 @@ related: [DM-Document, DM-ExtractionPayload, DM-ConversionJob, OCR-Pipeline, API
 | 层级 | 技术选择 | 说明 / 约束 |
 |------|----------|-------------|
 | **PC Web 前端** | React + TypeScript + Vite + Ant Design | `apps/web-pc/`，面向桌面浏览器 |
-| **Line MiniApp 前端** | React + TypeScript + Vite + Ant Design Mobile | `apps/line-mini/`，面向移动端 Line 内嵌浏览器 |
+| **Line MiniApp 前端** | Vue 3 + TypeScript + Vite | `apps/line-mini/`，面向移动端 LINE 内嵌浏览器；本期模板核验/选择，不实现模板管理 UI |
 | **前端共享库** | `packages/ui/`（组件/主题）、`packages/api-client/`（OpenAPI 生成）、`packages/tsconfig/` | 禁止手写第二份 API 契约 |
 | **包管理** | pnpm workspace | 仅扫描 `apps/*` 与 `packages/*`；`services/` 隔离 |
-| **后端** | Python `>=3.12,<3.15` + FastAPI + Pydantic + pydantic-settings | `services/api/`，异步优先 |
+| **后端** | Python + Flask + Flask-SQLAlchemy；模板校验使用 Pydantic | `services/api/`；模型调用在独立 MappingWorker，不阻塞 HTTP/OCR 线程；容器与本地测试版本见实际配置 |
 | **ORM / 数据库驱动** | SQLAlchemy 2.x + psycopg 3 | Cloud Run 使用 Cloud SQL Unix 套接字；本地使用 TLS TCP（`PGSSLMODE=require`）；参数取 `PG*` 环境变量（ADR-001、ADR-005 回切记录） |
 | **关系数据库** | Cloud SQL PostgreSQL **18.6**（实例 `saiflow-dev` / 库 `postgres` / schema `saiflow`） | 事务、查询、审计、模板与关系化业务数据；2026-10-27 已恢复原 Cloud SQL（ADR-001、ADR-005 回切记录） |
 | **对象存储** | 私有 Google Cloud Storage Bucket | 原件、派生文件、导出工件 |
-| **原始 OCR JSON** | Google Cloud Firestore | 按载荷版本不可变 |
-| **事件转换** | Google Cloud Functions（Firestore 触发） | 按模板将原始 JSON 幂等投影至 Cloud SQL |
+| **模板输入快照/结果** | Cloud SQL PostgreSQL `json` | 不可变 llm_json、模板版本与映射/结果归属；历史 Firestore 完整原文归档契约保留，非模板执行状态来源 |
+| **模板匹配/转换** | 进程内独立 MappingWorker + DeepSeek | 本期 FR-OCR-018..021；Cloud Functions 事件投影为历史/另获批范围 |
 | **外部 OCR** | TextIn API | 仅服务端调用；密钥存 Secret Manager |
 | **密钥管理** | Google Secret Manager | 运行时注入；禁止写入源码/镜像 |
 | **部署** | Docker 容器 → Google Cloud Run | 前端与后端为独立服务 |
 | **代码质量** | Ruff（Python）、ESLint + Prettier（JS/TS） | 后端命令在 `services/api/` 内执行 |
-| **测试** | pytest（后端）、Vitest + React Testing Library（前端） | 不得连接生产数据库；不得含真实密钥 |
-| **数据库迁移** | Alembic | 模型变更必须新增迁移版本；禁止修改已合并迁移 |
+| **测试** | pytest（后端）、离线 Vue/结构断言与全合成 API 浏览器 harness | 不连接共享数据库/供应商；真实模型/真机/多实例另验，实际证据见汇总 AC |
+| **数据库迁移** | 当前 `_ensure_tables` / `_ADD_COLUMNS` 与纯迁移规划 | 增量可空列、缺表/索引才创建；不将隔离 SQLite/规划测试或只读检查视为真实 PostgreSQL DDL 验收 |
 
 ## 1. 架构原则
 
-1. **托管云服务** — Cloud Run、Firestore、Cloud Functions、Cloud SQL 和 GCS 尽量减少客户侧运维。
-2. **关注点分离** — 浏览器、API、外部 OCR、原始 JSON、转换服务、关系型数据和对象数据具有边界明确的职责。
-3. **原始数据与投影分离** — Firestore 保留 TextIn 原始 JSON；Cloud SQL 仅保存可查询、可核验的模板化关系数据。
+1. **托管云服务** — 本期 Cloud Run、Cloud SQL 和 GCS 减少客户侧运维；历史 Firestore 归档与 Cloud Functions 旧投影不作为新模板依赖。
+2. **关注点分离** — 浏览器、API、OCR Worker、MappingWorker、不可变输入、核验结果和对象数据各有边界。
+3. **原始数据与结果分离** — 本期 Cloud SQL 同时保存互不覆盖的不可变 llm_json、模板版本和可版本化核验结果；历史 Firestore 完整原文归档契约仍保留。
 4. **Human-in-the-loop** — OCR 输出在确认前始终进入可审计的核验状态。
 5. **隐私保护设计** — 私有 Bucket、最小权限 IAM、HTTPS、加密存储和仅可追加的审计日志。
 6. **配置优于硬编码** — 项目 ID、区域、Cloud SQL 实例、Bucket、模板映射、密钥和允许来源均为部署配置。
@@ -49,50 +49,32 @@ related: [DM-Document, DM-ExtractionPayload, DM-ConversionJob, OCR-Pipeline, API
 ## 2. 组件概览
 
 ```mermaid
-graph TB  
-    WebBrowser["🌐 Web浏览器"]  
-    LineMiniApp["💬 Line MiniApp<br/>运行在手机上"]  
-      
-    WebBrowser -->|HTTP/HTTPS| CDN["Cloud CDN<br/>静态资源"]  
-    CDN -->|返回页面| WebBrowser  
-      
-    WebBrowser -->|API调用| FrontendCR["Cloud Run<br/>前端服务<br/>Web版本"]  
-    FrontendCR -->|返回页面| WebBrowser  
-      
-    LineMiniApp -->|API调用| BackendAPI["Cloud Run<br/>Python后端API"]  
-    FrontendCR -->|API调用| BackendAPI  
-      
-    BackendAPI -->|读写| GCS["Cloud Storage<br/>对象存储<br/>图片/文件"]  
-    BackendAPI -->|处理文件| OCRService["Cloud Vision API<br/>或 TextIn <br/>OCR识别"]  
-    OCRService -->|识别结果| BackendAPI  
-      
-    BackendAPI -->|保存结构化数据| Firestore["Cloud Firestore<br/>OCR原始JSON<br/>灵活schema"]  
-      
-    BackendAPI -->|登录、权限<br/>业务报表<br/>结构化OCR数据| PostgreSQL["Cloud SQL<br/>PostgreSQL 18<br/>关系数据库"]  
-      
-    Monitor["Cloud Monitoring<br/>日志监控"]  
-    FrontendCR -.->|日志| Monitor  
-    BackendAPI -.->|日志| Monitor  
-      
-    style WebBrowser fill:#e1f5ff  
-    style LineMiniApp fill:#e1f5ff  
-    style FrontendCR fill:#fff3e0  
-    style BackendAPI fill:#f3e5f5  
-    style GCS fill:#fce4ec  
-    style Firestore fill:#fce4ec  
-    style OCRService fill:#fff9c4  
-    style PostgreSQL fill:#fce4ec
+graph TB
+    WebBrowser["PC Web / React"] --> FrontendCR["Cloud Run 前端"]
+    LineMiniApp["LINE Mini App / Vue"] --> FrontendCR
+    FrontendCR -->|Cookie / CSRF API| BackendAPI["Cloud Run / Flask API"]
+    BackendAPI -->|原件与导出工件| GCS["私有 GCS"]
+    BackendAPI -->|排队与授权| PostgreSQL["Cloud SQL PostgreSQL 18 / json"]
+    OcrWorker["OcrWorker"] -->|服务端 OCR| OCRService["TextIn"]
+    OCRService -->|llm_json| OcrWorker
+    OcrWorker -->|不可变 raw / 通用 v1 / AUTO| PostgreSQL
+    MappingWorker["独立 MappingWorker / 开关控制"] -->|认领与阶段关联重读| PostgreSQL
+    MappingWorker -->|匹配与转换| LLM["DeepSeek"]
+    LLM --> MappingWorker
+    MappingWorker -->|固定模板版本 / READY 分支结果| PostgreSQL
+    Firestore["Firestore 完整原文归档 / 历史契约"] -.->|非模板执行状态来源| PostgreSQL
+    BackendAPI -.-> Monitor["Cloud Logging / Monitoring"]
 ```
 
 ## 3. 组件与职责映射
 
 | 组件                            | 职责                                                 | 实现内容                                    |
 | ----------------------------- | -------------------------------------------------- | --------------------------------------- |
-| **React web service**         | 上传/核验/管理/模板配置 UI、i18n、通过 HTTPS 调用 API              | EPIC-01、EPIC-03、EPIC-05、EPIC-06、EPIC-08 |
-| **FastAPI service**           | 认证、RBAC、上传编排、TextIn 服务端调用、Firestore 写入、API 契约和审计日志 | API-1..10、EPIC-01..08                   |
-| **TextIn API**                | 对预处理图像执行外部 OCR 与结构化解析，并返回原始 JSON                   | FR-OCR-017                              |
-| **Firestore**                 | 保存按载荷版本不可变的 TextIn 原始 JSON 与其处理状态                  | `DM-ExtractionPayload`、FR-OCR-018       |
-| **Cloud Functions**           | 监听 Firestore 创建事件，按已发布模板幂等转换 JSON 并写入 Cloud SQL    | `DM-ConversionJob`、FR-OCR-019/020       |
+| **前端服务** | Vue LINE Mini App 上传/核验/模板选择、i18n；PC React 定位保留，本期不实现模板管理 UI | EPIC-01/03/06；TEMPLATE-006 为 P1 |
+| **Flask API / OcrWorker** | 认证/归属/租户、上传、TextIn 服务端调用、不可变 llm_json 与 v1、模板只读接口/切换/审计 | EPIC-01..08、FR-OCR-021 |
+| **TextIn API** | 外部 OCR 与结构化解析 | FR-OCR-017 |
+| **MappingWorker** | 条件认领、固定版本匹配/转换、受任务锁与生效门禁保护的 READY 分支结果 | FR-OCR-018/019/020 |
+| **Firestore / Cloud Functions** | 历史完整原文归档与旧事件投影/另获批范围；不负责本期模板执行状态 | ADR-004 历史方案，ADR-006/007 本期决策 |
 | **Cloud SQL PostgreSQL 18.6** | 文档、模板、字段、行项目、用户、角色、审计/变更/导出元数据                     | `DM-*` 实体                               |
 | **Private GCS Bucket**        | 不可变的原始上传文件、派生文件、导出文件、归档数据工件                        | FR-UPLOAD-011、FR-ENTRY-005..008         |
 | **Secret Manager**            | 数据库凭据、TextIn 密钥和仅部署使用的配置                           | NFR-SEC-003                             |
@@ -108,30 +90,32 @@ graph TB
 ## 4. 端到端数据流
 
 ```text
-Browser upload → FastAPI format/size validation → private GCS original object
-→ preprocessing → server-side TextIn request → Firestore immutable raw JSON payload
-→ Firestore create event → Cloud Functions template conversion → Cloud SQL document/fields/line-items
-→ human verification and append-only change log → export artifact to GCS
-→ archive record references original, raw payload and structured/export objects
+Browser upload → Flask validation → private GCS original → OcrWorker → TextIn llm_json
+→ Cloud SQL immutable raw + generic v1（同事务）
+→ 开关开启且有候选：AUTO pending → 独立 MappingWorker → DeepSeek match / convert
+→ 固定模板版本的 READY ResultVersion → 条件自动生效 / 用户切换
+→ human verification / required gate / audit → current-version export artifact
 ```
 
-默认处理为逐份事件驱动。Dataflow 仅用于经批准的批量回填、高吞吐或重处理，且必须使用同一模板版本和幂等写入约束。浏览器通过经认证的 API 端点，或 API 签发的短期 signed URL 访问文档内容；浏览器不会获得 GCS、Firestore、Cloud SQL 或 TextIn 凭据。
+开关默认关闭：仍保存 raw，通用 v1 沿用既有整理，不创建自动映射或启动 MappingWorker。新版本为任务 max+1；切回仅移动当前指针，恢复分支最近保存内容，可返回旧版本号。删除结果保留 job，同任务锁清理 results/raw/mappings 与指针；Worker 各阶段重读关联，中止迟到写入。唯一详细契约见 [Data-Model](Data-Model.md)、[OCR-Pipeline](OCR-Pipeline.md)、[API-Spec](API-Spec.md)。
+
+Firestore 完整原文归档契约与本期 raw 不可混同；Cloud Functions/Dataflow 仅属旧方案或另行批准范围，不是默认模板链路。浏览器只经授权 API/短期 signed URL 访问文档，不持有存储/数据库/TextIn/模型服务凭据。
 
 ## 5. 部署模型
 
 | 方面 | 选择 | 需求 / 理由 |
 |------|------|-------------|
 | Web 前端 | 运行于 Cloud Run 的 React + Ant Design 容器 | 独立 UI 发布与自动扩缩 |
-| 后端 | 运行于 Cloud Run 的 Python + FastAPI 容器 | API-1..10、服务端授权及 TextIn 调用 |
-| 外部 OCR | TextIn API | 返回供应商原始结构化 JSON；仅由 FastAPI 服务端调用 |
-| 原始识别数据 | Firestore | 保存不可变 JSON 载荷、处理状态和关联元数据 |
-| 事件转换 | Cloud Functions（Firestore 触发） | 默认逐份模板转换与 Cloud SQL 幂等写入 |
-| 批量转换 | Dataflow（可选） | 仅用于经批准的回填、重处理或高吞吐任务 |
+| 后端 | Cloud Run Flask API + OcrWorker + MappingWorker | 服务端授权与 TextIn；模板映射由 `TEMPLATE_MAPPING_ENABLED` 控制，2026-10-31 起生产开启（`saiflow-api-00052-fal`） |
+| 外部 OCR | TextIn API | 仅后端调用，保留既有重试边界 |
+| 模板输入与版本 | Cloud SQL PostgreSQL json | 不可变 llm_json 与模板快照、映射归属/结果；历史 Firestore 完整原文归档契约保留 |
+| 模板转换 | 独立 MappingWorker（默认开关关闭） | 不依赖 Cloud Functions；本地共享库必须保持关闭 |
+| 历史事件/批量投影 | Cloud Functions / Dataflow 旧方案 | 另经批准才进入实施范围，不作为本期已部署组件 |
 | 关系型数据 | Cloud SQL PostgreSQL **18.6**（实例 `saiflow-dev` / 库 `postgres` / schema `saiflow`） | 事务、查询、审计、模板与关系化业务数据；ADR-001、ADR-005 回切记录 |
 | 文档数据 | 私有 GCS Bucket | 对原件和工件进行持久的双重存储 |
 | 数据库连接 | Cloud Run：Unix 套接字 `/cloudsql/saiflow-509205:asia-southeast1:saiflow-dev`，专用数据库用户 `saiflow_api`，口令经 Secret Manager `saiflow-cloudsql-password` **版本 1** 注入；本地：TLS TCP，`PGSSLMODE=require` | 最小权限数据库用户；未修改 `postgres` 旧密码；ADR-005 回切记录 |
 | 对象访问 | 专用 Cloud Run 服务账号 | 最小权限 GCS 对象访问 |
-| 后端并发容量 | `saiflow-api`：gunicorn `--workers 1 --threads 12`，Cloud Run `--concurrency 12`（二者必须相等），SQLAlchemy 连接池 `pool_size=5 + max_overflow=10 = 15` ≥ 12 请求线程 + 1 个 OCR worker；`test_capacity.py` 守住仓库内约束 | NFR-PERF-005：原 `--threads 8` 对 `--concurrency 80` 时第 9 个起的请求只在进程内排队、不触发扩容；单进程保证每实例仅一个 OCR 轮询线程（认领为原子条件更新），最坏连接数（maxScale 20 × 15 = 300）与调整前相同 |
+| 后端并发容量 | `saiflow-api`：gunicorn `--workers 1 --threads 12`，Cloud Run `--concurrency 12`（二者必须相等），SQLAlchemy 连接池 `pool_size=5 + max_overflow=10 = 15` ≥ 12 请求线程 + 1 个 OCR worker + 1 个映射 worker（开启时）；`test_capacity.py` 守住仓库内约束 | NFR-PERF-005：原 `--threads 8` 对 `--concurrency 80` 时第 9 个起的请求只在进程内排队、不触发扩容；单进程保证每实例仅一个 OCR 轮询线程（认领为原子条件更新），最坏连接数（maxScale 20 × 15 = 300）与调整前相同 |
 | 移动端上传通道 | 预检 POST、原字节 PUT 与完成 POST 均使用同源 XHR，沿用 Cookie/CSRF、120 秒阶段上限、原字节与单调进度 | FR-UPLOAD-001/010；网络错误/中断/超时/状态 0 结束等待，不自动重发写请求；不修改 GCS/TextIn/IAM |
 | 前端读请求合并 | `refreshQuota()`：同会话进行中的 `/me/quota` 复用；成功结果 5 秒内且期间无任何写请求结束时复用；会话切换或任一写请求结束即失效，旧会话迟到响应不覆盖 | NFR-PERF-005：启动、登录与首页挂载原本在数秒内各发一次，跨境链路下每次一个完整往返 |
 | 密钥 | 在运行时注入 Secret Manager | 源码或镜像中不包含密钥 |
@@ -155,6 +139,16 @@ Browser upload → FastAPI format/size validation → private GCS original objec
 
 用户授权后，仅前端 `saiflow-line-mini-00039-xuz` 已发布，镜像 `sha256:848e9bf3e436519ace9b82a68802bb744d08d995d8fd7507ba89e651032a7094`。以 `--no-traffic` 创建候选，`field-check` 标签核验通过后显式切至 100%，最终 latestCreated/latestReady/traffic 一致，临时标签已移除。候选标签、登记区域域名、Cloud Run 别名及旧业务域名的 7 个静态文件均与上述冻结构建逐一 SHA-256 一致，代理健康均 200、匿名 session 均 401 且无 Set-Cookie；58 个白名单上传文件哈希保持不变，不含 `.env` 或 Cookie 罐。后端仍为 `saiflow-api-00032-hvr` 100% 流量、并发 12，未重部署，未修改数据库或真实业务数据。13:09:00Z 至 13:19:19Z 对前端新 revision 与既有 API revision 的 ERROR 级以上日志限定查询为 0，不代表长期可用性保证。真实 iPhone/LINE WebView 新增字段后完整确认及生产持久化仍待用户验收；未恢复历史已丢失字段，本次发布与既有 00036 记录分开。
 
+**2026-10-31 模板 v2 开发边界：** 代码与隔离验证见 [汇总 AC](../40-acceptance/Acceptance-Criteria.md) 和 [变更任务](../../openspec/changes/document-template-mapping/tasks.md)。两份系统种子已获业务批准且离线 validate 通过，但共享库未 seed、未迁移或部署、未开启开关；只读 SELECT 的重复当前版本数 0 不是索引创建证据。真实 LLM 质量/耗时/token、LINE 真机/供应商端到端与 PostgreSQL 多实例另验。此记录不覆盖或撤销上面的既有已发布 revision 历史。
+
+**2026-10-31 模板映射正式发布（FR-OCR-018..021、FR-TEMPLATE-001..006）：** 用户授权全量发布。本地无连接共享库的后端进程，未终止用户进程；只读确认 `saiflow_api` 为表属主且有 schema CREATE、重复当前结果版本 0。发布前发现后端 Dockerfile 模块白名单漏拷 `doc_templates/`、`mapping_worker.py`、`manage_templates.py`、`templates_seed/`，补 COPY 并新增 `test_capacity.py` 镜像模块可达性守卫（旧 Dockerfile 下失败），823 项隔离后端回归通过。
+
+- **后端（开关关闭）：** `saiflow-api-00049-pux`（`sha256:84c12cff347bfa0a9a8ab6ff7d8e074d6e63c9313f2dcd8a76c1398ae6f12b4b`，并发 12）以 `TEMPLATE_MAPPING_ENABLED=false`、`--no-traffic` 部署；启动迁移在 `postgres.saiflow` 建出 `document_templates`、`document_template_versions`、`ocr_raw_results`、`template_mappings`，`ocr_jobs.current_mapping_id/pending_mapping_id`、`result_versions.mapping_id` 及 `uq_result_versions_job_current`、`uq_document_templates_scope_code` 等索引，启动无 WARNING/ERROR；标签与线上匿名探针一致后手动切 100%。该镜像同时包含此前未发布的 FR-OCR-017 TextIn 有界重试。
+- **系统模板：** 本地 CLI `seed --dry-run` 后 `seed --yes` 写入 `system.billing_note`（6 组/22 项）与 `system.tax_invoice`（7 组/34 项），系统作用域、ENABLED、版本 1，审计 `template.created` 2 条；复跑 dry-run 均 unchanged。
+- **前端：** `saiflow-line-mini-00043-wuh`（`sha256:d0b58a20273dffdb7ade6064c8c8b21f757c9ff0f3c854854c7ff9016ca3b5f2`，入口 `index-B70dHnIx.js`，SHA-256 `1f290bc9146ea126897f574e8bc009f5013788a9a96bc06703712ebe51e70eec`）。前端 `.gcloudignore` 不排除 `.env*`，故从 `temp/` 白名单暂存目录（57 文件，不含 `.env*`/Cookie 罐）上传；`--no-traffic` 标签核验后切 100%。登记区域域名、Cloud Run 别名、`saiflow.zhpulan.cn` 7/7 静态文件 SHA-256 一致，匿名 session 401 无 Set-Cookie，dev 400，无效 LINE token 401。`/healthz` 在 Cloud Run 上为保留路径，新旧 revision 均 404，不作为健康依据。
+- **开关开启：** 同一镜像以 `TEMPLATE_MAPPING_ENABLED=true` 创建 `saiflow-api-00052-fal`，`--no-traffic` 核验后切 100%，临时标签均已移除，latestCreated/latestReady/traffic 一致。02:00Z–02:45Z 三个新 revision 的 ERROR 级日志与 Traceback 查询为 0，不代表长期可用性。回滚：`--update-env-vars TEMPLATE_MAPPING_ENABLED=false`（新 revision）或切回 `00049-pux`；新表与列为增量，旧代码可忽略。
+- **未覆盖：** 未使用真实账号、未执行生产上传/OCR/映射；真实 DeepSeek 匹配与字段准确率、耗时/token 基线、LINE 真机端到端及 PostgreSQL 多实例并发仍待用户验收（tasks 9.3/9.4）。
+
 ## 6. 安全性与可靠性
 
 - **网络：** Cloud Run 服务使用 HTTPS；Cloud SQL、Firestore 和 Cloud Functions 不得向浏览器暴露管理凭据或公共写入权限。
@@ -174,7 +168,8 @@ Browser upload → FastAPI format/size validation → private GCS original objec
   - 认证验收仍见 [AC-FR-SYS-001-04/05/06](../40-acceptance/Acceptance-Criteria.md)；已配置 LINE Channel ID `2011688528` 与 LIFF ID `2011688528-9VP8cr3o`；认证 SDK `@line/liff` 升级至官方安全修复版 `2.31.1`（[LINE 发布说明](https://developers.line.biz/en/docs/liff/release-notes/#liff-v2-31-1)），对应 FR-SYS-001。真实 LINE 最终联调仍需核验渠道的 `openid`/`email` scope、Endpoint URL，并由用户完成授权，不视为已测试通过。
 - **租户订阅与到期（FR-SYS-012/013/017/018）：** 归属只有 `tenant_id`；个人用户（含游客）与每家企业各一行 `tenants`，`enterprises` 为企业租户的 1:1 扩展。权益由 `subscriptions` 持久化（一租户一行），不再由 `registered_at` 动态推导：个人租户自 `tenants.created_at`、企业租户自 `enterprises.verified_at` 起算 **Kinder 一个月**，企业未认证时不开通（`status=NONE`）。线下人工审批写入有效期起止（`source=APPROVED`），同档续费允许、降档 409；pending 申请独立保留，不阻挡当前订阅的显式确认。
   - **到期硬停：** 订阅非 `ACTIVE` 时新建/重跑 OCR 返回 `402 PLAN_EXPIRED` / `plan.expired`；历史任务、结果与导出仍可读。唯一计量单位为 `OCR_PAGE`：按 `Asia/Bangkok` 自然月实时 `SUM(ocr_jobs.page_count)`（`FAILED` / `CANCELLED` 不计），用尽返回 `402 QUOTA_EXCEEDED` / `quota.exceeded`。FREE 档位、赠送任务、额度流水（`quota_ledger`）与 `free_tasks` / `paid_pages` / `OCR_TASK` 计量全部删除，响应不再返回这些字段。企业租户天然汇总全体成员页数，与个人租户隔离。字段唯一语义见 Data-Model §2.13，验证目标见 AC-FR-SYS-012/013/017。
-  - **到期提醒：** `reminders.py` 在 `D7 / D3 / D1 / D0 / EXPIRED` 五个节点各发一次站内通知（`notifications`，首页铃铛读 `GET /me/notifications`）并向已注册且有邮箱的用户发提醒邮件；幂等键为 `plan_reminders (tenant_id, period_end, stage)` 唯一约束，错过的节点**不回补**，游客不提醒，邮件失败只影响 `plan_reminders.email_sent`，不影响站内通知与幂等记录。扫描由进程内 worker 低频触发（按泰国自然日当天只跑一次），可用 `PLAN_REMINDERS_ENABLED` 关闭。
+  - **套餐配置（FR-SYS-019）：** 套餐目录、价格展示、月页数、席位、卡片主题、泰英双语文案、档位排序、启停、默认套餐、`trial_months` 与 `approved_period_months` 存于 `plans` 表；`plans.py` 为唯一读取入口（进程内 60 秒 TTL 缓存、读失败缓存 10 秒，使用独立连接不影响请求会话；表为空或读库失败回退 `plans_seed.json`）。启动时 `plans.seed_if_empty()` 仅在空表时播种，不覆盖已有配置。修改对所有租户（含存量订阅）在缓存窗口内生效、不做快照；停用套餐不在 `GET /plans` 返回、不可新申请，但存量订阅仍按配置解析，未知 code 回退默认套餐并告警。维护只经 CLI `services/api/manage_plans.py`（list/show/export/validate/import/set/enable/disable/set-default/seed，写操作支持 dry-run、需确认或 `--yes`，写前校验整份目录并写审计 `plan_config.*`）；当前无管理 REST 接口，PC 管理端后续实现。多实例下各实例缓存独立，最长 60 秒不一致。
+  - **到期提醒：** `reminders.py` 在 `D7 / D3 / D1 / D0 / EXPIRED` 五个节点各发一次站内通知（`notifications`，首页铃铛读 `GET /me/notifications`）并向已注册且有邮箱的用户发提醒邮件；幂等键为 `plan_reminders (tenant_id, period_end, stage)` 唯一约束，错过的节点**不回补**，游客不提醒，邮件失败只影响 `plan_reminders.email_sent`，不影响站内通知与幂等记录。扫描由进程内 worker 低频触发（按泰国自然日当天只跑一次），可用 `PLAN_REMINDERS_ENABLED` 关闭。通知中心只返回账户变动类通知（到期、升级申请、个人/公司账户开通、加入公司）；开通通知在 `subscriptions.ensure_subscription` 首次建订阅行时随同事务写入，OCR worker 不再写完成通知。
 - **注册验证码 SMTP（FR-SYS-014；复用 FR-SYS-016 发送接口）：** 既有设计采用 Python 标准库 `smtplib`、`email` 与 `ssl`，服务端实际发送 6 位数字码，不以写日志或写库代替发送。仅允许 `SMTP_SSL`（`ssl`）或 `SMTP` 后执行 `STARTTLS`（`starttls`），使用验证证书/主机名的 TLS 上下文，认证前须完成 TLS，禁止降级为明文。
   - 仅后端读取以下环境配置，不暴露给前端、不硬编码发信账号或凭据：
 
@@ -194,9 +189,9 @@ Browser upload → FastAPI format/size validation → private GCS original objec
   - **历史发布记录（2026-10-27 注册/SMTP，仅保留，不覆盖本轮退出、注册触发、默认权益或确认门禁）：** API `saiflow-api-registration-1793105470`（镜像摘要 `sha256:721820f619e706abfeb6ad53578d5743123b11f93c0690871f81d478a58cb371`）与前端 `saiflow-line-mini-registration-1793104858`（`sha256:d7d2e3e8c6a8e08e3025e4cfa712aa7b9bde0249d11e0e32cd308f9e19bf828d`）均已承接 100% 流量，API 先切流、前端随后切流；临时 `registration-check` 标签与 SMTP 测试任务已删除。最终 API 镜像的独立 Cloud Run Gmail 实发自测获 SMTP 确认接收；公开地址切流后健康与 API 代理返回 200，dev 请求返回 400，无效 LINE token 与匿名注册/验证码请求返回 401且不创建会话，7 个前端静态文件 SHA-256 与本地构建完全一致。`APP_ENV=production`、`AUTH_DEV_MODE=false`、Cloud SQL `postgres.saiflow` 与数据库 secret 版本引用保持不变；SMTP 使用 `ssl:465`，超时 30 秒，密码仅引用 `saiflow-smtp-password:1`。221 项隔离回归（含锁后注册状态重读）、5 项模拟浏览器测试通过；发布后查询新 API/前端 revision 的 `ERROR` 及以上日志，两者均未发现服务器错误（单次查询证据，非长期可用性保证）。这些证据不覆盖真实 LINE 授权、收件箱/完整注册验收及真实数据库并发。
   - **并发与剩余安全边界：** 发送、注册与换邮箱按用户行锁串行；LINE 登录刷新已有用户前也锁定并重新读取 `registered_at`，避免初查旧状态覆盖已提交资料。隔离用例模拟锁后状态变化，但不代替真实 PostgreSQL 并发测试。本次未新增验证码校验失败次数上限或账号/IP 级防猜码机制，60 秒仅限制成功发码后的重发，不限制猜码；此安全加固需另行确认策略并变更，不能视为已通过防暴力猜码验收。
 - **外部 OCR：** TextIn 密钥只存储在 Secret Manager；文件仅由服务端发送；上线前必须完成 OQ-7 的跨境与 PDPA 评估。
-- **存储：** GCS Bucket 为私有且启用统一 Bucket 级访问；Firestore 原始载荷按版本不可变；Cloud SQL、GCS 和 Firestore 的静态加密是强制要求。
-- **审计：** 改变状态的 API、模板和转换操作写入应用操作/变更日志；转换记录载荷版本和模板版本。
-- **失败处理：** 单份文档失败相互隔离且可重试；Cloud Functions 和 Dataflow 使用幂等键，不得重复创建关系数据或破坏已归档记录。
+- **存储：** GCS 私有；历史 Firestore 原文与本期 PostgreSQL raw/模板版本不可变（依法删除例外）；全部存储强制静态加密，新映射不覆盖原始快照或人工分支编辑。
+- **审计：** 实际 CLI 写入、模板应用/切换/失败/确认反馈可追溯至任务/raw/固定模板版本；合法显式通用选择即使已通用也审计而不新增结果版本。日志不记录模型输入的单据内容。
+- **失败处理：** 单份失败隔离；本期条件认领、任务锁、关联阶段重读与卡住恢复保护结果，失败重试 force=true 但不绕过上限；Cloud Functions/Dataflow 幂等要求仅适用旧方案/另获批范围。
 - **可用性：** 云服务及 TextIn 调用需要网络访问；先前的 V1.0 离线需求已由 ADR-001 取代。
 
 ## 7. 架构决策
@@ -206,8 +201,10 @@ Browser upload → FastAPI format/size validation → private GCS original objec
 | ADR-001 | Google Cloud：Cloud Run + Cloud SQL PostgreSQL 18.6 + 私有 GCS | accepted（2026-10-27 已恢复原 Cloud SQL，数据库条目不再被 ADR-005 取代） |
 | ADR-002 | 在稳定接口后使用可插拔 OCR/提取引擎；V1.0 默认适配 TextIn | proposed |
 | ADR-003 | ERP/管理系统集成采用适配器模式 | proposed |
-| ADR-004 | Firestore 保存原始识别 JSON；Cloud Functions 事件驱动模板转换；Dataflow 仅用于批准的批量处理 | proposed |
+| ADR-004 | Firestore 原文归档与历史事件投影/Dataflow 方案 | proposed（旧方案/另获批范围；非本期模板执行链路） |
 | ADR-005 | 关系数据库迁移至自建 PostgreSQL 17（122.51.11.112 / odoo.saiflow） | reverted（2026-10-27 回切至 saiflow-dev/postgres.saiflow；自建库只读归档） |
+| [ADR-006](adr/ADR-006-relational-template-storage.md) | PostgreSQL json 存模板、不可变输入与映射/结果 | accepted（2026-10-31 已发布） |
+| [ADR-007](adr/ADR-007-llm-only-template-mapping.md) | 只用模型匹配/转换，不引入路径规则 | accepted（真实质量/性能基线未运行） |
 
 ## 链接
 
@@ -220,6 +217,10 @@ Browser upload → FastAPI format/size validation → private GCS original objec
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.7.0 | 2026-11-01 | Product Engineering | FR-SYS-019：套餐改为 `plans` 表配置 + `plans.py` 仓储缓存（60 秒 TTL、种子回退、空表启动播种）+ `manage_plans.py` CLI 维护，后端镜像新增 `manage_plans.py`、`plans_seed.json`；无管理 REST 接口，PC 管理端延后；863 项隔离后端测试通过，2026-11-01 正式发布：后端 saiflow-api-00056-ril、前端 saiflow-line-mini-00048-max（bundle index-SFvaHz8q.js）no-traffic 部署→tag 核验 /api/health 200、未登录接口 401、bundle 哈希一致→只读核验共享库自动建表并播种 4 个套餐（属主 saiflow_api，与种子一致）→手动切 100%，环境变量（22 项）与并发 12 与上一版一致；未建游客会话、未用真实账号做端到端核验 |
+| 2.6.2 | 2026-10-31 | Product Engineering | FR-SYS-018：通知中心收敛为账户变动类，新增个人/公司账户开通通知，worker 去掉 OCR 完成通知；2026-10-31 正式发布：后端 saiflow-api-00054-mol、前端 saiflow-line-mini-00046-god（bundle index-IPu3DEpl.js）no-traffic 部署→tag 核验 /api/health 200、通知接口未登录 401→手动切 100%，环境变量与并发 12 与上一版一致，切流后 15 分钟内无 5xx；含同日 TEMPLATE_MATCHING 三步流程；未用真实账号做端到端核验 |
+| 2.6.1 | 2026-10-31 | Product Engineering | 模板映射正式发布：Dockerfile 补拷模板模块并加守卫测试；后端 00049（开关关）迁移建表→seed 两个系统模板→前端 00043→后端 00052 开关开启；记录镜像、哈希、核验与未覆盖边界 |
+| 2.6.0 | 2026-10-31 | Product Engineering | 同步实际Flask/Vue/OcrWorker/MappingWorker与PostgreSQL json模板路径、组件图/数据流/审计/删除关联中止及ADR006/007；范围化旧Firestore事件投影而保留合法原文归档，明确本轮未seed/迁移/部署及真实基线待验 |
 | 2.5.4 | 2026-10-29 | Product Engineering | FR-VERIFY-015：Continue 校验并纳入尚在新增表单中的字段，Reset 包含输入，小屏控件完整可见；不改 API/JSON 或认证订阅资格，366 项隔离后端及 50 项浏览器/6 项源模块通过；仅前端 00039 100% 切流、标签移除、四入口资产/健康/匿名边界核验通过，镜像摘要及真机未验收边界见 §5 |
 | 2.5.3 | 2026-10-29 | Product Engineering | FR-SYS-001/011：Endpoint 同源/路径检查、默认 OAuth 与 LINE 内无 token 的一次恢复；FR-UPLOAD-001/010：三段同源 XHR、原字节/Cookie/CSRF/进度与有界失败；仅前端 00036 100% 切流、临时标签移除，四入口资产/健康/匿名边界核验通过；最终构建回归、真实 SDK 只读入口探针、镜像摘要及真机未验收边界见 §5，后端/数据库未变 |
 | 2.5.2 | 2026-10-29 | Product Engineering | NFR-PERF-005：后端 gunicorn `--threads 12` 与 Cloud Run `--concurrency 12` 对齐（单 worker、连接池 15 显式固定、`test_capacity.py` 约束）；前端 `/me/quota` 同会话同写代次请求合并与 5 秒复用；`.gcloudignore` 排除本地 Cookie 罐（NFR-SEC）；API 00032、前端 00025 100% 切流，发布证据见 §5 |

@@ -3,7 +3,7 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { ApiError, listJobs, type JobStage, type JobSummary } from '../api';
 import { messageText } from '../i18n';
 import { useT } from '../i18nVue';
-import { currentTenant, currentTenantId, navigate } from '../store';
+import { currentTenant, currentTenantId, jobRoute, navigate } from '../store';
 import BrandLoading from '../components/BrandLoading.vue';
 import JobListItem from '../components/JobListItem.vue';
 
@@ -16,7 +16,15 @@ const keyword = ref('');
 type Filter = 'ALL' | JobStage;
 const filter = ref<Filter>('ALL');
 
-const filters: Filter[] = ['ALL', 'OCR_PROCESSING', 'OCR_FAILED', 'VERIFYING', 'VERIFIED', 'COMPLETED'];
+const filters: Filter[] = [
+  'ALL',
+  'OCR_PROCESSING',
+  'OCR_FAILED',
+  'TEMPLATE_MATCHING',
+  'VERIFYING',
+  'VERIFIED',
+  'COMPLETED',
+];
 
 const PAGE_SIZE = 20;
 const page = ref(0);
@@ -108,9 +116,7 @@ function tenantLabel(): string {
 }
 
 function openJob(job: JobSummary) {
-  const route =
-    job.stage === 'OCR_PROCESSING' ? 'processing' : job.stage === 'COMPLETED' ? 'final' : 'result';
-  navigate(route, { jobId: job.id });
+  navigate(jobRoute(job.stage), { jobId: job.id });
 }
 </script>
 

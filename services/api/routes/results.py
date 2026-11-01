@@ -6,6 +6,15 @@ PATCH 携带 expected_version 做乐观并发校验，命中冲突返回 409 VER
 TextIn Prompt 任务没有 PageResult，编辑时直接提交完整 structured；
 旧版逐页任务仍支持按单元格编辑。
 每次有内容修改都会生成新 ResultVersion（旧版本 is_current=False，历史可追溯）。
+
+模板映射（FR-VERIFY-018..020，design D8、D13、D14）：
+- 新版本号 = 任务内 max(version) + 1，并继承当前版本的 mapping_id（通用 / 某个模板映射各自演进）；
+- PATCH 在任务行锁下执行，与模板切换、映射自动生效串行；
+- 模板结果保存前按模板补齐结构（缺失字段补 null，模板外内容原样保留）；
+- 模板结果确认前做必填门禁，缺失返回 422（草稿保存不拦截）；
+- 首次确认时记录一次自动匹配反馈审计（template.match_feedback）；
+- 响应附加 raw_result_id / current_mapping / template_schema / pending_mapping /
+  latest_failed_mapping / template_available / validation（见 doc_templates.views.result_extras）。
 """
 from __future__ import annotations
 
@@ -26,7 +35,11 @@ from errors import (
     version_conflict,
 )
 from extensions import db
-from models import PageResult, ResultVersion
+from doc_templates import normalize as template_normalize
+from doc_templates import service as mapping_service
+from doc_templates import views as template_views
+from errors import ApiError
+from models import PageResult, ResultVersion, TemplateMapping
 from routes.ocr import TERMINAL, _get_job_for_user, _registered
 from textin.adapter import _count_structure
 
@@ -96,7 +109,64 @@ def _result_payload(job, version: ResultVersion) -> dict:
         "missing_pages": list(job.missing_pages or []),
         "structured": structured,
         "pages": pages,
+        **_template_extras(job, version),
     }
+
+
+# —— 模板映射协作点（集中为模块级函数，便于单元测试替换）——
+
+
+def _template_extras(job, version: ResultVersion) -> dict:
+    return template_views.result_extras(job, version)
+
+
+def _lock_job(job):
+    return mapping_service.lock_job(job.id)
+
+
+def _template_groups(version: ResultVersion) -> list[dict] | None:
+    _, template_ver = template_views.groups_for_version(version)
+    return template_ver.groups if template_ver is not None else None
+
+
+def _next_version_no(job_id: str) -> int:
+    return mapping_service.next_version_no(job_id)
+
+
+def _required_gate(groups: list[dict], structured) -> None:
+    """必填门禁（FR-VERIFY-020）：模板结果确认前，按保存后的内容校验 required；缺失返回 422，不写入。"""
+    missing = template_normalize.required_missing(groups, structured)
+    if missing:
+        raise ApiError(
+            422, "INVALID_ARGUMENT", "results.required_missing",
+            field_errors=[{"field": f"structured.{path}", "reason": "required"} for path in missing],
+        )
+
+
+def _match_feedback(job, version: ResultVersion, user) -> None:
+    """确认时记录一次自动匹配反馈：自动匹配的模板版本 vs 最终确认的模板版本。"""
+    auto = (
+        TemplateMapping.query.filter_by(job_id=job.id, source=mapping_service.AUTO)
+        .order_by(TemplateMapping.created_at.desc(), TemplateMapping.id.desc())
+        .first()
+    )
+    if auto is None:
+        return
+    final = db.session.get(TemplateMapping, version.mapping_id) if version.mapping_id else None
+    auto_tv = auto.template_version_id if auto.status == mapping_service.READY else None
+    final_tv = final.template_version_id if final is not None else None
+    mapping_service.add_audit(
+        "template.match_feedback", job,
+        {"mapping_id": final.id if final else None,
+         "auto_mapping_id": auto.id, "auto_status": auto.status,
+         "auto_template_version_id": auto_tv, "auto_match_score": auto.match_score,
+         "final_template_id": final.template_id if final else None,
+         "template_version_id": final_tv,
+         "source": final.source if final else None,
+         "result": "match" if auto_tv is not None and auto_tv == final_tv else "changed",
+         "version": version.version},
+        user_id=user.id if user else None,
+    )
 
 
 @results_bp.get("/ocr/jobs/<job_id>/results")
@@ -114,11 +184,13 @@ def get_results(job_id: str):
 def update_results(job_id: str):
     user = current_user()
     job = _get_job_for_user(job_id, user)
+    job = _lock_job(job)  # 与模板切换 / 映射生效串行，版本号 max+1 不撞号
     version = _current_version(job.id)
     if version is None:
         if job.status not in TERMINAL:
             raise state_conflict("results.not_ready")
         raise not_found()
+    groups = _template_groups(version)
 
     body = request.get_json(silent=True) or {}
     if not isinstance(body, dict):
@@ -150,6 +222,9 @@ def update_results(job_id: str):
                 ]
             )
         normalized_structured = _normalize_structured(raw_structured)
+        if groups is not None:
+            # 模板结果的结构补齐：缺失的模板字段补 null、表格行补齐列；模板外内容原样保留
+            normalized_structured = template_normalize.fill_structure(groups, normalized_structured)
         structured_changed = normalized_structured != version.structured
 
     field_errors: list[dict] = []
@@ -176,17 +251,23 @@ def update_results(job_id: str):
     if field_errors:
         raise invalid_argument(field_errors=field_errors)
 
+    if confirm and groups is not None:
+        _required_gate(groups, normalized_structured if structured_changed else version.structured)
+    was_confirmed = job.review_status == "CONFIRMED"
+
     pages = _pages_payload(version)
 
     if structured_changed:
         new_version = ResultVersion(
             job_id=job.id,
-            version=version.version + 1,
+            version=_next_version_no(job.id),
             is_current=True,
             created_by_user_id=user.id,
             structured=normalized_structured,
+            mapping_id=version.mapping_id,
         )
         version.is_current = False
+        db.session.flush()  # 先落旧版本，避免 (job_id) WHERE is_current 部分唯一索引瞬时冲突
         db.session.add(new_version)
         db.session.flush()
         version = new_version
@@ -228,12 +309,14 @@ def update_results(job_id: str):
 
         new_version = ResultVersion(
             job_id=job.id,
-            version=version.version + 1,
+            version=_next_version_no(job.id),
             is_current=True,
             created_by_user_id=user.id,
             structured=copy.deepcopy(version.structured),
+            mapping_id=version.mapping_id,
         )
         version.is_current = False
+        db.session.flush()
         db.session.add(new_version)
         db.session.flush()
         for p in pages:
@@ -249,6 +332,8 @@ def update_results(job_id: str):
         version = new_version
 
     if confirm:
+        if not was_confirmed:
+            _match_feedback(job, version, user)
         job.review_status = "CONFIRMED"
         if job.completed_at is None:
             job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)

@@ -3,8 +3,8 @@ doc_id: EPIC-03
 title: "EPIC-03 — 数据人工核验与修改"
 type: epic
 status: active
-version: 1.5.9
-updated: 2026-10-29
+version: 1.7.0
+updated: 2026-10-31
 owner: Product Engineering
 priority: P0
 source: "PRD-001 §3.1 场景 3, §4.3"
@@ -40,7 +40,10 @@ related: [DM-Document, DM-ExtractedField, DM-ChangeLog, DM-ReviewRecord, DM-Resu
 | FR-VERIFY-014 | 核验结果页仅保留原图预览与结构化数据，原图位于表格上方；上传确认页预览、核验结果页/最终结果页原图与公司证书图片点击后均以全屏查看器打开，支持双指触控捏合缩放 | P0 | 界面调整 2026-10-17/19 | FR-VERIFY-001 | AC-FR-VERIFY-014-01/02 |
 | FR-VERIFY-015 | 允许直接编辑结构化字段与表格单元格，并可新增/删除字段与表格行、通过 Reset 放弃未保存改动，以新结果版本保存；Continue 必须校验并纳入尚在新增表单中的有效字段，不能静默丢弃；金额数字统一千分位 + 保留 2 位小数显示与导出 | P0 | 界面调整 2026-10-17/20、缺陷修复 2026-10-29 | FR-VERIFY-002 | AC-FR-VERIFY-015-01/02/03/04/05/06 |
 | FR-VERIFY-016 | LINE Mini App 结果页 Continue 在确认前检查认证、注册完成状态与任务所属工作空间的订阅；仅已注册且已开通付费套餐的用户可显式确认、锁定结果后进入最终结果页 | P0 | 界面调整 2026-10-17/18 | FR-VERIFY-006, FR-SYS-011, FR-SYS-012 | AC-FR-VERIFY-016-01/02 |
-| FR-VERIFY-017 | 在任务列表与结果页按流程阶段（OCR 处理中 / OCR 处理失败 / 数据验证中 / 数据已验证 / 最终完成）展示任务状态，并支持按阶段筛选历史任务，历史列表每页 20 条滚动分页加载 | P0 | 界面调整 2026-10-18 | FR-VERIFY-016 | AC-FR-VERIFY-017-01/02/03 |
+| FR-VERIFY-017 | 在任务列表与结果页按流程阶段（OCR 处理中 / OCR 处理失败 / 模板匹配中 / 数据验证中 / 数据已验证 / 最终完成）展示任务状态，并支持按阶段筛选历史任务，历史列表每页 20 条滚动分页加载 | P0 | 界面调整 2026-10-18 | FR-VERIFY-016 | AC-FR-VERIFY-017-01/02/03/04/05 |
+| FR-VERIFY-018 | 提供结果页模板选择、得分/已生成/预览、保存后切换、异步状态与失败恢复，允许不套用模板（通用结果）；复用已就绪映射仅移动指针，已确认拒绝切换 | P0 | PRD §3.2 R5/R6 | FR-OCR-018..021、FR-TEMPLATE-007 | AC-FR-VERIFY-018-01..06 |
+| FR-VERIFY-019 | 按固定模板分组、项、列顺序与显示名渲染；模板字段只能清空，保留模板外字段及表格行增删；保存 max+1 版本并继承当前映射，补齐结构；最终页只读及历史模板名 | P0 | PRD §3.2/4.8 R2/R3 | FR-VERIFY-015、FR-VERIFY-018 | AC-FR-VERIFY-019-01/02/03 |
+| FR-VERIFY-020 | 模板结果 required 字段/已有行必填列缺失时保留并高亮，不判 OCR 失败；confirm=true 返回 422 字段路径错误且不写版本/不确认，草稿与通用结果不受此门禁限制 | P0 | PRD §3.2 R4 | FR-VERIFY-019 | AC-FR-VERIFY-020-01/02/03 |
 
 ## 3. 规则
 
@@ -83,7 +86,8 @@ related: [DM-Document, DM-ExtractedField, DM-ChangeLog, DM-ReviewRecord, DM-Resu
 |-------|------|----------|
 | `OCR_PROCESSING` | OCR 处理中 | OCR 任务处于排队/预处理/识别/后处理/取消中 |
 | `OCR_FAILED` | OCR 处理失败 | OCR 任务 `FAILED` 或 `CANCELLED` |
-| `VERIFYING` | 数据验证中 | OCR 成功（含部分成功）且结果尚未确认 |
+| `TEMPLATE_MATCHING` | 模板匹配中 | OCR 成功（含部分成功）、结果尚未确认，且存在进行中的模板映射（`ocr_jobs.pending_mapping_id` 非空；映射 READY/FAILED/中断回收时清空） |
+| `VERIFYING` | 数据验证中 | OCR 成功（含部分成功）、结果尚未确认，且无进行中的模板映射 |
 | `VERIFIED` | 数据已验证 | 历史已确认结果，`completed_at` 为空；保留兼容 |
 | `COMPLETED` | 最终完成 | 结果已确认且 `completed_at` 已记录 |
 
@@ -91,11 +95,23 @@ related: [DM-Document, DM-ExtractedField, DM-ChangeLog, DM-ReviewRecord, DM-Resu
 - 游客、未完成注册者以及无已开通付费套餐的 Free/NONE 或 PENDING 用户点击 `Continue` 时不提交确认；未确认任务（含重定向前以 `confirm: false` 保存变更的任务）保持「数据验证中」，不锁定、不记录 `completed_at`。
 - 已注册且任务所属工作空间订阅 ACTIVE 的用户在结果页显式确认成功后，任务直接进入「最终完成」，不经过「数据已验证」；另有更高档升级申请处理中不影响此资格。
 - 历史「数据已验证」任务仍可展示与筛选；登录/注册或套餐开通后不自动完成，只有已注册付费用户在结果页再次显式点击「继续」，才记录 `completed_at` 并进入「最终完成」。
-- 历史页筛选项固定为：全部 / OCR 处理中 / OCR 处理失败 / 数据验证中 / 数据已验证 / 最终完成。筛选项超出一行宽度时自动换行，所有筛选项必须完整可见。
+- 历史页筛选项固定为：全部 / OCR 处理中 / OCR 处理失败 / 模板匹配中 / 数据验证中 / 数据已验证 / 最终完成。筛选项超出一行宽度时自动换行，所有筛选项必须完整可见。
 - 历史页分页加载：每页 20 条，按创建时间倒序；列表滚动至底部时自动加载下一页，加载中显示「加载更多…」，全部加载完毕（且超过一页）时显示「没有更多记录」。
 - 阶段筛选（`stage`）与文件名搜索（`q`，不区分大小写的包含匹配）均在服务端分页之前执行，保证每页结果完整；切换筛选、修改关键字（300 ms 防抖）或切换工作空间时从第 1 页重新加载。
-- 打开任务（历史页与首页最近任务）：OCR 处理中→处理进度页；最终完成→最终结果页；其余阶段→结果页。
+- 打开任务（历史页与首页最近任务）：OCR 处理中、模板匹配中→处理进度页；最终完成→最终结果页；其余阶段→结果页。
+- 处理进度页显示三步流程：**上传 → OCR 处理 → 模板匹配**。上传步始终完成；OCR 处理步覆盖排队/预处理/识别/后处理/取消中（进行中），`SUCCEEDED`/`PARTIAL_SUCCESS` 为完成，`FAILED`/`CANCELLED` 显示失败（状态卡标题同步显示 "OCR 处理失败"）；模板匹配步在 `stage=TEMPLATE_MATCHING` 时进行中，OCR 成功且无进行中映射（含无可用模板、映射完成或失败）时为完成。处理页以 `GET /api/v1/ocr/jobs/{id}` 的 `stage` 判断是否继续等待映射，最多额外等待 90 秒后进入结果页。
 - 最终结果页仅显示任务阶段标签，不再重复显示 `Confirmed` 标签；结果保持只读，原图与 Excel 导出功能不变。
+
+### 3.6 模板选择、展示与确认（FR-VERIFY-018..020）
+
+- 结果查询附加 `raw_result_id / current_mapping / template_schema / pending_mapping / latest_failed_mapping / template_available / validation`；任务摘要附加 `template_name`。通用结果的 current_mapping/template_schema 为 null；开关关闭仍保存并返回 raw_result_id，仅无历史快照时为空。内部不可变模板快照保留完整 description 供模型使用，GET 版本对前端裁剪描述，没有公开 description 需求；授权/字段契约来自 [API-Spec](../../30-design/API-Spec.md)。
+- 选择框默认当前模板，否则「不套用模板（通用结果）」；推荐与得分、其他可用模板/已生成标记、通用结果依次显示，支持分组与字段预览。未保存时提示「保存并切换 / 取消」，选择保存先存草稿；处理中禁止编辑，2 秒轮询，最长 10 分钟。处理页最多额外等待映射 90 秒，之后进入结果页继续轮询。
+- apply-template 使用 `{raw_result_id,template_id,expected_version,force?}` 或 `{mapping_id,expected_version}`；READY 复用/切回返回 200，处理中指向 pending 或新建 MANUAL 返回 202。raw_result_id 必须属于该任务（否则 404），模板需可见启用未删（否则 409 TEMPLATE_UNAVAILABLE）。use-generic 同步恢复通用分支最新保存版本，无模型调用。切换不复制数据，上次编辑原样保留；已确认三种操作均返回 409 `results.already_confirmed`。
+- 任务行锁串行创建、切换、READY 生效与 PATCH；新版本 = 该任务 max(version)+1，继承 current_mapping_id，通用归属为空。保存缺失模板字段补 null，表格行补齐列，用户新增的模板外字段、列、分组与行保留。READY 仅在 pending/base/未确认三条件全部满足时生效，否则保留可切回版本，不抢占用户编辑。
+- schema 存在时按分组/项/列顺序及显示名渲染，required 星标且空值标红。模板字段没有删除按钮，只能清空；模板外字段排末尾并可增删，表格行可增删。数字键盘按类型提供，amount 按 FR-VERIFY-015 显示千分位、至少两位小数，超过两位不舍入；通用结果沿用原键名推断规则，模板 decimal/amount 的字符串存储不得强行改成浮点数字。最终页只读复用 schema 并显示模板名，历史显示模板名标签。
+- required 只要求字段非空、已有表格每行必填列非空；空表格不虚构必填行。前端 Continue 高亮并滚动首个缺失项，后端按待保存内容再次检查：422 INVALID_ARGUMENT / `results.required_missing`，`field_errors=[{field:"structured.<path>",reason:"required"}]`，不写版本或确认；草稿仍可保存。类型警告仅提示，通用结果不套用此门禁；既有认证/注册/租户资格规则不变。
+- 失败提示提供重试、其他模板、通用结果，当前版本不变；重试映射显式传 `force=true` 避免复用旧 READY，仍受次数上限约束。低分仍套用并提示，零候选提示暂无可用模板。审计 template.applied/switched/generic_selected/mapping_failed；每次显式 use-generic 即使已通用也记录 template.generic_selected，不新增结果版本。首次确认记录 match_feedback（AUTO 版本与最终版本），不记录单据内容。
+- 本节在模板结果上优先于 §3.3/3.4 中历史字段删除、键名金额推断及置信度门控；不新增置信度或金额重算。2026-10-31 隔离 SQLite/mock 后端 816 项通过，不替代真实 LLM 基线或浏览器/真机验收；完整 AC 与实际补测边界见 [汇总 §3](../../40-acceptance/Acceptance-Criteria.md#3-epic-03--核验)。
 
 ## 4. 代表性验收标准（P0）
 
@@ -283,20 +299,37 @@ Feature: EPIC-03 核验与修改
     When 用户点击 "最终完成" 的任务
     Then 直接进入该任务的最终结果页，不再显示需要 Continue 确认的结果页
     And 最终结果页仅显示任务阶段标签，不再重复显示 Confirmed 标签，结果保持只读且可导出
-    When 用户点击 "OCR 处理中" 的任务
+    When 用户点击 "OCR 处理中" 或 "模板匹配中" 的任务
     Then 进入处理进度页
     When 用户点击其余阶段的任务
     Then 进入结果页
+
+  Scenario: AC-FR-VERIFY-017-05 处理进度三步流程与模板匹配阶段
+    Given 用户提交识别任务，且任务所属租户存在可用模板
+    When OCR 任务处于排队/预处理/识别/后处理中
+    Then 处理进度页显示 "上传"（完成）→ "OCR 处理"（进行中）→ "模板匹配"（未开始）三步
+    And 任务阶段为 "OCR 处理中"
+    When OCR 成功且自动模板映射仍在进行（pending_mapping_id 非空）
+    Then "OCR 处理" 显示完成，"模板匹配" 显示进行中，并提示正在匹配模板
+    And 任务阶段为 "模板匹配中"，历史页按 "模板匹配中" 筛选可查到该任务，按 "数据验证中" 查不到
+    When 映射完成或失败（pending_mapping_id 清空），或等待超过 90 秒
+    Then 三步均显示完成并进入结果页，任务阶段回到 "数据验证中"
+    When OCR 任务 FAILED 或 CANCELLED
+    Then "OCR 处理" 显示失败，"模板匹配" 不开始，任务阶段为 "OCR 处理失败"
 ```
 
 ## 5. 可追溯性
 | FR ID | 验证方式 | 设计引用 |
 |-------|----------|----------|
 | FR-VERIFY-001..017 | AC-FR-VERIFY-* | `DM-ExtractedField`、`DM-ChangeLog`、`DM-ReviewRecord`、`DM-ReviewPolicy`、`API-4` |
+| FR-VERIFY-018..020 | [AC-FR-VERIFY-018..020](../../40-acceptance/Acceptance-Criteria.md#3-epic-03--核验) | [Data-Model](../../30-design/Data-Model.md) 的 DM-TemplateMapping/DM-ResultVersion、[API-Spec](../../30-design/API-Spec.md)、[OCR-Pipeline](../../30-design/OCR-Pipeline.md) |
 
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.7.0 | 2026-10-31 | Product Engineering | FR-VERIFY-017：新增阶段 TEMPLATE_MATCHING（模板匹配中，pending_mapping_id 非空且未确认）并加入历史筛选；处理进度页改为「上传 → OCR 处理 → 模板匹配」三步，模板匹配中任务打开处理页；新增 AC-FR-VERIFY-017-05 |
+| 1.6.1 | 2026-10-31 | Product Engineering | 对齐公开description裁剪/raw快照、force重试、显式use-generic即使已通用仍记录审计且不升版；区分隔离后端证据、补测与真实验收 |
+| 1.6.0 | 2026-10-31 | Product Engineering | 新增FR-VERIFY-018..020：选择/切回保存分支、schema渲染及extras、任务锁/max+1/映射继承、required确认422无写入；通用与既有认证规则保持 |
 | 1.5.9 | 2026-10-29 | Product Engineering | FR-VERIFY-015：Continue 校验并纳入未点击小「+」的新增字段；空名/重名阻断且不部分提交，Reset 包含表单输入，小屏增删按钮完整可见；新增 AC-FR-VERIFY-015-06，API/JSON 与认证订阅资格不变 |
 | 1.5.8 | 2026-10-20 | Product Engineering | FR-VERIFY-015：核验结果页支持新增/删除字段与表格增删行（删除到空时保留空卡片入口，新增金额类值按金额格式保存与显示）；Continue 旁新增 Reset 按钮，确认后放弃未保存改动；新增 AC-FR-VERIFY-015-04/05 |
 | 1.5.7 | 2026-10-19 | Product Engineering | FR-VERIFY-015：金额数字千分位逗号 + 至少保留 2 位小数（不省略 .00），计数/标识字段按原值；页面与 Excel/CSV 导出一致，编辑后保持数字类型；新增 AC-FR-VERIFY-015-03。FR-VERIFY-014：核验结果页/最终结果页原图与公司证书统一使用全屏查看器（双指捏合缩放）；更新 AC-FR-VERIFY-014-01 |

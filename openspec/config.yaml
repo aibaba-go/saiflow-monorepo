@@ -27,7 +27,7 @@ rules:
     - 变更名使用 kebab-case。
     - 必须引用 docs/10-product 或 docs/20-requirements 中对应的产品诉求来源。
     - 需列出“非目标（Non-goals）”。
-  spec:
+  specs:
     - 每条需求至少 1 条 Gherkin 验收标准（Given/When/Then）。
     - 术语使用 docs/10-product/Glossary.md 的精确名称。
     - 需求原子化、可测，使用 SHALL/SHOULD/MAY。

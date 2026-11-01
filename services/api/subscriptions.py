@@ -2,13 +2,15 @@
 
 规则只有一条口径：**每个租户都有且只有一行订阅**。
 
-- 个人租户（含游客）建租户即默认开通 Kinder 一个月，`source=DEFAULT`；
-- 企业租户在 `enterprises.status=VERIFIED` 后按 `verified_at` 起算一个月；
+- 个人租户（含游客）建租户即开通默认套餐（`plans.is_default`，当前 Kinder）
+  `trial_months` 个月（当前 1），`source=DEFAULT`；
+- 企业租户在 `enterprises.status=VERIFIED` 后按 `verified_at` 起算，规则同上；
 - 没有 Free 档位、没有赠送次数：到期即硬停，不能再新建 OCR 任务，
   已有任务与历史结果仍可查看导出；
 - 续费走线下人工审批：把 `PLAN_UPGRADE` 申请置为 `APPROVED`，并在
   `form.valid_from / valid_to` 写明有效期；本模块读取订阅时按
-  `application_id` 惰性同步，没写日期就按 `APPROVED_PERIOD_MONTHS` 续。
+  `application_id` 惰性同步，没写日期就按该套餐配置的 `approved_period_months` 续。
+  套餐与默认规则均来自 `plans` 表配置（FR-SYS-019）。
 
 发放与续期都是幂等的：`subscriptions.tenant_id` 唯一，重复创建由唯一约束
 兜住；续期只在 `application_id` 发生变化时执行一次。
@@ -23,14 +25,8 @@ from datetime import date, datetime, timedelta, timezone
 from sqlalchemy.exc import IntegrityError
 
 from extensions import db
-from models import Application, Enterprise, Subscription, Tenant, _now
-from plans import (
-    APPROVED_PERIOD_MONTHS,
-    DEFAULT_PERIOD_MONTHS,
-    DEFAULT_PLAN_CODE,
-    PLAN_CATALOG,
-    get_plan,
-)
+from models import Application, Enterprise, Notification, Subscription, Tenant, _now
+import plans as plan_config
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +59,8 @@ def days_remaining(expires_at: datetime, *, now: datetime | None = None) -> int:
     return (local_date(expires_at) - local_date(now or _now())).days
 
 
-def plan_name(code: str) -> str:
-    return next((p["name"] for p in PLAN_CATALOG if p["code"] == code), get_plan(code)["name"])
+def plan_name(code: str, language: str = "en") -> str:
+    return plan_config.plan_name(code, language)
 
 
 # ---- 默认开通 ----
@@ -85,7 +81,7 @@ def _start_for(tenant: Tenant) -> datetime | None:
 
 
 def ensure_subscription(tenant: Tenant, *, commit: bool = False) -> Subscription | None:
-    """幂等返回租户订阅；首次调用按默认规则开通一个月。企业未认证返回 None。"""
+    """幂等返回租户订阅；首次调用按配置的默认套餐与月数开通。企业未认证返回 None。"""
     row = Subscription.query.filter_by(tenant_id=tenant.id).first()
     if row is not None:
         return _sync_approved(row, commit=commit)
@@ -93,12 +89,13 @@ def ensure_subscription(tenant: Tenant, *, commit: bool = False) -> Subscription
     starts_at = _start_for(tenant)
     if starts_at is None:
         return None
+    default = plan_config.default_plan()
     row = Subscription(
         tenant_id=tenant.id,
-        plan_code=DEFAULT_PLAN_CODE,
+        plan_code=default["code"],
         source="DEFAULT",
         starts_at=starts_at,
-        expires_at=add_months(starts_at, DEFAULT_PERIOD_MONTHS),
+        expires_at=add_months(starts_at, default["trial_months"]),
     )
     db.session.add(row)
     try:
@@ -107,10 +104,45 @@ def ensure_subscription(tenant: Tenant, *, commit: bool = False) -> Subscription
         db.session.rollback()
         existing = Subscription.query.filter_by(tenant_id=tenant.id).first()
         return _sync_approved(existing, commit=commit) if existing else None
-    logger.info("默认开通 Kinder tenant=%s 至 %s", tenant.id, row.expires_at)
+    logger.info("默认开通 %s tenant=%s 至 %s", row.plan_code, tenant.id, row.expires_at)
+    _queue_activation_notice(tenant, row)
     if commit:
         db.session.commit()
     return _sync_approved(row, commit=commit)
+
+
+def _activation_texts(language: str, company: str | None, plan: str, until: str) -> tuple[str, str, str]:
+    """开通通知 (type, title, body)，按收件人语言（th/en）；company 为空即个人账户。"""
+    thai = language == "th"
+    if company is None:
+        if thai:
+            return ("ACCOUNT_ACTIVATED", "เปิดใช้งานบัญชีแล้ว", f"แพ็กเกจ {plan} ของคุณใช้งานได้ถึงวันที่ {until}")
+        return ("ACCOUNT_ACTIVATED", "Account activated", f"Your {plan} plan is active until {until}.")
+    name = company
+    if thai:
+        return ("COMPANY_ACTIVATED", "เปิดใช้งานบัญชีบริษัทแล้ว", f"{name}: แพ็กเกจ {plan} ใช้งานได้ถึงวันที่ {until}")
+    return ("COMPANY_ACTIVATED", "Company account activated", f"{name}: {plan} plan is active until {until}.")
+
+
+def _queue_activation_notice(tenant: Tenant, row: Subscription) -> None:
+    """首次开通时给账户负责人发一条站内通知（与订阅行同一事务提交，不单独 commit）。
+
+    个人租户发给本人（游客试用不发：认领后试用订阅随游客租户一起删除）；
+    企业租户发给 ACTIVE OWNER（与到期提醒同一收件人规则）。
+    """
+    from reminders import recipient_for  # 延迟导入：reminders 依赖本模块
+
+    user = recipient_for(tenant.id)
+    if user is None or user.is_guest:
+        return
+    language = user.language if user.language in ("th", "en") else "en"
+    until = local_date(row.expires_at).isoformat()
+    company = None
+    if tenant.tenant_type != "PERSONAL":
+        enterprise = Enterprise.query.filter_by(tenant_id=tenant.id).first()
+        company = (enterprise.legal_name if enterprise else None) or tenant.display_name or ""
+    type_, title, body = _activation_texts(language, company, plan_name(row.plan_code, language), until)
+    db.session.add(Notification(user_id=user.id, type=type_, title=title, body=body))
 
 
 # ---- 人工审批续期 ----
@@ -155,11 +187,13 @@ def _sync_approved(row: Subscription, *, commit: bool = False) -> Subscription:
         # 未到期就续费：从当期到期日接续，不浪费剩余天数
         starts_at = max(now, row.expires_at)
     expires_at = _parse_moment(form.get("valid_to"))
+    plan_code = form.get("plan_code") or row.plan_code
     if expires_at is None:
         months = form.get("period_months")
-        months = months if isinstance(months, int) and 1 <= months <= 120 else APPROVED_PERIOD_MONTHS
+        if not (isinstance(months, int) and 1 <= months <= 120):
+            months = plan_config.approved_period_months(plan_code)
         expires_at = add_months(starts_at, months)
-    row.plan_code = form.get("plan_code") or row.plan_code
+    row.plan_code = plan_code
     row.source = "APPROVED"
     row.starts_at = starts_at
     row.expires_at = expires_at

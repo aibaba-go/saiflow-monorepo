@@ -32,7 +32,7 @@ import storage
 
 exports_bp = Blueprint("exports", __name__)
 
-FORMATS = {"XLSX", "CSV", "TXT"}
+FORMATS = {"XLSX", "CSV", "TXT", "JSON"}
 EXPORT_TTL = timedelta(hours=24)
 
 
@@ -285,8 +285,115 @@ _TITLE_HEIGHT = 28.5
 _LONG_TEXT = 20
 
 
+# ---------- 模板结果导出（design D15，FR-ENTRY-002）----------
+# 按模板分组顺序输出；字段行为「显示名称 | 值」，表格表头为列显示名称；
+# 金额按字段类型（而不是按键名）格式化；模板外字段追加在对应分组末尾。
+
+
+def _format_amount(text: str) -> str:
+    sign = "-" if text.startswith("-") else ""
+    integer, _, frac = text[len(sign):].partition(".")
+    return f"{sign}{int(integer):,}.{frac.ljust(2, '0')}"
+
+
+def _typed_text(value, ftype: str) -> str:
+    from doc_templates.normalize import normalize_value
+
+    if value is None:
+        return ""
+    if ftype == "amount" and not isinstance(value, bool):
+        normalized, warn = normalize_value("amount", value)
+        if warn is None and isinstance(normalized, str):
+            return _format_amount(normalized)
+        return str(value)
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, float) and str(value).endswith(".0"):
+        return str(value)[:-2]
+    if isinstance(value, (dict, list)):
+        return _format_cell(value)
+    return str(value)
+
+
+def _template_sections(groups: list[dict], structured) -> tuple[list, list]:
+    """返回 (字段分区, 表格分区)，均为已排版的显示文本：
+    字段分区 [(标题, [(名称, 值)])]；表格分区 [(标题, [表头], [[单元格]])]。"""
+    data = structured if isinstance(structured, dict) else {}
+    field_sections: list[tuple[str | None, list[tuple[str, str]]]] = []
+    table_sections: list[tuple[str, list[str], list[list[str]]]] = []
+    known_groups = set()
+    for group in groups:
+        gkey = group["key"]
+        known_groups.add(gkey)
+        gval = data.get(gkey)
+        gval = gval if isinstance(gval, dict) else {}
+        rows: list[tuple[str, str]] = []
+        known_items = set()
+        for item in group["items"]:
+            known_items.add(item["key"])
+            if item["kind"] == "field":
+                rows.append((item["name"], _typed_text(gval.get(item["key"]), item.get("type", "string"))))
+                continue
+            columns = item["columns"]
+            col_keys = [c["key"] for c in columns]
+            table_rows = gval.get(item["key"])
+            table_rows = table_rows if isinstance(table_rows, list) else []
+            extra_cols: list[str] = []
+            for row in table_rows:
+                if isinstance(row, dict):
+                    for key in row:
+                        if key not in col_keys and key not in extra_cols:
+                            extra_cols.append(str(key))
+            headers = [c["name"] for c in columns] + [_display_name(k) for k in extra_cols]
+            body = []
+            for row in table_rows:
+                row = row if isinstance(row, dict) else {}
+                body.append(
+                    [_typed_text(row.get(c["key"]), c.get("type", "string")) for c in columns]
+                    + [_format_cell(row.get(k), k) for k in extra_cols]
+                )
+            table_sections.append((f"{group['name']} · {item['name']}", headers, body))
+        for key, value in gval.items():  # 模板外字段追加在分组末尾
+            if key in known_items:
+                continue
+            if isinstance(value, list) and value and all(isinstance(r, dict) for r in value):
+                for title, cols, trows in _table_sections(value, [str(key)]):
+                    table_sections.append((
+                        f"{group['name']} · {_display_name(title)}",
+                        [_display_name(c) for c in cols],
+                        [[_format_cell(v, cols[i]) for i, v in enumerate(r)] for r in trows],
+                    ))
+            else:
+                rows.append((_display_name(str(key)), _format_cell(value, str(key))))
+        if rows:  # 只有表格的分组不出空的字段分区
+            field_sections.append((group["name"], rows))
+    extra = {k: v for k, v in data.items() if k not in known_groups}
+    if extra:
+        generic_fields, generic_tables = _generic_sections(extra, "")
+        field_sections.extend((title or _display_name("other"), rows) for title, rows in generic_fields)
+        table_sections.extend(generic_tables)
+    return field_sections, table_sections
+
+
+def _generic_sections(structured, tables_title: str) -> tuple[list, list]:
+    """通用结果的分区（与 line-mini StructuredDataView 一致），排版为与模板分区相同的形状。"""
+    fields = []
+    for index, (path, rows) in enumerate(_field_sections(structured, [])):
+        title = _display_name(path) if (path or index) else None
+        fields.append((title, [(_display_name(key), _format_cell(value, str(key))) for key, value in rows]))
+    tables = []
+    for path, columns, rows in _table_sections(structured, []):
+        tables.append((
+            _display_name(path) if path else tables_title,
+            [_display_name(column) for column in columns],
+            [[_format_cell(value, columns[col]) for col, value in enumerate(values)] for values in rows],
+        ))
+    return fields, tables
+
+
 def _build_xlsx_structured(
-    structured, out: io.BytesIO, missing_pages: list[int], language: str = "th"
+    structured, out: io.BytesIO, missing_pages: list[int], language: str = "th",
+    template: tuple[str, list[dict]] | None = None,
 ) -> None:
     try:
         from openpyxl import Workbook
@@ -317,22 +424,25 @@ def _build_xlsx_structured(
     def blank() -> None:
         plan.append(("blank", []))
 
-    fields = _field_sections(structured, [])
-    tables = _table_sections(structured, [])
+    if template is not None:
+        title = template[0] or info_title
+        fields, tables = _template_sections(template[1], structured)
+    else:
+        title = info_title
+        fields, tables = _generic_sections(structured, tables_title)
 
-    plan.append(("title", [(info_title, "title", center)]))
-    for index, (path, rows) in enumerate(fields):
-        if path or index:
+    plan.append(("title", [(title, "title", center)]))
+    for section_title, rows in fields:
+        if section_title is not None:
             blank()
-            plan.append(("section", [(_display_name(path), "section", center)]))
-        for key, value in rows:
-            plan.append(("row", [(_display_name(key), "key", center), (_format_cell(value, str(key)), "value", left)]))
+            plan.append(("section", [(section_title, "section", center)]))
+        for label, text in rows:
+            plan.append(("row", [(label, "key", center), (text, "value", left)]))
 
-    for path, columns, rows in tables:
+    for section_title, headers, texts in tables:
         blank()
-        plan.append(("section", [(_display_name(path) if path else tables_title, "section", center)]))
-        plan.append(("row", [(_display_name(column), "head", center) for column in columns]))
-        texts = [[_format_cell(value, columns[col]) for col, value in enumerate(values)] for values in rows]
+        plan.append(("section", [(section_title, "section", center)]))
+        plan.append(("row", [(header, "head", center) for header in headers]))
         long_cols = {
             col
             for line in texts
@@ -389,6 +499,22 @@ def _build_xlsx_structured(
         else:
             ws.row_dimensions[row_no].height = _ROW_HEIGHT + (lines - 1) * _LINE_HEIGHT
     wb.save(out)
+
+
+def _build_csv_template(structured, groups: list[dict]) -> bytes:
+    fields, tables = _template_sections(groups, structured)
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["section", "name", "value"])
+    for title, rows in fields:
+        for label, text in rows:
+            writer.writerow(["FIELD", _safe_cell(f"{title} / {label}" if title else label), _safe_cell(text)])
+    for title, headers, body in tables:
+        writer.writerow(["TABLE", _safe_cell(title), ""])
+        writer.writerow(["HEADER", *[_safe_cell(h) for h in headers]])
+        for row in body:
+            writer.writerow(["ROW", *[_safe_cell(cell) for cell in row]])
+    return buf.getvalue().encode("utf-8-sig")
 
 
 def _build_csv_structured(structured) -> bytes:
@@ -512,6 +638,10 @@ def create_export(job_id: str):
     db.session.flush()
 
     pages = _load_pages(version.id)
+    from doc_templates.views import groups_for_version
+
+    _, template_ver = groups_for_version(version)
+    template = (template_ver.name, template_ver.groups) if template_ver is not None else None
     try:
         if fmt == "XLSX":
             buf = io.BytesIO()
@@ -521,18 +651,24 @@ def create_export(job_id: str):
                     buf,
                     list(job.missing_pages or []),
                     language=user.language or "th",
+                    template=template,
                 )
             else:
                 _build_xlsx(pages, buf, list(job.missing_pages or []))
             data = buf.getvalue()
             mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         elif fmt == "CSV":
-            data = (
-                _build_csv_structured(version.structured)
-                if version.structured is not None
-                else _build_csv(pages)
-            )
+            if version.structured is not None and template is not None:
+                data = _build_csv_template(version.structured, template[1])
+            elif version.structured is not None:
+                data = _build_csv_structured(version.structured)
+            else:
+                data = _build_csv(pages)
             mime = "text/csv"
+        elif fmt == "JSON":
+            # FR-ENTRY-002：不做名称替换、类型格式化或字段投影，保留当前 structured。
+            data = json.dumps(version.structured, ensure_ascii=False, indent=2).encode("utf-8")
+            mime = "application/json"
         else:
             if version.structured is not None:
                 data = json.dumps(version.structured, ensure_ascii=False, indent=2).encode("utf-8")
@@ -588,6 +724,7 @@ def download_export(export_id: str):
             "XLSX": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "CSV": "text/csv",
             "TXT": "text/plain",
+            "JSON": "application/json",
         }[exp.format],
         as_attachment=True,
         download_name=f"{base}-v{exp.result_version_id[:8]}.{exp.format.lower()}",

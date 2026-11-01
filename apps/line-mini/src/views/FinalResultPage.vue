@@ -99,7 +99,8 @@ async function exportExcel() {
           :page-count="job.page_count || results.page_count || 1"
         />
 
-        <StructuredDataView :data="results.structured" />
+        <div v-if="results.current_mapping" class="meta">{{ t('template.label') }}: {{ results.current_mapping.template_name }}</div>
+        <StructuredDataView :data="results.structured" :schema="results.template_schema" />
 
         <p v-if="errorMsg" class="status-error">{{ errorMsg }}</p>
         <p v-if="exportReady" class="export-ready">{{ t('final.exportReady') }}</p>

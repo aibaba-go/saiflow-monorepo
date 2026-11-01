@@ -43,7 +43,7 @@ def _registered(user: User | None) -> bool:
     return user is not None and not user.is_guest and user.registered_at is not None
 
 
-_STAGES = {"OCR_PROCESSING", "OCR_FAILED", "VERIFYING", "VERIFIED", "COMPLETED"}
+_STAGES = {"OCR_PROCESSING", "OCR_FAILED", "TEMPLATE_MATCHING", "VERIFYING", "VERIFIED", "COMPLETED"}
 _SUCCESS = ("SUCCEEDED", "PARTIAL_SUCCESS")
 
 
@@ -54,8 +54,11 @@ def _stage_condition(stage: str):
     if stage == "OCR_PROCESSING":
         return OcrJob.status.notin_(TERMINAL)
     succeeded = OcrJob.status.in_(_SUCCESS)
+    unconfirmed = and_(succeeded, OcrJob.review_status != "CONFIRMED")
+    if stage == "TEMPLATE_MATCHING":
+        return and_(unconfirmed, OcrJob.pending_mapping_id.isnot(None))
     if stage == "VERIFYING":
-        return and_(succeeded, OcrJob.review_status != "CONFIRMED")
+        return and_(unconfirmed, OcrJob.pending_mapping_id.is_(None))
     confirmed = and_(succeeded, OcrJob.review_status == "CONFIRMED")
     if stage == "COMPLETED":
         return and_(confirmed, OcrJob.completed_at.isnot(None))
@@ -63,8 +66,12 @@ def _stage_condition(stage: str):
 
 
 def _summary(job: OcrJob) -> dict:
+    from doc_templates.views import template_names
+
     file = db.session.get(File, job.file_id)
-    return job.to_summary(file_name=file.original_name if file else "")
+    return job.to_summary(
+        file_name=file.original_name if file else "", template_name=template_names([job]).get(job.id)
+    )
 
 
 @ocr_bp.get("/ocr/capabilities")
@@ -237,9 +244,15 @@ def list_jobs():
     names = {
         f.id: f.original_name for f in File.query.filter(File.id.in_(file_ids)).all()
     } if file_ids else {}
+    from doc_templates.views import template_names
+
+    tpl_names = template_names(rows)
     return ok(
         {
-            "items": [j.to_summary(file_name=names.get(j.file_id, "")) for j in rows],
+            "items": [
+                j.to_summary(file_name=names.get(j.file_id, ""), template_name=tpl_names.get(j.id))
+                for j in rows
+            ],
             "total": total,
             "page": page,
             "page_size": page_size,
@@ -305,6 +318,11 @@ def rerun_job(job_id: str):
 def delete_job(job_id: str):
     user = current_user()
     job = _get_job_for_user(job_id, user)
+    from doc_templates.service import lock_job
+
+    job = lock_job(job.id)  # D16：与映射完成 / 模板切换串行，删除后 worker 不再补写结果
+    if job is None:
+        raise not_found()
     if job.status not in TERMINAL:
         raise state_conflict("job.not_terminal")
 
@@ -325,6 +343,10 @@ def delete_job(job_id: str):
             db.session.delete(exp)
         for v in versions:
             db.session.delete(v)
+    # D16：一并删除模板映射与 OCR 解析结果并清空任务指针；处理中的映射 Worker 发现映射不存在即中止
+    from doc_templates.service import delete_for_job
+
+    delete_for_job(job.id)
     db.session.commit()
     audit("job.delete_results", "ocr_job", job.id)
     return ok({"id": job.id, "results_deleted": True})

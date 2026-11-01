@@ -3,8 +3,8 @@ doc_id: GLO-001
 title: "SaiFlow — 术语表（唯一事实来源）"
 type: glossary
 status: active
-version: 1.1.0
-updated: 2026-10-07
+version: 1.2.1
+updated: 2026-10-31
 owner: Product
 ---
 
@@ -59,9 +59,13 @@ owner: Product
 | **Merge PDF** | 将多个文档（PO + DN + Invoice）合并为一个账单包 PDF。 |
 | **TextIn** | 外部 OCR 与结构化文档识别服务；SaiFlow 仅在服务端调用，并保存其原始 JSON 响应。 |
 | **原始识别载荷（Raw extraction payload）** | TextIn 返回、原样保存于 Firestore 的完整 JSON 及其关联元数据。 |
-| **文档格式模板（Document template）** | 表单类型、TextIn 参数引用与 JSON 到规范关系字段映射的已版本化配置。 |
-| **JSONPath 映射** | 从原始 JSON 中选择数据并写入既定规范字段的受限路径规则。 |
-| **幂等转换（Idempotent conversion）** | 对同一文档与原始载荷版本重复执行时，结果不产生重复关系记录的转换。 |
+| **文档格式模板（Document template）** | 具有 code、名称、描述、有序分组（KV 字段/表格）的字段契约；字段有 key/name/description/type/required，type 仅 string/integer/decimal/amount；内容变化生成不可变版本，系统或租户作用域。描述仅供模型匹配/转换，内部不可变快照完整保留，GET 版本对前端裁剪 description，无公开描述需求。作为映射、核验展示与导出的依据，不含路径规则或 TextIn 参数引用。 |
+| **JSONPath 映射** | 历史受限路径规则的名称；已被此次大模型模板映射取代，不是本期模板属性或执行路径。 |
+| **OCR 解析结果** | TextIn llm_json 在整理、映射及人工编辑前深拷贝的不可变原始结果，每任务一条 PostgreSQL ocr_raw_results；开关关闭也保存并返回 raw_result_id，仅无历史快照时为空。不同于 Firestore 保存全量响应及元数据的原始识别载荷。 |
+| **基于模板的解析结果** | 由 OCR 解析结果与固定不可变模板版本经大模型转换、严格结构/类型校验生成的有序分组字段与表格；结果版本固定归属该映射，人工编辑生成后续快照。所有新结果版本采用全任务 max(version)+1，切回可恢复旧号而不新增版本。 |
+| **不套用模板（通用结果）** | 未归属映射的任务结果版本及结果页选项；切换时恢复通用分支最新保存的编辑，不调用模型或新增结果版本。每次显式 use-generic 均记录 template.generic_selected，即使已为通用。开关开启时初始通用结果为 TextIn llm_json，关闭时为既有整理结果；不是 P1 自由格式（由大模型生成新结构）。 |
+| **模板映射** | 独立异步阶段：在可用系统/租户模板中自动匹配或手动选定版本，再经大模型转换及严格校验生成基于模板的解析结果；状态 PENDING/MATCHING/CONVERTING/READY/FAILED，与 OCR 状态独立。 |
+| **幂等转换（Idempotent conversion）** | 既有原始载荷到关系投影的去重语义；本期同模板版本复用 READY 映射且只切换当前指针，force 显式重映射不承诺生成完全相同内容。 |
 
 ## 4. 角色（见 `Personas.md`）
 
@@ -84,7 +88,7 @@ owner: Product
 | **AR / AP** | Accounts Receivable / Accounts Payable（应收账款 / 应付账款）。 |
 | **SO** | Sales Order（销售订单）；PO 校验后在 ERP 中创建的草稿。 |
 | **SKU** | Stock Keeping Unit（库存量单位）；区分不同物料/产品的编码。 |
-| **THB** | 泰铢（货币）。金额使用 `decimal(14,2)`。 |
+| **THB** | 泰铢（货币）。历史业务投影金额使用 `decimal(14,2)`；本期模板 amount 为规范字符串，至少两位小数，超过两位保留、不舍入，不受该历史投影精度约束。 |
 | **DPI** | Dots per inch（每英寸点数）；扫描分辨率。目标为等效 ≥ 300 DPI。 |
 | **P0 / P1 / P2** | 优先级层级：发布必需 / 迭代 / 长期。 |
 | **FR / NFR / AC / TC** | Functional requirement / Non-functional requirement / Acceptance criterion / Test case（功能需求 / 非功能需求 / 验收标准 / 测试用例）。 |
@@ -92,6 +96,8 @@ owner: Product
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.2.1 | 2026-10-31 | Product Engineering | 明确关闭仍保存raw_result_id、内部完整描述与公开裁剪、新版本max+1及旧号切回、显式通用选择审计且不升版 |
+| 1.2.0 | 2026-10-31 | Product Engineering | 同步模板契约，新增OCR解析结果、基于模板的解析结果、不套用模板（通用结果）、模板映射；区分历史Firestore归档和关系型快照 |
 | 1.1.0 | 2026-10-07 | Product Engineering | 新增 TextIn、Firestore 原始识别载荷、模板映射和幂等转换术语 |
 | 1.0.1 | 2026-10-02 | Product Engineering | 将人类可读内容翻译为简体中文 |
 | 1.0.0 | 2026-09-10 | Product Engineering | 根据 PRD v2 生成初始术语表 |

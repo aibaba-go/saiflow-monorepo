@@ -108,6 +108,17 @@ def forbid_external_io(monkeypatch):
             monkeypatch.setattr(smtp_type, name, forbidden)
 
 
+@pytest.fixture(autouse=True)
+def plan_catalog(monkeypatch):
+    """FR-SYS-019：套餐配置默认读内置种子（plans 表为空的路径），测试之间不共享缓存。"""
+    catalog = importlib.import_module("plans")
+    rows: list[dict] = []
+    monkeypatch.setattr(catalog, "_load_rows", lambda: copy.deepcopy(rows))
+    catalog.invalidate()
+    yield SimpleNamespace(module=catalog, rows=rows)
+    catalog.invalidate()
+
+
 @pytest.fixture
 def fake_db(monkeypatch, modules):
     database = SimpleNamespace(session=Mock())
@@ -1934,6 +1945,64 @@ def test_concurrent_first_activation_is_absorbed_by_the_unique_constraint(
     assert modules.subscriptions.ensure_subscription(tenant) is None
     assert plan_db.session.rollbacks == 1
     assert plan_db.tables["Subscription"].rows == [existing]
+    # 并发落败方不发开通通知（胜出方已发）
+    assert plan_db.tables["Notification"].rows == []
+
+
+# ---------- 开通通知：个人账户开通 / 公司账户开通 ----------
+
+
+@pytest.mark.parametrize(
+    "kind, language, expected",
+    [
+        ("personal", "en", ("ACCOUNT_ACTIVATED", "Account activated", "Your Kinder plan is active until {d}.")),
+        ("personal", "th", ("ACCOUNT_ACTIVATED", "เปิดใช้งานบัญชีแล้ว", "แพ็กเกจ Kinder ของคุณใช้งานได้ถึงวันที่ {d}")),
+        ("enterprise", "en", ("COMPANY_ACTIVATED", "Company account activated", "Synthetic Co: Kinder plan is active until {d}.")),
+        ("enterprise", "th", ("COMPANY_ACTIVATED", "เปิดใช้งานบัญชีบริษัทแล้ว", "Synthetic Co: แพ็กเกจ Kinder ใช้งานได้ถึงวันที่ {d}")),
+    ],
+)
+def test_first_activation_notifies_account_owner_once(modules, plan_db, kind, language, expected):
+    subs = modules.subscriptions
+    owner = plan_db.user(language=language)
+    if kind == "personal":
+        plan_db.tenant(PERSONAL_TENANT_ID, owner_user_id=owner.id)
+        tenant_id = PERSONAL_TENANT_ID
+    else:
+        plan_db.tenant(ENTERPRISE_TENANT_ID, "ENTERPRISE", name="Stale display name")
+        plan_db.enterprise(ENTERPRISE_TENANT_ID)
+        plan_db.user(user_id=102)
+        plan_db.membership(ENTERPRISE_TENANT_ID, 102, role="MEMBER", created_at=PLAN_NOW - timedelta(days=1))
+        plan_db.membership(ENTERPRISE_TENANT_ID, owner.id, role="OWNER")
+        tenant_id = ENTERPRISE_TENANT_ID
+    modules.plans.subscription_state(tenant_id)
+    modules.plans.subscription_state(tenant_id)  # 再读一次不重复发
+    row, = plan_db.tables["Subscription"].rows
+    note, = plan_db.tables["Notification"].rows
+    until = subs.local_date(row.expires_at).isoformat()
+    type_, title, body = expected
+    assert (note.user_id, note.type, note.title, note.body) == (owner.id, type_, title, body.format(d=until))
+    assert note.type in modules.auth.ACCOUNT_NOTIFICATION_TYPES
+
+
+@pytest.mark.parametrize("kind", ["guest", "enterprise_unverified", "existing"])
+def test_activation_notice_skips_guest_unverified_and_existing(modules, plan_db, kind):
+    if kind == "guest":
+        guest = plan_db.user(provider="guest", registered=False)
+        plan_db.tenant(PERSONAL_TENANT_ID, owner_user_id=guest.id)
+        tenant_id = PERSONAL_TENANT_ID
+    elif kind == "enterprise_unverified":
+        plan_db.user()
+        plan_db.tenant(ENTERPRISE_TENANT_ID, "ENTERPRISE")
+        plan_db.enterprise(ENTERPRISE_TENANT_ID, status="PENDING_VERIFICATION")
+        plan_db.membership(ENTERPRISE_TENANT_ID, 101, role="OWNER")
+        tenant_id = ENTERPRISE_TENANT_ID
+    else:
+        plan_db.user()
+        plan_db.tenant(PERSONAL_TENANT_ID, owner_user_id=101)
+        plan_db.subscription()
+        tenant_id = PERSONAL_TENANT_ID
+    modules.plans.subscription_state(tenant_id)
+    assert plan_db.tables["Notification"].rows == []
 
 
 # ---------- 到期即硬停 ----------
@@ -2098,6 +2167,117 @@ def test_a_pending_application_blocks_a_second_one_without_changing_the_plan(
     assert state["pending"]["plan_code"] == "ADVANCE"
 
 
+# ---------- 套餐配置（FR-SYS-019）：plans 表驱动，改动对存量订阅立即生效 ----------
+
+
+def _configure_plans(plan_catalog, **changes):
+    """以内置种子为底，按 code 覆盖字段后作为 plans 表内容（并清缓存）。"""
+    rows = plan_catalog.module.load_seed()
+    for row in rows:
+        row.update(changes.get(row["code"], {}))
+    plan_catalog.rows[:] = rows
+    plan_catalog.module.invalidate()
+
+
+def test_default_plan_and_trial_months_come_from_configuration(modules, plan_db, plan_catalog):
+    _configure_plans(
+        plan_catalog,
+        KINDER={"is_default": False},
+        STARTER={"is_default": True, "trial_months": 2},
+    )
+    created = datetime(2026, 10, 20, 5, 0, 0)
+    owner = plan_db.user()
+    plan_db.tenant(PERSONAL_TENANT_ID, owner_user_id=owner.id, created_at=created)
+    state = modules.plans.subscription_state(PERSONAL_TENANT_ID)
+    assert (state["plan_code"], state["plan_name"], state["source"]) == ("STARTER", "Starter", "DEFAULT")
+    assert state["expires_at"] == modules.subscriptions.add_months(created, 2).isoformat()
+
+
+def test_page_quota_changes_apply_immediately_to_existing_subscriptions(
+    modules, plan_db, plan_catalog, monkeypatch
+):
+    plan_db.user()
+    plan_db.tenant(PERSONAL_TENANT_ID, owner_user_id=101)
+    plan_db.subscription(expires_at=PLAN_NOW + timedelta(days=10))
+    monkeypatch.setattr(modules.quota, "pages_used", Mock(return_value=1500))
+    job = _ocr_job_stub()
+    # 种子 Kinder 1,000 页：本月已用 1,500 页 → 额度用尽
+    with pytest.raises(modules.errors.ApiError) as exc:
+        modules.quota.check_and_consume(job)
+    assert exc.value.code == "QUOTA_EXCEEDED"
+    # 运维把 Kinder 调到 2,000 页：同一条存量订阅立即按新额度计量（不做快照）
+    _configure_plans(plan_catalog, KINDER={"quota_pages_per_month": 2000})
+    modules.quota.check_and_consume(job)
+    plan = modules.quota.entitled_plan(PERSONAL_TENANT_ID)
+    assert modules.quota.pages_view(plan, PERSONAL_TENANT_ID) == {"monthly_total": 2000, "remaining": 500}
+
+
+def test_approval_without_dates_uses_the_plans_configured_renewal_months(
+    modules, plan_db, plan_catalog
+):
+    _configure_plans(plan_catalog, STARTER={"approved_period_months": 6})
+    plan_db.user()
+    plan_db.tenant(PERSONAL_TENANT_ID, owner_user_id=101)
+    plan_db.subscription(expires_at=PLAN_NOW - timedelta(days=1))
+    plan_db.application(code="STARTER")
+    state = modules.plans.subscription_state(PERSONAL_TENANT_ID)
+    assert state["plan_code"] == "STARTER"
+    assert state["expires_at"] == modules.subscriptions.add_months(PLAN_NOW, 6).isoformat()
+
+
+def test_activation_notice_uses_the_plan_name_in_the_recipients_language(
+    modules, plan_db, plan_catalog
+):
+    _configure_plans(plan_catalog, KINDER={"name": {"en": "Kinder", "th": "คินเดอร์"}})
+    owner = plan_db.user(language="th")
+    plan_db.tenant(PERSONAL_TENANT_ID, owner_user_id=owner.id)
+    modules.plans.subscription_state(PERSONAL_TENANT_ID)
+    note, = plan_db.tables["Notification"].rows
+    assert "แพ็กเกจ คินเดอร์" in note.body
+
+
+def test_plan_catalog_endpoint_is_bilingual_and_hides_disabled_plans(
+    client, modules, plan_db, plan_catalog, monkeypatch
+):
+    _configure_plans(plan_catalog, INTERMEDIATE={"status": "DISABLED"})
+    response = client.get("/api/v1/plans")
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    assert (data["currency"], data["payment"]) == ("THB", "OFFLINE")
+    assert [p["code"] for p in data["items"]] == ["KINDER", "STARTER", "ADVANCE"]
+    kinder, starter, advance = data["items"]
+    # 只暴露展示字段（含用于预选的 is_default）；试用/续期月数等后台规则不出现在公开目录
+    assert set(kinder) == {
+        "code", "name", "price", "quota_pages_per_month", "seats", "features", "theme",
+        "is_default", "i18n",
+    }
+    assert (kinder["is_default"], starter["is_default"]) == (True, False)
+    assert kinder["price"] == {"monthly_thb": None, "yearly_thb": 888, "display": "THB 888 / year"}
+    assert kinder["i18n"]["th"]["price_display"] == "THB 888 / ปี"
+    assert starter["i18n"]["th"]["features"] == ["ขั้นตอนการอนุมัติ", "แจ้งเตือนทางอีเมล"]
+    assert (kinder["theme"], advance["theme"]) == ("DEFAULT", "DARK")
+
+    # 停用的套餐不可申请
+    user = plan_db.user()
+    tenant = plan_db.tenant(PERSONAL_TENANT_ID, owner_user_id=user.id)
+    monkeypatch.setattr(modules.plans, "current_user", Mock(return_value=user))
+    monkeypatch.setattr(modules.plans, "resolve_tenant", Mock(return_value=tenant))
+    response = client.post("/api/v1/me/plan-applications", json={"plan_code": "INTERMEDIATE"})
+    assert response.status_code == 400
+    assert plan_db.tables["Application"].rows == []
+
+
+def test_disabled_plan_keeps_metering_existing_subscriptions(modules, plan_db, plan_catalog):
+    _configure_plans(plan_catalog, INTERMEDIATE={"status": "DISABLED"})
+    plan_db.user()
+    plan_db.tenant(PERSONAL_TENANT_ID, owner_user_id=101)
+    plan_db.subscription(plan_code="INTERMEDIATE", source="APPROVED",
+                         expires_at=PLAN_NOW + timedelta(days=30))
+    plan = modules.quota.entitled_plan(PERSONAL_TENANT_ID)
+    assert (plan["code"], plan["quota_pages_per_month"]) == ("INTERMEDIATE", 10000)
+    assert modules.plans.plan_rank("INTERMEDIATE") > modules.plans.plan_rank("STARTER")
+
+
 # ---------- /me/quota 汇总 ----------
 
 
@@ -2134,6 +2314,7 @@ def test_quota_summary_exposes_plan_subscription_and_pages_only(
     active = scenario != "expired"
     assert personal["plan"] == {
         "code": code, "name": code.title(), "is_paid": scenario == "approved",
+        "name_i18n": {"en": code.title(), "th": code.title()},
         "source": "APPROVED" if scenario == "approved" else "DEFAULT",
         "metering": "OCR_PAGE",
     }
@@ -2143,7 +2324,8 @@ def test_quota_summary_exposes_plan_subscription_and_pages_only(
     }
     if scenario == "unverified_enterprise":
         assert enterprise["plan"] == {
-            "code": None, "name": None, "is_paid": False, "source": None, "metering": "OCR_PAGE",
+            "code": None, "name": None, "name_i18n": None, "is_paid": False, "source": None,
+            "metering": "OCR_PAGE",
         }
         assert enterprise["subscription"] == {
             "status": "NONE", "starts_at": None, "expires_at": None, "days_remaining": None,
@@ -2456,8 +2638,11 @@ def test_notifications_list_feeds_the_home_bell_with_unread_count(
     newest = plan_db.notification(
         user.id, "PLAN_EXPIRED", created_at=PLAN_NOW + timedelta(hours=1),
     )
-    plan_db.notification(user.id, "INFO", created_at=PLAN_NOW - timedelta(hours=1),
+    plan_db.notification(user.id, "MEMBERSHIP_ACTIVE", created_at=PLAN_NOW - timedelta(hours=1),
                          read_at=PLAN_NOW)
+    # 非账户变动类（历史 OCR_DONE / INFO）不进列表也不计未读
+    plan_db.notification(user.id, "OCR_DONE", created_at=PLAN_NOW + timedelta(hours=2))
+    plan_db.notification(user.id, "INFO", created_at=PLAN_NOW + timedelta(hours=3))
     plan_db.notification(plan_db.user(user_id=102).id, "PLAN_EXPIRED")
     monkeypatch.setattr(modules.me, "current_user", Mock(return_value=user))
     response = client.get("/api/v1/me/notifications")
@@ -2466,7 +2651,7 @@ def test_notifications_list_feeds_the_home_bell_with_unread_count(
     assert payload["unread_count"] == 2
     assert [item["id"] for item in payload["items"]][0] == newest.id
     assert [item["type"] for item in payload["items"]] == [
-        "PLAN_EXPIRED", "PLAN_EXPIRING", "INFO",
+        "PLAN_EXPIRED", "PLAN_EXPIRING", "MEMBERSHIP_ACTIVE",
     ]
     assert [item["read"] for item in payload["items"]] == [False, False, True]
 
@@ -2488,6 +2673,14 @@ def result_store(modules, fake_db, monkeypatch):
     monkeypatch.setattr(modules.results, "_get_job_for_user", Mock(return_value=job))
     monkeypatch.setattr(modules.results, "_current_version", Mock(return_value=version))
     monkeypatch.setattr(modules.results, "audit", Mock())
+    # 通用结果路径：模板映射协作点替换为本地桩（模板结果由 test_template_routes.py 覆盖）
+    monkeypatch.setattr(modules.results, "_lock_job", Mock(side_effect=lambda j: j))
+    monkeypatch.setattr(modules.results, "_template_groups", Mock(return_value=None))
+    monkeypatch.setattr(modules.results, "_template_extras", Mock(return_value={}))
+    monkeypatch.setattr(modules.results, "_match_feedback", Mock())
+    monkeypatch.setattr(
+        modules.results, "_next_version_no", Mock(side_effect=lambda job_id: version.version + 1)
+    )
     # All PageResult queries stay local; new versions/pages remain real mapped objects.
     query = Mock(name="synthetic_page_results")
     query.filter_by.return_value = query

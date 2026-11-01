@@ -4,24 +4,34 @@
  * 「字段表 + 数据表」，并保留每个值在原始 JSON 中的路径，供核验页就地修改。
  */
 
+import type { TemplateSchema, TemplateFieldType } from './api';
+
 export type Path = (string | number)[];
 export type JsonRecord = Record<string, unknown>;
 
-export interface FieldRow {
+/** FR-VERIFY-015 / document-template-mapping D14: generic rows omit this metadata. */
+export interface FieldMetadata {
+  name?: string;
+  templateOwned?: boolean;
+  required?: boolean;
+  type?: TemplateFieldType;
+}
+
+export interface FieldRow extends FieldMetadata {
   path: Path;
   key: string;
   value: unknown;
   editable: boolean;
 }
 
-export interface FieldSection {
+export interface FieldSection extends FieldMetadata {
   path: string;
   /** 原始 JSON 路径（保留数组下标类型），用于增删字段 */
   parts: Path;
   rows: FieldRow[];
 }
 
-export interface TableCell {
+export interface TableCell extends FieldMetadata {
   path: Path;
   value: unknown;
   editable: boolean;
@@ -34,14 +44,25 @@ export interface TableRow {
 
 export type TableKind = 'records' | 'matrix';
 
-export interface TableSection {
+export interface TableSection extends FieldMetadata {
   path: string;
   /** 原始 JSON 路径（保留数组下标类型），用于增删行 */
   parts: Path;
   /** records = 对象数组（按列名取值）；matrix = 二维数组（按列序号取值） */
   kind: TableKind;
   columns: string[];
+  columnMetadata?: FieldMetadata[];
   rows: TableRow[];
+}
+
+export type StructuredSection =
+  | { kind: 'fields'; section: FieldSection }
+  | { kind: 'table'; section: TableSection };
+
+export interface StructuredGroup {
+  key: string;
+  name?: string;
+  sections: StructuredSection[];
 }
 
 export function isRecord(value: unknown): value is JsonRecord {
@@ -108,26 +129,86 @@ export function formatNumber(value: number, key = ''): string {
   return `${sign}${grouped}.${frac.padEnd(2, '0')}`;
 }
 
-function scalarText(value: unknown, key: string, empty: string): string {
+/** Format decimal strings without Number(), rounding or truncating their precision. */
+export function formatAmount(value: string | number): string {
+  const text = String(value);
+  if (!/^-?\d+(\.\d+)?$/.test(text)) return text;
+  const sign = text.startsWith('-') ? '-' : '';
+  const [int, frac = ''] = text.slice(sign.length).split('.');
+  return `${sign}${int.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${frac.padEnd(2, '0')}`;
+}
+
+function scalarText(value: unknown, key: string, empty: string, type?: TemplateFieldType): string {
   if (value === null || value === undefined) return empty;
+  if (type !== undefined) {
+    return type === 'amount' && (typeof value === 'string' || typeof value === 'number')
+      ? formatAmount(value)
+      : String(value);
+  }
   if (typeof value === 'number') return formatNumber(value, key);
   return String(value);
 }
 
-export function formatCell(value: unknown, key = ''): string {
+export function formatCell(value: unknown, key = '', type?: TemplateFieldType): string {
   if (value === null || value === undefined) return '—';
   if (Array.isArray(value)) {
     if (value.length === 0) return '—';
     if (value.every((item) => isScalar(item))) {
-      return value.map((item) => scalarText(item, key, '—')).join('\n');
+      return value.map((item) => scalarText(item, key, '—', type)).join('\n');
     }
   }
   if (typeof value === 'object') return JSON.stringify(value, null, 2);
-  return scalarText(value, key, '—');
+  return scalarText(value, key, '—', type);
 }
 
-export function inputText(value: unknown, key = ''): string {
-  return scalarText(value, key, '');
+export function inputText(value: unknown, key = '', type?: TemplateFieldType): string {
+  return scalarText(value, key, '', type);
+}
+
+export function isEmptyValue(value: unknown): boolean {
+  return value === null || value === undefined || (typeof value === 'string' && value.trim() === '');
+}
+
+/** Backend validation paths use brackets for array indices. */
+export function pathText(path: Path): string {
+  return path.reduce<string>((text, part) =>
+    typeof part === 'number' ? `${text}[${part}]` : `${text}${text ? '.' : ''}${part}`, '');
+}
+
+export function templateTypeAtPath(
+  schema: TemplateSchema | null | undefined,
+  path: Path,
+): TemplateFieldType | undefined {
+  const group = schema?.groups.find((candidate) => candidate.key === path[0]);
+  const item = group?.items.find((candidate) => candidate.key === path[1]);
+  if (item?.kind === 'field' && path.length === 2) return item.type;
+  if (item?.kind === 'table' && path.length === 4 && typeof path[2] === 'number') {
+    return item.columns.find((column) => column.key === path[3])?.type;
+  }
+  return undefined;
+}
+
+/** Required columns apply only to existing rows; empty tables never block confirmation. */
+export function requiredMissing(schema: TemplateSchema | null | undefined, data: unknown): string[] {
+  const missing: string[] = [];
+  for (const group of schema?.groups ?? []) {
+    for (const item of group.items) {
+      const path: Path = [group.key, item.key];
+      const value = getAtPath(data, path);
+      if (item.kind === 'field') {
+        if (item.required && isEmptyValue(value)) missing.push(pathText(path));
+      } else if (Array.isArray(value)) {
+        value.forEach((row, index) => {
+          for (const column of item.columns) {
+            if (column.required && isEmptyValue(getAtPath(row, [column.key]))) {
+              missing.push(pathText([...path, index, column.key]));
+            }
+          }
+        });
+      }
+    }
+  }
+  return missing;
 }
 
 /** 输入框中的数字文本（允许千分位逗号） */
@@ -163,6 +244,7 @@ export interface TableRowTarget {
   parts: Path;
   kind: TableKind;
   columns: string[];
+  templateOwned?: boolean;
 }
 
 /** 在指定对象末尾新增字段；名称为空或与现有字段重名时返回 false */
@@ -185,7 +267,16 @@ export function removeFieldAt(root: unknown, path: Path): boolean {
 
 /** 追加一行空值：对象数组补全所有列名，二维数组按列数补空单元格 */
 export function addTableRowAt(root: unknown, table: TableRowTarget): boolean {
-  const node = getAtPath(root, table.parts);
+  let node = getAtPath(root, table.parts);
+  if (table.templateOwned && isEmptyValue(node) && table.parts.length === 2 && isRecord(root)) {
+    const [groupKey, tableKey] = table.parts;
+    if (isEmptyValue(root[groupKey])) root[groupKey] = {};
+    const group = root[groupKey];
+    if (isRecord(group)) {
+      node = [];
+      group[tableKey] = node;
+    }
+  }
   if (!Array.isArray(node)) return false;
   if (table.kind === 'matrix') {
     node.push(table.columns.map(() => ''));
@@ -294,4 +385,101 @@ export function collectTableSections(value: unknown, path: Path = []): TableSect
   }
 
   return [];
+}
+
+function genericSections(value: unknown, path: Path = []): StructuredSection[] {
+  return [
+    ...collectFieldSections(value, path).map<StructuredSection>((section) => ({ kind: 'fields', section })),
+    ...collectTableSections(value, path).map<StructuredSection>((section) => ({ kind: 'table', section })),
+  ];
+}
+
+/** D14: preserve group/item/column order, absent template items and all user-added extras. */
+export function collectStructuredGroups(
+  value: unknown,
+  schema?: TemplateSchema | null,
+): StructuredGroup[] {
+  if (!schema) return [{ key: '', sections: genericSections(value) }];
+  const groups: StructuredGroup[] = schema.groups.map((group) => {
+    const parts: Path = [group.key];
+    const data = getAtPath(value, parts);
+    const sections: StructuredSection[] = [];
+    const nestedTables: TableSection[] = [];
+    for (const item of group.items) {
+      const path: Path = [...parts, item.key];
+      const current = getAtPath(value, path);
+      if (item.kind === 'field') {
+        const row: FieldRow = {
+          path, key: item.key, value: current, editable: isDisplayableLeaf(current),
+          name: item.name, templateOwned: true, required: item.required, type: item.type,
+        };
+        const last = sections[sections.length - 1];
+        if (last?.kind === 'fields') last.section.rows.push(row);
+        else sections.push({
+          kind: 'fields',
+          section: { path: group.key, parts, name: group.name, templateOwned: true, rows: [row] },
+        });
+      } else {
+        const records = Array.isArray(current) ? current : [];
+        const columns = Array.from(new Set([
+          ...item.columns.map((column) => column.key),
+          ...records.flatMap((record) => isRecord(record) ? Object.keys(record) : []),
+        ]));
+        const columnMetadata: FieldMetadata[] = columns.map((key) => {
+          const column = item.columns.find((candidate) => candidate.key === key);
+          return column ? {
+            name: column.name, templateOwned: true, required: column.required, type: column.type,
+          } : {};
+        });
+        const rows = records.map<TableRow>((record, index) => ({
+          path: [...path, index],
+          cells: columns.map((key, columnIndex) => {
+            const cell = getAtPath(record, [key]);
+            return {
+              path: [...path, index, key], value: cell, editable: isDisplayableLeaf(cell),
+              ...columnMetadata[columnIndex],
+            };
+          }),
+        }));
+        sections.push({ kind: 'table', section: {
+          path: path.join('.'), parts: path, kind: 'records', name: item.name,
+          templateOwned: true, columns, columnMetadata, rows,
+        } });
+        records.forEach((record, index) => {
+          if (!isRecord(record)) return;
+          for (const [key, cell] of Object.entries(record)) {
+            if (isRecord(cell) || Array.isArray(cell)) {
+              nestedTables.push(...collectTableSections(cell, [...path, index, key]));
+            }
+          }
+        });
+      }
+    }
+    const keys = new Set(group.items.map((item) => item.key));
+    const extras = isRecord(data)
+      ? Object.fromEntries(Object.entries(data).filter(([key]) => !keys.has(key)))
+      : {};
+    const extraSections = genericSections(extras, parts);
+    // Keep one Add field entry for every group, including a table-only group.
+    const extraFields = extraSections.find((entry) => entry.kind === 'fields' && entry.section.path === group.key);
+    const last = sections[sections.length - 1];
+    if (last?.kind === 'fields') {
+      if (extraFields?.kind === 'fields') last.section.rows.push(...extraFields.section.rows);
+    } else {
+      sections.push({ kind: 'fields', section: {
+        path: group.key, parts, name: group.name, templateOwned: true,
+        rows: extraFields?.kind === 'fields' ? extraFields.section.rows : [],
+      } });
+    }
+    sections.push(...extraSections.filter((entry) => entry !== extraFields));
+    sections.push(...nestedTables.map<StructuredSection>((section) => ({ kind: 'table', section })));
+    return { key: group.key, name: group.name, sections };
+  });
+  const groupKeys = new Set(schema.groups.map((group) => group.key));
+  const extras = isRecord(value)
+    ? Object.fromEntries(Object.entries(value).filter(([key]) => !groupKeys.has(key)))
+    : value;
+  const extraSections = genericSections(extras);
+  if (extraSections.length) groups.push({ key: '', sections: extraSections });
+  return groups;
 }

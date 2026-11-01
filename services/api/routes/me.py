@@ -15,7 +15,7 @@ from sqlalchemy import select
 import avatars
 import email_sender
 import storage
-from auth import audit, current_user
+from auth import ACCOUNT_NOTIFICATION_TYPES, audit, current_user
 from errors import (
     invalid_argument,
     not_found,
@@ -315,17 +315,21 @@ def me_applications():
     return ok({"items": [a.to_dict() for a in rows]})
 
 
+def _account_notifications(user_id: int):
+    """本人的账户变动类通知（列表、未读数与标记已读同一口径）。"""
+    return Notification.query.filter(
+        Notification.user_id == user_id,
+        Notification.type.in_(ACCOUNT_NOTIFICATION_TYPES),
+    )
+
+
 @bp.get("/me/notifications")
 def me_notifications():
-    """站内通知列表 + 未读数（首页铃铛的数据源，含套餐到期提醒）。"""
+    """站内通知列表 + 未读数（首页铃铛的数据源）：只含账户变动类通知。"""
     user = current_user()
-    rows = (
-        Notification.query.filter_by(user_id=user.id)
-        .order_by(Notification.created_at.desc())
-        .limit(50)
-        .all()
-    )
-    unread = Notification.query.filter_by(user_id=user.id, read_at=None).count()
+    mine = _account_notifications(user.id)
+    rows = mine.order_by(Notification.created_at.desc(), Notification.id.desc()).limit(50).all()
+    unread = mine.filter(Notification.read_at.is_(None)).count()
     return ok(
         {
             "unread_count": unread,
@@ -350,9 +354,7 @@ def me_notifications_read():
     user = current_user()
     body = request.get_json(silent=True) or {}
     ids = body.get("ids") if isinstance(body, dict) else None
-    query = Notification.query.filter(
-        Notification.user_id == user.id, Notification.read_at.is_(None)
-    )
+    query = _account_notifications(user.id).filter(Notification.read_at.is_(None))
     if isinstance(ids, list) and ids:
         wanted = [i for i in ids if isinstance(i, int) and not isinstance(i, bool)]
         if len(wanted) != len(ids):
@@ -362,7 +364,7 @@ def me_notifications_read():
         raise _field_error("ids")
     updated = query.update({"read_at": _now()}, synchronize_session=False)
     db.session.commit()
-    unread = Notification.query.filter_by(user_id=user.id, read_at=None).count()
+    unread = _account_notifications(user.id).filter(Notification.read_at.is_(None)).count()
     return ok({"updated": int(updated or 0), "unread_count": unread})
 
 

@@ -3,8 +3,8 @@ doc_id: REQ-INDEX
 title: "SaiFlow — 需求索引与可追溯性矩阵"
 type: index
 status: active
-version: 1.4.0
-updated: 2026-10-28
+version: 1.6.0
+updated: 2026-11-01
 owner: Product Engineering
 ---
 
@@ -23,7 +23,7 @@ owner: Product Engineering
 | EPIC-05 | 文档管理与检索 | `functional/EPIC-05-doc-management.md` | P1 / P2 | §4.5 |
 | EPIC-06 | 基础系统（账户/配置/i18n） | `functional/EPIC-06-system-base.md` | P0 | §4.6 |
 | EPIC-07 | 运营报表 | `functional/EPIC-07-operational-reporting.md` | P1（待 OQ-5） | §3.1 场景 3、§4.7 |
-| EPIC-08 | 文档格式模板配置 | `functional/EPIC-08-document-template-configuration.md` | P1（待 OQ-9） | §4.8 |
+| EPIC-08 | 文档格式模板与CLI | `functional/EPIC-08-document-template-configuration.md` | P0（001..005/007） / P1（006管理UI） | §3.2/4.8 R1–R6 |
 | NFR | 非功能需求 | `non-functional/NFR.md` | P0 | §5 |
 
 ## 2. 功能需求矩阵
@@ -58,10 +58,11 @@ owner: Product Engineering
 | FR-OCR-014 | 签字检测 | P1 | §4.2 | OCR-001 | AC-FR-OCR-014-01 | DM-ExtractedField | active |
 | FR-OCR-015 | 低置信度标记 | P0 | §3.1 | OCR-012 | AC-FR-OCR-015-01 | DM-ExtractedField | active |
 | FR-OCR-016 | 标准化日期/数值/THB | P0 | §3.1 | OCR-002 | AC-FR-OCR-016-01 | OCR-Pipeline | active |
-| FR-OCR-017 | 服务端调用 TextIn | P0 | §4.2 | UPLOAD-006/TEMPLATE-006 | AC-FR-OCR-017-01 | OCR-Pipeline | active |
-| FR-OCR-018 | 保存 Firestore 原始 JSON | P0 | §4.2 | OCR-017 | AC-FR-OCR-018-01 | DM-ExtractionPayload | active |
-| FR-OCR-019 | Cloud Functions 模板转换 | P0 | §4.2 | OCR-018/TEMPLATE-006 | AC-FR-OCR-019-01 | DM-ConversionJob | active |
-| FR-OCR-020 | 转换幂等重试 | P0 | §4.2 | OCR-019 | AC-FR-OCR-020-01 | DM-ConversionJob | active |
+| FR-OCR-017 | 服务端TextIn与有界自动重试 | P0 | §4.2 | UPLOAD-006 | AC-FR-OCR-017-01/02 | OCR-Pipeline §3.1/6.1 | active |
+| FR-OCR-018 | 自动匹配最高合法模板/低分提示 | P0 | §3.2/4.2 R5/R6 | OCR-021/TEMPLATE-007 | AC-FR-OCR-018-01/02/03/04 | OCR-Pipeline §4 | active |
+| FR-OCR-019 | 现有DeepSeek严格模板转换/四类型 | P0 | §3.2/4.2 R2–R5 | OCR-018/TEMPLATE-003/004 | AC-FR-OCR-019-01/02/03/04 | DM-TemplateMapping、ADR-007 | active |
+| FR-OCR-020 | 独立Worker/重试恢复/READY复用与次数上限；保留手动Retry/取消 | P0 | §3.2/4.2 R5/R6 | OCR-019 | AC-FR-OCR-020-01..09 | OCR-Pipeline §6 | active |
+| FR-OCR-021 | 不可变关系型llm_json快照/默认关与本地关 | P0 | §3.2/4.2 R6 | OCR-017 | AC-FR-OCR-021-01/02/03/04 | DM-OcrRawResult、ADR-006 | active |
 | FR-VERIFY-001 | 并排展示结果 | P0 | §4.3 | OCR-012 | AC-FR-VERIFY-001-01 | API-4 | active |
 | FR-VERIFY-002 | 单字段编辑 | P0 | §4.3 | VERIFY-001 | AC-FR-VERIFY-002-01 | DM-ChangeLog | active |
 | FR-VERIFY-003 | 批量更正 | P1 | §4.3 | VERIFY-002 | AC-FR-VERIFY-003-01 | API-4 | active |
@@ -78,9 +79,12 @@ owner: Product Engineering
 | FR-VERIFY-014 | 原图置顶与全屏触控缩放（上传确认页、结果页、最终结果页、公司证书） | P0 | 界面调整 2026-10-17/19 | VERIFY-001 | AC-FR-VERIFY-014-01/02 | OriginalPreview、ImageViewer | active |
 | FR-VERIFY-015 | 结构化结果版本化编辑（含字段/表格行增删、Reset 放弃改动）；金额千分位 + 2 位小数 | P0 | 界面调整 2026-10-17/20 | VERIFY-002 | AC-FR-VERIFY-015-01/02/03/04/05 | DM-ResultVersion | active |
 | FR-VERIFY-016 | LINE 确认前认证与工作空间订阅检查；已注册付费用户显式确认后进入最终页，恢复未完成任务返回结果页 | P0 | 界面调整 2026-10-17/18 | VERIFY-006/SYS-011/SYS-012 | AC-FR-VERIFY-016-01/02 | DM-ResultVersion | active |
-| FR-VERIFY-017 | 任务流程阶段展示、历史筛选与分页加载 | P0 | 界面调整 2026-10-18 | VERIFY-016 | AC-FR-VERIFY-017-01/02/03 | DM-OcrJob | active |
+| FR-VERIFY-017 | 任务流程阶段展示、历史筛选与分页加载 | P0 | 界面调整 2026-10-18 | VERIFY-016 | AC-FR-VERIFY-017-01/02/03/04/05 | DM-OcrJob | active |
+| FR-VERIFY-018 | 选择/预览/保存后切换/异步/通用分支 | P0 | §3.2 R5/R6 | OCR-018..021/TEMPLATE-007 | AC-FR-VERIFY-018-01..06 | API-Spec、DM-ResultVersion | active |
+| FR-VERIFY-019 | 固定schema渲染/结构补齐保留extras/类型显示 | P0 | §3.2/4.8 R2/R3 | VERIFY-015/018 | AC-FR-VERIFY-019-01/02/03 | DM-ResultVersion、OCR-Pipeline | active |
+| FR-VERIFY-020 | required确认422无写入，草稿/通用豁免 | P0 | §3.2 R4 | VERIFY-019 | AC-FR-VERIFY-020-01/02/03 | API-Spec §3 | active |
 | FR-ENTRY-001 | 生成 Excel 模板 | P0 | §4.4 | VERIFY-006 | AC-FR-ENTRY-001-01 | DM-ExportJob | active |
-| FR-ENTRY-002 | 一键填充 Excel | P0 | §4.4 | ENTRY-001 | AC-FR-ENTRY-002-01 | API-5 | active |
+| FR-ENTRY-002 | 模板XLSX/CSV顺序/显示名/金额与保存extras；正式JSON原样导出（application/json、.json），TXT兼容 | P0 | §4.4 D15 | ENTRY-001/VERIFY-019 | AC-FR-ENTRY-002-01/02/03 | API-Spec §2/4、OCR-Pipeline §5 | active |
 | FR-ENTRY-003 | 批量导出 | P0 | §4.4 | ENTRY-002 | AC-FR-ENTRY-003-01 | API-5 | active |
 | FR-ENTRY-004 | 自定义保存路径 | P0 | §4.4 | ENTRY-002 | AC-FR-ENTRY-004-01 | DM-Settings | active |
 | FR-ENTRY-005 | 双重存储归档 | P0 | §4.4 | UPLOAD-011 | AC-FR-ENTRY-005-01 | DM-ArchiveRecord | active |
@@ -119,18 +123,19 @@ owner: Product Engineering
 | FR-SYS-013 | 唯一计量 OCR_PAGE 月页数（按泰国自然月实时统计，FAILED/CANCELLED 不计），无 FREE 档与赠送额度；用尽返回 402 quota.exceeded | P0 | 用户流程调整 2026-10-27；套餐到期调整 2026-10-28 | SYS-012 | AC-FR-SYS-013-01/02/03/04 | API-8 | active |
 | FR-SYS-015 | 个人中心可修改昵称、头像与手机号（可清空，按格式校验，游客不可改） | P0 | 用户流程调整 2026-10-17；资料调整 2026-10-28 | SYS-014 | AC-FR-SYS-015-01/02 | DM-User, API-8 | active |
 | FR-SYS-017 | 租户保持、个人/企业隔离与企业成员共享（含企业单独申请套餐） | P0 | 用户流程调整 2026-10-18；归属调整 2026-10-28 | SYS-002/SYS-012 | AC-FR-SYS-017-01/02/03 | DM-Application, API-8 | active |
-| FR-SYS-018 | 套餐到期提醒（D7/D3/D1/D0/EXPIRED，按 (tenant_id, period_end, stage) 幂等、不回补、游客不提醒）与通知中心未读数/标记已读 | P0 | 套餐到期调整 2026-10-28 | SYS-012 | AC-FR-SYS-018-01/02/03 | API-8 | active |
+| FR-SYS-018 | 套餐到期提醒（D7/D3/D1/D0/EXPIRED，按 (tenant_id, period_end, stage) 幂等、不回补、游客不提醒）与通知中心（仅账户变动类：到期、升级、个人/公司账户开通、加入公司；OCR 完成不通知）未读数/标记已读 | P0 | 套餐到期调整 2026-10-28；通知收敛 2026-10-31 | SYS-012 | AC-FR-SYS-018-01..05 | API-8 | active |
+| FR-SYS-019 | 套餐配置化：plans 表维护目录、价格展示、月页数、席位、泰英文案、排序、启停、默认套餐、试用月数与审批续期月数，CLI manage_plans.py 维护（PC 管理端后续），修改对全部租户（含存量订阅）在 ≤60 秒缓存窗口内生效、不做快照；停用套餐不可申请但已有订阅仍可解析 | P0 | 订阅配置化 2026-11-01 | SYS-012/SYS-013 | AC-FR-SYS-019-01..05 | DM-Plan, API-8 | active |
 | FR-REPORT-001 | 管理层访问运营报表 | P1 | §3.1/§4.7 | SYS-002 | AC-FR-REPORT-001-01 | API-9（待设计） | in-review |
 | FR-REPORT-002 | 展示已配置运营指标 | P1 | §1.2/§4.7 | REPORT-001/OQ-5 | AC-FR-REPORT-002-01 | DM-ReportDefinition（待设计） | in-review |
 | FR-REPORT-003 | 报表授权范围限制 | P1 | §4.7 | SYS-002 | AC-FR-REPORT-003-01 | API-9（待设计） | in-review |
 | FR-REPORT-004 | 记录报表访问 | P1 | §1.2 | SYS-003 | AC-FR-REPORT-004-01 | DM-OperationLog | in-review |
-| FR-TEMPLATE-001 | 查看模板列表 | P1 | §4.8 | SYS-002 | AC-FR-TEMPLATE-001-01 | API-10 | in-review |
-| FR-TEMPLATE-002 | 创建模板草稿 | P1 | §4.8 | TEMPLATE-001 | AC-FR-TEMPLATE-002-01 | DM-DocumentTemplate | in-review |
-| FR-TEMPLATE-003 | 配置字段 JSON 映射 | P1 | §4.8 | TEMPLATE-002 | AC-FR-TEMPLATE-003-01 | DM-TemplateFieldMapping | in-review |
-| FR-TEMPLATE-004 | 配置行项目映射 | P1 | §4.8 | TEMPLATE-003 | AC-FR-TEMPLATE-004-01 | DM-TemplateFieldMapping | in-review |
-| FR-TEMPLATE-005 | 发布前校验模板 | P1 | §4.8 | TEMPLATE-003/004 | AC-FR-TEMPLATE-005-01 | API-10 | in-review |
-| FR-TEMPLATE-006 | 使用已发布模板版本 | P1 | §4.8 | TEMPLATE-005 | AC-FR-TEMPLATE-006-01 | DM-DocumentTemplate | in-review |
-| FR-TEMPLATE-007 | 模板变更与转换审计 | P1 | §4.8 | SYS-003 | AC-FR-TEMPLATE-007-01 | DM-OperationLog | in-review |
+| FR-TEMPLATE-001 | 后台CLI list/show/export | P0 | §4.8 R1/R6 | — | AC-FR-TEMPLATE-001-01 | Data-Model §2.4、ADR-006 | active |
+| FR-TEMPLATE-002 | 哈希幂等导入/不可变版本/两种子 | P0 | §4.8 R1/R6 | TEMPLATE-005 | AC-FR-TEMPLATE-002-01/02/03 | DM-DocumentTemplate | active |
+| FR-TEMPLATE-003 | 有序分组KV、名称描述与四类型 | P0 | §4.8 R2/R3 | TEMPLATE-002 | AC-FR-TEMPLATE-003-01/02 | Data-Model §2.5 | active |
+| FR-TEMPLATE-004 | 有序表格与列 | P0 | §4.8 R2/R3 | TEMPLATE-003 | AC-FR-TEMPLATE-004-01 | Data-Model §2.5 | active |
+| FR-TEMPLATE-005 | 完整校验/路径错误/validate不连库 | P0 | §4.8 R2/R3 | — | AC-FR-TEMPLATE-005-01/02 | Data-Model §2.5 | active |
+| FR-TEMPLATE-006 | 模板管理UI延后，本期无UI/REST写 | P1 | §4.8 R1 | TEMPLATE-001..005/007 | AC-FR-TEMPLATE-006-01（P1） | EPIC-08 §3 | planned |
+| FR-TEMPLATE-007 | 系统/租户隔离、状态历史版本、CLI审计 | P0 | §4.8 R1/R6 | TEMPLATE-002/SYS-003 | AC-FR-TEMPLATE-007-01/02/03/04 | DM-DocumentTemplate、API-Spec | active |
 
 ## 3. PRD 覆盖检查
 
@@ -143,7 +148,7 @@ owner: Product Engineering
 | §4.5 管理与检索 | EPIC-05 |
 | §4.6 基础系统 | EPIC-06 |
 | §4.7 运营报表 | EPIC-07（待 OQ-5） |
-| §4.8 文档格式模板配置 | EPIC-08（待 OQ-9） |
+| §4.8 文档格式模板配置 | EPIC-08（P0 CLI/结构/版本；006管理UI P1） |
 | §5 非功能需求 | NFR.md |
 | §3.1 业务场景 | EPIC-02/04（卖方与买方流程）、EPIC-03（复核）、EPIC-07（报表） |
 | §3.2 优先级（P0/P1/P2） | 上方优先级列 |
@@ -154,13 +159,13 @@ owner: Product Engineering
 | 指标 | 数量 |
 |------|------|
 | Epics | 8 |
-| 功能需求 | 87 |
-| — P0 | 56 |
+| 本索引功能需求行 | 105 |
+| — P0 | 74 |
 | — P1 | 26 |
 | — P2 | 5 |
-| NFR 项目 | 46 |
+| NFR 项目 | 46（历史统计，本期未重算） |
 
-> 计数仅供参考；新增/移除需求时应保持同步。
+> 功能数按本索引§2主FR行计算，不等于所有Epic完整覆盖或已验收。历史索引尚有非本期漏项/旧API编号，未据本任务补造需求；本期OCR018..021、VERIFY018..020、ENTRY002、TEMPLATE001..007的AC已逐项定义，P1管理UI不作为P0门禁。
 
 ## 链接
 - 标准：`docs/00-standards/ID-Conventions.md`
@@ -170,6 +175,11 @@ owner: Product Engineering
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.6.0 | 2026-11-01 | Product Engineering | 新增 FR-SYS-019（套餐配置化：plans 表 + CLI 维护，默认套餐/试用月数/续期月数可配，泰英双语，立即生效），AC-FR-SYS-019-01..05 |
+| 1.5.3 | 2026-10-31 | Product Engineering | FR-SYS-018 通知中心收敛为账户变动类（新增 ACCOUNT_ACTIVATED / COMPANY_ACTIVATED），AC 列补齐至 AC-FR-SYS-018-05 |
+| 1.5.2 | 2026-10-31 | Product Engineering | FR-VERIFY-017 新增 TEMPLATE_MATCHING 阶段与处理页三步流程，AC 列补齐至 AC-FR-VERIFY-017-05 |
+| 1.5.1 | 2026-10-31 | Product Engineering | FR-ENTRY-002索引改为正式JSON原样导出及application/json/.json验收，保留TXT兼容；移除待契约对齐状态 |
+| 1.5.0 | 2026-10-31 | Product Engineering | 同步模板CLI P0/UI P1、OCR018..021、VERIFY018..020与ENTRY002及AC/设计追溯；移除模板管理UI对TextIn错误依赖；汇总按本索引行计数 |
 | 1.4.0 | 2026-10-28 | Product Engineering | 新增 FR-SYS-018（套餐到期提醒与通知中心标记已读）；补录并改写 FR-SYS-012（每租户一个月 Kinder、到期硬停）、FR-SYS-013（唯一 OCR_PAGE 月页计量，无 FREE 与赠送）、FR-SYS-015（个人中心可改手机号）与 FR-SYS-017（按租户隔离）索引行，与 EPIC-06 v1.7.0 对齐 |
 | 1.3.8 | 2026-10-27 | Product Engineering | 仅同步既有 FR-SYS-001：线上真实 LINE 联合认证、本地开发明确启用的独立 Developer sign-in；新增 AC-FR-SYS-001-04/05/06 与 Architecture §6 引用，不补录无关索引项 |
 | 1.3.7 | 2026-10-20 | Product Engineering | FR-VERIFY-015 扩展为字段/表格行增删与 Reset 放弃改动，新增 AC-FR-VERIFY-015-04/05 |

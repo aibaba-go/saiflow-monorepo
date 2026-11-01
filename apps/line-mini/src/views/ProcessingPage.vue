@@ -20,27 +20,32 @@ const errorMsg = ref('');
 const cancelling = ref(false);
 const confirmingCancel = ref(false);
 let timer: ReturnType<typeof setTimeout> | null = null;
+let active = true;
+let mappingStarted = 0;
 
 const RUNNING = ['QUEUED', 'PREPROCESSING', 'PROCESSING', 'POSTPROCESSING', 'CANCEL_REQUESTED'];
+const MAPPING_WAIT_MS = 90000;
 
+// 三步流程：上传 → OCR 处理（排队/预处理/识别/后处理均归入此步）→ 模板匹配（job.stage=TEMPLATE_MATCHING）
+const matching = computed(() => job.value?.stage === 'TEMPLATE_MATCHING');
+const ocrFailed = computed(() => ['FAILED', 'CANCELLED'].includes(job.value?.status ?? ''));
 const steps = computed(() => {
   const status = job.value?.status ?? 'QUEUED';
-  const uploaded = true;
-  const pre = !['QUEUED'].includes(status);
-  const proc = ['PROCESSING', 'POSTPROCESSING', 'SUCCEEDED', 'PARTIAL_SUCCESS', 'FAILED', 'CANCELLED'].includes(status);
-  const post = ['POSTPROCESSING', 'SUCCEEDED', 'PARTIAL_SUCCESS'].includes(status);
-  const failed = ['FAILED', 'CANCELLED'].includes(status);
+  const ocrRunning = RUNNING.includes(status);
+  const ocrDone = ['SUCCEEDED', 'PARTIAL_SUCCESS'].includes(status);
   return [
-    { key: 'UPLOADED', done: uploaded && !failed, active: false },
-    { key: 'PREPROCESSING', done: pre && !failed, active: status === 'PREPROCESSING' },
-    { key: 'PROCESSING', done: proc && !failed, active: status === 'PROCESSING' },
-    { key: 'POSTPROCESSING', done: post && !failed, active: status === 'POSTPROCESSING' },
+    { key: 'UPLOAD', done: true, active: false, failed: false },
+    { key: 'OCR', done: ocrDone, active: ocrRunning, failed: ocrFailed.value },
+    { key: 'TEMPLATE_MATCHING', done: ocrDone && !matching.value, active: matching.value, failed: false },
   ];
 });
 
 async function poll() {
   try {
-    job.value = await getJob(props.jobId);
+    const payload = await getJob(props.jobId);
+    if (!active) return;
+    job.value = payload;
+    errorMsg.value = '';
     // worker 跑完才写 job.page_count；排队中回退显示文件页数，避免 "All 0 pages"
     if (job.value.page_count == null && filePageCount.value == null) {
       getFile(job.value.file_id)
@@ -49,15 +54,24 @@ async function poll() {
     }
     if (RUNNING.includes(job.value.status)) {
       timer = setTimeout(poll, 2000);
+    } else if (['SUCCEEDED', 'PARTIAL_SUCCESS'].includes(job.value.status)) {
+      // OCR 成功后若有进行中的模板映射，停在「模板匹配」步继续轮询，最多等 90 秒
+      if (!mappingStarted) mappingStarted = Date.now();
+      if (matching.value && Date.now() - mappingStarted < MAPPING_WAIT_MS) timer = setTimeout(poll, 2000);
+      else navigate('result', { jobId: props.jobId });
     }
   } catch (e) {
+    if (!active) return;
     errorMsg.value = e instanceof ApiError ? messageText(e.messageKey) : t('common.unknownError');
+    if (mappingStarted && Date.now() - mappingStarted >= MAPPING_WAIT_MS) navigate('result', { jobId: props.jobId });
+    else if (!(e instanceof ApiError && [401, 404].includes(e.status))) timer = setTimeout(poll, 2000);
   }
 }
 
 onMounted(poll);
 
 onBeforeUnmount(() => {
+  active = false;
   if (timer) clearTimeout(timer);
 });
 
@@ -82,10 +96,10 @@ async function cancel() {
 
     <div class="content">
       <div class="status-card" v-if="job">
-        <BrandLoading v-if="RUNNING.includes(job.status)" :label="t('processing.recognizing')" />
+        <BrandLoading v-if="RUNNING.includes(job.status) || matching" :label="matching ? t('template.matching') : t('processing.recognizing')" />
         <template v-else>
-          <div class="done-mark" />
-          <div class="status-title">{{ t('processing.recognizing') }}</div>
+          <div class="done-mark" :class="{ failed: ocrFailed }" />
+          <div class="status-title">{{ ocrFailed ? t('job.stage.OCR_FAILED') : t('processing.recognizing') }}</div>
         </template>
         <div class="status-sub">{{ job.file_name }} · {{ t('processing.pagesAll', { n: job.page_count ?? filePageCount ?? 0 }) }}</div>
 
@@ -93,14 +107,17 @@ async function cancel() {
           <div v-for="(step, i) in steps" :key="step.key" class="step">
             <div
               class="step-dot"
-              :class="{ done: step.done, active: step.active }"
+              :class="{ done: step.done, active: step.active, failed: step.failed }"
             >
               <svg v-if="step.done" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M20 6L9 17l-5-5" />
               </svg>
+              <svg v-else-if="step.failed" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
               <span v-else-if="step.active" class="step-pulse" />
             </div>
-            <span class="step-label" :class="{ on: step.done || step.active }">{{ t(`processing.step.${step.key}`) }}</span>
+            <span class="step-label" :class="{ on: step.done || step.active, failed: step.failed }">{{ t(`processing.step.${step.key}`) }}</span>
             <div v-if="i < steps.length - 1" class="step-line" :class="{ done: steps[i + 1].done || steps[i + 1].active }" />
           </div>
         </div>
@@ -122,7 +139,7 @@ async function cancel() {
       >
         {{ t('processing.cancelTask') }}
       </button>
-      <button v-else-if="job" class="cancel-btn" @click="navigate('result', { jobId: job.id })">
+      <button v-else-if="job && !matching" class="cancel-btn" @click="navigate('result', { jobId: job.id })">
         {{ t('common.done') }}
       </button>
     </div>
@@ -177,6 +194,10 @@ async function cancel() {
   border-radius: 50%;
 }
 
+.done-mark.failed {
+  border-color: var(--danger);
+}
+
 .status-title {
   font-size: 14px;
   font-weight: 700;
@@ -202,7 +223,7 @@ async function cancel() {
   align-items: center;
   gap: 6px;
   position: relative;
-  width: 76px;
+  width: 96px;
 }
 
 .step-dot {
@@ -223,6 +244,10 @@ async function cancel() {
   background: var(--primary-light);
 }
 
+.step-dot.failed {
+  background: var(--danger);
+}
+
 .step-pulse {
   width: 10px;
   height: 10px;
@@ -239,13 +264,18 @@ async function cancel() {
 }
 
 .step-label {
-  font-size: 8px;
+  font-size: 10px;
   color: var(--text-secondary);
   text-align: center;
 }
 
 .step-label.on {
   color: var(--primary);
+  font-weight: 600;
+}
+
+.step-label.failed {
+  color: var(--danger);
   font-weight: 600;
 }
 

@@ -251,7 +251,13 @@ export type JobStatus =
 export type ReviewStatus = 'UNREVIEWED' | 'EDITED' | 'CONFIRMED';
 
 /** 流程阶段（服务端推导）；VERIFIED 仅出现在未注册用户的已确认任务 */
-export type JobStage = 'OCR_PROCESSING' | 'OCR_FAILED' | 'VERIFYING' | 'VERIFIED' | 'COMPLETED';
+export type JobStage =
+  | 'OCR_PROCESSING'
+  | 'OCR_FAILED'
+  | 'TEMPLATE_MATCHING'
+  | 'VERIFYING'
+  | 'VERIFIED'
+  | 'COMPLETED';
 
 export interface JobSummary {
   id: string;
@@ -269,6 +275,7 @@ export interface JobSummary {
   error_message: string;
   parent_job_id: string | null;
   idempotency_key: string | null;
+  template_name?: string | null;
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
@@ -310,6 +317,73 @@ export interface ResultPage {
   fields: ResultField[];
 }
 
+// 模板映射（FR-VERIFY-018..020）；新增响应字段可选以兼容开关关闭/旧后端。
+export type TemplateFieldType = 'string' | 'integer' | 'decimal' | 'amount';
+export interface TemplateColumn {
+  key: string;
+  name: string;
+  type: TemplateFieldType;
+  required: boolean;
+}
+export type TemplateItem =
+  | (TemplateColumn & { kind: 'field' })
+  | { kind: 'table'; key: string; name: string; columns: TemplateColumn[] };
+export interface TemplateGroup { key: string; name: string; items: TemplateItem[] }
+export interface TemplateSchema { template_version_id: number; name: string; groups: TemplateGroup[] }
+export interface TemplateVersionSnapshot {
+  template_id: number;
+  template_version_id: number;
+  version: number;
+  code: string;
+  name: string;
+  groups: TemplateGroup[];
+}
+export interface MappingSummary {
+  id: string;
+  status: 'PENDING' | 'MATCHING' | 'CONVERTING' | 'READY' | 'FAILED';
+  source: 'AUTO' | 'MANUAL';
+  template_id: number | null;
+  template_version_id: number | null;
+  template_version: number | null;
+  template_name: string | null;
+  match_score: number | null;
+  low_score: boolean;
+  error_code: string | null;
+  error_message: string | null;
+  created_at: string;
+  finished_at: string | null;
+  is_current?: boolean;
+}
+export interface TemplateOption {
+  template_id: number;
+  template_version_id: number;
+  template_version: number;
+  code: string;
+  scope: 'system' | 'tenant';
+  name: string;
+  score: number | null;
+  low_score: boolean;
+  recommended: boolean;
+  generated: boolean;
+  ready_mapping_id: string | null;
+  in_progress_mapping_id: string | null;
+  is_current: boolean;
+}
+export interface TemplateOptions {
+  raw_result_id: string | null;
+  enabled: boolean;
+  current_mapping_id: string | null;
+  pending_mapping_id: string | null;
+  max_mappings: number;
+  mapping_count: number;
+  templates: TemplateOption[];
+  mappings: MappingSummary[];
+}
+export type ApplyTemplateInput = { expected_version: number } & (
+  | { mapping_id: string }
+  | { raw_result_id: string; template_id: number; force?: boolean }
+);
+
 /** GET/PATCH /ocr/jobs/{id}/results：扁平负载，无嵌套 job */
 export interface JobResults {
   job_id: string;
@@ -322,12 +396,19 @@ export interface JobResults {
   /** TextIn Prompt 模式结构化 JSON（key-value 字段 + 表格） */
   structured: unknown;
   pages: ResultPage[];
+  raw_result_id?: string | null;
+  current_mapping?: MappingSummary | null;
+  template_schema?: TemplateSchema | null;
+  pending_mapping?: Pick<MappingSummary, 'id' | 'status' | 'source' | 'template_name'> | null;
+  latest_failed_mapping?: Pick<MappingSummary, 'id' | 'template_name' | 'error_code' | 'error_message' | 'source'> | null;
+  template_available?: boolean;
+  validation?: { required_missing: string[]; type_warnings: { path: string; code: string }[] } | null;
 }
 
 export interface ExportInfo {
   id: string;
   job_id: string;
-  format: 'XLSX' | 'CSV' | 'TXT';
+  format: 'XLSX' | 'CSV' | 'TXT' | 'JSON';
   status: string;
   expires_at: string;
   created_at: string;
@@ -358,6 +439,18 @@ export interface Plan {
   quota_pages_per_month: number;
   seats: number;
   features: string[];
+  /** FR-SYS-019：卡片主题由后台配置（DARK=深色卡），不再按 code 硬编码 */
+  theme?: 'DEFAULT' | 'DARK';
+  /** FR-SYS-019：后台配置的默认开通套餐，用于选择页预选 */
+  is_default?: boolean;
+  /** FR-SYS-019：泰英双语展示文案；缺失时回退英文字段 */
+  i18n?: Partial<Record<'en' | 'th', PlanText>>;
+}
+
+export interface PlanText {
+  name: string;
+  price_display: string;
+  features: string[];
 }
 
 /** 订阅状态：ACTIVE 可用；EXPIRED 到期硬停；NONE 企业未认证（未开通） */
@@ -380,6 +473,8 @@ export interface QuotaTenant {
   plan: {
     code: string | null;
     name: string | null;
+    /** FR-SYS-019：套餐名称双语（en/th）；未知套餐为 null */
+    name_i18n?: Partial<Record<'en' | 'th', string>> | null;
     is_paid: boolean;
     source?: 'DEFAULT' | 'APPROVED' | null;
     metering?: 'OCR_PAGE';
@@ -425,12 +520,15 @@ export interface Subscription extends PlanApplicationBrief {
 /** 租户引用：缺省/null 即调用者的个人租户 */
 export type TenantRef = number | null | undefined;
 
-/** 站内通知类型（首页铃铛） */
+/** 站内通知类型（首页铃铛）：只含账户变动类，与后端 ACCOUNT_NOTIFICATION_TYPES 一致 */
 export type NotificationType =
   | 'PLAN_EXPIRING'
   | 'PLAN_EXPIRED'
-  | 'OCR_DONE'
   | 'PLAN_UPGRADE_SUBMITTED'
+  | 'PLAN_UPGRADE_APPROVED'
+  | 'PLAN_UPGRADE_REJECTED'
+  | 'ACCOUNT_ACTIVATED'
+  | 'COMPANY_ACTIVATED'
   | 'MEMBERSHIP_ACTIVE';
 
 export interface NotificationItem {
@@ -673,9 +771,24 @@ export function updateJobResults(jobId: string, input: ResultsUpdateInput): Prom
   return request<JobResults>(`/ocr/jobs/${jobId}/results`, { method: 'PATCH', json: input });
 }
 
+// ---------- 模板选择 / 切换（200 结果负载，202 映射负载） ----------
+
+export function getTemplateOptions(jobId: string): Promise<TemplateOptions> {
+  return request(`/ocr/jobs/${jobId}/template-options`);
+}
+export function getTemplateVersion(versionId: number): Promise<TemplateVersionSnapshot> {
+  return request(`/templates/versions/${versionId}`);
+}
+export function applyTemplate(jobId: string, input: ApplyTemplateInput): Promise<JobResults | { mapping: MappingSummary }> {
+  return request(`/ocr/jobs/${jobId}/apply-template`, { method: 'POST', json: input });
+}
+export function useGenericResult(jobId: string, expectedVersion: number): Promise<JobResults> {
+  return request(`/ocr/jobs/${jobId}/use-generic`, { method: 'POST', json: { expected_version: expectedVersion } });
+}
+
 // ---------- 导出 ----------
 
-export function createExport(jobId: string, format: 'XLSX' | 'CSV' | 'TXT'): Promise<ExportInfo> {
+export function createExport(jobId: string, format: 'XLSX' | 'CSV' | 'TXT' | 'JSON'): Promise<ExportInfo> {
   return request<ExportInfo>(`/ocr/jobs/${jobId}/exports`, { method: 'POST', json: { format } });
 }
 

@@ -262,10 +262,18 @@ class OcrWorker:
 
         self._transition(job_id, "POSTPROCESSING", progress=80)
 
+        # FR-OCR-021：DeepSeek 整理之前保存 TextIn llm_json 原样副本（OCR 解析结果，模板映射唯一输入）
+        import copy
+        import uuid
+
+        raw_payload = copy.deepcopy(result["structured"])
+        # design D6：开启模板映射后 v1 通用结果直接使用 TextIn 结果，不再调用 DeepSeek
+        mapping_enabled = bool(self.app.config.get("TEMPLATE_MAPPING_ENABLED"))
+
         refiner = ""
         import deepseek
 
-        if deepseek.is_configured(self.app.config):
+        if not mapping_enabled and deepseek.is_configured(self.app.config):
             try:
                 from textin.adapter import _count_structure
 
@@ -286,11 +294,20 @@ class OcrWorker:
                 self._transition(job_id, "CANCELLED")
                 return
             duration_ms = int((time.monotonic() - started) * 1000)
+            from models import OcrRawResult
+
+            raw = OcrRawResult(id=uuid.uuid4().hex, job_id=job_id, payload=raw_payload)
+            db.session.add(raw)
             version = ResultVersion(
                 job_id=job_id, version=1, is_current=True, created_by_user_id=None,
                 structured=result["structured"],
             )
             db.session.add(version)
+            if mapping_enabled:
+                from doc_templates.service import create_auto_mapping
+
+                db.session.flush()  # 生成 v1 主键，作为自动映射的 base_version_id
+                create_auto_mapping(job, raw.id, version)
             job.duration_ms = result["duration_ms"] or duration_ms
             job.page_count = result["page_count"] or file_pages or 1
             job.table_count = result["table_count"]
@@ -305,7 +322,7 @@ class OcrWorker:
             job.finished_at = datetime.now(timezone.utc).replace(tzinfo=None)
             db.session.commit()
 
-        # 审计副本 + 完成通知
+        # 审计副本
         try:
             import json
             from datetime import datetime, timezone
@@ -327,19 +344,7 @@ class OcrWorker:
             )
         except Exception:  # noqa: BLE001
             logger.warning("审计副本写入失败 job=%s", job_id)
-
-        from auth import notify
-        from models import User
-
-        with self.app.app_context():
-            job = db.session.get(OcrJob, job_id)
-            user = db.session.get(User, job.created_by_user_id)
-            if user is not None:
-                notify(
-                    user.id, "OCR_DONE",
-                    "OCR task finished",
-                    f"job {job_id} -> {job.status}",
-                )
+        # 不再发 OCR 完成站内通知：通知中心只承载账户变动（FR-SYS-018），任务进度看历史页阶段
 
 
 def _is_retryable(err: Exception) -> bool:

@@ -144,6 +144,21 @@ def audit(action: str, object_type: str = "", object_id: str = "", detail: dict 
     db.session.commit()
 
 
+#: 通知中心只展示账户变动类通知（FR-SYS-018）：到期/欠费、升级申请与审批、
+#: 个人账户开通、公司账户开通、加入公司。不在此列表的类型（如历史遗留的 OCR_DONE）
+#: 不出现在列表与未读数里。
+ACCOUNT_NOTIFICATION_TYPES = (
+    "PLAN_EXPIRING",
+    "PLAN_EXPIRED",
+    "PLAN_UPGRADE_SUBMITTED",
+    "PLAN_UPGRADE_APPROVED",
+    "PLAN_UPGRADE_REJECTED",
+    "ACCOUNT_ACTIVATED",
+    "COMPANY_ACTIVATED",
+    "MEMBERSHIP_ACTIVE",
+)
+
+
 def notify(user_id: int, type_: str, title: str, body: str = "") -> None:
     from models import Notification
 
