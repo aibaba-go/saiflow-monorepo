@@ -34,7 +34,7 @@ status=0
 if docker run --rm \
   -v "$GCS_KEY_FILE:/key.json:ro" -v "$backups:/backups:ro" \
   google/cloud-sdk:slim sh -c \
-  "gcloud auth activate-service-account --key-file=/key.json --quiet && gcloud storage cp /backups/$name ${BACKUP_BUCKET%/}/" ; then
+  "gcloud auth activate-service-account --key-file=/key.json --quiet && gcloud storage cp /backups/$name ${BACKUP_BUCKET%/}/$name" ; then
   log "backup: uploaded $name to ${BACKUP_BUCKET%/}/"
 else
   log "backup: upload failed for $name (local copy kept)"
