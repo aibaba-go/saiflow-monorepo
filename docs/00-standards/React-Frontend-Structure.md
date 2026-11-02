@@ -3,8 +3,8 @@ doc_id: STD-006
 title: "SaiFlow React 前端 — 目录结构"
 type: standard
 status: active
-version: 1.0.0
-updated: 2026-10-12
+version: 1.1.0
+updated: 2026-11-03
 owner: Product Engineering
 doc_source: manual
 ---
@@ -55,6 +55,9 @@ apps/web-pc/                              # PC Web 端（React + Ant Design + Vi
     ├── types/                            # 应用级类型
     ├── styles/                           # 全局样式、CSS 变量、主题覆盖
     └── assets/                           # 静态资源（图片、字体、图标）
+
+apps/web-admin/                           # admin 后台（React + Ant Design + Vite），独立应用
+└── ...                                   # 结构与 web-pc 一致
 
 apps/line-mini/                           # Line MiniApp 端（React + Ant Design Mobile + Vite）
 └── ...                                   # 结构与 web-pc 一致，组件与样式针对移动端
@@ -123,6 +126,7 @@ packages/
 1. **应用包名**
    - `apps/web-pc` 的 `package.json` 名称为 `@saiflow/web-pc`。
    - `apps/line-mini` 的 `package.json` 名称为 `@saiflow/line-mini`。
+   - `apps/web-admin` 的 `package.json` 名称为 `@saiflow/web-admin`。
    - 共享库使用 `@saiflow/ui`、`@saiflow/api-client`、`@saiflow/tsconfig`。
 
 2. **依赖方向**
@@ -192,4 +196,5 @@ packages/
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.1.0 | 2026-11-03 | Product Engineering | B-1：新增 `apps/web-admin`（`@saiflow/web-admin`） |
 | 1.0.0 | 2026-10-12 | Product Engineering | 初始 SaiFlow React 前端目录结构标准 |

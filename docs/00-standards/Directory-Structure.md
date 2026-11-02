@@ -3,8 +3,8 @@ doc_id: STD-004
 title: "SaiFlow monorepo — 目录结构与文档地图"
 type: standard
 status: active
-version: 2.6.0
-updated: 2026-10-30
+version: 2.7.0
+updated: 2026-11-03
 owner: Product Engineering
 doc_source: manual
 ---
@@ -30,12 +30,15 @@ saiflow/
 ├── README.md
 ├── .claudeignore                          # Claude Code 索引排除列表（node_modules / 构建产物 / 临时文件等）
 ├── pnpm-workspace.yaml  package.json      # JS 工作区根（glob: apps/*, packages/*）
+├── eslint.config.js                       # 共享 ESLint 配置（apps/*、packages/*）
+├── .github/workflows/                     # CI（ci.yml）与手动部署（deploy.yml）
 │
 ├── apps/                                  # JS/TS 可部署应用（pnpm）
-│   ├── web-pc/                            # React + AntDesign PC 端
+│   ├── web-pc/                            # React + AntDesign PC 端（web-pc 企业版）
+│   ├── web-admin/                         # React + AntDesign admin 后台（独立应用）
 │   └── line-mini/                         # Line MiniApp 端
 ├── packages/                              # JS/TS 共享库（pnpm）
-│   ├── api-client/                        # 由 OpenAPI 生成，两前端共用（generated）
+│   ├── api-client/                        # 由 OpenAPI 生成，三个前端共用（generated）
 │   ├── ui/                                # 共享 UI 组件（manual）
 │   └── tsconfig/                          # 共享 TS 配置（manual）
 ├── services/                              # 后端（Python，pnpm 不扫描）
@@ -55,9 +58,13 @@ saiflow/
 │   │   ├── functional/<EPIC-xx>.md
 │   │   └── non-functional/NFR.md
 │   ├── 30-design/                         # 架构、数据模型、接口、OCR 流程、ADR（API-Spec 为 generated，其余 manual）
-│   └── 40-acceptance/                     # Gherkin 验收标准（manual）
+│   ├── 40-acceptance/                     # Gherkin 验收标准（manual）
+│   └── deployment/                        # 人读的部署与运维说明（manual）
 │
 ├── scripts/                               # 仓库级脚本（含部署自动化）
+│   ├── deploy/                            # Compose、Caddy 配置与服务器上运行的部署/备份脚本
+│   ├── docker/                            # 前端镜像 Dockerfile 与 nginx 配置
+│   └── tests/                             # 脚本测试（CI 运行）
 ├── legacy/                                # 旧代码只读参考（ADR-006），不参与构建，不被新代码引用
 ├── temp/                                  # 临时产物（禁止作为正式资产）
 └── .claude/                               # Claude Code 配置
@@ -92,7 +99,7 @@ saiflow/
 9. **原始 PRD / 样本单据** → 不作为本仓库顶层目录：
    - 原始 PRD 输入（外部 `.docx`）的产品级结论沉淀为 `docs/10-product/PRD-SaiFlow.md`；禁止在仓库根另开 `prd/`。
    - OCR 真实样本单据属**敏感数据**，置于 `services/api/tests/fixtures/ocr/` 并加入 `.gitignore`；禁止在仓库根另开 `samples/`，避免真实泰文商业单据进入版本库（PDPA 边界）。
-10. **部署与基础设施** → 暂**不设**顶层基础设施目录，也**不设** `docs/deployment/`（当前无内容）：人读的部署/运维说明未来落在 `docs/deployment/`，部署自动化脚本放 `scripts/`。待真正引入 IaC（Terraform/Pulumi）或需要运维手册时，再新建 `docs/deployment/` 或语义化顶层目录（如 `terraform/`），并回到本标准登记，避免留下长期空壳。
+10. **部署与基础设施** → 暂**不设**顶层基础设施目录：人读的部署/运维说明放 `docs/deployment/`（B-1 起启用），部署自动化脚本与配置放 `scripts/`（Compose 与 Caddy 配置在 `scripts/deploy/`）。待真正引入 IaC（Terraform/Pulumi）或需要运维手册时，再新建 `docs/deployment/` 或语义化顶层目录（如 `terraform/`），并回到本标准登记，避免留下长期空壳。
 11. **端到端测试（E2E）** → 暂**不设**顶层 `e2e/`。跨应用 E2E 是必要层（上传→OCR→核验→录入→归档 跨越两个前端与后端），但其技术栈与粒度尚未定；落地时按以下之一归位，并回到本标准登记：
     - 作为 **pnpm 工作区成员**：新增顶层 `e2e/` 并写入 `pnpm-workspace.yaml`（保持 JS 依赖可解析）；
     - 或**按应用**建 `apps/<app>-e2e`，由 `apps/*` 天然覆盖。
@@ -105,7 +112,8 @@ saiflow/
 
 - 目录：小写、kebab-case（`web-pc`、`line-mini`、`api-client`）。
 - 文档：kebab-case，`.md`（`domain-model.md`、`ai-workflow.md`）。
-- 应用包名：`@saiflow/<name>`（`@saiflow/web-pc`、`@saiflow/line-mini`），使 `pnpm --filter` 与物理路径解耦。
+- 应用包名：`@saiflow/<name>`（`@saiflow/web-pc`、`@saiflow/web-admin`、`@saiflow/line-mini`），使 `pnpm --filter` 与物理路径解耦。
+- 服务、镜像与 Compose 服务名：`saiflow-<be 或 fe>-<目录名>`，`be` 对应 `services/`，`fe` 对应 `apps/`（`saiflow-be-api`、`saiflow-fe-web-pc`、`saiflow-fe-web-admin`、`saiflow-fe-line-mini`）。
 - 每份文件只承载一个概念；文件超过约 500 行时拆分。
 
 ---
@@ -122,6 +130,7 @@ saiflow/
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.7.0 | 2026-11-03 | Product Engineering | B-1：新增 `apps/web-admin`、`.github/workflows/`、`eslint.config.js`、`docs/deployment/`、`scripts/{deploy,docker,tests}/`；规则 10 启用 `docs/deployment/`；新增服务命名规则 |
 | 2.6.0 | 2026-10-30 | Product Engineering | 规则 2：数据模型只登记实体层，字段以代码为唯一来源（ADR-007） |
 | 2.5.0 | 2026-10-30 | Product Engineering | 按 ADR-006：新增 `legacy/`（规则 12）与 `.claude/archive/`；删除 `.claude/agents/` 执行层；change 目录产物改为 proposal / specs / plan / verification；规则 2、4 的变更级设计改写入 `plan.md` |
 | 2.4.6 | 2026-10-12 | Product Engineering | 新增 `docs/00-standards/Document-Source-Guide.md`（STD-007）；目录树增加 `(manual)` / `(generated)` 标注；引用 STD-001 v1.0.2 的 `doc_source` 字段 |

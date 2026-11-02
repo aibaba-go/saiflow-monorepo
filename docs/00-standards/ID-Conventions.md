@@ -3,8 +3,8 @@ doc_id: STD-003
 title: "ID 与可追溯性约定"
 type: standard
 status: active
-version: 1.0.1
-updated: 2026-10-02
+version: 1.1.0
+updated: 2026-11-03
 owner: Product Engineering
 ---
 
@@ -46,6 +46,7 @@ owner: Product Engineering
 | `ENTRY` | 多渠道录入与归档 | EPIC-04 |
 | `MGMT` | 文档管理与检索 | EPIC-05 |
 | `SYS` | 账户、权限、配置、i18n | EPIC-06 |
+| `PLAT` | 平台基线（健康检查、错误格式、配置、部署、备份） | `openspec/specs/platform-baseline` |
 
 ## 3. 非功能分类代码
 
@@ -119,5 +120,6 @@ PRD §4.2  ──source──▶  FR-OCR-004  ──verified_by──▶  AC-FR-
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.1.0 | 2026-11-03 | Product Engineering | 新增领域代码 `PLAT`（B-1 `rebuild-skeleton`） |
 | 1.0.1 | 2026-10-02 | Product Engineering | 将人类可读内容翻译为简体中文 |
 | 1.0.0 | 2026-09-10 | Product Engineering | 初始 ID 与可追溯性约定 |
