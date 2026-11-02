@@ -311,8 +311,8 @@ it("shows UNREACHABLE", async () => { mockHealth({ state: "unreachable" }); ...f
   - `contract`：装 uv 与 pnpm；`bash packages/api-client/scripts/generate.sh` 后 `git diff --exit-code docs/30-design/openapi.json packages/api-client/src/generated`，失败时输出 `::error::api-client is out of date; run pnpm generate:api-client`。
   - `scripts`：`shellcheck scripts/*.sh scripts/deploy/*.sh scripts/tests/*.sh`；运行 `scripts/tests/*.test.sh`；运行 `scripts/check-no-secrets.sh`。
   - `stack`：本地构建 4 个镜像（`IMAGE_TAG=ci`，不推送）；在临时目录按 `env.example` 写 `.env`（随机口令，`APP_HOST=app.localhost`、`ADMIN_HOST=admin.localhost`、`LINE_HOST=line.localhost`）；`docker compose up -d postgres` → 迁移命令 → `docker compose up -d`；`SMOKE_INSECURE=1` 对三个 `https://*.localhost` 运行 `smoke-check.sh <url> ci`；断言 `docker compose port postgres 5432` 无输出（数据库未发布端口，AC-FR-PLAT-005-06 的配置部分）；对运行中的栈执行一次 `pg_dump`（与 `backup.sh` 相同参数）并运行 `restore-check.sh`（AC-FR-PLAT-006-04）。
-  - `scripts/check-no-secrets.sh`：在 `git ls-files` 范围内搜索 `"type": "service_account"`、`"private_key"`、`-----BEGIN [A-Z ]*PRIVATE KEY-----`，命中则列出文件并退出 1（AC-FR-PLAT-005-04）。
-- [ ] **Step 1: 写失败测试** `scripts/tests/check-no-secrets.test.sh`：在临时 git 仓库中，无密钥 → 退出 0；提交含 `"type": "service_account"` 的 JSON → 退出 1 并输出文件名；提交含 `-----BEGIN OPENSSH PRIVATE KEY-----` 的文件 → 退出 1。
+  - `scripts/check-no-secrets.sh`：在 `git ls-files` 范围内搜索 服务账号密钥 JSON 的类型字段（type = service account）、`private_key` 字段、PEM 私钥开头行（BEGIN … PRIVATE KEY），命中则列出文件并退出 1（AC-FR-PLAT-005-04）。
+- [ ] **Step 1: 写失败测试** `scripts/tests/check-no-secrets.test.sh`：在临时 git 仓库中，无密钥 → 退出 0；提交含服务账号类型字段的 JSON → 退出 1 并输出文件名；提交含 OpenSSH 私钥开头行的文件 → 退出 1。
 - [ ] **Step 2: 运行** `bash scripts/tests/check-no-secrets.test.sh` → Expected: FAIL。
 - [ ] **Step 3: 实现** `check-no-secrets.sh` 与 `ci.yml`。
 - [ ] **Step 4: 运行** `bash scripts/tests/check-no-secrets.test.sh && bash scripts/check-no-secrets.sh` → Expected: 测试 PASS，仓库检查退出 0。`ci.yml` 在 Task 11 推送后首次实际运行。
