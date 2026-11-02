@@ -74,3 +74,7 @@
 - **外部**：VPS 上的 Docker、`deploy` 账号、部署目录与环境变量文件；DNS 中三个子域名指向 VPS；GHCR 中 4 个镜像；GCS 备份桶与只写服务账号；GitHub 仓库 Secrets 与 Variables。
 - **风险**：单台服务器承载数据库与全部服务（ADR-008）；`deploy` 账号权限接近 root（D9）；备份是唯一的恢复手段，所以 B-1 验证中必须实际做一次恢复演练，并把结果写入 `verification.md`。
 - `legacy/` 不改动、不引用。
+
+## 评审结论
+
+负责人 2026-11-03 确认按 ADR-008 修订后的 proposal、spec（FR-PLAT-001..006）与 plan（11 个任务）执行；LINE 小程序子域名确认为 `saiflow-line.aibaba.asia`；执行方式 Native。
