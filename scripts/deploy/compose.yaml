@@ -1,0 +1,83 @@
+# SaiFlow stack on the VPS (ADR-008). Lives in /opt/saiflow next to .env (mode 600).
+#   docker compose up -d postgres
+#   docker compose run --rm saiflow-be-api alembic upgrade head
+#   docker compose up -d --remove-orphans
+name: saiflow
+
+x-common: &common
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+services:
+  postgres:
+    <<: *common
+    image: postgres:18
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: saiflow
+      DB_PASSWORD: ${DB_PASSWORD:?}
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    # No ports: reachable only on the internal network (FR-PLAT-005, AC-005-06).
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d saiflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  saiflow-be-api:
+    <<: *common
+    image: ${IMAGE_REGISTRY:-ghcr.io/aibaba-go}/saiflow-be-api:${IMAGE_TAG:?}
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: saiflow
+      DB_USER: saiflow_v3_app
+      DB_PASSWORD: ${DB_PASSWORD:?}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  saiflow-fe-web-pc:
+    <<: *common
+    image: ${IMAGE_REGISTRY:-ghcr.io/aibaba-go}/saiflow-fe-web-pc:${IMAGE_TAG:?}
+
+  saiflow-fe-web-admin:
+    <<: *common
+    image: ${IMAGE_REGISTRY:-ghcr.io/aibaba-go}/saiflow-fe-web-admin:${IMAGE_TAG:?}
+
+  saiflow-fe-line-mini:
+    <<: *common
+    image: ${IMAGE_REGISTRY:-ghcr.io/aibaba-go}/saiflow-fe-line-mini:${IMAGE_TAG:?}
+
+  caddy:
+    <<: *common
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      APP_HOST: ${APP_HOST:?}
+      ADMIN_HOST: ${ADMIN_HOST:?}
+      LINE_HOST: ${LINE_HOST:?}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - saiflow-be-api
+      - saiflow-fe-web-pc
+      - saiflow-fe-web-admin
+      - saiflow-fe-line-mini
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
