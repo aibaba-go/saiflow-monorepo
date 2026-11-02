@@ -2,9 +2,9 @@
 doc_id: ADR-007
 title: "ADR-007 — v3 存储边界：表单数据存 Firestore，系统数据存 Cloud SQL"
 type: adr
-status: accepted
-version: 1.0.1
-updated: 2026-10-30
+status: superseded
+version: 1.1.0
+updated: 2026-11-02
 owner: Product Engineering
 related: [PRD-001, OQ-21, OQ-27, ADR-001, ADR-006]
 doc_source: manual
@@ -16,7 +16,9 @@ doc_source: manual
 
 ## 状态
 
-accepted（2026-10-30，负责人确认）
+**superseded（已被取代）。** 2026-11-02 起由 [ADR-008](ADR-008-vps-docker-hosting.md) 取代：Firestore 与 Cloud SQL 合并为 VPS 上的 PostgreSQL，识别结果（OCR 原始 JSON、结构化 JSON）用 jsonb；对象仍存私有 GCS。以下内容为历史记录。
+
+原状态：accepted（2026-10-30，负责人确认）
 
 ## 上下文
 
@@ -72,5 +74,6 @@ accepted（2026-10-30，负责人确认）
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.1.0 | 2026-11-02 | Product Engineering | 标记 superseded，由 ADR-008 取代 |
 | 1.0.1 | 2026-10-30 | Product Engineering | 按 PRD v3.2 调整措辞：企业认证可选、免费额度、用量提醒、月扫描配额；决策不变 |
 | 1.0.0 | 2026-10-30 | Product Engineering | 初版：v3 存储归属表；关闭 OQ-27 |

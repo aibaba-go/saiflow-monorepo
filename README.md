@@ -2,7 +2,7 @@
 
 > **We turn paper into process.**
 
-面向泰国 SME 制造企业的纸质单据 OCR 数字化录入系统（PO / Delivery Note / Invoice / Receipt / Credit Note / Tax Receipt）。云端部署于 Google Cloud（Cloud Run + Cloud SQL PostgreSQL 18.6 + 私有 GCS + Firestore + Cloud Functions）。
+面向泰国 SME 制造企业的纸质单据 OCR 数字化录入系统（PO / Delivery Note / Invoice / Receipt / Credit Note / Tax Receipt）。部署于 LightNode VPS（曼谷）的 Docker Compose：后端、三个前端、PostgreSQL 与 Caddy；原件等对象存私有 GCS（见 `docs/30-design/adr/ADR-008-vps-docker-hosting.md`）。
 
 ## monorepo 结构
 

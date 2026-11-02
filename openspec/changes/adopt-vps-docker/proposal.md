@@ -64,3 +64,11 @@
 - **后续 change：** B-1 `rebuild-skeleton` 需修订（FR-PLAT-003 凭据来源、FR-PLAT-005 部署与密钥要求、plan 第 3、6–10 步）；B-3 的存储实现改为 PostgreSQL jsonb + GCS。
 - **外部：** VPS 上需开放 80/443 端口给 Caddy；GCS 新建数据库备份桶；GCP 新建专用服务账号（S1）。
 - **风险：** 单台服务器同时承载数据库与全部服务，宕机即全部不可用、磁盘损坏依赖异地备份恢复；投产前需要重新评估。
+
+## 实施说明（2026-11-02）
+
+- 按上面的清单修改；以下两处与清单不同，理由如下：
+  - `EPIC-*`、`Acceptance-Criteria.md`、`Requirements-Index.md` **未改**：`AGENTS.md` 规则 6 规定需求与 AC 只经 change 的 delta spec 落地，不再直接改写；这三类文件已标注“与 PRD 冲突时以 PRD 为准”，其中的存储表述在 B-2～B-4 迁入 `openspec/specs/` 时按 ADR-008 改写。
+  - `OCR-Pipeline.md` 只在开头加“已过时”说明：全文是 v2 设计，按 ADR-006 §7 在 B-3 重写。
+- 历史记录（各文档的版本历史、PRD §0 的 v2.2.2 对比列、已决议问题的原结论、已归档的 change）保留原文，只在需要处注明“按 ADR-008 修订”。
+- `docs/30-design/openapi.json` 中的旧环境描述在 B-1 Task 4 由新后端导出的契约整体替换，本 change 不改。

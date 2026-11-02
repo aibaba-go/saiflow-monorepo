@@ -3,8 +3,8 @@ doc_id: PRD-002
 title: "SaiFlow — 愿景、范围与发布计划"
 type: prd
 status: active
-version: 1.3.0
-updated: 2026-10-30
+version: 1.4.0
+updated: 2026-11-02
 owner: Product
 source: "PRD-001; 2026-10-05 产品范围补充"
 ---
@@ -21,7 +21,7 @@ SaiFlow 让泰国 SME 制造企业的纸质单据实现数字化、核验并录�
 
 ## 2. 产品原则
 
-1. **私有与安全优先** — 以私有 GCS、Cloud SQL、最小权限 IAM 和审计日志保护数据，并符合 PDPA 约束。
+1. **私有与安全优先** — 以私有 GCS、不对公网开放的数据库、最小权限账号和审计日志保护数据，并符合 PDPA 约束。
 2. **可配置流程优先** — 单据类型、处理步骤、字段映射和业务规则应支持按企业业务进行配置；具体配置模型须在需求层明确后实现。
 3. **Human-in-the-loop** — OCR 提出结果，人员在录入前核验；更正会被记录。
 4. **零 IT 人员可用性** — 未受培训的文员也能完成流程。
@@ -84,8 +84,8 @@ SaiFlow 应根据企业当前业务支持不同单据处理流程，并支持可
 ## 5. 假设与约束
 
 - 用户提供等效 ≥ 300 DPI 的文档或清晰的手机照片。
-- 企业用户须可访问部署在 Google Cloud Run 的服务；运行环境与浏览器兼容性见 `NFR-COMPAT`。
-- 原件存储在私有 GCS Bucket，表单数据（原始识别载荷与结构化结果）存储在 Firestore，系统数据存储在 Cloud SQL PostgreSQL（`docs/30-design/adr/ADR-007-v3-storage-boundary.md`）；PDPA 适用于文档中的所有个人数据（见 `NFR-SEC`、OQ-4）。
+- 企业用户须可经 HTTPS 访问部署在 VPS（Docker）上的服务；运行环境与浏览器兼容性见 `NFR-COMPAT`。
+- 原件存储在私有 GCS Bucket，表单数据（原始识别载荷与结构化结果）与系统数据都存储在 PostgreSQL（`docs/30-design/adr/ADR-008-vps-docker-hosting.md`）；PDPA 适用于文档中的所有个人数据（见 `NFR-SEC`、OQ-4）。
 
 ## 链接
 - PRD：`docs/10-product/PRD-SaiFlow.md`
@@ -94,6 +94,7 @@ SaiFlow 应根据企业当前业务支持不同单据处理流程，并支持可
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.4.0 | 2026-11-02 | Product Engineering | 按 ADR-008：运行环境改为 VPS + Docker，表单数据改存 PostgreSQL |
 | 1.3.0 | 2026-10-30 | Product Engineering | 按 PRD v3.2：团队租户；计费改为按 OCR 扫描次数计量，补充开通周期、成员人数上限、免费额度、用量提醒 |
 | 1.2.0 | 2026-10-30 | Product Engineering | 按 PRD v3.1：范围内新增三个使用入口、账户与租户、计费；Excel 一条改为 OCR 结果导出；范围外新增在线支付、按租户配置引擎与大模型、web-pc 报表等；存储约束改为 v3 边界 |
 | 1.1.0 | 2026-10-05 | Product Engineering | 更新产品愿景；加入可配置单据处理与订单、应收应付、设备维修三类业务流程；同步云端部署范围 |

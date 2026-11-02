@@ -3,8 +3,8 @@ doc_id: NFR-000
 title: "SaiFlow — 非功能需求"
 type: nfr
 status: active
-version: 1.2.0
-updated: 2026-10-30
+version: 1.3.0
+updated: 2026-11-02
 owner: Product Engineering
 source: "PRD-001 §5"
 ---
@@ -17,9 +17,9 @@ source: "PRD-001 §5"
 
 | ID | 需求 | 目标 | 优先级 |
 |----|------|------|--------|
-| NFR-PERF-001 | 单份文档端到端识别与转换时间 | 从预处理完成至 OCR 引擎返回与 Firestore 载荷保存完成 ≤ **5 s**（p95；不含人工核验）；大模型模板匹配与结构化转换的性能目标见 PRD OQ-20 | P0 |
+| NFR-PERF-001 | 单份文档端到端识别与转换时间 | 从预处理完成至 OCR 引擎返回与原始载荷保存完成 ≤ **5 s**（p95；不含人工核验）；大模型模板匹配与结构化转换的性能目标见 PRD OQ-20 | P0 |
 | NFR-PERF-002 | 每张图像预处理（矫正/裁剪）时间 | ≤ **1 s**（p95） | P0 |
-| NFR-PERF-008 | Firestore 载荷到 Cloud SQL 转换延迟 | v3 已废弃：不再有 Cloud SQL 关系投影（PRD OQ-19、ADR-007）；保留 ID 以便追溯 | — |
+| NFR-PERF-008 | Firestore 载荷到 Cloud SQL 转换延迟 | v3 已废弃：不再有关系投影（PRD OQ-19、ADR-007，现由 ADR-008 取代）；保留 ID 以便追溯 | — |
 | NFR-PERF-003 | 批量吞吐量 | 批量模式下 ≥ **200 份文档/小时** | P1 |
 | NFR-PERF-004 | 字段级 OCR 准确率（V1.0 基线） | 样本集上 ≥ **85%**；各字段目标 = PRD OQ-1 | P0 |
 | NFR-PERF-005 | UI 对用户操作的响应 | 本地操作 ≤ **200 ms** | P0 |
@@ -31,11 +31,11 @@ source: "PRD-001 §5"
 
 | ID | 需求 | 详细信息 | 优先级 |
 |----|------|----------|--------|
-| NFR-SEC-001 | 云端静态加密 | GCS 文档、Firestore 原始载荷和 Cloud SQL 关系数据均启用云平台静态加密 | P0 |
+| NFR-SEC-001 | 静态加密 | GCS 中的文档与数据库备份启用静态加密；VPS 上数据库与本地备份文件的静态加密方式按 PRD OQ-30 在投产前确定并启用（ADR-008） | P0 |
 | NFR-SEC-002 | 私有云对象存储 | 文档字节仅存储于私有 GCS Bucket；不得使用公共 Bucket、匿名访问或由浏览器持有服务凭据 | P0 |
-| NFR-SEC-003 | 隔离的操作权限 | 在服务端强制实施 RBAC；Cloud Run 与 Cloud Functions 使用职责分离的最小权限服务账号 | P0 |
-| NFR-SEC-009 | TextIn 密钥与跨境控制 | TextIn 凭据仅存储于 Secret Manager；生产调用须在 OQ-7 的 PDPA 与跨境评估通过后启用 | P0 |
-| NFR-SEC-010 | 原始识别载荷保护 | Firestore 原始 JSON 按载荷版本不可变；浏览器不得直接读写，访问必须经服务端授权 | P0 |
+| NFR-SEC-003 | 隔离的操作权限 | 在服务端强制实施 RBAC；访问 GCS 与 Vision 的 GCP 服务账号只授予所需权限（业务桶读写、备份桶写入、Vision 调用）；数据库应用账号只授予所需权限；服务器部署账号只拥有部署所需权限 | P0 |
+| NFR-SEC-009 | TextIn 密钥与跨境控制 | TextIn 等外部服务凭据仅存储于服务器上仅管理员可读的环境变量文件（部署所需的值存于 GitHub Secrets），不进仓库与镜像；生产调用须在 OQ-7 的 PDPA 与跨境评估通过后启用 | P0 |
+| NFR-SEC-010 | 原始识别载荷保护 | 原始 JSON（PostgreSQL jsonb）按载荷版本不可变；浏览器不得直接读写，访问必须经服务端授权 | P0 |
 | NFR-SEC-011 | admin 后台认证 | 平台 admin 后台使用与客户账号隔离的独立账号；口令以强单向哈希存储，连续失败达到阈值后锁定；admin 的每次写操作写入操作日志。短信 OTP 在接入短信平台后补充 | P0 |
 | NFR-SEC-012 | 大模型与 OCR 服务的数据处理 | 发送到大模型与 OCR 服务的单据内容仅由服务端调用；更换模型或引擎时由人工确认其 PDPA 合规（PRD §3.6） | P0 |
 | NFR-SEC-004 | 记录防篡改 | 变更日志与操作日志仅可追加且经过完整性检查 | P0 |
@@ -71,9 +71,9 @@ source: "PRD-001 §5"
 
 | ID | 需求 | 详细信息 | 优先级 |
 |----|------|----------|--------|
-| NFR-REL-001 | 云服务依赖反馈 | 当 Google Cloud 或 TextIn 不可用时，系统必须显示可操作的失败状态，不得声称离线完成 | P0 |
+| NFR-REL-001 | 云服务依赖反馈 | 当 GCS、OCR 引擎（TextIn、Google Cloud Vision）、大模型或数据库不可用时，系统必须显示可操作的失败状态，不得声称离线完成 | P0 |
 | NFR-REL-002 | 优雅失败 | 一份失败文档不得中止批次；应标记为失败且可重试 | P0 |
-| NFR-REL-003 | 数据持久性 | 处理期间崩溃不得损坏 GCS 原件、Firestore 原始载荷或已归档文档 | P0 |
+| NFR-REL-003 | 数据持久性 | 处理期间崩溃不得损坏 GCS 原件、原始载荷或已归档文档 | P0 |
 | NFR-REL-004 | 恢复 | 重启或事件重放后恢复待处理任务，并通过幂等键避免重复的结构化结果 | P1 |
 | NFR-REL-005 | OCR 引擎切换 | OCR 引擎按 PRD §4.6 与 OQ-12 决议执行两层切换：单据级重试后改用备用引擎；首选引擎全局连续失败达到阈值时整体切换并按间隔试探恢复；只统计服务层面的失败 | P0 |
 
@@ -85,8 +85,8 @@ source: "PRD-001 §5"
 | NFR-DATA-002 | 可配置阈值 | 可按文档类型/字段配置置信度/核验阈值 | P1 |
 | NFR-DATA-003 | 保留策略 | 可按 PDPA（PRD OQ-4）配置保留/删除 | P1 |
 | NFR-DATA-004 | 金额精度 | 金额使用 `decimal(14,2)`；不得出现浮点舍入漂移 | P0 |
-| NFR-DATA-005 | 备份与导出 | 支持 Cloud SQL 关系数据与 GCS/Firestore 对应元数据的受控备份或导出 | P1 |
-| NFR-DATA-006 | 原始载荷可追溯性 | 每个关系投影必须关联 Firestore 载荷版本和已发布模板版本；转换不得覆盖原始 JSON | P0 |
+| NFR-DATA-005 | 备份与导出 | 数据库每天导出一次，VPS 本地保留 7 天，导出完成后立即复制到 GCS 单独的备份桶（保留 30 天）；GCS 对象按其保留策略管理（ADR-008） | P0 |
+| NFR-DATA-006 | 原始载荷可追溯性 | 每份结构化结果必须关联原始载荷版本和已发布模板版本；转换不得覆盖原始 JSON | P0 |
 | NFR-DATA-007 | 转换幂等性 | 同一 `document_id` 与 `payload_version` 的重试不得重复创建字段或行项目 | P0 |
 
 ## 7. 本地化与多语言（`NFR-I18N`）
@@ -116,6 +116,7 @@ source: "PRD-001 §5"
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.3.0 | 2026-11-02 | Product Engineering | 按 ADR-008（VPS + Docker，表单数据存 PostgreSQL）：改写 SEC-001/003/009/010、REL-001/003、DATA-005（每日备份，提升为 P0）/006 与 PERF-001 中的存储与凭据表述 |
 | 1.2.0 | 2026-10-30 | Product Engineering | 按 PRD v3.1：新增 NFR-SEC-011（admin 后台认证）、NFR-SEC-012（大模型与 OCR 服务的数据处理）、NFR-REL-005（OCR 引擎两层切换）、NFR-PERF-009（调用次数与耗时可观测）、NFR-COMPAT-008（同一 LINE Provider）；NFR-PERF-008 随 Cloud SQL 关系投影废弃，NFR-PERF-001、NFR-REL-004 去掉关系投影表述（PERF-001 不扩大承诺范围，大模型环节目标见 OQ-20） |
 | 1.1.1 | 2026-10-18 | Product Engineering | 补充 NFR-USAB-004：LINE Mini App 统一品牌等待反馈，保留操作文案、上传进度与 OCR 阶段，支持减少动态效果；套餐审核不作为网络加载 |
 | 1.1.0 | 2026-10-07 | Product Engineering | 新增 TextIn、Firestore 原始载荷、Cloud Functions 转换延迟、幂等性与云端可靠性约束 |

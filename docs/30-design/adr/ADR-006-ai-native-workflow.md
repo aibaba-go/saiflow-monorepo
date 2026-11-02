@@ -3,10 +3,10 @@ doc_id: ADR-006
 title: "ADR-006 — AI Native 开发模式：OpenSpec 管需求、SuperPowers 管实现，并重建代码"
 type: adr
 status: accepted
-version: 1.1.1
-updated: 2026-10-30
+version: 1.2.0
+updated: 2026-11-02
 owner: Product Engineering
-related: [WF-001, AGENTS, STD-004, STD-005, STD-006, PRD-001]
+related: [WF-001, AGENTS, STD-004, STD-005, STD-006, PRD-001, ADR-008]
 doc_source: manual
 ---
 
@@ -127,7 +127,7 @@ accepted（2026-10-30 负责人确认）
 - **线上现状（负责人确认，2026-10-30）**：线上没有真实用户，不考虑数据迁移、服务中断和用户体验延续。现有线上服务可以随时下线；新版本按 B-1 起的部署方式重新发布。
 - **旧代码**：只作参考，**不保留重新部署的能力**（Dockerfile、入口等随目录一起移走，不维护构建路径）。打 git tag `legacy-v1` 后，将现有 `services/api`、`apps/line-mini`、`apps/web-pc` 移至顶层 `legacy/`（不在 pnpm glob 内，不参与构建与测试）。`legacy/` 为只读参考：重建时可阅读，不修改、不引用、不复制未经测试的代码。新版本测试通过并运行一段时间后删除 `legacy/`，tag 保留。
 - 重建认证、LINE、租户、订阅时，以 `legacy/` 中已验证的边界处理（LIFF 20 秒超时、登出锁定、游客归集等）作为参考答案：先把这些边界写成 AC 与测试，再实现。
-- **部署**：现状为手工操作，即本地构建 Docker 镜像后，手工执行 `gcloud` 命令发布到 Cloud Run（负责人确认，2026-10-30）。仓库内没有部署脚本可沿用。B-1 把这套手工步骤写成 `scripts/` 下的部署脚本（构建镜像 → 推送 → `gcloud run deploy`），由人手动触发；Cloud Run 服务、域名、Secret Manager 等云端配置沿用，不重新设计。自动部署不在本 ADR 范围内（实施者决定，已记录）。
+- **部署**：现状为手工操作，即本地构建 Docker 镜像后，手工执行 `gcloud` 命令发布到 Cloud Run（负责人确认，2026-10-30）。仓库内没有部署脚本可沿用。B-1 把这套手工步骤写成 `scripts/` 下的部署脚本（构建镜像 → 推送 → `gcloud run deploy`），由人手动触发。**2026-11-02 起运行环境按 [ADR-008](ADR-008-vps-docker-hosting.md) 改为 LightNode VPS + Docker**：部署由 GitHub Actions 手动触发，构建镜像推到 GHCR，经 SSH 登录 VPS 后执行数据库迁移与 `docker compose` 更新；Cloud Run、Cloud SQL、Secret Manager 不再使用。自动部署不在本 ADR 范围内（实施者决定，已记录）。
 
 ## 7. 代码重建路线（部分 B）
 
@@ -138,7 +138,7 @@ accepted（2026-10-30 负责人确认）
 | B-0 | `prd-v3-doc-sync` | M | 完成 PRD §8 中产品级部分：Glossary、Vision-Scope、NFR（大模型约束）、`AGENTS.md` 第 7 条；Architecture / Data-Model 按 v3 数据边界重写并新增 ADR（关闭 OQ-27） | A 完成 |
 | B-1 | `rebuild-skeleton` | L | 新 `services/api`（FastAPI 骨架、配置、Alembic、pytest）、新 `apps/web-pc` 与 `apps/line-mini` 空壳（React、Vitest）、`packages/api-client` 生成脚本、CI 跑 lint/test/build、`scripts/` 手动触发的部署脚本 | B-0 |
 | B-2 | `rebuild-auth-tenant` | L | LINE 认证、游客会话与归集、租户、订阅与计量（月扫描配额、免费额度、成员人数上限）、用量与到期提醒（EPIC-06 迁入 capability；规则见 PRD §4.9 v3.2） | B-1 |
-| B-3 | `ocr-pipeline-v3` | L | 上传、OCR 引擎抽象、大模型模板匹配与结构化转换、Firestore 存储（EPIC-01/02 迁入） | B-2 |
+| B-3 | `ocr-pipeline-v3` | L | 上传（原件存私有 GCS）、OCR 引擎抽象、大模型模板匹配与结构化转换、识别结果存 PostgreSQL jsonb（EPIC-01/02 迁入；ADR-008） | B-2 |
 | B-4 | `verify-and-export` | L | 人工确认与修正、复核、导出 Excel（EPIC-03/04 迁入） | B-3 |
 | B-5 | `frontend-flows` | L | 两个前端接入真实后端的完整流程（可按页面再拆分） | B-2 起可并行 |
 
@@ -148,7 +148,7 @@ B-2 到 B-5 的具体范围、优先级以各自 proposal 经负责人确认的�
 
 - **B-0** 不含行为需求，不写 delta spec，归档使用 `openspec archive --skip-specs`。B-0 不改 `EPIC-*` 与 `Acceptance-Criteria.md`（它们在 B-2～B-4 迁移时按 v3 改写进 capability）；`OCR-Pipeline.md` 的重绘放到 B-3。
 - **`packages/*`**（`api-client`、`ui`、`tsconfig`）当前为空目录，保留原位，在 B-1 中建立内容，不移入 `legacy/`。
-- **数据库**：新后端在 Cloud SQL 中使用新的 schema，由 Alembic 从初始版本建立，不在旧 `saiflow` schema 上做基线迁移；旧 schema 原样保留只读，直到 `legacy/` 删除时再决定 drop。
+- **数据库**：新后端在 VPS 上的 PostgreSQL 中使用新的 schema，由 Alembic 从初始版本建立（ADR-008）；旧 Cloud SQL 中的 `saiflow` schema 不迁移，旧 Google Cloud 资源的下线另行决定。
 - **执行顺序**：本 ADR 改为 `accepted` 后才执行部分 A；A 与 B-0 分为两个独立分支与 PR。
 
 ## 8. 延后：夜间自动运行
@@ -164,7 +164,7 @@ B-2 到 B-5 的具体范围、优先级以各自 proposal 经负责人确认的�
 
 - **发布分支**：今后从 `chore/ai-workflow-v2`（及其后续分支）开发与发布；`main`、`docs/*`、`feature_ocr_*` 等其余分支与 tag 保持原样，不改写、不 force push。
 - 本分支的历史经过改写（清除 cookie 文件与 31 个上传/导出文件）：与 `main` 的共同祖先是 `fb3f16e`，此后 `main` 上的 20 余个提交在本分支中是内容相同、哈希不同的改写版本。将来若要合并回 `main`，会出现重复提交与冲突，应改为用本分支替换 `main`，届时另行决定。
-- **凭据**：`legacy/` 及历史中的 Cloud SQL、Firestore Mongo、MySQL、TextIn 凭据不轮换、不清理历史，风险接受（团队仅 2 人）。当前代码树中已删除两个含明文密码的 sample 文件，并清空其余凭据默认值。新代码一律通过 Secret Manager / 环境变量注入，不得硬编码默认值。
+- **凭据**：`legacy/` 及历史中的 Cloud SQL、Firestore Mongo、MySQL、TextIn 凭据不轮换、不清理历史，风险接受（团队仅 2 人）。当前代码树中已删除两个含明文密码的 sample 文件，并清空其余凭据默认值。新代码一律通过环境变量注入（服务器上的环境变量文件，ADR-008），不得硬编码默认值。
 
 ## 考虑过的方案
 
@@ -186,7 +186,7 @@ B-2 到 B-5 的具体范围、优先级以各自 proposal 经负责人确认的�
 ## 合规与约束检查
 
 - PDPA：真实 OCR 样本仍只放 `services/api/tests/fixtures/ocr/` 且不入库；`legacy/` 不得包含 cookie、密钥或真实单据。
-- 数据边界：以 B-0 产出的新 ADR 为准（表单数据 Firestore、系统数据 Cloud SQL）。
+- 数据边界：以 ADR-008 为准（表单数据与系统数据存 PostgreSQL，对象存私有 GCS）；B-0 产出的 ADR-007 已被取代。
 
 ## 留给实施者决定
 
@@ -206,6 +206,7 @@ B-2 到 B-5 的具体范围、优先级以各自 proposal 经负责人确认的�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.2.0 | 2026-11-02 | Product Engineering | 按 ADR-008：§6 部署改为 GitHub Actions + GHCR + SSH 到 VPS；§7 B-3 存储改为 PostgreSQL jsonb + GCS，数据库边界改为 VPS 上的 PostgreSQL；凭据来源改为服务器环境变量文件 |
 | 1.1.1 | 2026-10-30 | Product Engineering | §7 B-2 范围按 PRD v3.2 补充用量提醒、免费额度与成员人数上限 |
 | 1.1.0 | 2026-10-30 | Product Engineering | 记录负责人决定：历史清理只作用于本分支，其余分支与 tag 不变，今后从本分支发布；`legacy/` 中发现的数据库与 TextIn 凭据不轮换、不清理历史，风险接受（团队仅 2 人），当前代码树中已清空其默认值；新增“发布分支与凭据”一节 |
 | 1.0.0 | 2026-10-30 | Product Engineering | 负责人审阅通过，状态改为 accepted；`sf-cookies.txt` 与 31 个已入库的上传/导出文件已从全部分支历史中清除 |

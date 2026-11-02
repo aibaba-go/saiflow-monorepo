@@ -3,8 +3,8 @@ doc_id: GLO-001
 title: "SaiFlow — 术语表（唯一事实来源）"
 type: glossary
 status: active
-version: 1.3.0
-updated: 2026-10-30
+version: 1.4.0
+updated: 2026-11-02
 owner: Product
 ---
 
@@ -77,7 +77,7 @@ owner: Product
 | **双重存储（Dual storage）** | 同时归档原始图像文件与识别/结构化数据文件。 |
 | **Merge PDF** | 将多个文档（PO + DN + Invoice）合并为一个账单包 PDF。 |
 | **TextIn** | 外部 OCR 与结构化文档识别服务；SaiFlow 仅在服务端调用，并保存其原始 JSON 响应。 |
-| **原始识别载荷（Raw extraction payload）** | OCR 引擎（TextIn 或 Google Cloud Vision API）返回、原样保存于 Firestore 的完整 JSON 及其关联元数据；按载荷版本不可变。 |
+| **原始识别载荷（Raw extraction payload）** | OCR 引擎（TextIn 或 Google Cloud Vision API）返回、原样保存于 PostgreSQL（jsonb）的完整 JSON 及其关联元数据；按载荷版本不可变。 |
 | **文档格式模板（Document template）** | 已版本化的表单定义：表单类型、字段、明细行、主要字段与界面定义；是大模型模板匹配与结构化转换的依据，也决定 Excel 导入模板与导出版式。 |
 | **JSONPath 映射** | v3 不再使用（已由大模型结构化转换取代，PRD OQ-19）；保留词条以便追溯：曾指从原始 JSON 中选择数据并写入既定规范字段的受限路径规则。 |
 | **幂等转换（Idempotent conversion）** | 对同一文档与原始载荷版本重复执行时，结果不产生重复记录的转换。 |
@@ -142,6 +142,7 @@ owner: Product
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.4.0 | 2026-11-02 | Product Engineering | 按 ADR-008：原始识别载荷改存 PostgreSQL（jsonb） |
 | 1.3.0 | 2026-10-30 | Product Engineering | 按 PRD v3.2：企业租户改称团队租户；企业认证改为可选；月页额度改为 OCR 扫描次数与月扫描配额；新增免费额度（归属租户）、成员人数上限、用量提醒；团队租户由个人租户原地升级；修订套餐、到期提醒 |
 | 1.2.0 | 2026-10-30 | Product Engineering | 按 PRD v3.1：新增数据录入入口、OCR 引擎切换、大模型与置信度术语；新增租户、游客、关联身份、套餐与月页额度术语；角色分为系统角色（平台管理员、owner、默认角色、权限点）与业务角色；新增三个使用入口、LINE OA、LINE Provider、到期提醒术语；修订原始识别载荷、文档格式模板，JSONPath 映射标注为 v3 不再使用 |
 | 1.1.0 | 2026-10-07 | Product Engineering | 新增 TextIn、Firestore 原始识别载荷、模板映射和幂等转换术语 |

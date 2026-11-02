@@ -3,17 +3,17 @@ doc_id: DES-002
 title: "SaiFlow — 数据模型"
 type: data-model
 status: active
-version: 2.1.0
-updated: 2026-10-30
+version: 2.2.0
+updated: 2026-11-02
 owner: Product Engineering
-source: "PRD-001 v3.2 §3, §4, §4.9; ADR-007"
-related: [ADR-007, DM-FormDocument, DM-ExtractionPayload, DM-OcrJob, DM-DocumentTemplate, DM-Tenant, DM-Subscription]
+source: "PRD-001 v3.3 §3, §4, §4.9; ADR-008"
+related: [ADR-008, DM-FormDocument, DM-ExtractionPayload, DM-OcrJob, DM-DocumentTemplate, DM-Tenant, DM-Subscription]
 doc_source: manual
 ---
 
 # SaiFlow — 数据模型
 
-> **本文件只描述实体层**：实体、用途、存储位置、归属、关键关系与生命周期。**字段级结构以代码为唯一来源**（Cloud SQL：ORM 模型 + Alembic 迁移；Firestore：服务端文档模型），不在文档中重复（ADR-007、STD-004 规则 2）。存储位置以 [`adr/ADR-007-v3-storage-boundary.md`](./adr/ADR-007-v3-storage-boundary.md) 为准。v1 的字段级内容见 git tag `legacy-v1` 中的版本。
+> **本文件只描述实体层**：实体、用途、存储位置、归属、关键关系与生命周期。**字段级结构以代码为唯一来源**（ORM 模型 + Alembic 迁移；jsonb 字段内的结构以服务端模型为准），不在文档中重复（ADR-008、STD-004 规则 2）。存储位置以 [`adr/ADR-008-vps-docker-hosting.md`](./adr/ADR-008-vps-docker-hosting.md) 为准。v1 的字段级内容见 git tag `legacy-v1` 中的版本。
 >
 > 本文件仅在新增实体、实体更换存储位置、关系或生命周期变化时更新。
 
@@ -51,31 +51,32 @@ erDiagram
 
 | 实体 ID | 用途 | 存储 | 归属 | 关键关系 | 生命周期 |
 |---------|------|------|------|----------|----------|
-| `DM-User` | 用户；内部唯一用户 ID | Cloud SQL | 全局 | 1:N 关联身份、成员关系、通知 | 游客 → 已注册；游客注册后数据归入个人租户 |
-| `DM-UserIdentity` | 关联身份：LINE 身份 ID、邮箱、手机号、将来的 OAuth | Cloud SQL | 用户 | N:1 用户；同类身份全局唯一 | 绑定 → 验证（邮箱）→ 解绑 |
-| `DM-Tenant` | 租户：业务数据的归属单位 | Cloud SQL | — | 1:N 成员关系、文件、表单文档；0..1 企业认证、订阅 | 游客临时 / 个人 / 团队；个人 → 团队（付费原地升级，不可逆）；开通 → 关闭（平台 admin） |
-| `DM-Enterprise` | 团队租户的企业信息与企业认证（可选，只影响身份显示，后续如规划开发票则为其前提） | Cloud SQL | 租户（1:1） | 1:1 团队租户 | 未认证 → 已认证（审核开通或 admin 直接开通） |
-| `DM-Membership` | 用户在租户中的成员关系 | Cloud SQL | 租户 | N:1 用户、N:1 租户、N:M 角色 | 加入 → 移除；个人租户只有本人 |
-| `DM-Role` | 角色：owner、默认角色与 owner 自定义角色，由权限点组合 | Cloud SQL | 租户 | N:M 成员关系 | 创建 → 修改权限点 → 删除（owner 与默认角色不可删除） |
-| `DM-Invitation` | 团队租户的成员邀请（受成员人数上限约束） | Cloud SQL | 租户 | N:1 团队租户 | 待接受 → 已接受 / 已过期 / 已撤销 |
-| `DM-Plan` | 套餐目录：四档及月扫描配额 | Cloud SQL | 全局 | 1:N 订阅 | 由平台维护 |
-| `DM-Subscription` | 租户当前订阅：档位、开通周期（按月 / 按年）与有效期 | Cloud SQL | 租户（一租户一个） | N:1 套餐；1:N 提醒记录 | 未开通 → 有效 → 已到期；续费/升级后重新有效 |
-| `DM-Application` | 续费/升级申请、企业认证申请 | Cloud SQL | 租户 | N:1 目标租户 | 已提交 → 处理中 / 需补充 → 已批准 / 已拒绝 |
-| `DM-PlanReminder` | 用量提醒与到期提醒的发送记录（同一周期同一节点只一次） | Cloud SQL | 租户 | N:1 订阅 | 仅追加 |
-| `DM-FreeQuota` | 一次性免费额度及其余量（OCR 扫描次数） | Cloud SQL | 租户（每个租户至多一份，个人租户在用户注册时发放；数量取系统参数；识别时先于月扫描配额扣减，PRD OQ-28） | 1:1 租户 | 发放 → 用尽；升级后延续 |
-| `DM-Notification` | 站内通知 | Cloud SQL | 用户 | N:1 用户 | 未读 → 已读 |
-| `DM-File` | 文件元数据：原件、导入、导出、头像 | Cloud SQL | 租户 | 1:1 GCS 对象；1:N 识别任务 | 上传 → 删除（按保留策略） |
-| `DM-OcrJob` | 识别任务：状态、页数、所用引擎；月扫描配额计量与调用观测的依据 | Cloud SQL | 租户 | N:1 文件；1:N 原始载荷；0..1 表单文档 | 排队 → 识别中 → 完成 / 失败 / 取消 |
-| `DM-DocumentTemplate` | 文档格式模板及其版本 | Cloud SQL | 全局（V1.0 由实施人员预置） | 1:N 表单文档 | 草稿 → 已发布 → 停用；发布后版本不可变 |
-| `DM-SystemSetting` | 系统参数：OCR 首选/备用引擎与切换参数、大模型配置引用、免费额度、各档成员人数上限、置信度阈值 | Cloud SQL | 全局（平台 admin 配置） | — | 修改时写操作日志；密钥本体在 Secret Manager |
-| `DM-OperationLog` | 操作日志（审计） | Cloud SQL | 租户或平台 | N:1 操作者（用户或 admin 账号） | 仅追加 |
-| `DM-AdminAccount` | 平台 admin 账号 | Cloud SQL（与客户账号分表隔离） | 平台 | 1:N 操作日志 | 启用 → 锁定 / 停用 |
-| `DM-FormDocument` | 表单数据：每份单据一个文档，含结构化结果、结果版本、状态、核验修改记录与复核记录 | Firestore | 租户 | N:1 识别任务、模板版本 | 待核验 → 待复核 → 正式业务数据（同一文档的状态字段，OQ-21） |
-| `DM-ExtractionPayload` | 原始识别载荷：OCR 引擎原始 JSON | Firestore | 租户 | N:1 识别任务 | 按载荷版本不可变 |
+| `DM-User` | 用户；内部唯一用户 ID | PostgreSQL | 全局 | 1:N 关联身份、成员关系、通知 | 游客 → 已注册；游客注册后数据归入个人租户 |
+| `DM-UserIdentity` | 关联身份：LINE 身份 ID、邮箱、手机号、将来的 OAuth | PostgreSQL | 用户 | N:1 用户；同类身份全局唯一 | 绑定 → 验证（邮箱）→ 解绑 |
+| `DM-Tenant` | 租户：业务数据的归属单位 | PostgreSQL | — | 1:N 成员关系、文件、表单文档；0..1 企业认证、订阅 | 游客临时 / 个人 / 团队；个人 → 团队（付费原地升级，不可逆）；开通 → 关闭（平台 admin） |
+| `DM-Enterprise` | 团队租户的企业信息与企业认证（可选，只影响身份显示，后续如规划开发票则为其前提） | PostgreSQL | 租户（1:1） | 1:1 团队租户 | 未认证 → 已认证（审核开通或 admin 直接开通） |
+| `DM-Membership` | 用户在租户中的成员关系 | PostgreSQL | 租户 | N:1 用户、N:1 租户、N:M 角色 | 加入 → 移除；个人租户只有本人 |
+| `DM-Role` | 角色：owner、默认角色与 owner 自定义角色，由权限点组合 | PostgreSQL | 租户 | N:M 成员关系 | 创建 → 修改权限点 → 删除（owner 与默认角色不可删除） |
+| `DM-Invitation` | 团队租户的成员邀请（受成员人数上限约束） | PostgreSQL | 租户 | N:1 团队租户 | 待接受 → 已接受 / 已过期 / 已撤销 |
+| `DM-Plan` | 套餐目录：四档及月扫描配额 | PostgreSQL | 全局 | 1:N 订阅 | 由平台维护 |
+| `DM-Subscription` | 租户当前订阅：档位、开通周期（按月 / 按年）与有效期 | PostgreSQL | 租户（一租户一个） | N:1 套餐；1:N 提醒记录 | 未开通 → 有效 → 已到期；续费/升级后重新有效 |
+| `DM-Application` | 续费/升级申请、企业认证申请 | PostgreSQL | 租户 | N:1 目标租户 | 已提交 → 处理中 / 需补充 → 已批准 / 已拒绝 |
+| `DM-PlanReminder` | 用量提醒与到期提醒的发送记录（同一周期同一节点只一次） | PostgreSQL | 租户 | N:1 订阅 | 仅追加 |
+| `DM-FreeQuota` | 一次性免费额度及其余量（OCR 扫描次数） | PostgreSQL | 租户（每个租户至多一份，个人租户在用户注册时发放；数量取系统参数；识别时先于月扫描配额扣减，PRD OQ-28） | 1:1 租户 | 发放 → 用尽；升级后延续 |
+| `DM-Notification` | 站内通知 | PostgreSQL | 用户 | N:1 用户 | 未读 → 已读 |
+| `DM-File` | 文件元数据：原件、导入、导出、头像 | PostgreSQL | 租户 | 1:1 GCS 对象；1:N 识别任务 | 上传 → 删除（按保留策略） |
+| `DM-OcrJob` | 识别任务：状态、页数、所用引擎；月扫描配额计量与调用观测的依据 | PostgreSQL | 租户 | N:1 文件；1:N 原始载荷；0..1 表单文档 | 排队 → 识别中 → 完成 / 失败 / 取消 |
+| `DM-DocumentTemplate` | 文档格式模板及其版本 | PostgreSQL | 全局（V1.0 由实施人员预置） | 1:N 表单文档 | 草稿 → 已发布 → 停用；发布后版本不可变 |
+| `DM-SystemSetting` | 系统参数：OCR 首选/备用引擎与切换参数、大模型配置引用、免费额度、各档成员人数上限、置信度阈值 | PostgreSQL | 全局（平台 admin 配置） | — | 修改时写操作日志；密钥本体在服务器环境变量文件中 |
+| `DM-OperationLog` | 操作日志（审计） | PostgreSQL | 租户或平台 | N:1 操作者（用户或 admin 账号） | 仅追加 |
+| `DM-AdminAccount` | 平台 admin 账号 | PostgreSQL（与客户账号分表隔离） | 平台 | 1:N 操作日志 | 启用 → 锁定 / 停用 |
+| `DM-FormDocument` | 表单数据：每份单据一条，含结构化结果、结果版本、状态、核验修改记录与复核记录 | PostgreSQL：结构化结果（大模型按模板转换后的 JSON）用 jsonb，每个结果版本一份；结果版本、状态、核验与复核记录用普通字段与表 | 租户 | N:1 识别任务、模板版本 | 待核验 → 待复核 → 正式业务数据（同一单据的状态字段，OQ-21） |
+| `DM-ExtractionPayload` | 原始识别载荷：OCR 引擎原始 JSON | PostgreSQL（jsonb） | 租户 | N:1 识别任务 | 按载荷版本不可变 |
 | `DM-StoredObject` | 对象：原始单据、导入文件、导出文件、头像 | 私有 GCS | 租户 | 1:1 文件元数据 | 原件不可变；按保留策略删除 |
 
 - 登录会话、邮箱验证码等短期技术数据不作为实体登记，在 B-2 的 `plan.md` 中设计。
-- 报表数据（方式 B，经 Dataflow ETL 进入 Cloud SQL）为后续能力（OQ-8），实现时再登记实体。
+- 报表数据（方式 B，PostgreSQL 内的报表汇总表）为后续能力（OQ-8），实现时再登记实体。
+- 数据库备份文件（VPS 本地 7 天、GCS 备份桶 30 天）是运维数据，不作为实体登记（ADR-008）。
 
 ### 2.1 v1 实体去向
 
@@ -84,8 +85,8 @@ erDiagram
 | v1 实体 | v3 去向 |
 |---------|---------|
 | `DM-Document` | `DM-File`（元数据）+ `DM-FormDocument`（表单数据） |
-| `DM-ExtractionPayload` | 保留，仍在 Firestore |
-| `DM-ConversionJob` | 取消（不再有 Cloud SQL 关系投影）；处理状态见 `DM-OcrJob` |
+| `DM-ExtractionPayload` | 保留，改存 PostgreSQL jsonb（ADR-008） |
+| `DM-ConversionJob` | 取消（不再有关系投影）；处理状态见 `DM-OcrJob` |
 | `DM-TemplateFieldMapping` | 取消（JSONPath 映射由大模型结构化转换取代） |
 | `DM-ExtractedField`、`DM-LineItem`、`DM-ResultVersion`、`DM-ChangeLog`、`DM-ReviewRecord` | 并入 `DM-FormDocument` |
 | `DM-ReviewPolicy`、`DM-Settings` | `DM-SystemSetting`（复核配置的具体形式在 B-4 确定） |
@@ -108,14 +109,14 @@ erDiagram
 
 ## 4. 数据保留与隐私
 
-- Cloud SQL、Firestore 和私有 GCS 对象均启用静态加密。
+- 私有 GCS 对象启用静态加密；VPS 上数据库与备份文件的加密方式待 OQ-30（投产前关闭）。
 - 原始识别载荷是可追溯的原始记录；转换、核验和重试均不得覆盖它。
-- 保留/删除策略可配置（NFR-DATA-003；PRD OQ-4 / PDPA）；删除须同时协调 GCS、Firestore 和 Cloud SQL，并记录操作日志。
-- 原件在 GCS 中不可变；浏览器客户端永远不会获得 GCS、Firestore、Cloud SQL、OCR 引擎或大模型凭据。
+- 保留/删除策略可配置（NFR-DATA-003；PRD OQ-4 / PDPA）；删除须同时协调 GCS 对象与数据库记录（含 GCS 备份桶中的旧备份按保留期自然过期），并记录操作日志。
+- 原件在 GCS 中不可变；浏览器客户端永远不会获得 GCS、数据库、OCR 引擎或大模型凭据；对象下载只用后端签发的有时效签名 URL。
 
 ## 链接
 
-- 存储边界：[`adr/ADR-007-v3-storage-boundary.md`](./adr/ADR-007-v3-storage-boundary.md)
+- 存储边界：[`adr/ADR-008-vps-docker-hosting.md`](./adr/ADR-008-vps-docker-hosting.md)（取代 [`ADR-007`](./adr/ADR-007-v3-storage-boundary.md)）
 - 架构：[`Architecture.md`](./Architecture.md)
 - PRD：[`../10-product/PRD-SaiFlow.md`](../10-product/PRD-SaiFlow.md)
 - 术语：[`../10-product/Glossary.md`](../10-product/Glossary.md)
@@ -124,6 +125,7 @@ erDiagram
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.2.0 | 2026-11-02 | Product Engineering | 按 ADR-008：Cloud SQL 与 Firestore 合并为 PostgreSQL；DM-ExtractionPayload 与 DM-FormDocument 的结构化结果用 jsonb，版本、状态、核验与复核记录用普通字段；报表方式 B 改为 PostgreSQL 内汇总表；静态加密与删除协调改写；实体数不变（22） |
 | 2.1.0 | 2026-10-30 | Product Engineering | 按 PRD v3.2：企业租户改称团队租户、企业认证改为可选；新增 DM-FreeQuota（归属租户；共 22 个实体）；个人租户原地升级为团队租户；订阅状态去掉“未开通”；订阅含开通周期；提醒记录含用量提醒；系统参数含成员人数上限 |
 | 2.0.0 | 2026-10-30 | Product Engineering | 改为实体层（字段以代码为唯一来源）；按 ADR-007 的 v3 存储边界重列 21 个实体并给出 v1 实体去向；枚举只保留产品级取值；旧字段级内容见 tag legacy-v1 |
 | 1.6.0 | 2026-10-28 | Product Engineering | 归属改为单一 `tenant_id`：新增 `tenants` 表与 `enterprises.tenant_id` / `verified_at`，files/ocr_jobs/memberships/invitations 改挂 `tenant_id`、applications 改为 `target_tenant_id`，保留 `error.invalid_workspace` / `error.enterprise_access_revoked` 等旧 message_key；新增 `subscriptions`（一租户一行，默认一个月 Kinder、月末夹取、审批惰性续期）与 `plan_reminders`（`uq_plan_reminder_stage` 幂等、不回补节点）；删除 `quota_ledger` 与赠送任务额度、取消 FREE 档与 `free_tasks`/`paid_pages`/`OCR_TASK` 计量，改为按泰国自然月实时统计 `ocr_jobs.page_count`；`users.phone` 在个人中心可改（原「只读」表述作废）；补记无 Alembic、ADD COLUMN 与 `setup_db.py` 重建的 schema 落地方式。未运行测试 |

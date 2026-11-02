@@ -12,6 +12,8 @@ related: [DM-ExtractionPayload, DM-ConversionJob, DM-DocumentTemplate, DM-Extrac
 
 # SaiFlow — OCR 与提取流水线
 
+> **注意（2026-11-02）：** 本文件是 v2 设计（Firestore、Cloud Functions、Cloud SQL 关系投影），已过时。v3 链路以 PRD §3.2 为准，存储与运行环境以 [`adr/ADR-008-vps-docker-hosting.md`](./adr/ADR-008-vps-docker-hosting.md) 为准；本文件在 B-3 `ocr-pipeline-v3` 中重写（ADR-006 §7）。
+
 > 本设计将上传文件经 TextIn 转换为原始结构化 JSON，保存于 Firestore，并由 Cloud Functions 按已发布的文档格式模板转换为 Cloud SQL 的可核验关系数据。实现 EPIC-01、EPIC-02 与 EPIC-08。
 
 ## 1. 流水线阶段

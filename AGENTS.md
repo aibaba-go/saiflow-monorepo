@@ -3,8 +3,8 @@ doc_id: AGENTS
 title: "SaiFlow monorepo — AI 代理入口"
 type: index
 status: active
-version: 3.1.0
-updated: 2026-10-30
+version: 3.2.0
+updated: 2026-11-02
 audience: [ai-agent, engineer, pm]
 ---
 
@@ -16,7 +16,7 @@ audience: [ai-agent, engineer, pm]
 
 **SaiFlow — “We turn paper into process.”（将纸张变为流程。）**
 
-面向泰国 SME 制造企业的纸质单据 OCR 数字化录入系统。识别采购订单（PO）、送货单（Delivery Note）、发票（Invoice）、收据（Receipt）、贷项通知单（Credit Note）与税务收据（Tax Receipt）；由人工核验后，录入并归档至本地 ERP、Excel 与文件夹。部署于 Google Cloud（Cloud Run、Firestore、Cloud SQL PostgreSQL 18.6、私有 GCS、Secret Manager）：原件存私有 GCS；表单数据（含原始识别载荷与结构化结果）存 Firestore；系统数据存 Cloud SQL PostgreSQL 18.6（实例 `saiflow-dev` / `postgres.saiflow`）；见 ADR-007。
+面向泰国 SME 制造企业的纸质单据 OCR 数字化录入系统。识别采购订单（PO）、送货单（Delivery Note）、发票（Invoice）、收据（Receipt）、贷项通知单（Credit Note）与税务收据（Tax Receipt）；由人工核验后，录入并归档至本地 ERP、Excel 与文件夹。以 Docker Compose 部署于 LightNode VPS（曼谷）：原件等对象存私有 GCS；表单数据（含原始识别载荷与结构化结果，jsonb）与系统数据都存 PostgreSQL；见 ADR-008。
 
 ## 2. 入口与读取顺序（渐进式加载）
 
@@ -95,7 +95,7 @@ AI 开发、分析、转换、调试、测试过程中产生的所有临时文�
 4. **验收优先：** 编码前必须先读取对应的 `AC-*` 验收标准。
 5. **禁止范围蔓延：** 初始版本 V1.0 只包含 P0；不得提前实现 P1/P2/P3 功能。
 6. **同步更新文档：** 改变系统行为时，需求与 AC 只通过 change 的 delta spec 落地（归档后进入 `openspec/specs/`），不再直接改写 `docs/20-requirements`、`docs/40-acceptance` 中的 EPIC/AC（迁移规则见 `AI-WORKFLOW.md` §4）；数据模型、架构等变化同步更新 `docs/30-design/` 及版本历史。
-7. **云端数据边界：** 原件存私有 GCS；表单数据（含原始识别载荷与结构化结果）存 Firestore；系统数据存 Cloud SQL PostgreSQL 18.6（实例 `saiflow-dev` / `postgres.saiflow`）；见 ADR-007（ADR-001、ADR-005 回切记录）；仅服务端可访问云资源与 TextIn 凭据，必须符合 PDPA 与 `NFR-SEC-*`。
+7. **运行环境与数据边界：** 全部服务与 PostgreSQL 以 Docker Compose 运行在 LightNode VPS（曼谷）；原件等对象存私有 GCS（签名 URL 下载）；表单数据与系统数据都存 PostgreSQL，识别结果（OCR 原始 JSON、结构化 JSON）用 jsonb；见 ADR-008（取代 ADR-001、ADR-007）；凭据只在服务器环境变量文件与 GitHub Secrets 中，仅服务端可访问 GCS、数据库、OCR 与大模型凭据，必须符合 PDPA 与 `NFR-SEC-*`。
 8. **临时文件隔离：** 所有临时产物必须置于 `./temp/`。
 9. **过程与成果分层：** 过程产物写 `openspec/changes/<change>/`，产品级成果写 `docs/`；同一内容只定义一次，其余链接。验证与部署证据只写 `openspec/changes/<change>/verification.md`，不写入 `docs/`。
 10. **勿手改生成物：** `.claude/commands/opsx/**` 与 `.claude/skills/openspec-*` 由 OpenSpec 生成，升级时会被覆盖；通过 `openspec update` 更新，不手工编辑。
@@ -113,6 +113,7 @@ AI 开发、分析、转换、调试、测试过程中产生的所有临时文�
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 3.2.0 | 2026-11-02 | Product Engineering | §1 与规则 7 按 ADR-008 修订：VPS + Docker，表单数据存 PostgreSQL jsonb，对象保持私有 GCS |
 | 3.1.0 | 2026-10-30 | Product Engineering | §1 与规则 7 的存储描述按 ADR-007 修订：表单数据存 Firestore，系统数据存 Cloud SQL |
 | 3.0.0 | 2026-10-30 | Product Engineering | 按 ADR-006：取消 subagent 入口，OpenSpec 管需求、SuperPowers 管实现；读取顺序与规则 6 改为以 `openspec/specs/` 为行为需求正本；新增 legacy/ 只读规则与验证证据位置；标注 apps/、services/ 为待重建目标结构 |
 | 2.4.0 | 2026-10-27 | Product Engineering | 产品云平台描述与规则 7 恢复 Cloud SQL PostgreSQL 18.6（saiflow-dev/postgres.saiflow；ADR-001、ADR-005 回切记录）；其余代理指令与权限不变 |
