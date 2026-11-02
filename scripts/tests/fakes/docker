@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Fake `docker` for script tests: records every call to $FAKE_LOG and simulates
+# pg_dump / gcloud upload / alembic outcomes via FAKE_* variables.
+echo "docker $*" >>"${FAKE_LOG:?}"
+args="$*"
+case "$args" in
+  *pg_dump*)
+    [ "${FAKE_DUMP_FAIL:-0}" = "1" ] && { echo "pg_dump: connection refused" >&2; exit 1; }
+    printf 'PGDMP-fake-dump'
+    ;;
+  *"gcloud storage cp"*)
+    [ "${FAKE_UPLOAD_FAIL:-0}" = "1" ] && { echo "AccessDenied" >&2; exit 1; }
+    ;;
+  *alembic*)
+    [ "${FAKE_MIGRATE_FAIL:-0}" = "1" ] && { echo "migration failed" >&2; exit 1; }
+    ;;
+  *"login ghcr.io"*)
+    cat >/dev/null
+    ;;
+esac
+exit 0
