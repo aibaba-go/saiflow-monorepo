@@ -1,0 +1,13 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+import { HealthPage } from "./pages/HealthPage";
+
+const queryClient = new QueryClient();
+
+export function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <HealthPage />
+    </QueryClientProvider>
+  );
+}
