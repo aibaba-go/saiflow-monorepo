@@ -75,3 +75,6 @@ openspec/.cache/
 # uploaded / exported documents (PDPA, STD-004 rule 9)
 **/storage/files/
 **/storage/exports/
+
+# backend scratch
+services/api/temp/
