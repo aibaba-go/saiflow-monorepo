@@ -36,3 +36,79 @@ async def client(settings):
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
+
+
+@pytest.fixture
+def patch_db_check(monkeypatch):
+    def _patch(result: bool):
+        async def fake_check(engine, timeout: float = 3.0) -> bool:
+            return result
+
+        monkeypatch.setattr("app.services.health_service.check_database", fake_check)
+
+    return _patch
+
+
+@pytest.fixture
+async def client_db_ok(client, patch_db_check):
+    patch_db_check(True)
+    return client
+
+
+@pytest.fixture
+async def client_db_down(client, patch_db_check):
+    patch_db_check(False)
+    return client
+
+
+async def get_health(app) -> httpx.Response:
+    """Run the app with its lifespan (engine creation/disposal) and call the health endpoint."""
+    from asgi_lifespan import LifespanManager
+
+    async with LifespanManager(app) as manager:
+        transport = httpx.ASGITransport(app=manager.app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+            return await c.get("/api/v1/health")
+
+
+class _SilentServer:
+    def __init__(self, server, port: int):
+        self.server, self.port = server, port
+
+
+@pytest.fixture
+async def silent_tcp_server():
+    """Accepts TCP connections but never reads or writes (a hung database)."""
+    import asyncio
+
+    held = []
+
+    async def on_connect(reader, writer):
+        held.append(writer)
+        await asyncio.sleep(3600)
+
+    server = await asyncio.start_server(on_connect, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    yield _SilentServer(server, port)
+    for w in held:
+        w.close()
+    server.close()
+
+
+@pytest.fixture
+def db_settings() -> Settings:
+    import os
+
+    names = ["TEST_DB_HOST", "TEST_DB_PORT", "TEST_DB_NAME", "TEST_DB_USER", "TEST_DB_PASSWORD"]
+    if not all(os.environ.get(n) for n in names):
+        if os.environ.get("REQUIRE_INTEGRATION") == "1":
+            pytest.fail("integration database not configured")
+        pytest.skip("integration database not configured (TEST_DB_*)")
+    return Settings(
+        db_host=os.environ["TEST_DB_HOST"],
+        db_port=int(os.environ["TEST_DB_PORT"]),
+        db_name=os.environ["TEST_DB_NAME"],
+        db_user=os.environ["TEST_DB_USER"],
+        db_password=SecretStr(os.environ["TEST_DB_PASSWORD"]),
+        app_version="test-sha",
+    )
