@@ -2,43 +2,45 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 建立可测试、可构建、可手动部署的空骨架：FastAPI 后端（健康检查、统一错误、配置加载）、三个只显示后端状态的前端空壳、生成的接口客户端、CI 与手动部署。
+**Goal:** 建立可测试、可构建、可手动部署的空骨架：FastAPI 后端（健康检查、统一错误、配置加载）、三个只显示后端状态的前端空壳、生成的接口客户端、CI、手动部署到 VPS，以及数据库每日备份。
 
-**Architecture:** 一个 FastAPI 服务（`services/api`）连接 Cloud SQL 的 `saiflow_v3` schema；三个 Vite + React 前端（`apps/line-mini`、`apps/web-pc`、`apps/web-admin`）以同源 `/api` 路径访问后端，由各自 nginx 容器反向代理到后端，因此前端镜像不含后端地址、后端无需 CORS。接口客户端由后端导出的 OpenAPI 生成；GitHub Actions 负责 CI 与手动部署，部署调用 `scripts/deploy.sh`。
+**Architecture:** 一台 LightNode VPS 上的 Docker Compose 栈（ADR-008）：PostgreSQL（schema `saiflow_v3`，不发布端口）、一个 FastAPI 服务（`services/api`）、三个 Vite + React 前端静态容器（`apps/line-mini`、`apps/web-pc`、`apps/web-admin`）与 Caddy。Caddy 为三个子域名自动申请 HTTPS 证书，并把每个子域名下的 `/api` 转给后端，因此前端与后端同源、前端镜像不含后端地址、后端无需 CORS。接口客户端由后端导出的 OpenAPI 生成；GitHub Actions 负责 CI 与手动部署（GHCR + SSH）；systemd 定时器每天运行备份脚本。
 
-**Tech Stack:** Python 3.12、uv、FastAPI、pydantic-settings、SQLAlchemy 2 async + asyncpg、Alembic、pytest、ruff；Node 24、pnpm、Vite、React 18.3、TypeScript、Ant Design 5、Ant Design Mobile 5、TanStack Query、Vitest + React Testing Library、ESLint、openapi-typescript + openapi-fetch；nginx；GitHub Actions、Artifact Registry、Cloud Run（服务与 Job）、Secret Manager、Workload Identity Federation。
+**Tech Stack:** Python 3.12、uv、FastAPI、pydantic-settings、SQLAlchemy 2 async + asyncpg、Alembic、pytest、ruff；Node 24、pnpm、Vite、React 18.3、TypeScript、Ant Design 5、Ant Design Mobile 5、TanStack Query、Vitest + React Testing Library、ESLint、openapi-typescript + openapi-fetch；nginx（前端静态文件）；PostgreSQL 18、Caddy 2、Docker Compose；GitHub Actions、GHCR；GCS（仅备份桶）；Ubuntu 24.04、systemd。
 
-**Spec:** `openspec/changes/rebuild-skeleton/specs/platform-baseline/spec.md`（FR-PLAT-001..005），范围与决定见同目录 `proposal.md`（D1–D5）。
+**Spec:** `openspec/changes/rebuild-skeleton/specs/platform-baseline/spec.md`（FR-PLAT-001..006），范围与决定见同目录 `proposal.md`（D1–D10）；运行环境见 `docs/30-design/adr/ADR-008-vps-docker-hosting.md`。
 
 ## Global Constraints
 
-- 只在当前分支 `chore/ai-workflow-v2` 上提交（负责人决定，不建 worktree、不改其他分支）；**推送前必须得到负责人确认**（Task 10）。提交信息以 `[rebuild-skeleton]` 开头。
+- 只在当前分支 `chore/ai-workflow-v2` 上提交（负责人决定，不建 worktree、不改其他分支）；**推送前必须得到负责人确认**（Task 11）。提交信息以 `[rebuild-skeleton]` 开头。
 - `legacy/` 只读：不修改、不引用、不复制代码。
 - Python 命令只在 `services/api/` 内执行；`services/` 不加入 pnpm workspace。
 - 依赖版本：实施时取各库当前稳定版并锁定（`uv.lock`、`pnpm-lock.yaml`）；Python `requires-python = ">=3.12,<3.13"`；React 固定 18.3.x（与 Ant Design 5、Ant Design Mobile 5 兼容）。
-- 服务与镜像名（D1）：`saiflow-be-api`、`saiflow-fe-web-pc`、`saiflow-fe-web-admin`、`saiflow-fe-line-mini`；迁移 Job：`saiflow-be-api-migrate`。schema（D2）：`saiflow_v3`。区域（D3）：`asia-southeast1`。
-- 接口路径前缀 `/api/v1`；健康检查为 `GET /api/v1/health`（不用 `/healthz`：Cloud Run 保留以 `z` 结尾的路径）。
-- 后端配置环境变量名：`DB_HOST`、`DB_PORT`（默认 5432）、`DB_NAME`、`DB_USER`、`DB_PASSWORD`、`DB_SCHEMA`（默认 `saiflow_v3`）、`APP_VERSION`（默认 `dev`）。凭据（`DB_PASSWORD`）无默认值。
+- 服务、镜像与 Compose 服务名（D1）：`saiflow-be-api`、`saiflow-fe-web-pc`、`saiflow-fe-web-admin`、`saiflow-fe-line-mini`；镜像仓库 `ghcr.io/aibaba-go`。schema（D2）：`saiflow_v3`；数据库名 `saiflow`；应用账号 `saiflow_v3_app`。
+- 域名（D6）：`saiflow-app.aibaba.asia`（web-pc）、`saiflow-admin.aibaba.asia`（web-admin）、`saiflow-line.aibaba.asia`（line-mini）。VPS：SSH 端口 11022，账号 `deploy`，部署目录 `/opt/saiflow`（D9、D10）。
+- 接口路径前缀 `/api/v1`；健康检查为 `GET /api/v1/health`（与后续业务接口同一前缀，经 Caddy 的 `/api` 转发即可访问）。
+- 后端配置环境变量名：`DB_HOST`、`DB_PORT`（默认 5432）、`DB_NAME`、`DB_USER`、`DB_PASSWORD`、`DB_SCHEMA`（默认 `saiflow_v3`）、`APP_VERSION`（默认 `dev`）。凭据（`DB_PASSWORD`）无默认值。服务器上的凭据只在 `/opt/saiflow/.env`（权限 600）与 `/opt/saiflow/secrets/`；仓库中只有变量名。
 - 错误码与消息键固定为：`not_found`/`error.not_found`、`method_not_allowed`/`error.method_not_allowed`、`validation_error`/`error.validation`、`internal_error`/`error.internal`；其他 HTTP 错误为 `http_<status>`/`error.http`。
 - 健康检查数据库探测超时 3 秒（满足 spec 的 5 秒上限）。
 - 对外 API 契约唯一来源为 `docs/30-design/openapi.json`（`Directory-Structure.md` 规则 5），由后端导出覆盖旧 v1 契约（旧版保留在 tag `legacy-v1`）；`docs/30-design/API-Spec.md` 改为指向它的说明页。
-- 人读的部署说明放 `docs/deployment/`，脚本放 `scripts/`（`Directory-Structure.md` 规则 10）。
-- 本机没有 Docker、gcloud 与 PostgreSQL：集成测试在本机缺少 `TEST_DB_HOST` 时跳过，CI 中设 `REQUIRE_INTEGRATION=1` 使其必须运行；镜像构建与部署只在 GitHub Actions 中验证。
+- 人读的部署说明放 `docs/deployment/`，脚本与部署配置放 `scripts/`（Compose 与 Caddy 配置在 `scripts/deploy/`，`Directory-Structure.md` 规则 10）。所有 shell 脚本 `set -euo pipefail` 且通过 shellcheck。
+- 本机没有 Docker 与 PostgreSQL，`python3` 是无效的系统别名：集成测试在本机缺少 `TEST_DB_HOST` 时跳过，CI 中设 `REQUIRE_INTEGRATION=1` 使其必须运行；镜像、Compose 栈与部署只在 GitHub Actions 中验证；本机运行脚本测试时用指向 `py` 的临时 `python3` 别名。
 
 ## Review Focus
 
 1. 必需配置缺失时，pydantic 的校验错误默认会把全部输入值（含 `DB_PASSWORD`）打印出来；启动错误必须只列配置名 → Task 1 `test_missing_config_error_does_not_leak_values`。
 2. 数据库接受 TCP 连接但从不响应（而不是直接拒绝）时，健康检查仍须在 5 秒内返回 503 → Task 3 `test_health_db_hangs_returns_503_within_5s`。
 3. asyncpg 的错误文本含主机与用户名，可能经健康检查或 500 错误体泄露 → Task 3 `test_health_db_error_hides_connection_details`。
-4. nginx 在后端不可达时返回 502 HTML（不是 JSON），前端不得崩溃或显示为正常 → Task 4 `getBackendHealth returns unreachable for non-JSON 502`。
-5. 对 CI 仍在运行（尚无结论）的提交手动触发部署，必须被拒绝 → Task 8 `require-ci-success` 用例 `in_progress`。
+4. Caddy 在后端不可达时返回 502（不是 JSON），前端不得崩溃或显示为正常 → Task 4 `getBackendHealth returns unreachable for non-JSON 502`。
+5. 对 CI 仍在运行（尚无结论）的提交手动触发部署，必须被拒绝 → Task 9 `require-ci-success` 用例 `in_progress`。
+6. 部署中途失败（例如迁移失败）时，服务器上不得留下 GHCR 登录凭据 → Task 9 `remote-deploy.test.sh` 迁移失败用例。
 
 ---
 
 ### Task 1: 后端工程与配置加载（FR-PLAT-003）
 
 **Files:**
-- Create: `services/api/pyproject.toml`、`services/api/uv.lock`、`services/api/.python-version`（`3.12`）、`services/api/.env.example`、`services/api/README.md`、`services/api/app/__init__.py`、`services/api/app/config.py`
+- Create: `services/api/pyproject.toml`、`services/api/uv.lock`、`services/api/.python-version`（`3.12`）、`services/api/.env.example`（只列变量名）、`services/api/README.md`、`services/api/app/__init__.py`、`services/api/app/config.py`
 - Test: `services/api/tests/__init__.py`、`services/api/tests/unit/test_config.py`
 - Modify: `.gitignore`（加入 `services/api/temp/`）
 
@@ -69,7 +71,7 @@ def test_complete_config_loads(monkeypatch): ...  # 四个必需值齐全 → db
 ```
 
 - [ ] **Step 3: 运行** `uv run pytest tests/unit/test_config.py -v` → Expected: FAIL（`ImportError: cannot import name 'ConfigError'`）。
-- [ ] **Step 4: 实现** `app/config.py`。`.env.example` 只列变量名（含注释“Cloud Run 中 DB_HOST 为 /cloudsql/<连接名>”）；README 写本地运行、测试、迁移命令。
+- [ ] **Step 4: 实现** `app/config.py`。`.env.example` 只列变量名；README 写本地运行、测试、迁移命令。
 - [ ] **Step 5: 运行** `uv run pytest tests/unit -v` 与 `uv run ruff check . && uv run ruff format --check .` → Expected: 全部 PASS，ruff 无输出错误。
 - [ ] **Step 6: 提交** `[rebuild-skeleton] backend project and config loading (FR-PLAT-003)`。
 
@@ -131,7 +133,7 @@ async def test_invalid_request_id_header_is_replaced(client):
 **Interfaces:**
 - Consumes: `Settings`、`create_app`、`ErrorResponse`（Task 1–2）。
 - Produces:
-  - `def database_url(settings: Settings) -> sqlalchemy.engine.URL`：`URL.create("postgresql+asyncpg", username, password, host, port, database)`；`DB_HOST` 以 `/` 开头时改为 `query={"host": DB_HOST}`（Unix 套接字）。
+  - `def database_url(settings: Settings) -> sqlalchemy.engine.URL`：`URL.create("postgresql+asyncpg", username, password, host, port, database)`（Compose 中 `DB_HOST=postgres`）。
   - `def create_engine(settings: Settings) -> AsyncEngine`：`connect_args={"timeout": 3, "server_settings": {"search_path": settings.db_schema}}`、`pool_pre_ping=True`；lifespan 中创建并存到 `app.state.engine`，关闭时 `dispose()`。
   - `async def check_database(engine: AsyncEngine, timeout: float = 3.0) -> bool`：`asyncio.wait_for` 包住一次 `SELECT 1`；任何异常或超时都返回 `False`，并以 `logger.warning("database check failed: %s", type(exc).__name__)` 只记录异常类型。
   - `class HealthResponse(BaseModel)`：`status: Literal["ok", "degraded"]`、`version: str`、`database: Literal["ok", "error"]`。
@@ -244,92 +246,138 @@ it("shows UNREACHABLE", async () => { mockHealth({ state: "unreachable" }); ...f
 - [ ] **Step 4: 运行** `pnpm -r test && pnpm -r lint && pnpm -r build` → Expected: 全部 PASS，三个 `dist/` 生成。
 - [ ] **Step 5: 提交** `[rebuild-skeleton] three frontend shells showing backend health (FR-PLAT-004)`。
 
-### Task 6: 容器镜像与部署后检查脚本（FR-PLAT-005-03）
+### Task 6: 容器镜像、Compose 栈、Caddy 与部署后检查脚本（FR-PLAT-005-03、005-06）
 
 **Files:**
-- Create: `services/api/Dockerfile`、`services/api/.dockerignore`、`scripts/docker/frontend.Dockerfile`、`scripts/docker/nginx.conf.template`、`.dockerignore`（根）、`scripts/smoke-check.sh`、`scripts/tests/smoke-check.test.sh`
+- Create: `services/api/Dockerfile`、`services/api/.dockerignore`、`scripts/docker/frontend.Dockerfile`、`scripts/docker/nginx-static.conf`、`.dockerignore`（根）、`scripts/deploy/compose.yaml`、`scripts/deploy/Caddyfile`、`scripts/deploy/env.example`、`scripts/deploy/postgres-init/01-app-user.sh`、`scripts/smoke-check.sh`、`scripts/tests/smoke-check.test.sh`、`scripts/tests/fake_health_server.py`
+- Modify: `services/api/.env.example`（注释改为“Compose 中 DB_HOST 为 postgres”）
 
 **Interfaces:**
 - Produces:
-  - 后端镜像：`python:3.12-slim` 基础；`uv sync --frozen --no-dev`；`ARG APP_VERSION` → `ENV APP_VERSION`；`CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT}`（shell 形式，标准 §3.6）。构建上下文 `services/api`。
-  - 前端镜像：构建上下文为仓库根；`ARG APP`（`line-mini` / `web-pc` / `web-admin`）；Node 阶段 `pnpm install --frozen-lockfile` 后 `pnpm --filter @saiflow/${APP} build`；运行阶段 `nginx:stable-alpine`，`dist` 复制到 `/usr/share/nginx/html`，模板放 `/etc/nginx/templates/default.conf.template`（官方镜像启动时以环境变量替换）。
-  - `nginx.conf.template`：监听 `${PORT}`；`location /api/ { proxy_pass ${API_UPSTREAM}; proxy_ssl_server_name on; proxy_set_header Host ${API_HOST}; proxy_set_header X-Request-ID $request_id; }`；其余路径 `try_files $uri /index.html`。`API_UPSTREAM`（如 `https://saiflow-be-api-xxxx.a.run.app`）与 `API_HOST`（同一主机名）由部署时注入。
-  - `scripts/smoke-check.sh <base_url> <expected_version> [--timeout-seconds N=60]`：轮询 `<base_url>/api/v1/health` 直到 200 且 `status=ok`、`version=<expected_version>`，成功退出 0 并打印正文；超时退出 1 并打印最后一次状态码与正文。只用 `curl` 与 `python3 -c` 解析 JSON。
-- [ ] **Step 1: 写失败测试** `scripts/tests/smoke-check.test.sh`：用 `python3 -m http.server` 风格的极小桩服务（同目录 `fake_health_server.py`，按参数返回 200 ok / 503 degraded / 200 ok 但版本不同）验证三种情况：ok 且版本匹配 → 退出 0；503 → 退出 1；版本不匹配 → 退出 1（`--timeout-seconds 3`）。
+  - 后端镜像：`python:3.12-slim` 基础；`uv sync --frozen --no-dev`；`ARG APP_VERSION` → `ENV APP_VERSION`；`CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}`（shell 形式）。构建上下文 `services/api`。
+  - 前端镜像：构建上下文为仓库根；`ARG APP`（`line-mini` / `web-pc` / `web-admin`）；Node 阶段 `pnpm install --frozen-lockfile` 后 `pnpm --filter @saiflow/${APP} build`；运行阶段 `nginx:stable-alpine`，只提供静态文件（监听 8080，`try_files $uri /index.html`），**不代理 `/api`**（由 Caddy 负责）。
+  - 镜像名：`${IMAGE_REGISTRY:-ghcr.io/aibaba-go}/<服务名>:${IMAGE_TAG}`，服务名按 D1。
+  - `scripts/deploy/compose.yaml`（项目名 `saiflow`）：
+    - `postgres`：`postgres:18`；数据卷 `pgdata`；**不发布任何端口**；`POSTGRES_USER`、`POSTGRES_PASSWORD`、`POSTGRES_DB=saiflow` 来自 `.env`；挂载 `postgres-init/` 到 `/docker-entrypoint-initdb.d`；健康检查 `pg_isready`。
+    - `saiflow-be-api`：`env_file: .env`；`DB_HOST=postgres`、`DB_NAME=saiflow`、`DB_USER=saiflow_v3_app`；`depends_on: postgres (service_healthy)`。
+    - `saiflow-fe-web-pc`、`saiflow-fe-web-admin`、`saiflow-fe-line-mini`：各自镜像。
+    - `caddy`：`caddy:2`；发布 `80`、`443`（含 `443/udp`）；挂载 `Caddyfile` 与数据卷 `caddy_data`、`caddy_config`；环境变量 `APP_HOST`、`ADMIN_HOST`、`LINE_HOST`。
+    - 所有服务 `restart: unless-stopped`；日志 `json-file`，`max-size: 10m`、`max-file: 5`。
+    - 迁移命令：`docker compose run --rm saiflow-be-api alembic upgrade head`。
+  - `Caddyfile`：`{$APP_HOST}`、`{$ADMIN_HOST}`、`{$LINE_HOST}` 三个站点块，每块 `handle /api/* { reverse_proxy saiflow-be-api:8000 }`，其余 `reverse_proxy <对应前端>:8080`；请求头 `X-Request-ID` 透传。站点名为 `*.localhost` 时 Caddy 自动使用内部证书（CI 用）。
+  - `postgres-init/01-app-user.sh`：首次初始化时建角色 `saiflow_v3_app`（口令取 `DB_PASSWORD`）、`GRANT CREATE ON DATABASE saiflow`；不授予超级用户。
+  - `scripts/deploy/env.example`：只列变量名：`POSTGRES_USER`、`POSTGRES_PASSWORD`、`DB_PASSWORD`、`APP_HOST`、`ADMIN_HOST`、`LINE_HOST`、`IMAGE_TAG`、`BACKUP_BUCKET`。
+  - `scripts/smoke-check.sh <base_url> <expected_version> [--timeout-seconds N=60]`：轮询 `<base_url>/api/v1/health` 直到 200 且 `status=ok`、`version=<expected_version>`，成功退出 0 并打印正文；超时退出 1 并打印最后一次状态码与正文。只用 `curl` 与 `python3 -c` 解析 JSON；`SMOKE_INSECURE=1` 时加 `curl -k`（CI 的内部证书）。
+- [ ] **Step 1: 写失败测试** `scripts/tests/smoke-check.test.sh`：用 `fake_health_server.py`（按参数返回 200 ok / 503 degraded / 200 ok 但版本不同）验证：ok 且版本匹配 → 退出 0；503 → 退出 1；版本不匹配 → 退出 1（`--timeout-seconds 3`）。
 - [ ] **Step 2: 运行** `bash scripts/tests/smoke-check.test.sh` → Expected: FAIL（脚本不存在）。
-- [ ] **Step 3: 实现**两个 Dockerfile、nginx 模板、`smoke-check.sh`。
-- [ ] **Step 4: 运行** `bash scripts/tests/smoke-check.test.sh` → Expected: 3/3 PASS。镜像构建在 Task 7 的 CI 中验证（本机无 Docker）。
-- [ ] **Step 5: 提交** `[rebuild-skeleton] container images and post-deploy smoke check (FR-PLAT-005)`。
+- [ ] **Step 3: 实现**两个 Dockerfile、nginx 配置、Compose 文件、Caddyfile、初始化脚本、`smoke-check.sh`。
+- [ ] **Step 4: 运行** `bash scripts/tests/smoke-check.test.sh` → Expected: 3/3 PASS。镜像与整套 Compose 在 Task 7 的 CI `stack` job 中验证（本机无 Docker）。
+- [ ] **Step 5: 提交** `[rebuild-skeleton] container images, compose stack, caddy, smoke check (FR-PLAT-005)`。
 
-### Task 7: CI 工作流（FR-PLAT-004-01、FR-PLAT-005-01、FR-PLAT-005-04）
+### Task 7: 数据库备份与恢复脚本（FR-PLAT-006）
 
 **Files:**
-- Create: `.github/workflows/ci.yml`、`scripts/check-no-sa-keys.sh`、`scripts/tests/check-no-sa-keys.test.sh`
+- Create: `scripts/deploy/backup.sh`、`scripts/deploy/restore-check.sh`、`scripts/tests/backup.test.sh`、`scripts/tests/fakes/docker`（测试用假命令）
 
 **Interfaces:**
+- Consumes: `scripts/deploy/compose.yaml`（服务名 `postgres`，Task 6）。
+- Produces:
+  - `scripts/deploy/backup.sh`，环境变量：`DEPLOY_DIR`（默认 `/opt/saiflow`）、`BACKUP_BUCKET`（如 `gs://saiflow-db-backup`）、`GCS_KEY_FILE`（默认 `${DEPLOY_DIR}/secrets/gcs-backup.json`）。步骤：
+    1. `docker compose -p saiflow exec -T postgres pg_dump -U "$POSTGRES_USER" -Fc saiflow` 写入 `${DEPLOY_DIR}/backups/saiflow-<UTC 时间 YYYYmmddTHHMMSSZ>.dump`（先写 `.partial`，成功后改名）；导出失败 → 删除 `.partial`，日志 `backup: dump failed`，退出 1。
+    2. `docker run --rm -v <key>:/key.json:ro -v <backups>:/backups:ro google/cloud-sdk:slim sh -c 'gcloud auth activate-service-account --key-file=/key.json && gcloud storage cp /backups/<文件> ${BACKUP_BUCKET}/'`；失败 → 日志 `backup: upload failed`，**保留本地备份**，退出 1。
+    3. 删除 `${DEPLOY_DIR}/backups/` 下修改时间超过 7 天的 `*.dump`（`find -mtime +7`）。保留清理在上传失败时也执行。
+    每行日志带 UTC 时间，写到 stdout（由 systemd 记入 journal）。
+  - `scripts/deploy/restore-check.sh <dump_file>`：启动一个临时 `postgres:18` 容器（随机口令、不发布端口），`pg_restore` 该文件，查询 `information_schema` 确认 schema `saiflow_v3` 与表 `saiflow_v3.alembic_version` 存在且有一行，打印结果；成功退出 0，最后删除临时容器（`trap`）。
+- [ ] **Step 1: 写失败测试** `scripts/tests/backup.test.sh`（`PATH` 前放 `scripts/tests/fakes/`，假 `docker` 按环境变量 `FAKE_DUMP_FAIL`、`FAKE_UPLOAD_FAIL` 决定成功或失败，并把调用记录到文件）：
+  - 正常：生成 `saiflow-*.dump`，记录中有一次 `gcloud storage cp`，退出 0（AC-FR-PLAT-006-01）；
+  - 保留期：预先放入 `touch -d '8 days ago'` 与 `touch -d '6 days ago'` 的两个 `.dump` → 前者被删、后者保留（AC-FR-PLAT-006-02）；
+  - 上传失败：本地新备份仍在，退出 1，输出含 `backup: upload failed`（AC-FR-PLAT-006-03）；
+  - 导出失败：不留 `.partial`，退出 1，输出含 `backup: dump failed`。
+- [ ] **Step 2: 运行** `bash scripts/tests/backup.test.sh` → Expected: FAIL（脚本不存在）。
+- [ ] **Step 3: 实现** `backup.sh` 与 `restore-check.sh`。
+- [ ] **Step 4: 运行** `bash scripts/tests/backup.test.sh` → Expected: 4/4 PASS。`restore-check.sh` 在 Task 8 的 CI `stack` job 中对真实备份运行（AC-FR-PLAT-006-04）。
+- [ ] **Step 5: 提交** `[rebuild-skeleton] database backup and restore check (FR-PLAT-006)`。
+
+### Task 8: CI 工作流（FR-PLAT-004-01、005-01、005-04、005-06、006-04）
+
+**Files:**
+- Create: `.github/workflows/ci.yml`、`scripts/check-no-secrets.sh`、`scripts/tests/check-no-secrets.test.sh`
+
+**Interfaces:**
+- Consumes: Task 6 的镜像、Compose 与 `smoke-check.sh`；Task 7 的 `backup.sh`、`restore-check.sh`。
 - Produces: 工作流名 `CI`；触发 `push`（分支 `chore/ai-workflow-v2`）与 `pull_request`；**没有任何部署步骤**。Jobs：
-  - `backend`：`services.postgres`（镜像 `postgres:18`，库 `saiflow_test`）；`astral-sh/setup-uv`；`uv sync --frozen`；`ruff check`、`ruff format --check`；`REQUIRE_INTEGRATION=1` 与 `TEST_DB_*` 下运行 `uv run pytest -v`。
+  - `backend`：`services.postgres`（`postgres:18`，库 `saiflow_test`）；`astral-sh/setup-uv`；`uv sync --frozen`；`ruff check`、`ruff format --check`；`REQUIRE_INTEGRATION=1` 与 `TEST_DB_*` 下运行 `uv run pytest -v`。
   - `frontend`：`pnpm/action-setup`（版本取 `packageManager`）、`actions/setup-node`（24，pnpm 缓存）；`pnpm install --frozen-lockfile`；`pnpm -r lint`、`pnpm -r test`、`pnpm -r build`。
-  - `contract`：同时装 uv 与 pnpm；运行 `bash packages/api-client/scripts/generate.sh`，再 `git diff --exit-code docs/30-design/openapi.json packages/api-client/src/generated`，失败时输出 `::error::api-client is out of date; run pnpm generate:api-client`。
-  - `scripts`：`shellcheck scripts/*.sh scripts/tests/*.sh`；运行 `scripts/tests/*.test.sh`；运行 `scripts/check-no-sa-keys.sh`。
-  - `images`：`docker build` 后端镜像与三个前端镜像（不推送），以确认 Dockerfile 可用；随后启动后端容器（连 `backend` 同款 postgres 服务）与 `web-pc` 容器（`API_UPSTREAM=http://<后端容器>`），对两者分别运行 `scripts/smoke-check.sh`，以证明 nginx 代理与健康检查端到端可用。
-  - `scripts/check-no-sa-keys.sh`：在 `git ls-files` 范围内搜索 `"type": "service_account"` 与 `"private_key"`，命中则列出文件并退出 1（AC-FR-PLAT-005-04）。
-- [ ] **Step 1: 写失败测试** `scripts/tests/check-no-sa-keys.test.sh`：在临时 git 仓库中，无密钥 → 退出 0；提交一个含 `"type": "service_account"` 的 JSON → 退出 1 并输出该文件名。
-- [ ] **Step 2: 运行** `bash scripts/tests/check-no-sa-keys.test.sh` → Expected: FAIL。
-- [ ] **Step 3: 实现** `check-no-sa-keys.sh` 与 `ci.yml`。
-- [ ] **Step 4: 运行** `bash scripts/tests/check-no-sa-keys.test.sh && bash scripts/check-no-sa-keys.sh` → Expected: 测试 PASS，仓库检查退出 0。`ci.yml` 在 Task 10 推送后首次实际运行。
-- [ ] **Step 5: 提交** `[rebuild-skeleton] CI workflow (FR-PLAT-004, FR-PLAT-005)`。
+  - `contract`：装 uv 与 pnpm；`bash packages/api-client/scripts/generate.sh` 后 `git diff --exit-code docs/30-design/openapi.json packages/api-client/src/generated`，失败时输出 `::error::api-client is out of date; run pnpm generate:api-client`。
+  - `scripts`：`shellcheck scripts/*.sh scripts/deploy/*.sh scripts/tests/*.sh`；运行 `scripts/tests/*.test.sh`；运行 `scripts/check-no-secrets.sh`。
+  - `stack`：本地构建 4 个镜像（`IMAGE_TAG=ci`，不推送）；在临时目录按 `env.example` 写 `.env`（随机口令，`APP_HOST=app.localhost`、`ADMIN_HOST=admin.localhost`、`LINE_HOST=line.localhost`）；`docker compose up -d postgres` → 迁移命令 → `docker compose up -d`；`SMOKE_INSECURE=1` 对三个 `https://*.localhost` 运行 `smoke-check.sh <url> ci`；断言 `docker compose port postgres 5432` 无输出（数据库未发布端口，AC-FR-PLAT-005-06 的配置部分）；对运行中的栈执行一次 `pg_dump`（与 `backup.sh` 相同参数）并运行 `restore-check.sh`（AC-FR-PLAT-006-04）。
+  - `scripts/check-no-secrets.sh`：在 `git ls-files` 范围内搜索 `"type": "service_account"`、`"private_key"`、`-----BEGIN [A-Z ]*PRIVATE KEY-----`，命中则列出文件并退出 1（AC-FR-PLAT-005-04）。
+- [ ] **Step 1: 写失败测试** `scripts/tests/check-no-secrets.test.sh`：在临时 git 仓库中，无密钥 → 退出 0；提交含 `"type": "service_account"` 的 JSON → 退出 1 并输出文件名；提交含 `-----BEGIN OPENSSH PRIVATE KEY-----` 的文件 → 退出 1。
+- [ ] **Step 2: 运行** `bash scripts/tests/check-no-secrets.test.sh` → Expected: FAIL。
+- [ ] **Step 3: 实现** `check-no-secrets.sh` 与 `ci.yml`。
+- [ ] **Step 4: 运行** `bash scripts/tests/check-no-secrets.test.sh && bash scripts/check-no-secrets.sh` → Expected: 测试 PASS，仓库检查退出 0。`ci.yml` 在 Task 11 推送后首次实际运行。
+- [ ] **Step 5: 提交** `[rebuild-skeleton] CI workflow with full compose stack check (FR-PLAT-004, FR-PLAT-005, FR-PLAT-006)`。
 
-### Task 8: 部署脚本、部署工作流与 GCP 一次性配置（FR-PLAT-005）
+### Task 9: 部署脚本、部署工作流与一次性配置（FR-PLAT-005）
 
 **Files:**
-- Create: `scripts/require-ci-success.sh`、`scripts/tests/require-ci-success.test.sh`、`scripts/deploy.sh`、`scripts/tests/deploy-dry-run.test.sh`、`scripts/gcp-bootstrap.sh`、`.github/workflows/deploy.yml`、`docs/deployment/README.md`
+- Create: `scripts/require-ci-success.sh`、`scripts/tests/require-ci-success.test.sh`、`scripts/deploy/remote-deploy.sh`、`scripts/tests/remote-deploy.test.sh`、`scripts/vps-bootstrap.sh`、`scripts/gcp-backup-bootstrap.sh`、`scripts/deploy/saiflow-backup.service`、`scripts/deploy/saiflow-backup.timer`、`.github/workflows/deploy.yml`、`docs/deployment/README.md`
 
 **Interfaces:**
-- Consumes: `scripts/smoke-check.sh`（Task 6）、镜像构建约定（Task 6）。
+- Consumes: `smoke-check.sh`、`compose.yaml`、`Caddyfile`、`backup.sh`（Task 6、7）。
 - Produces:
   - `scripts/require-ci-success.sh <sha>`：`gh run list --workflow CI --commit <sha> --json status,conclusion --limit 20`；存在 `status=completed` 且 `conclusion=success` 的运行 → 退出 0；否则退出 1 并打印 `CI has not passed for <sha>`（含 `in_progress`、`queued`、`failure`、无记录）。
-  - `scripts/deploy.sh`，必需环境变量：`GCP_PROJECT_ID`、`GCP_REGION`（`asia-southeast1`）、`AR_REPO`（`saiflow`）、`CLOUDSQL_CONNECTION`（如 `saiflow-509205:asia-southeast1:saiflow-dev`）、`RUNTIME_SA`、`DB_USER`、`DB_NAME`、`DB_PASSWORD_SECRET`（`saiflow-v3-db-password`）、`GIT_SHA`；`DRY_RUN=1` 时只打印命令。顺序：
-    1. 构建并推送 4 个镜像到 `${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${AR_REPO}/<服务名>:${GIT_SHA}`；
-    2. `gcloud run jobs deploy saiflow-be-api-migrate`（同一后端镜像，`--command alembic --args upgrade,head`，`--set-cloudsql-instances`，`--set-secrets DB_PASSWORD=${DB_PASSWORD_SECRET}:latest`，`--service-account ${RUNTIME_SA}`，环境变量 `DB_HOST=/cloudsql/${CLOUDSQL_CONNECTION}` 等）后 `gcloud run jobs execute saiflow-be-api-migrate --wait`；
-    3. `gcloud run deploy saiflow-be-api`（同上连接与密钥，`APP_VERSION=${GIT_SHA}`，`--allow-unauthenticated`）；取其 URL；
-    4. 依次部署 3 个前端服务（`API_UPSTREAM=<后端 URL>`、`API_HOST=<后端主机名>`，`--allow-unauthenticated`）；
-    5. 对后端 URL 与每个前端 URL 运行 `smoke-check.sh <url> ${GIT_SHA}`，任一失败则脚本退出 1（AC-FR-PLAT-005-03）。
-  - `.github/workflows/deploy.yml`：名 `Deploy`；**只有** `workflow_dispatch` 触发（AC-FR-PLAT-005-01）；`permissions: id-token: write, contents: read, actions: read`；步骤：checkout → `scripts/require-ci-success.sh ${{ github.sha }}`（AC-FR-PLAT-005-02）→ `google-github-actions/auth`（`workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}`、`service_account: ${{ vars.GCP_DEPLOYER_SA }}`，不使用 `credentials_json`）→ `google-github-actions/setup-gcloud` → `gcloud auth configure-docker` → `scripts/deploy.sh`（变量取自仓库 Variables，`GIT_SHA=${{ github.sha }}`）→ 将 `smoke-check` 输出写入 job summary。
-  - `scripts/gcp-bootstrap.sh`（在 Cloud Shell 中执行一次，必需变量 `GCP_PROJECT_ID`、`GCP_REGION`、`GITHUB_REPO=aibaba-go/saiflow-monorepo`、`CLOUDSQL_INSTANCE=saiflow-dev`）：启用 API（run、artifactregistry、sqladmin、secretmanager、iamcredentials、sts）；建 Artifact Registry 仓库 `saiflow`；建服务账号 `saiflow-v3-deployer`（`roles/run.admin`、`roles/artifactregistry.writer`，对运行账号的 `roles/iam.serviceAccountUser`）与 `saiflow-v3-runtime`（`roles/cloudsql.client`，对密钥的 `roles/secretmanager.secretAccessor`）；建 Workload Identity 池 `github` 与提供方 `github-oidc`（`attribute-condition: assertion.repository=='aibaba-go/saiflow-monorepo'`），授权 deployer；建 Cloud SQL 用户 `saiflow_v3_app`（随机口令）并写入密钥 `saiflow-v3-db-password`；最后打印需要执行的 SQL（`GRANT CREATE ON DATABASE postgres TO saiflow_v3_app;`，经 `gcloud sql connect` 执行）与需要填入 GitHub 仓库 Variables 的值。每一步先检查资源是否已存在，重复执行不报错。
-  - `docs/deployment/README.md`：一次性配置步骤（含 Cloud Run 列表查重名，D4）、GitHub Variables 清单、如何手动触发部署、如何查看结果与回滚（`gcloud run services update-traffic` 到上一个版本）。
+  - `scripts/deploy/remote-deploy.sh <image_tag>`（在 VPS 上以 `deploy` 运行，工作目录 `/opt/saiflow`）：从 stdin 读取 GHCR 令牌与用户名（两行）；`trap 'docker logout ghcr.io' EXIT` 后 `docker login ghcr.io --password-stdin`；把 `.env` 中的 `IMAGE_TAG` 更新为 `<image_tag>`；`docker compose pull` → `docker compose up -d postgres` → 迁移命令 → `docker compose up -d --remove-orphans` → `docker image prune -f`。任一步失败即退出非 0（`trap` 仍执行退出登录，AC-FR-PLAT-005-05）。
+  - `.github/workflows/deploy.yml`：名 `Deploy`；**只有** `workflow_dispatch` 触发（AC-FR-PLAT-005-01）；`permissions: contents: read, packages: write, actions: read`；步骤：
+    1. checkout → `scripts/require-ci-success.sh ${{ github.sha }}`（AC-FR-PLAT-005-02，失败则后续步骤都不执行）；
+    2. 用 `GITHUB_TOKEN` 登录 GHCR，构建并推送 4 个镜像（标签 `${{ github.sha }}`）；
+    3. 从 Secrets 写入 SSH 私钥（`VPS_SSH_KEY`）与主机指纹（`VPS_KNOWN_HOSTS`，开启严格主机校验）；`scp -P 11022` 把 `compose.yaml`、`Caddyfile`、`postgres-init/`、`remote-deploy.sh`、`backup.sh`、`restore-check.sh` 复制到 `deploy@${{ vars.VPS_HOST }}:/opt/saiflow/`；
+    4. `ssh -p 11022 deploy@… 'bash /opt/saiflow/remote-deploy.sh <sha>'`，stdin 传入 `GITHUB_TOKEN` 与 `github.actor`；
+    5. 对 `https://${{ vars.APP_HOST }}`、`ADMIN_HOST`、`LINE_HOST` 运行 `smoke-check.sh <url> <sha>`，任一失败则工作流失败（AC-FR-PLAT-005-03）；
+    6. 从 runner 用 `nc -z -w 5 <VPS_HOST> 5432` 确认连接失败（AC-FR-PLAT-005-06）；
+    7. 把 smoke-check 输出写入 job summary；最后无论成功失败都删除 runner 上的私钥文件。
+  - `scripts/vps-bootstrap.sh`（负责人以 root 在 VPS 上执行一次，重复执行不报错；参数：部署公钥文件路径）：按 Docker 官方 apt 源安装 Docker Engine 与 Compose 插件；建账号 `deploy` 并加入 `docker` 组；写入其 `authorized_keys`；`/etc/ssh/sshd_config.d/saiflow-deploy.conf` 中对 `deploy` 设 `PasswordAuthentication no`，`sshd -t` 通过后重载；建 `/opt/saiflow/{backups,secrets}`（属主 `deploy`，权限 700）；若 `/opt/saiflow/.env` 不存在，按 `env.example` 生成，`POSTGRES_PASSWORD` 与 `DB_PASSWORD` 用 `openssl rand` 生成，三个主机名写入 D6 的子域名，权限 600、属主 `deploy`；安装并启用 `saiflow-backup.timer`。不修改防火墙与 SSH 端口（负责人已配置）。
+  - `saiflow-backup.service` / `.timer`：以 `deploy` 运行 `/opt/saiflow/backup.sh`；每天 03:00（`Asia/Bangkok`）；`Persistent=true`。
+  - `scripts/gcp-backup-bootstrap.sh`（在 Cloud Shell 执行一次，重复执行不报错；必需变量 `GCP_PROJECT_ID`、`BACKUP_BUCKET`、`BUCKET_LOCATION=asia-southeast1`）：建桶（统一桶级访问、禁止公开访问）；生命周期规则 30 天删除；建服务账号 `saiflow-v3-backup`，**只在该桶上**授予 `roles/storage.objectCreator`；生成密钥文件并提示用 `scp -P 11022` 放到 VPS 的 `/opt/saiflow/secrets/gcs-backup.json`（权限 600）后从 Cloud Shell 删除。
+  - `docs/deployment/README.md`：一次性配置顺序（DNS 三条 A 记录 → VPS 初始化 → GCP 备份桶 → GitHub Secrets `VPS_SSH_KEY`、`VPS_KNOWN_HOSTS` 与 Variables `VPS_HOST`、`APP_HOST`、`ADMIN_HOST`、`LINE_HOST`）；如何手动触发部署、查看结果；回滚（以上一个提交的 sha 重新触发 Deploy，或在 VPS 上把 `IMAGE_TAG` 改回后 `docker compose up -d`）；如何手动运行备份与恢复演练；`deploy` 账号权限接近 root 的风险说明（D9）。
 - [ ] **Step 1: 写失败测试**：
-  - `require-ci-success.test.sh`：在 `PATH` 前放一个假 `gh`，按用例输出 JSON：`[{"status":"completed","conclusion":"success"}]` → 0；`[{"status":"in_progress","conclusion":""}]` → 1（Review Focus 5）；`[{"status":"completed","conclusion":"failure"}]` → 1；`[]` → 1。
-  - `deploy-dry-run.test.sh`：`DRY_RUN=1` 与全部必需变量下运行 `deploy.sh`，断言输出含 4 个服务名、`saiflow-be-api-migrate`、`--set-secrets DB_PASSWORD=saiflow-v3-db-password:latest`、`/cloudsql/`、4 次 `smoke-check.sh`，且迁移 Job 的执行出现在 `run deploy saiflow-be-api` 之前；缺少 `GIT_SHA` 时退出非 0 并提示变量名。
-- [ ] **Step 2: 运行** `bash scripts/tests/require-ci-success.test.sh && bash scripts/tests/deploy-dry-run.test.sh` → Expected: FAIL。
-- [ ] **Step 3: 实现**上述脚本、工作流与文档。
-- [ ] **Step 4: 运行**两个测试与 `shellcheck scripts/*.sh scripts/tests/*.sh`（本机无 shellcheck 时由 CI 的 `scripts` job 覆盖）→ Expected: 测试全部 PASS。
-- [ ] **Step 5: 提交** `[rebuild-skeleton] deploy script, deploy workflow, GCP bootstrap (FR-PLAT-005)`。
+  - `require-ci-success.test.sh`：`PATH` 前放假 `gh`，按用例输出 JSON：`[{"status":"completed","conclusion":"success"}]` → 0；`[{"status":"in_progress","conclusion":""}]` → 1（Review Focus 5）；`[{"status":"completed","conclusion":"failure"}]` → 1；`[]` → 1。
+  - `remote-deploy.test.sh`：`PATH` 前放记录调用的假 `docker`；正常 → 调用顺序为 `login` → `compose pull` → `compose up -d postgres` → `compose run --rm saiflow-be-api alembic upgrade head` → `compose up -d --remove-orphans` → `logout`，且 `.env` 中 `IMAGE_TAG` 已更新；迁移失败（假 `docker` 对 `alembic` 返回 1）→ 退出非 0、未执行最后的 `up -d --remove-orphans`、**仍执行了 `logout`**（AC-FR-PLAT-005-05）。
+- [ ] **Step 2: 运行** `bash scripts/tests/require-ci-success.test.sh && bash scripts/tests/remote-deploy.test.sh` → Expected: FAIL。
+- [ ] **Step 3: 实现**上述脚本、systemd 单元、工作流与文档。
+- [ ] **Step 4: 运行**两个测试与 `shellcheck`（本机无 shellcheck 时由 CI 的 `scripts` job 覆盖）→ Expected: 测试全部 PASS。
+- [ ] **Step 5: 提交** `[rebuild-skeleton] deploy workflow, remote deploy, VPS and GCP bootstrap (FR-PLAT-005)`。
 
-### Task 9: 文档同步
+### Task 10: 文档同步
 
 **Files:**
 - Modify:
-  - `docs/30-design/adr/ADR-006-ai-native-workflow.md`：§6 部署条改为“`scripts/deploy.sh` 由 GitHub Actions 手动触发调用”；§7 B-1 行改为三个前端空壳；版本历史。
-  - `docs/30-design/Architecture.md`：§0 web-pc 行拆为“web-pc 企业版”“web-pc admin 后台”两行；§5 前端行改为三个独立 Cloud Run 服务（服务命名规则 D1）、发布行改为 GitHub Actions 手动触发；版本历史。
-  - `docs/00-standards/Directory-Structure.md`：目录树新增 `apps/web-admin`、`.github/workflows/`、`docs/deployment/`；规则 10 改为 `docs/deployment/` 已启用；应用包名示例加 `@saiflow/web-admin`；新增服务命名规则（D1）；版本历史。
+  - `docs/30-design/adr/ADR-006-ai-native-workflow.md`：§7 B-1 行改为三个前端空壳与数据库备份；版本历史。
+  - `docs/30-design/Architecture.md`：§0 web-pc 行拆为“web-pc 企业版”“web-pc admin 后台”两行；§5 前端行改为三个前端容器与三个子域名（D6），服务命名规则（D1）；版本历史。
+  - `docs/00-standards/Directory-Structure.md`：目录树新增 `apps/web-admin`、`.github/workflows/`、`docs/deployment/`、`scripts/deploy/`、`scripts/docker/`；规则 10 改为 `docs/deployment/` 已启用；应用包名示例加 `@saiflow/web-admin`；新增服务命名规则（D1）；版本历史。
   - `docs/00-standards/React-Frontend-Structure.md`：§3.1 加 `@saiflow/web-admin`；§1.1 加 `apps/web-admin/` 一行；版本历史。
-  - `docs/00-standards/ID-Conventions.md`：§2 新增 `PLAT | 平台基线（健康检查、错误格式、配置、部署） | openspec/specs/platform-baseline`；版本历史。
-  - 根 `README.md`：本地开发命令（后端、三个前端、生成接口客户端）。
-- [ ] **Step 1: 检查** `git grep -n "web-pc（企业版与 admin 后台）\|line-mini\` 空壳\|手动执行 \`gcloud" -- docs` 列出待改处。
+  - `docs/00-standards/ID-Conventions.md`：§2 新增 `PLAT | 平台基线（健康检查、错误格式、配置、部署、备份） | openspec/specs/platform-baseline`；版本历史。
+  - 根 `README.md`：本地开发命令（后端、三个前端、生成接口客户端）与部署说明链接。
+- [ ] **Step 1: 检查** `git grep -n "web-pc（企业版与 admin 后台）\|web-pc 各为独立\|不设\` \`docs/deployment/" -- docs` 列出待改处。
 - [ ] **Step 2: 修改**上述文件。
 - [ ] **Step 3: 检查**再次运行 Step 1 的 grep → Expected: 无结果；`git grep -n "web-admin" -- docs` 在上述 5 个文档中都有命中。
-- [ ] **Step 4: 提交** `[rebuild-skeleton] docs: three frontends, deploy via GitHub Actions, PLAT domain`。
+- [ ] **Step 4: 提交** `[rebuild-skeleton] docs: three frontends, subdomains, deployment docs, PLAT domain`。
 
-### Task 10: 首次推送、CI 与真实部署（需负责人参与）
+### Task 11: 首次推送、CI 与真实部署（需负责人参与）
 
 本任务涉及推送与外部系统，每一步前先向负责人确认。
 
 - [ ] **Step 1: 请负责人确认推送** `chore/ai-workflow-v2` 到 `origin`。确认后 `git push origin chore/ai-workflow-v2`。
-- [ ] **Step 2: 观察 CI** `gh run watch`（工作流 `CI`）→ Expected: 5 个 job 全部成功；同时确认没有任何部署运行（AC-FR-PLAT-005-01）。失败按 systematic-debugging 修复后重新推送（推送前再次确认）。
-- [ ] **Step 3: 一次性 GCP 配置**：请负责人或同事在 Cloud Shell 执行 `scripts/gcp-bootstrap.sh` 与打印出的 SQL，在 Cloud Run 列表确认无重名，并把输出的值填入 GitHub 仓库 Variables（`docs/deployment/README.md`）。
+- [ ] **Step 2: 观察 CI** `gh run watch`（工作流 `CI`）→ Expected: 6 个 job 全部成功；同时确认没有任何部署运行（AC-FR-PLAT-005-01）。失败按 systematic-debugging 修复后重新推送（推送前再次确认）。
+- [ ] **Step 3: 一次性配置**（负责人执行，按 `docs/deployment/README.md`）：
+  1. DNS：`saiflow-app`、`saiflow-admin`、`saiflow-line` 三条 A 记录指向 VPS；
+  2. VPS：以 root 执行 `scripts/vps-bootstrap.sh <部署公钥>`；
+  3. GCP：在 Cloud Shell 执行 `scripts/gcp-backup-bootstrap.sh`，把密钥文件放到 VPS；
+  4. GitHub：填入 Secrets 与 Variables。
 - [ ] **Step 4: 拒绝验证**（AC-FR-PLAT-005-02）：在一个 CI 尚未完成的提交上手动触发 `Deploy` → Expected: `require-ci-success` 步骤失败，未构建镜像。
-- [ ] **Step 5: 正式部署**：CI 通过后手动触发 `Deploy` → Expected: 迁移 Job 成功；4 个服务的 smoke-check 全部通过（后端 `database=ok`，验证 ADR-005 中的口令认证问题已不存在）。
-- [ ] **Step 6: 失败路径验证**（AC-FR-PLAT-005-03）：在 Cloud Run 控制台临时把 `saiflow-be-api` 的 `DB_PASSWORD` 指向一个错误口令版本后运行 `scripts/smoke-check.sh <后端 URL> <sha> --timeout-seconds 30`（Cloud Shell）→ Expected: 退出 1，输出 503 与 `database=error`；随后恢复。
-- [ ] **Step 7: 打开三个前端 URL** → Expected: 页面显示 `Backend: OK (<sha>)`（AC-FR-PLAT-004-02）。
-- [ ] **Step 8: 写验证记录** `openspec/changes/rebuild-skeleton/verification.md`：AC → 测试或手工步骤 → 结果；包含 CI 运行链接、部署运行链接、4 个服务 URL、smoke-check 输出。提交 `[rebuild-skeleton] verification record`。
+- [ ] **Step 5: 正式部署**：CI 通过后手动触发 `Deploy` → Expected: 迁移成功；三个子域名的 smoke-check 全部通过（`database=ok`）；端口 5432 从外部不可连（AC-FR-PLAT-005-06）；Caddy 已为三个子域名取得证书。
+- [ ] **Step 6: 凭据检查**（AC-FR-PLAT-005-05）：在 VPS 上以 `deploy` 查看 `~/.docker/config.json` → Expected: 没有 `ghcr.io` 的凭据。
+- [ ] **Step 7: 失败路径验证**（AC-FR-PLAT-005-03）：在 VPS 上临时停止 `postgres` 服务后运行 `scripts/smoke-check.sh https://saiflow-app.aibaba.asia <sha> --timeout-seconds 30` → Expected: 退出 1，输出 503 与 `database=error`；随后恢复并确认恢复正常。
+- [ ] **Step 8: 打开三个前端地址** → Expected: 页面显示 `Backend: OK (<sha>)`（AC-FR-PLAT-004-02）。
+- [ ] **Step 9: 备份与恢复演练**（AC-FR-PLAT-006-01、04）：在 VPS 上手动运行一次 `systemctl start saiflow-backup.service` → Expected: `backups/` 中出现新备份，备份桶中出现同名对象；对该文件运行 `restore-check.sh` → Expected: 恢复成功。
+- [ ] **Step 10: 写验证记录** `openspec/changes/rebuild-skeleton/verification.md`：AC → 测试或手工步骤 → 结果；包含 CI 运行链接、部署运行链接、三个地址、smoke-check 输出、备份与恢复输出。提交 `[rebuild-skeleton] verification record`。
