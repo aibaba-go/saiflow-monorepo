@@ -45,3 +45,39 @@ async def test_invalid_request_id_header_is_replaced(client):
 async def test_validation_error_does_not_echo_input(client):
     r = await client.get("/api/v1/_test/required", params={"other": "secret-input-123"})
     assert r.status_code == 422 and "secret-input-123" not in r.text
+
+
+def _access_records(caplog):
+    return [rec for rec in caplog.records if rec.name == "app.access"]
+
+
+async def test_404_is_logged_with_request_id(client, caplog):  # FR-PLAT-002 (log side)
+    caplog.set_level("INFO")
+    r = await client.get("/api/v1/nope", headers={"X-Request-ID": "req-404"})
+    records = _access_records(caplog)
+    assert r.status_code == 404 and records
+    assert records[-1].request_id == "req-404"
+    assert "GET /api/v1/nope 404" in records[-1].getMessage()
+
+
+async def test_422_is_logged_with_request_id(client, caplog):
+    caplog.set_level("INFO")
+    await client.get("/api/v1/_test/required", headers={"X-Request-ID": "req-422"})
+    assert any(
+        rec.request_id == "req-422" and " 422 " in rec.getMessage() + " "
+        for rec in _access_records(caplog)
+    )
+
+
+async def test_500_is_logged_once_in_access_log(client, caplog):
+    caplog.set_level("INFO")
+    await client.get("/api/v1/_test/boom", headers={"X-Request-ID": "req-500"})
+    hits = [r for r in _access_records(caplog) if r.request_id == "req-500"]
+    assert len(hits) == 1 and "GET /api/v1/_test/boom 500" in hits[0].getMessage()
+
+
+async def test_access_log_omits_query_string(client, caplog):
+    caplog.set_level("INFO")
+    await client.get("/api/v1/_test/required", params={"q": "secret-query-value"})
+    server_logs = [r.getMessage() for r in caplog.records if r.name.startswith("app")]
+    assert server_logs and not any("secret-query-value" in m for m in server_logs)

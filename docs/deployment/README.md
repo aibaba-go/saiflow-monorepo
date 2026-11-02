@@ -95,7 +95,17 @@ ssh -p 11022 root@<VPS_IP> 'chown deploy:deploy /opt/saiflow/secrets/gcs-backup.
 - **自动：** 每天 03:00（曼谷时间）运行；本地 `/opt/saiflow/backups/` 保留 7 天，同时复制到备份桶（30 天）。查看结果：`journalctl -u saiflow-backup.service`。
 - **手动运行：** `sudo systemctl start saiflow-backup.service`。
 - **恢复演练：** `bash /opt/saiflow/restore-check.sh /opt/saiflow/backups/<文件>.dump`（恢复到一个临时数据库并检查 schema，不影响正在运行的数据库）。
-- **真正恢复（数据丢失时）：** 停止后端 → 从本地或备份桶取最近的 `.dump` → `docker compose exec -T postgres pg_restore -U "$POSTGRES_USER" -d saiflow --clean --if-exists < 文件` → 启动后端并检查健康。
+- **真正恢复（数据丢失时）：** 以 `deploy` 在 `/opt/saiflow` 中执行：
+
+  ```bash
+  docker compose stop saiflow-be-api
+  # 用户名在容器内展开（单引号），文件从宿主机经标准输入传入
+  docker compose exec -T postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d saiflow --clean --if-exists --exit-on-error' < backups/<文件>.dump
+  docker compose start saiflow-be-api
+  curl -s https://saiflow-app.aibaba.asia/api/v1/health
+  ```
+
+  本地没有可用备份时，先从备份桶下载到 `backups/`。
 
 ## 6. 常用检查
 

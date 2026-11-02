@@ -82,8 +82,12 @@ jobs:
           HOSTS: ${{ vars.APP_HOST }} ${{ vars.ADMIN_HOST }} ${{ vars.LINE_HOST }}
         run: |
           : >"$RUNNER_TEMP/smoke.txt"
+          read -r -a hosts <<<"$HOSTS"
+          if [ "${#hosts[@]}" -ne 3 ]; then
+            echo "::error::repository variables APP_HOST, ADMIN_HOST and LINE_HOST must all be set"; exit 1
+          fi
           status=0
-          for host in $HOSTS; do
+          for host in "${hosts[@]}"; do
             bash scripts/smoke-check.sh "https://$host" "$SHA" --timeout-seconds 120 \
               >>"$RUNNER_TEMP/smoke.txt" 2>&1 || status=1
           done

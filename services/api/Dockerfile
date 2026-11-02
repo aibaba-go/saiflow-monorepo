@@ -24,4 +24,5 @@ RUN useradd --uid 10001 --no-create-home app
 USER app
 EXPOSE 8000
 # Shell form so ${PORT} expands (STD-005 §3.6).
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT}
+# --no-access-log: app.access writes JSON access records that carry the request ID.
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --no-access-log

@@ -21,4 +21,5 @@ run_with() { # run_with <mode> -> prints smoke-check exit code
 check "ok and matching version exits 0" test "$(run_with ok)" -eq 0
 check "503 degraded exits 1" test "$(run_with degraded)" -eq 1
 check "version mismatch exits 1" test "$(run_with wrongversion)" -eq 1
+check "frontend page down exits 1" test "$(run_with nofrontend)" -eq 1
 finish

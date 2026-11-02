@@ -24,6 +24,8 @@ l=$(order_of 'login ghcr.io'); p=$(order_of 'compose.* pull'); pg=$(order_of 'up
 m=$(order_of 'alembic upgrade head'); u=$(order_of 'up -d --remove-orphans'); o=$(order_of 'logout ghcr.io')
 check "order login<pull<postgres<migrate<up<logout" \
   test -n "$o" -a "$l" -lt "$p" -a "$p" -lt "$pg" -a "$pg" -lt "$m" -a "$m" -lt "$u" -a "$u" -lt "$o"
+r=$(order_of 'exec -T caddy caddy reload')
+check "caddy config reloaded after up" test -n "$r" -a "$u" -lt "$r" -a "$r" -lt "$o"
 check "token not in call log" bash -c "! grep -q token-123 '$FAKE_LOG'"
 rm -rf "$work"
 

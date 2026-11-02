@@ -9,12 +9,14 @@ dump="${1:?usage: restore-check.sh <dump_file>}"
 
 name="saiflow-restore-check-$$"
 password="$(head -c 18 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')"
+# shellcheck disable=SC2329  # invoked by the EXIT trap
 cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
 docker run -d --name "$name" -e POSTGRES_PASSWORD="$password" -e POSTGRES_DB=restore postgres:18 >/dev/null
 for _ in $(seq 60); do
-  docker exec "$name" pg_isready -U postgres -d restore >/dev/null 2>&1 && break
+  # TCP probe: the init-time temporary server listens on the Unix socket only.
+  docker exec "$name" pg_isready -h 127.0.0.1 -U postgres -d restore >/dev/null 2>&1 && break
   sleep 1
 done
 docker exec "$name" psql -U postgres -d restore -qc "CREATE ROLE saiflow_v3_app" >/dev/null

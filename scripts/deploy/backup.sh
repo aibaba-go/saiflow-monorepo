@@ -22,6 +22,7 @@ name="saiflow-$(date -u +%Y%m%dT%H%M%SZ).dump"
 partial="$backups/$name.partial"
 
 compose=(docker compose --project-directory "$DEPLOY_DIR" -f "$DEPLOY_DIR/compose.yaml")
+# shellcheck disable=SC2016  # $POSTGRES_USER must expand inside the container
 if ! "${compose[@]}" exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -Fc saiflow' >"$partial"; then
   rm -f "$partial"
   log "backup: dump failed"

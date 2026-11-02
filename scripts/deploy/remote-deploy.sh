@@ -31,5 +31,7 @@ echo "remote-deploy: pulling $tag"
 echo "remote-deploy: migrating"
 "${compose[@]}" run --rm saiflow-be-api alembic upgrade head
 "${compose[@]}" up -d --remove-orphans
+# The Caddyfile is bind-mounted and not watched: reload so edits take effect.
+"${compose[@]}" exec -T caddy caddy reload --config /etc/caddy/Caddyfile
 docker image prune -f >/dev/null
 echo "remote-deploy: done ($tag)"

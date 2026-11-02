@@ -103,7 +103,8 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       IMAGE_TAG: ci
-      STACK_DIR: ${{ runner.temp }}/saiflow
+      # runner.temp is not available in job-level env; a fixed path is fine on hosted runners.
+      STACK_DIR: /tmp/saiflow-stack
     steps:
       - uses: actions/checkout@v4
       - name: build images
