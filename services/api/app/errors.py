@@ -1,0 +1,56 @@
+"""Error handlers that turn every failure into ErrorResponse, never exposing internals."""
+
+import logging
+
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from app.request_context import request_id_var
+from app.schemas.common import ErrorResponse
+
+logger = logging.getLogger("app.errors")
+
+_HTTP_CODES = {
+    404: ("not_found", "error.not_found"),
+    405: ("method_not_allowed", "error.method_not_allowed"),
+}
+
+
+def _respond(status: int, code: str, message_key: str, fields: list[str] | None = None):
+    body = ErrorResponse(
+        code=code, message_key=message_key, request_id=request_id_var.get(), fields=fields
+    )
+    return JSONResponse(status_code=status, content=body.model_dump())
+
+
+async def _http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    code, key = _HTTP_CODES.get(exc.status_code, (f"http_{exc.status_code}", "error.http"))
+    response = _respond(exc.status_code, code, key)
+    if exc.headers:
+        response.headers.update(exc.headers)
+    return response
+
+
+async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    fields: list[str] = []
+    for err in exc.errors():
+        name = str(err["loc"][-1]) if err.get("loc") else ""
+        if name and name not in fields:
+            fields.append(name)
+    return _respond(422, "validation_error", "error.validation", fields)
+
+
+async def _unhandled_error(request: Request, exc: Exception) -> JSONResponse:
+    logger.exception("unhandled error")
+    response = _respond(500, "internal_error", "error.internal")
+    # This handler runs outside RequestIdMiddleware, so the header is added here.
+    response.headers["X-Request-ID"] = request_id_var.get()
+    return response
+
+
+def register_error_handlers(app: FastAPI) -> None:
+    app.add_exception_handler(StarletteHTTPException, _http_error)
+    app.add_exception_handler(RequestValidationError, _validation_error)
+    app.add_exception_handler(Exception, _unhandled_error)
