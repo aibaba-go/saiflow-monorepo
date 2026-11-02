@@ -1,0 +1,4 @@
+{
+  "extends": "@saiflow/tsconfig/base.json",
+  "include": ["src"]
+}

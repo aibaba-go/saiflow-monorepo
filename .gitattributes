@@ -1,0 +1,6 @@
+# Keep LF in every checkout: shell scripts run on Linux (CI, VPS) and the generated
+# API contract is compared byte-for-byte in CI.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.pdf binary
