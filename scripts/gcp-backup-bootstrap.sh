@@ -33,10 +33,12 @@ fi
 gcloud storage buckets add-iam-policy-binding "$bucket" \
   --member="serviceAccount:$sa" --role=roles/storage.objectCreator >/dev/null
 
-if [ ! -f "$key_file" ]; then
+# -s, not -f: a failed `keys create` leaves an empty file behind, which must not count.
+if [ ! -s "$key_file" ]; then
   # A just-created service account can take a few seconds to become usable (NOT_FOUND).
   for attempt in 1 2 3 4 5 6; do
     if gcloud iam service-accounts keys create "$key_file" --iam-account="$sa"; then break; fi
+    rm -f "$key_file"
     [ "$attempt" -lt 6 ] || { echo "could not create the key for $sa" >&2; exit 1; }
     echo "retrying in 10s ($attempt/6)" >&2
     sleep 10
