@@ -80,7 +80,7 @@ ssh -p 11022 root@<VPS_IP> 'chown deploy:deploy /opt/saiflow/secrets/gcs-backup.
 
 1. 确认要部署的提交在 GitHub Actions 的 `CI` 中已通过。
 2. Actions → `Deploy` → Run workflow，选择分支 `chore/ai-workflow-v2`（部署该分支最新提交）。
-3. 工作流依次：检查 CI 结果（未通过即停止）→ 构建并推送 4 个镜像 → 复制 Compose 与脚本到 `/opt/saiflow` → 在服务器上拉取镜像、数据库迁移、重启服务 → 检查三个地址的健康检查与版本 → 确认 5432 端口从外部不可连。
+3. 工作流依次：检查分支（只允许 `chore/ai-workflow-v2`，选了别的分支即停止）→ 检查 CI 结果（未通过即停止）→ 构建并推送 4 个镜像 → 复制 Compose 与脚本到 `/opt/saiflow` → 在服务器上拉取镜像、数据库迁移、重启服务 → 检查三个地址的健康检查与版本 → 确认 5432 端口从外部不可连。
 4. 结果见该次运行的 Summary；任何一步失败，工作流即为失败。
 
 推送代码或合并 PR **不会**触发部署。
