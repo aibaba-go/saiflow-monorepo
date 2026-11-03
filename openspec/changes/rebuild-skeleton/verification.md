@@ -11,6 +11,7 @@
 | CI（本记录之前的最新提交 `47273fa`） | https://github.com/aibaba-go/saiflow-monorepo/actions/runs/41617178251 | 成功 |
 | 拒绝验证（`13a5fcd`，CI 未完成时触发） | https://github.com/aibaba-go/saiflow-monorepo/actions/runs/41613725331 | 按预期失败于"CI must have passed"，后续步骤全部跳过 |
 | 正式部署（`267c486`） | https://github.com/aibaba-go/saiflow-monorepo/actions/runs/41615119033 | 全部步骤成功 |
+| 追加部署（`1b1fe69`，去掉 `DB_SCHEMA`、部署超时 10 分钟、接口一致性检查覆盖新文件） | https://github.com/aibaba-go/saiflow-monorepo/actions/runs/41633182397 | 全部步骤成功（约 3 分钟），三个地址 smoke-check 通过 |
 
 首次 CI（`94f2bf3`）与两次部署（41614091944、41614788877）失败，原因与修复见第 4 节。
 
@@ -62,3 +63,4 @@
 | `VPS_KNOWN_HOSTS` 在 Windows cmd 中生成为空值 | 重新扫描并核对 ED25519 指纹（与控制台一致）后设置；工作流去掉 CR、打印指纹、缺少主机时直接报错 | `267c486` |
 | 备份账号只有 objectCreator，`gcloud storage cp` 需要 `storage.objects.get`（403） | 增加备份桶 objectViewer（仍不能删除或覆盖） | `47273fa` |
 | VPS 上负责人自建的 `postgresql` 容器对公网开放 5432 | 负责人决定删除容器（数据卷保留） | —（服务器操作） |
+| 审查遗留：`DB_SCHEMA` 配置项不起作用；接口一致性检查漏掉新文件；部署无超时（负责人要求修） | 去掉 `DB_SCHEMA`（schema 固定 `saiflow_v3`）；`scripts/check-generated-clean.sh`；`timeout-minutes: 10` | `a1c6c2c`、`1b1fe69` |
