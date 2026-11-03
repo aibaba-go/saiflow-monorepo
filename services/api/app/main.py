@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from app.config import Settings, load_settings
 from app.db import create_engine, create_sessionmaker
 from app.errors import register_error_handlers
+from app.integrations.email import SmtpSender
 from app.integrations.line import LineClient
 from app.logging_setup import configure_logging
 from app.request_context import RequestIdMiddleware
@@ -32,11 +33,26 @@ async def lifespan(app: FastAPI):
             if settings.line_channel_id
             else None
         )
+    if not hasattr(app.state, "email_sender"):  # tests may inject a fake first
+        app.state.email_sender = _smtp_sender(settings)
     try:
         yield
     finally:
         await app.state.http.aclose()
         await app.state.engine.dispose()
+
+
+def _smtp_sender(settings: Settings) -> SmtpSender | None:
+    if not (settings.smtp_host and settings.smtp_from):
+        return None
+    return SmtpSender(
+        settings.smtp_host,
+        settings.smtp_port,
+        settings.smtp_username,
+        settings.smtp_password.get_secret_value() if settings.smtp_password else None,
+        settings.smtp_from,
+        settings.smtp_security,
+    )
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

@@ -101,11 +101,27 @@ def line():
 
 
 @pytest.fixture
-async def api(db_engine, app_settings, line):
+def mail():
+    from tests.integration.fake_email import FakeEmailSender
+
+    return FakeEmailSender()
+
+
+async def login(api, line, sub: str = "U1", **claims) -> dict:
+    """Log in through the real endpoint with a fake LINE identity; returns MeResponse."""
+    line.add(f"tok-{sub}", sub, **claims)
+    r = await api.post("/api/v1/auth/line", json={"id_token": f"tok-{sub}"})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+@pytest.fixture
+async def api(db_engine, app_settings, line, mail):
     from asgi_lifespan import LifespanManager
 
     app = create_app(app_settings)
     app.state.line_client = line
+    app.state.email_sender = mail
     async with LifespanManager(app) as manager:
         transport = httpx.ASGITransport(app=manager.app, raise_app_exceptions=False)
         async with httpx.AsyncClient(

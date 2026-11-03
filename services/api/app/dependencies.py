@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.config import Settings
 from app.errors import AppError
+from app.integrations.email import SmtpSender
 from app.integrations.line import LineClient
 from app.repositories import user_repo
 from app.services import session_service
@@ -78,3 +79,10 @@ def get_line_client(request: Request) -> LineClient:
     if client is None:
         raise AppError(503, "line_unavailable", "auth.line_unavailable")
     return client
+
+
+def get_email_sender(request: Request) -> SmtpSender:
+    sender = getattr(request.app.state, "email_sender", None)
+    if sender is None:
+        raise AppError(503, "email_unavailable", "error.email_service_unavailable")
+    return sender
