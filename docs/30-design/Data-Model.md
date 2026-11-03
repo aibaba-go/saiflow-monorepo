@@ -3,8 +3,8 @@ doc_id: DES-002
 title: "SaiFlow — 数据模型"
 type: data-model
 status: active
-version: 2.2.0
-updated: 2026-11-02
+version: 2.3.0
+updated: 2026-11-03
 owner: Product Engineering
 source: "PRD-001 v3.3 §3, §4, §4.9; ADR-008"
 related: [ADR-008, DM-FormDocument, DM-ExtractionPayload, DM-OcrJob, DM-DocumentTemplate, DM-Tenant, DM-Subscription]
@@ -74,7 +74,8 @@ erDiagram
 | `DM-ExtractionPayload` | 原始识别载荷：OCR 引擎原始 JSON | PostgreSQL（jsonb） | 租户 | N:1 识别任务 | 按载荷版本不可变 |
 | `DM-StoredObject` | 对象：原始单据、导入文件、导出文件、头像 | 私有 GCS | 租户 | 1:1 文件元数据 | 原件不可变；按保留策略删除 |
 
-- 登录会话、邮箱验证码等短期技术数据不作为实体登记，在 B-2 的 `plan.md` 中设计。
+- 登录会话、邮箱验证码等短期技术数据不作为实体登记，设计见 B-2a 的 `openspec/changes/rebuild-identity/plan.md`。
+- **B-2a 已实现（`rebuild-identity`）：** `DM-User`（LINE 身份 ID 与邮箱作为唯一的关联身份直接存在用户上，邮箱统一小写；手机号不要求唯一）；`DM-Tenant` 只有个人租户与游客临时租户两类（团队租户随 B-2b）；`DM-OperationLog` 仅可追加（数据库触发器禁止修改与删除），每条记录带前一条的校验值，服务器命令 `audit-verify` 检查是否被改动；`DM-AdminAccount` 口令为 argon2id 哈希，连续 5 次错误锁定 15 分钟。`DM-UserIdentity` 在接入第三种身份（如 Google）时再拆成独立的表。
 - 报表数据（方式 B，PostgreSQL 内的报表汇总表）为后续能力（OQ-8），实现时再登记实体。
 - 数据库备份文件（VPS 本地 7 天、GCS 备份桶 30 天）是运维数据，不作为实体登记（ADR-008）。
 
@@ -125,6 +126,7 @@ erDiagram
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.3.0 | 2026-11-03 | Product Engineering | §2 记录 B-2a 已实现的实体范围：用户与关联身份、个人与游客租户、操作日志校验链、平台 admin 账号 |
 | 2.2.0 | 2026-11-02 | Product Engineering | 按 ADR-008：Cloud SQL 与 Firestore 合并为 PostgreSQL；DM-ExtractionPayload 与 DM-FormDocument 的结构化结果用 jsonb，版本、状态、核验与复核记录用普通字段；报表方式 B 改为 PostgreSQL 内汇总表；静态加密与删除协调改写；实体数不变（22） |
 | 2.1.0 | 2026-10-30 | Product Engineering | 按 PRD v3.2：企业租户改称团队租户、企业认证改为可选；新增 DM-FreeQuota（归属租户；共 22 个实体）；个人租户原地升级为团队租户；订阅状态去掉“未开通”；订阅含开通周期；提醒记录含用量提醒；系统参数含成员人数上限 |
 | 2.0.0 | 2026-10-30 | Product Engineering | 改为实体层（字段以代码为唯一来源）；按 ADR-007 的 v3 存储边界重列 21 个实体并给出 v1 实体去向；枚举只保留产品级取值；旧字段级内容见 tag legacy-v1 |

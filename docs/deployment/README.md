@@ -3,7 +3,7 @@ doc_id: OPS-001
 title: "SaiFlow — 部署与运维说明（dev 环境）"
 type: guide
 status: active
-version: 1.0.2
+version: 1.1.0
 updated: 2026-11-03
 owner: Product Engineering
 related: [ADR-008, FR-PLAT-005, FR-PLAT-006]
@@ -76,6 +76,38 @@ ssh -p 11022 root@<VPS_IP> 'chown deploy:deploy /opt/saiflow/secrets/gcs-backup.
 
 镜像推送与服务器拉取都用工作流自带的临时令牌，不需要另建镜像仓库密码；服务器在每次部署结束时退出登录（FR-PLAT-005）。
 
+### 2.6 LINE 登录与发信（B-2a 起；不填则对应功能返回 503）
+
+1. **LINE Developers**（与 LINE OA、LIFF 同一个 Provider，NFR-COMPAT-008）：
+   - LIFF 端点：`https://saiflow-line2.aibaba.asia/`；
+   - LINE 登录回调地址（web-pc）：`https://saiflow-app.aibaba.asia/login`（B-5 页面上线时按实际地址核对）；
+   - 记下 Channel ID 与 Channel secret。
+2. 以 `deploy` 编辑 `/opt/saiflow/.env`（权限保持 600），填写：
+
+   | 变量 | 值 |
+   |------|----|
+   | `LINE_CHANNEL_ID` / `LINE_CHANNEL_SECRET` | 上一步记下的值 |
+   | `LINE_LOGIN_REDIRECT_URIS` | 上面登记的回调地址，多个用逗号分隔 |
+   | `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURITY` | 如 Gmail：`smtp.gmail.com` / `587` / `starttls`（`465` 端口对应 `ssl`） |
+   | `SMTP_USERNAME` / `SMTP_PASSWORD` | 发信账号与应用专用密码 |
+   | `SMTP_FROM` | 发件人，如 `SaiFlow <账号地址>` |
+
+   较早初始化的服务器没有这些行，手工追加即可。改完后重新运行一次 `Deploy`（或 `docker compose up -d`）使后端读到新值。
+3. 验证发信：`docker compose exec -T saiflow-be-api python -m app.cli smtp-check <你的邮箱>` → `smtp OK`，并确认收到邮件。
+
+### 2.7 平台 admin 后台账号
+
+只能在服务器上用命令管理（FR-SYS-019），口令从标准输入读取，不会出现在命令历史里：
+
+```bash
+cd /opt/saiflow
+docker compose exec -T saiflow-be-api python -m app.cli admin-create <用户名>        # 然后输入口令（至少 12 个字符）回车
+docker compose exec -T saiflow-be-api python -m app.cli admin-reset-password <用户名> # 重设口令并解除锁定
+docker compose exec -T saiflow-be-api python -m app.cli admin-disable <用户名>        # 停用并结束其会话
+```
+
+连续 5 次输错口令锁定 15 分钟；后台 30 分钟无操作需重新登录。
+
 ## 3. 部署
 
 1. 确认要部署的提交在 GitHub Actions 的 `CI` 中已通过。
@@ -114,6 +146,7 @@ cd /opt/saiflow
 docker compose ps
 docker compose logs --tail 100 saiflow-be-api
 curl -s https://saiflow-app.aibaba.asia/api/v1/health
+docker compose exec -T saiflow-be-api python -m app.cli audit-verify   # 操作日志是否被改动
 ```
 
 ## 7. 已知风险
@@ -127,6 +160,7 @@ curl -s https://saiflow-app.aibaba.asia/api/v1/health
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.1.0 | 2026-11-03 | Product Engineering | B-2a：§2.6 LINE 登录与发信配置、§2.7 平台 admin 账号命令；§6 加操作日志检查 |
 | 1.0.2 | 2026-11-03 | Product Engineering | 备份服务账号增加备份桶读取权限（`gcloud storage cp` 需要 `storage.objects.get`，首次备份演练发现） |
 | 1.0.1 | 2026-11-03 | Product Engineering | LINE 小程序子域名改为 `saiflow-line2`（原名与之前调试地址冲突，负责人 2026-11-03） |
 | 1.0.0 | 2026-11-03 | Product Engineering | 初版（B-1 `rebuild-skeleton`）：地址、一次性配置、部署、回滚、备份与恢复、风险 |

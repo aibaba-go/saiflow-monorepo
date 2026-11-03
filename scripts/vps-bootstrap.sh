@@ -52,6 +52,16 @@ if [ ! -f "$dir/.env" ]; then
       echo "LINE_HOST=saiflow-line2.aibaba.asia"
       echo "IMAGE_TAG="
       echo "BACKUP_BUCKET=$bucket"
+      # filled in by the owner (docs/deployment/README.md); empty = feature off
+      echo "LINE_CHANNEL_ID="
+      echo "LINE_CHANNEL_SECRET="
+      echo "LINE_LOGIN_REDIRECT_URIS="
+      echo "SMTP_HOST="
+      echo "SMTP_USERNAME="
+      echo "SMTP_PASSWORD="
+      echo "SMTP_FROM="
+      echo "SMTP_PORT=587"
+      echo "SMTP_SECURITY=starttls"
     } >"$dir/.env"
   )
   echo "created $dir/.env with random passwords"

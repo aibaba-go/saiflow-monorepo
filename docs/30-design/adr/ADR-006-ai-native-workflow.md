@@ -3,7 +3,7 @@ doc_id: ADR-006
 title: "ADR-006 — AI Native 开发模式：OpenSpec 管需求、SuperPowers 管实现，并重建代码"
 type: adr
 status: accepted
-version: 1.2.1
+version: 1.2.2
 updated: 2026-11-03
 owner: Product Engineering
 related: [WF-001, AGENTS, STD-004, STD-005, STD-006, PRD-001, ADR-008]
@@ -137,7 +137,9 @@ accepted（2026-10-30 负责人确认）
 |------|------------------|------|------|------|
 | B-0 | `prd-v3-doc-sync` | M | 完成 PRD §8 中产品级部分：Glossary、Vision-Scope、NFR（大模型约束）、`AGENTS.md` 第 7 条；Architecture / Data-Model 按 v3 数据边界重写并新增 ADR（关闭 OQ-27） | A 完成 |
 | B-1 | `rebuild-skeleton` | L | 新 `services/api`（FastAPI 骨架、配置、Alembic、pytest）、新 `apps/web-pc`、`apps/web-admin` 与 `apps/line-mini` 三个空壳（React、Vitest；admin 后台独立成应用，负责人 2026-10-30）、`packages/api-client` 生成脚本、CI 跑 lint/test/build、`scripts/` 手动触发的部署脚本、数据库每日备份（FR-PLAT-006） | B-0 |
-| B-2 | `rebuild-auth-tenant` | L | LINE 认证、游客会话与归集、租户、订阅与计量（月扫描配额、免费额度、成员人数上限）、用量与到期提醒（EPIC-06 迁入 capability；规则见 PRD §4.9 v3.2） | B-1 |
+| B-2a | `rebuild-identity` | M | LINE 登录与会话、游客会话与数据归集、注册与邮箱验证码、个人资料、平台 admin 后台账号、操作日志（只做后端） | B-1 |
+| B-2b | `rebuild-tenant-rbac` | M | 个人租户与团队租户、原地升级、成员邀请与成员人数上限、角色与权限点、租户切换、企业认证（只做后端） | B-2a |
+| B-2c | `rebuild-plans-metering` | M | 订阅与四档套餐、免费额度、月扫描配额与扣减接口（B-3 调用）、续费与升级申请、用量与到期提醒、站内/LINE OA/邮件通知（只做后端；规则见 PRD §4.9 v3.2） | B-2b |
 | B-3 | `ocr-pipeline-v3` | L | 上传（原件存私有 GCS）、OCR 引擎抽象、大模型模板匹配与结构化转换、识别结果存 PostgreSQL jsonb（EPIC-01/02 迁入；ADR-008） | B-2 |
 | B-4 | `verify-and-export` | L | 人工确认与修正、复核、导出 Excel（EPIC-03/04 迁入） | B-3 |
 | B-5 | `frontend-flows` | L | 两个前端接入真实后端的完整流程（可按页面再拆分） | B-2 起可并行 |
@@ -206,6 +208,7 @@ B-2 到 B-5 的具体范围、优先级以各自 proposal 经负责人确认的�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.2.2 | 2026-11-03 | Product Engineering | §7 B-2 按负责人决定拆为 B-2a / B-2b / B-2c，三者只做后端，页面在 B-5 |
 | 1.2.1 | 2026-11-03 | Product Engineering | §7 B-1 行：三个前端空壳（新增 web-admin）与数据库每日备份 |
 | 1.2.0 | 2026-11-02 | Product Engineering | 按 ADR-008：§6 部署改为 GitHub Actions + GHCR + SSH 到 VPS；§7 B-3 存储改为 PostgreSQL jsonb + GCS，数据库边界改为 VPS 上的 PostgreSQL；凭据来源改为服务器环境变量文件 |
 | 1.1.1 | 2026-10-30 | Product Engineering | §7 B-2 范围按 PRD v3.2 补充用量提醒、免费额度与成员人数上限 |

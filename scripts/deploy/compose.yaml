@@ -40,6 +40,16 @@ services:
       DB_NAME: saiflow
       DB_USER: saiflow_v3_app
       DB_PASSWORD: ${DB_PASSWORD:?}
+      # LINE login and SMTP (FR-SYS-001, FR-SYS-020); empty = that feature answers 503
+      LINE_CHANNEL_ID: ${LINE_CHANNEL_ID:-}
+      LINE_CHANNEL_SECRET: ${LINE_CHANNEL_SECRET:-}
+      LINE_LOGIN_REDIRECT_URIS: ${LINE_LOGIN_REDIRECT_URIS:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
     depends_on:
       postgres:
         condition: service_healthy

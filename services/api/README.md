@@ -43,3 +43,15 @@ uv run python -m app.export_openapi ../../docs/30-design/openapi.json
 ```
 
 通常用仓库根的 `pnpm generate:api-client`，它同时重新生成前端接口客户端。
+
+## 服务器命令
+
+在后端容器内运行（`docker compose exec -T saiflow-be-api python -m app.cli <命令>`）：
+
+| 命令 | 作用 |
+|------|------|
+| `admin-create <用户名>` | 建平台 admin 后台账号；口令从标准输入读一行，至少 12 个字符 |
+| `admin-reset-password <用户名>` | 重设口令（从标准输入），同时解除锁定 |
+| `admin-disable <用户名>` | 停用账号并结束其全部后台会话 |
+| `audit-verify` | 检查操作日志的校验链是否完整 |
+| `smtp-check <收件地址>` | 用当前 `SMTP_*` 配置发一封测试邮件 |
