@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.config import Settings
 from app.errors import AppError
+from app.integrations.line import LineClient
 from app.repositories import user_repo
 from app.services import session_service
 from app.services.session_service import Principal
@@ -70,3 +71,10 @@ async def require_registered_user(
     if user is None or user.registered_at is None:
         raise AppError(403, "registration_required", "auth.registration_required")
     return principal
+
+
+def get_line_client(request: Request) -> LineClient:
+    client = getattr(request.app.state, "line_client", None)
+    if client is None:
+        raise AppError(503, "line_unavailable", "auth.line_unavailable")
+    return client

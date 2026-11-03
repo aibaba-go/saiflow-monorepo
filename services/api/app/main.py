@@ -2,11 +2,13 @@
 
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI
 
 from app.config import Settings, load_settings
 from app.db import create_engine, create_sessionmaker
 from app.errors import register_error_handlers
+from app.integrations.line import LineClient
 from app.logging_setup import configure_logging
 from app.request_context import RequestIdMiddleware
 from app.routers import auth, health, me
@@ -16,9 +18,24 @@ from app.routers import auth, health, me
 async def lifespan(app: FastAPI):
     app.state.engine = create_engine(app.state.settings)
     app.state.sessionmaker = create_sessionmaker(app.state.engine)
+    settings = app.state.settings
+    app.state.http = httpx.AsyncClient(timeout=5)
+    if not hasattr(app.state, "line_client"):  # tests may inject a fake first
+        app.state.line_client = (
+            LineClient(
+                settings.line_channel_id,
+                settings.line_channel_secret.get_secret_value()
+                if settings.line_channel_secret
+                else None,
+                app.state.http,
+            )
+            if settings.line_channel_id
+            else None
+        )
     try:
         yield
     finally:
+        await app.state.http.aclose()
         await app.state.engine.dispose()
 
 
