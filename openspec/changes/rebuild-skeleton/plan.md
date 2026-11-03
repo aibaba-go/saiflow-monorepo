@@ -19,7 +19,7 @@
 - 服务、镜像与 Compose 服务名（D1）：`saiflow-be-api`、`saiflow-fe-web-pc`、`saiflow-fe-web-admin`、`saiflow-fe-line-mini`；镜像仓库 `ghcr.io/aibaba-go`。schema（D2）：`saiflow_v3`；数据库名 `saiflow`；应用账号 `saiflow_v3_app`。
 - 域名（D6）：`saiflow-app.aibaba.asia`（web-pc）、`saiflow-admin.aibaba.asia`（web-admin）、`saiflow-line2.aibaba.asia`（line-mini）。VPS：SSH 端口 11022，账号 `deploy`，部署目录 `/opt/saiflow`（D9、D10）。
 - 接口路径前缀 `/api/v1`；健康检查为 `GET /api/v1/health`（与后续业务接口同一前缀，经 Caddy 的 `/api` 转发即可访问）。
-- 后端配置环境变量名：`DB_HOST`、`DB_PORT`（默认 5432）、`DB_NAME`、`DB_USER`、`DB_PASSWORD`、`DB_SCHEMA`（默认 `saiflow_v3`）、`APP_VERSION`（默认 `dev`）。凭据（`DB_PASSWORD`）无默认值。服务器上的凭据只在 `/opt/saiflow/.env`（权限 600）与 `/opt/saiflow/secrets/`；仓库中只有变量名。
+- 后端配置环境变量名：`DB_HOST`、`DB_PORT`（默认 5432）、`DB_NAME`、`DB_USER`、`DB_PASSWORD`、`APP_VERSION`（默认 `dev`）。schema 固定为 `saiflow_v3`（D2），不是配置项（`app/db.py` 的 `SCHEMA`；负责人 2026-11-03 决定去掉原 `DB_SCHEMA`）。凭据（`DB_PASSWORD`）无默认值。服务器上的凭据只在 `/opt/saiflow/.env`（权限 600）与 `/opt/saiflow/secrets/`；仓库中只有变量名。
 - 错误码与消息键固定为：`not_found`/`error.not_found`、`method_not_allowed`/`error.method_not_allowed`、`validation_error`/`error.validation`、`internal_error`/`error.internal`；其他 HTTP 错误为 `http_<status>`/`error.http`。
 - 健康检查数据库探测超时 3 秒（满足 spec 的 5 秒上限）。
 - 对外 API 契约唯一来源为 `docs/30-design/openapi.json`（`Directory-Structure.md` 规则 5），由后端导出覆盖旧 v1 契约（旧版保留在 tag `legacy-v1`）；`docs/30-design/API-Spec.md` 改为指向它的说明页。
@@ -45,7 +45,7 @@
 - Modify: `.gitignore`（加入 `services/api/temp/`）
 
 **Interfaces:**
-- Produces: `class Settings(BaseSettings)`（字段 `db_host: str`、`db_port: int = 5432`、`db_name: str`、`db_user: str`、`db_password: SecretStr`、`db_schema: str = "saiflow_v3"`、`app_version: str = "dev"`；读取同名大写环境变量，不读 `.env` 文件以外的来源）；`class ConfigError(RuntimeError)`；`def load_settings() -> Settings`（缺失时抛 `ConfigError("missing configuration: DB_HOST, DB_PASSWORD")`，名称按字段顺序、大写、逗号分隔，`from None` 截断原始校验错误）。
+- Produces: `class Settings(BaseSettings)`（字段 `db_host: str`、`db_port: int = 5432`、`db_name: str`、`db_user: str`、`db_password: SecretStr`、`app_version: str = "dev"`；读取同名大写环境变量，不读 `.env` 文件以外的来源）；`class ConfigError(RuntimeError)`；`def load_settings() -> Settings`（缺失时抛 `ConfigError("missing configuration: DB_HOST, DB_PASSWORD")`，名称按字段顺序、大写、逗号分隔，`from None` 截断原始校验错误）。
 
 - [ ] **Step 1: 安装工具并建工程**：`py -m pip install uv`；在 `services/api/` 执行 `uv init --app`（随后按上面文件清单整理）、`uv add fastapi "uvicorn[standard]" pydantic-settings "sqlalchemy[asyncio]" asyncpg alembic`、`uv add --dev pytest pytest-asyncio httpx ruff`。`pyproject.toml` 中配置 ruff（`line-length = 100`，规则 `E,F,I,UP,B`）与 pytest（`asyncio_mode = "auto"`，`testpaths = ["tests"]`，marker `integration`）。
 
@@ -67,7 +67,7 @@ def test_missing_config_error_does_not_leak_values(monkeypatch):
         load_settings()
     assert "s3cret-value" not in str(e.value) and e.value.__cause__ is None and e.value.__suppress_context__
 
-def test_complete_config_loads(monkeypatch): ...  # 四个必需值齐全 → db_schema == "saiflow_v3", app_version == "dev", db_password.get_secret_value() == 设定值
+def test_complete_config_loads(monkeypatch): ...  # 四个必需值齐全 → app_version == "dev", db_password.get_secret_value() == 设定值
 ```
 
 - [ ] **Step 3: 运行** `uv run pytest tests/unit/test_config.py -v` → Expected: FAIL（`ImportError: cannot import name 'ConfigError'`）。
@@ -134,11 +134,11 @@ async def test_invalid_request_id_header_is_replaced(client):
 - Consumes: `Settings`、`create_app`、`ErrorResponse`（Task 1–2）。
 - Produces:
   - `def database_url(settings: Settings) -> sqlalchemy.engine.URL`：`URL.create("postgresql+asyncpg", username, password, host, port, database)`（Compose 中 `DB_HOST=postgres`）。
-  - `def create_engine(settings: Settings) -> AsyncEngine`：`connect_args={"timeout": 3, "server_settings": {"search_path": settings.db_schema}}`、`pool_pre_ping=True`；lifespan 中创建并存到 `app.state.engine`，关闭时 `dispose()`。
+  - `def create_engine(settings: Settings) -> AsyncEngine`：`connect_args={"timeout": 3, "server_settings": {"search_path": SCHEMA}}`、`pool_pre_ping=True`；lifespan 中创建并存到 `app.state.engine`，关闭时 `dispose()`。
   - `async def check_database(engine: AsyncEngine, timeout: float = 3.0) -> bool`：`asyncio.wait_for` 包住一次 `SELECT 1`；任何异常或超时都返回 `False`，并以 `logger.warning("database check failed: %s", type(exc).__name__)` 只记录异常类型。
   - `class HealthResponse(BaseModel)`：`status: Literal["ok", "degraded"]`、`version: str`、`database: Literal["ok", "error"]`。
   - `GET /api/v1/health` → 200 `HealthResponse(status="ok", database="ok")` 或 503 `HealthResponse(status="degraded", database="error")`；在 OpenAPI 中声明两种响应，`operation_id="getHealth"`。
-  - Alembic：`env.py` 用异步引擎（复用 `create_engine(load_settings())`），先执行 `CREATE SCHEMA IF NOT EXISTS <db_schema>`，`version_table_schema=db_schema`，`target_metadata = Base.metadata`（`app/db.py` 定义 `class Base(DeclarativeBase)`，`metadata` 的 `schema` 设为 `saiflow_v3`）。`0001_baseline` 的 upgrade/downgrade 为空。
+  - Alembic：`env.py` 用异步引擎（复用 `create_engine(load_settings())`），先执行 `CREATE SCHEMA IF NOT EXISTS <SCHEMA>`，`version_table_schema=SCHEMA`，`target_metadata = Base.metadata`（`app/db.py` 定义 `class Base(DeclarativeBase)`，`metadata` 的 `schema` 设为 `saiflow_v3`）。`0001_baseline` 的 upgrade/downgrade 为空。
 - 集成测试 fixture（`tests/conftest.py`）：`TEST_DB_HOST/PORT/NAME/USER/PASSWORD` 齐全时提供 `db_settings`；缺少时 `pytest.skip`，若 `REQUIRE_INTEGRATION=1` 则 `pytest.fail("integration database not configured")`。
 
 - [ ] **Step 1: 写失败测试**：

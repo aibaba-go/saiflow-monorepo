@@ -43,7 +43,15 @@ def test_complete_config_loads(monkeypatch):
     monkeypatch.setenv("DB_PASSWORD", "pw-123")
     settings = load_settings()
     assert settings.db_port == 5432
-    assert settings.db_schema == "saiflow_v3"
     assert settings.app_version == "dev"
     assert settings.db_password.get_secret_value() == "pw-123"
     assert "pw-123" not in repr(settings)
+
+
+def test_schema_is_not_configurable(monkeypatch):
+    # The schema is fixed (saiflow_v3, decision D2); DB_SCHEMA must not exist as a setting.
+    for key, value in {"DB_HOST": "h", "DB_NAME": "n", "DB_USER": "u", "DB_PASSWORD": "p"}.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("DB_SCHEMA", "other")
+    settings = load_settings()
+    assert not hasattr(settings, "db_schema")

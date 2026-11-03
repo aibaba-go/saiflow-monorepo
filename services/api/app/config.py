@@ -20,7 +20,6 @@ class Settings(BaseSettings):
     db_name: str
     db_user: str
     db_password: SecretStr
-    db_schema: str = "saiflow_v3"
     app_version: str = "dev"
 
 

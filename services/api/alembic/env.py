@@ -1,4 +1,4 @@
-"""Alembic environment: async engine from app settings; everything lives in DB_SCHEMA."""
+"""Alembic environment: async engine from app settings; everything lives in schema app.db.SCHEMA."""
 
 import asyncio
 from logging.config import fileConfig
@@ -8,7 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 from app.config import load_settings
-from app.db import Base, create_engine
+from app.db import SCHEMA, Base, create_engine
 
 config = context.config
 if config.config_file_name is not None:
@@ -34,7 +34,7 @@ async def run_migrations_online() -> None:
     engine = create_engine(settings)
     try:
         async with engine.begin() as conn:
-            await conn.run_sync(_run, settings.db_schema)
+            await conn.run_sync(_run, SCHEMA)
     finally:
         await engine.dispose()
 

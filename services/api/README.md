@@ -33,7 +33,7 @@ uv run ruff check . && uv run ruff format --check .
 ## 数据库迁移
 
 ```bash
-uv run alembic upgrade head  # 在 DB_SCHEMA（默认 saiflow_v3）中建表与版本表
+uv run alembic upgrade head  # 在固定的 schema saiflow_v3 中建表与版本表
 ```
 
 ## 导出接口描述

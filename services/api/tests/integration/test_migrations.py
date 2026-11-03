@@ -18,7 +18,6 @@ async def test_upgrade_creates_version_table_in_schema(db_settings):
         "DB_NAME": db_settings.db_name,
         "DB_USER": db_settings.db_user,
         "DB_PASSWORD": db_settings.db_password.get_secret_value(),
-        "DB_SCHEMA": db_settings.db_schema,
     }
     result = subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"],

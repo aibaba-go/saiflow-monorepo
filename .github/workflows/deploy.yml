@@ -17,6 +17,8 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-24.04
+    # A normal deploy takes about 3 minutes; stop a hung SSH, pull or health check.
+    timeout-minutes: 10
     env:
       SHA: ${{ github.sha }}
       REGISTRY: ghcr.io/aibaba-go

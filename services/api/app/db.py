@@ -1,4 +1,4 @@
-"""Database engine and connectivity probe (PostgreSQL, schema from settings)."""
+"""Database engine and connectivity probe (PostgreSQL, fixed schema saiflow_v3, decision D2)."""
 
 import asyncio
 import logging
@@ -34,7 +34,7 @@ def create_engine(settings: Settings) -> AsyncEngine:
     return create_async_engine(
         database_url(settings),
         pool_pre_ping=True,
-        connect_args={"timeout": 3, "server_settings": {"search_path": settings.db_schema}},
+        connect_args={"timeout": 3, "server_settings": {"search_path": SCHEMA}},
     )
 
 
