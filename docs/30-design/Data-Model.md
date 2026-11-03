@@ -74,7 +74,7 @@ erDiagram
 | `DM-ExtractionPayload` | 原始识别载荷：OCR 引擎原始 JSON | PostgreSQL（jsonb） | 租户 | N:1 识别任务 | 按载荷版本不可变 |
 | `DM-StoredObject` | 对象：原始单据、导入文件、导出文件、头像 | 私有 GCS | 租户 | 1:1 文件元数据 | 原件不可变；按保留策略删除 |
 
-- 登录会话、邮箱验证码等短期技术数据不作为实体登记，设计见 B-2a 的 `openspec/changes/rebuild-identity/plan.md`。
+- 登录会话、邮箱验证码等短期技术数据不作为实体登记，设计见 B-2a 的 `openspec/changes/archive/2026-11-03-rebuild-identity/plan.md`。
 - **B-2a 已实现（`rebuild-identity`）：** `DM-User`（LINE 身份 ID 与邮箱作为唯一的关联身份直接存在用户上，邮箱统一小写；手机号不要求唯一）；`DM-Tenant` 只有个人租户与游客临时租户两类（团队租户随 B-2b）；`DM-OperationLog` 仅可追加（数据库触发器禁止修改与删除），每条记录带前一条的校验值，服务器命令 `audit-verify` 检查是否被改动；`DM-AdminAccount` 口令为 argon2id 哈希，连续 5 次错误锁定 15 分钟。`DM-UserIdentity` 在接入第三种身份（如 Google）时再拆成独立的表。
 - 报表数据（方式 B，PostgreSQL 内的报表汇总表）为后续能力（OQ-8），实现时再登记实体。
 - 数据库备份文件（VPS 本地 7 天、GCS 备份桶 30 天）是运维数据，不作为实体登记（ADR-008）。
