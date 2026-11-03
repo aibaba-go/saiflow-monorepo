@@ -1,13 +1,22 @@
-"""Customer authentication: guest session, logout (LINE login is added in Task 6)."""
+"""Customer authentication: guest session, logout and LINE login."""
 
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_db, get_optional_principal, get_principal, require_csrf_header
-from app.schemas.auth import MeResponse
-from app.services import me_service, session_service
+from app.config import Settings
+from app.dependencies import (
+    get_db,
+    get_line_client,
+    get_optional_principal,
+    get_principal,
+    get_settings,
+    require_csrf_header,
+)
+from app.integrations.line import LineClient
+from app.schemas.auth import LineLoginRequest, MeResponse
+from app.services import auth_service, me_service, session_service
 from app.services.audit_service import AuditEvent, record
 from app.services.session_service import CUSTOMER_COOKIE, CUSTOMER_IDLE, Principal
 
@@ -63,3 +72,18 @@ async def logout(db: Db, principal: Annotated[Principal, Depends(get_principal)]
     response = Response(status_code=204)
     response.delete_cookie(CUSTOMER_COOKIE, path="/api", secure=True, httponly=True, samesite="lax")
     return response
+
+
+@router.post("/line", operation_id="loginWithLine", response_model=MeResponse)
+async def login_with_line(
+    req: LineLoginRequest,
+    response: Response,
+    db: Db,
+    current: Annotated[Principal | None, Depends(get_optional_principal)],
+    line: Annotated[LineClient, Depends(get_line_client)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> MeResponse:
+    allowed = {u.strip() for u in settings.line_login_redirect_uris.split(",") if u.strip()}
+    token, principal = await auth_service.login_with_line(db, line, current, req, allowed)
+    set_customer_cookie(response, token)
+    return await me_service.me(db, principal)

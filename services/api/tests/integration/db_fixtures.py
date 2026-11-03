@@ -1,6 +1,7 @@
 """Fixtures for tests that need the real PostgreSQL (TEST_DB_*): migrated schema,
 a session per test, an HTTPS test client, and a full cleanup after every test."""
 
+import asyncio
 import os
 import subprocess
 import sys
@@ -8,13 +9,31 @@ from pathlib import Path
 
 import httpx
 import pytest
-from sqlalchemy import text
+from sqlalchemy import BigInteger, Column, ForeignKey, Table, Text, text
 
 from app.db import SCHEMA, Base, create_engine, create_sessionmaker
 from app.main import create_app
 
 API_DIR = Path(__file__).resolve().parents[2]
 CSRF = {"X-Requested-With": "SaiFlow"}
+WEB_REDIRECT = "https://saiflow-app.aibaba.asia/login"
+
+# A tenant-owned table that exists only in tests, so guest-data claiming has data to move.
+test_tenant_items = Table(
+    "test_tenant_items",
+    Base.metadata,
+    Column("id", BigInteger, primary_key=True, autoincrement=True),
+    Column("tenant_id", BigInteger, ForeignKey(f"{SCHEMA}.tenants.id"), nullable=False),
+    Column("label", Text, nullable=False),
+    info={"tenant_scoped": True},
+)
+
+
+async def _create_test_tables(settings) -> None:
+    engine = create_engine(settings)
+    async with engine.begin() as conn:
+        await conn.run_sync(test_tenant_items.create, checkfirst=True)
+    await engine.dispose()
 
 
 def _env_for(settings) -> dict:
@@ -38,6 +57,7 @@ def migrated_db(db_settings_session):
         text=True,
     )
     assert result.returncode == 0, result.stderr
+    asyncio.run(_create_test_tables(db_settings_session))
     return db_settings_session
 
 
@@ -70,14 +90,22 @@ async def db(db_engine):
 @pytest.fixture
 def app_settings(migrated_db):
     """Settings for the app under test; tests may replace fields with model_copy."""
-    return migrated_db
+    return migrated_db.model_copy(update={"line_login_redirect_uris": WEB_REDIRECT})
 
 
 @pytest.fixture
-async def api(db_engine, app_settings):
+def line():
+    from tests.integration.fake_line import FakeLineClient
+
+    return FakeLineClient()
+
+
+@pytest.fixture
+async def api(db_engine, app_settings, line):
     from asgi_lifespan import LifespanManager
 
     app = create_app(app_settings)
+    app.state.line_client = line
     async with LifespanManager(app) as manager:
         transport = httpx.ASGITransport(app=manager.app, raise_app_exceptions=False)
         async with httpx.AsyncClient(
