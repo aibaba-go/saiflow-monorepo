@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "SaiFlow API",
-    "version": "1.3.0",
-    "description": "SaiFlow 后端接口（Flask，`services/api`）。本文件是对外接口契约的唯一来源，\n`docs/30-design/API-Spec.md` 由其生成发布，请勿手写第二份。\n\n## 通用约定\n- 所有业务接口位于 `/api/v1`；未启用版本（如 `/api/v2/...`）与旧的无版本 `/api/...` 业务路径一律 404。\n- 成功响应：`{\"code\": \"OK\", \"data\": ...}`（见 `OkEnvelope`）。\n- 失败响应：`{\"code\", \"message_key\", \"request_id\", \"retryable\", \"field_errors\"}`（见 `Error`），\n  `message_key` 为前端 i18n 文案键。\n- 时间字段为 UTC 的 ISO 8601 字符串（无时区后缀）。\n\n## 归属：只有 tenant_id\n- 业务归属的唯一表达是 `tenant_id`（`tenants` 表）。个人用户（含游客）各占一个 PERSONAL 租户，\n  每个公司各占一个 ENTERPRISE 租户（`enterprises.tenant_id` 一对一扩展）。\n- 请求侧：`POST /uploads`、`POST /file-imports`、`POST /me/plan-applications` 在 JSON body 中接受可选\n  `tenant_id`；`GET /me/subscription`、`GET /ocr/jobs` 以查询参数接受 `tenant_id`。\n  缺省或空值 = 调用者本人的个人租户。\n- 响应侧：身份/租户列表与业务对象一律返回 `tenant_id`（企业租户另给 `tenant_type` / `name` / `role`）。\n\n## 套餐与计量\n- 没有 FREE 档位、没有赠送任务额度。每个租户恰好一行订阅：个人租户（含游客）自 `tenants.created_at`\n  起默认开通默认套餐（`plans.is_default`，当前为 Kinder）`trial_months` 个月（当前 1）；企业租户自 `enterprises.verified_at` 起算，未认证时无订阅（`status=NONE`）。\n- 套餐目录、价格展示、月页数、席位、泰英文案与审批续期月数均来自 `plans` 表配置（FR-SYS-019，CLI `manage_plans.py` 维护），\n  修改立即对所有租户生效（不做订阅快照）。\n- 唯一计量单位是 `OCR_PAGE`（每月页数），按泰国时间（UTC+7）自然月实时统计 `ocr_jobs.page_count`，\n  FAILED / CANCELLED 的任务不计，因此没有消耗流水、也没有取消返还。\n- 订阅到期后新建任务被硬停（402 `PLAN_EXPIRED`）；订阅仍 ACTIVE 但本月页数用尽为 402 `QUOTA_EXCEEDED`。\n  已有任务、结果与导出在任何情况下都可继续查看与导出。\n\n## 认证与 CSRF\n- 免登录白名单（精确匹配）：`POST /auth/line`、`POST /auth/guest`；其余接口必须携带会话 Cookie `saiflow_session`（HttpOnly，path=/api）。\n- 写请求（POST/PUT/PATCH/DELETE）还必须携带请求头 `X-CSRF-Token`，其值来自登录 / `GET /auth/session` 响应中的 `csrf_token`。\n- 跨用户 / 跨租户访问不存在或无权的对象统一返回 404，不泄露资源存在性。\n\n## 错误码\n| HTTP | code | 说明 |\n|------|------|------|\n| 400 | INVALID_ARGUMENT | 参数校验失败，`field_errors` 给出字段级原因 |\n| 401 | AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED | 未登录 / 会话过期 / 会话已吊销 |\n| 402 | PLAN_EXPIRED / QUOTA_EXCEEDED | 订阅已到期或未开通（`plan.expired`）/ 本月页数已用尽（`quota.exceeded`） |\n| 403 | ACCOUNT_DISABLED / PERMISSION_DENIED / CSRF_INVALID / ENTERPRISE_ACCESS_REVOKED | 账号禁用 / 无权限 / CSRF 校验失败 / 企业访问权已撤销 |\n| 404 | RESOURCE_NOT_FOUND | 资源不存在或无权访问 |\n| 409 | STATE_CONFLICT / VERSION_CONFLICT | 状态不允许 / 乐观并发版本冲突 |\n| 409 | TEMPLATE_MAPPING_DISABLED / RAW_RESULT_MISSING / TEMPLATE_UNAVAILABLE / MAPPING_NOT_READY / MAPPING_LIMIT_REACHED | 模板映射：功能关闭 / 无 OCR 解析结果 / 模板不可用 / 映射未成功 / 达到每任务映射上限 |\n| 422 | INVALID_ARGUMENT（`results.required_missing`） | 模板结果确认时必填字段缺失，`field_errors` 给出 `structured.<路径>` |\n| 429 | RATE_LIMITED | 请求过于频繁（retryable=true） |\n| 503 | SERVICE_UNAVAILABLE / AUTH_SERVICE_UNAVAILABLE / OCR_VENDOR_UNAVAILABLE / EMAIL_SERVICE_UNAVAILABLE / STORAGE_UNAVAILABLE / EXPORT_UNAVAILABLE / EXPORT_FAILED | 依赖服务不可用 |\n"
+    "version": "1.3.1",
+    "description": "SaiFlow 后端接口（Flask，`services/api`）。本文件是对外接口契约的唯一来源，\n`docs/30-design/API-Spec.md` 由其生成发布，请勿手写第二份。\n\n## 通用约定\n- 所有业务接口位于 `/api/v1`；未启用版本（如 `/api/v2/...`）与旧的无版本 `/api/...` 业务路径一律 404。\n- 成功响应：`{\"code\": \"OK\", \"data\": ...}`（见 `OkEnvelope`）。\n- 失败响应：`{\"code\", \"message_key\", \"request_id\", \"retryable\", \"field_errors\"}`（见 `Error`），\n  `message_key` 为前端 i18n 文案键。\n- 时间字段为 UTC 的 ISO 8601 字符串（无时区后缀）。\n\n## 归属：只有 tenant_id\n- 业务归属的唯一表达是 `tenant_id`（`tenants` 表）。个人用户（含游客）各占一个 PERSONAL 租户，\n  每个公司各占一个 ENTERPRISE 租户（`enterprises.tenant_id` 一对一扩展）。\n- 请求侧：`POST /uploads`、`POST /file-imports`、`POST /me/plan-applications` 在 JSON body 中接受可选\n  `tenant_id`；`GET /me/subscription`、`GET /ocr/jobs` 以查询参数接受 `tenant_id`。\n  缺省或空值 = 调用者本人的个人租户。\n- 响应侧：身份/租户列表与业务对象一律返回 `tenant_id`（企业租户另给 `tenant_type` / `name` / `role`）。\n\n## 套餐与计量\n- 没有 FREE 档位、没有赠送任务额度。每个租户恰好一行订阅：个人租户（含游客）自 `tenants.created_at`\n  起默认开通默认套餐（`plans.is_default`，当前为 Kinder）`trial_months` 个月（当前 1）；企业租户自 `enterprises.verified_at` 起算，未认证时无订阅（`status=NONE`）。\n- 套餐目录、价格展示、月页数、席位、泰英文案与审批续期月数均来自 `plans` 表配置（FR-SYS-019，CLI `manage_plans.py` 维护），\n  修改立即对所有租户生效（不做订阅快照）。\n- 唯一计量单位是 `OCR_PAGE`（每月页数），按泰国时间（UTC+7）自然月实时统计 `ocr_jobs.page_count`，\n  FAILED / CANCELLED 的任务不计，因此没有消耗流水、也没有取消返还。\n- 订阅到期后新建任务被硬停（402 `PLAN_EXPIRED`）；订阅仍 ACTIVE 但本月页数用尽为 402 `QUOTA_EXCEEDED`。\n  已有任务、结果与导出在任何情况下都可继续查看与导出。\n\n## 认证与 CSRF\n- 免登录白名单（精确匹配）：`POST /auth/line`、`POST /auth/guest`；其余接口必须携带会话 Cookie `saiflow_session`（HttpOnly，path=/api）。\n- 唯一例外：`GET /export-downloads/{ticket}`（FR-ENTRY-015）以 60 秒限时签名票据代替 Cookie，仅 GET/HEAD 且路径完整匹配票据格式时放行；票据只能由已登录用户经 `POST /exports/{export_id}/download-ticket` 换取。\n- 写请求（POST/PUT/PATCH/DELETE）还必须携带请求头 `X-CSRF-Token`，其值来自登录 / `GET /auth/session` 响应中的 `csrf_token`。\n- 跨用户 / 跨租户访问不存在或无权的对象统一返回 404，不泄露资源存在性。\n\n## 错误码\n| HTTP | code | 说明 |\n|------|------|------|\n| 400 | INVALID_ARGUMENT | 参数校验失败，`field_errors` 给出字段级原因 |\n| 401 | AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED | 未登录 / 会话过期 / 会话已吊销 |\n| 402 | PLAN_EXPIRED / QUOTA_EXCEEDED | 订阅已到期或未开通（`plan.expired`）/ 本月页数已用尽（`quota.exceeded`） |\n| 403 | ACCOUNT_DISABLED / PERMISSION_DENIED / CSRF_INVALID / ENTERPRISE_ACCESS_REVOKED | 账号禁用 / 无权限 / CSRF 校验失败 / 企业访问权已撤销 |\n| 404 | RESOURCE_NOT_FOUND | 资源不存在或无权访问 |\n| 409 | STATE_CONFLICT / VERSION_CONFLICT | 状态不允许 / 乐观并发版本冲突 |\n| 409 | TEMPLATE_MAPPING_DISABLED / RAW_RESULT_MISSING / TEMPLATE_UNAVAILABLE / MAPPING_NOT_READY / MAPPING_LIMIT_REACHED | 模板映射：功能关闭 / 无 OCR 解析结果 / 模板不可用 / 映射未成功 / 达到每任务映射上限 |\n| 422 | INVALID_ARGUMENT（`results.required_missing`） | 模板结果确认时必填字段缺失，`field_errors` 给出 `structured.<路径>` |\n| 429 | RATE_LIMITED | 请求过于频繁（retryable=true） |\n| 503 | SERVICE_UNAVAILABLE / AUTH_SERVICE_UNAVAILABLE / OCR_VENDOR_UNAVAILABLE / EMAIL_SERVICE_UNAVAILABLE / STORAGE_UNAVAILABLE / EXPORT_UNAVAILABLE / EXPORT_FAILED | 依赖服务不可用 |\n"
   },
   "servers": [
     {
@@ -2926,7 +2926,7 @@
           "Exports"
         ],
         "summary": "下载导出文件",
-        "description": "后端代理下发导出文件（需会话 Cookie 与对象级鉴权，无匿名/签名 URL），始终以附件形式返回。\n文件名：`<源文件名去扩展名>-v<result_version_id 前 8 位>.<xlsx|csv|txt>`（源文件缺失时用 job_id）。\n- 不可见 → 404；已过期 → 409 `export.expired`；状态非 READY 或对象不存在 → 409 `export.not_ready`。\n",
+        "description": "后端代理下发导出文件（需会话 Cookie 与对象级鉴权），始终以附件形式返回。Cookie 不可用的场景（Android LINE 内置浏览器）改用\n`POST /exports/{export_id}/download-ticket` 换取限时票据，见 `GET /export-downloads/{ticket}`。\n文件名：`<源文件名去扩展名>-v<result_version_id 前 8 位>.<xlsx|csv|txt|json>`（源文件缺失时用 job_id）。\n- 不可见 → 404；已过期 → 409 `export.expired`；状态非 READY 或对象不存在 → 409 `export.not_ready`。\n",
         "operationId": "downloadExport",
         "security": [
           {
@@ -2978,6 +2978,155 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/exports/{export_id}/download-ticket": {
+      "post": {
+        "tags": [
+          "Exports"
+        ],
+        "summary": "换取限时下载票据",
+        "description": "FR-ENTRY-015：Android LINE 内置浏览器把附件交给系统下载器，下载器不携带会话 Cookie，页面也无反馈。\n前端在该环境先调用本接口，再以 `liff.openWindow({external:true})` 在系统浏览器打开返回的 `url`；iOS / 桌面仍用 Cookie 下载。\n- 需会话 Cookie + CSRF；对象级鉴权与 `GET /exports/{export_id}` 相同（不可见 → 404，已过期 → 409 `export.expired`）。\n- 状态非 READY → 409 `export.not_ready`。\n- 票据有效 60 秒，是 `SECRET_KEY` 的 HMAC-SHA256 签名，绑定 export_id、用户与签发会话，不落库、不新增导出记录；审计 `export.download_ticket`。\n- 云端仍使用默认 SECRET_KEY 时拒绝签发：503 EXPORT_UNAVAILABLE。\n",
+        "operationId": "createExportDownloadTicket",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "export_id",
+            "in": "path",
+            "required": true,
+            "description": "导出 ID（32 位十六进制 UUID）。",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "已签发票据。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/OkEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ExportDownloadTicket"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/export-downloads/{ticket}": {
+      "get": {
+        "tags": [
+          "Exports"
+        ],
+        "summary": "凭限时票据下载导出文件",
+        "description": "FR-ENTRY-015：不需要会话 Cookie 的唯一下载入口（安全中间件仅对 GET/HEAD 且路径完整匹配票据格式时放行，不签发会话）。\n- 兑换时重新校验：签名、60 秒有效期、签发会话未注销/未过期、账号 ACTIVE、任务对象级鉴权；任一不满足 → 404（不区分原因）。\n- 有效期内可重复请求（兼容下载器的 HEAD/二次 GET），只能取票据绑定的导出。\n- 导出本身已过期 → 409 `export.expired`；非 READY 或对象缺失 → 409 `export.not_ready`。\n- 成功返回附件，文件名与 `GET /exports/{export_id}/download` 相同，附带 `Cache-Control: no-store`、`Referrer-Policy: no-referrer`、\n  `X-Content-Type-Options: nosniff`；审计 `export.download`（detail.via=ticket，记入票据所属用户）。\n",
+        "operationId": "downloadExportByTicket",
+        "security": [],
+        "parameters": [
+          {
+            "name": "ticket",
+            "in": "path",
+            "required": true,
+            "description": "由 download-ticket 接口返回的票据（`<export_id>.<user_id>.<session_id>.<exp>.<签名>`），客户端应视为不透明字符串。",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "导出文件字节。",
+            "headers": {
+              "Content-Disposition": {
+                "description": "形如 `attachment; filename=...`（非 ASCII 文件名附带 `filename*=UTF-8''...`）。",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "固定 `no-store`。",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "票据格式不符时按普通 /api/v1 请求处理，无会话 → 401。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -5942,6 +6091,24 @@
           "created_at": {
             "type": "string",
             "nullable": true
+          }
+        }
+      },
+      "ExportDownloadTicket": {
+        "type": "object",
+        "description": "限时下载票据（FR-ENTRY-015）。票据为服务端签名、不落库，绑定导出、用户与当前会话。",
+        "required": [
+          "url",
+          "expires_at"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "同源相对地址 `/api/v1/export-downloads/<ticket>`；前端拼接 `location.origin` 后在系统浏览器打开。"
+          },
+          "expires_at": {
+            "type": "string",
+            "description": "票据过期时间（签发后 60 秒，UTC ISO 8601，无时区后缀）。"
           }
         }
       },

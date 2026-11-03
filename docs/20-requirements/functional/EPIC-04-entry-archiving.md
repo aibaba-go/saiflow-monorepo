@@ -3,8 +3,8 @@ doc_id: EPIC-04
 title: "EPIC-04 — 多渠道录入与归档"
 type: epic
 status: active
-version: 1.3.1
-updated: 2026-10-31
+version: 1.4.0
+updated: 2026-11-03
 owner: Product Engineering
 priority: P0
 source: "PRD-001 §4.4"
@@ -39,7 +39,7 @@ related: [DM-Document, DM-ArchiveRecord, API-5, API-6]
 | FR-ENTRY-012 | 将自定义字段映射到企业管理系统 | P1（V2.0） | §4.4 | FR-ENTRY-010 | AC-FR-ENTRY-012-01 |
 | FR-ENTRY-013 | 将数据导出为 JSON / CSV / Excel 以供下游集成 | P1（V2.0） | §3.1 | FR-ENTRY-002 | AC-FR-ENTRY-013-01 |
 | FR-ENTRY-014 | 归档至云端文件夹（双重存储、自动命名、分类） | P2（V3.0） | §4.4 | FR-ENTRY-005 | AC-FR-ENTRY-014-01 |
-| FR-ENTRY-015 | 在核验确认后的最终结果页提供结果查看与 Excel（XLSX）导出 | P0 | 界面调整 2026-10-17 | FR-VERIFY-016 | AC-FR-ENTRY-015-01 |
+| FR-ENTRY-015 | 在核验确认后的最终结果页提供结果查看与 Excel（XLSX）导出；Android LINE 内置浏览器经限时下载票据在系统浏览器下载 | P0 | 界面调整 2026-10-17；Android 导出修复 2026-11-03 | FR-VERIFY-016 | AC-FR-ENTRY-015-01/02 |
 
 ## 3. 规则
 
@@ -70,6 +70,11 @@ related: [DM-Document, DM-ArchiveRecord, API-5, API-6]
   - 显示名规则与结果页相同（`_` 转空格、层级以 ` / ` 连接、单词首字母大写）；空值输出为空白单元格。
 - OCR 部分成功时，在工作表末尾注明缺失页。
 - 所有单元格按文本写入以保留前导零；以 `=`、`+`、`-`、`@` 开头的用户可编辑文本须做公式注入防护。
+- 下载交付（2026-11-03）：
+  - 同一最终结果页内重复点击复用已生成且距过期超过 1 分钟的导出，不重复创建导出记录；复用的导出失效（404/409）时自动重新生成一次。
+  - iOS、桌面及非 LINE 浏览器沿用会话 Cookie 下载（`GET /exports/{id}/download`）。
+  - Android LINE 内置浏览器会把附件交给不带会话 Cookie 的系统下载器且页面无反馈，因此改为：以会话 + CSRF 换取 **60 秒限时下载票据**，经 `liff.openWindow({external:true})` 在系统浏览器打开下载，页面提示文件保存到「下载/Downloads」并可在通知栏或文件 App 查看。
+  - 票据由后端签名、不落库，绑定导出、用户与签发会话；兑换时重新校验会话、账号状态、任务归属与导出状态，任一不满足按不存在处理。有效期内允许下载器重复请求同一文件，不能取其他导出。文件仍经后端代理下发，浏览器不获得存储凭据或存储 URL（符合 §3.3 的限时 URL 调解）。
 
 ### 3.6 按模板导出（FR-ENTRY-002）
 
@@ -122,6 +127,13 @@ Feature: EPIC-04 录入与归档
     When 用户在最终结果页点击 "Export Excel"
     Then 生成仅含一个工作表的 XLSX，字段区块与表格区块的顺序、标题与列名与解析结果页一致
     And 导出内容反映当前已确认的结构化结果
+
+  Scenario: AC-FR-ENTRY-015-02 Android LINE 内置浏览器导出
+    Given 用户在 Android 手机的 LINE 内打开已确认文档的最终结果页
+    When 点击 "Export Excel"
+    Then 前端换取 60 秒限时下载票据并在系统浏览器打开，XLSX 以附件下载，页面提示文件保存位置
+    And 票据无需会话 Cookie，但签名被改、超过 60 秒、会话已注销、账号停用或无任务访问权时一律返回 404
+    And 连续点击复用同一导出记录；iOS 与桌面仍用会话 Cookie 下载且行为不变
 ```
 
 ## 5. 可追溯性
@@ -132,6 +144,7 @@ Feature: EPIC-04 录入与归档
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.4.0 | 2026-11-03 | Product Engineering | FR-ENTRY-015：Android LINE 内置浏览器导出改为 60 秒限时下载票据 + 系统浏览器下载（票据签名不落库、兑换时重新鉴权），页面内重复点击复用导出；新增 AC-FR-ENTRY-015-02 |
 | 1.3.1 | 2026-10-31 | Product Engineering | FR-ENTRY-002/AC-03改为正式JSON格式、application/json MIME与.json下载；原样structured保留类型/精度/顺序/extras，不改TXT旧行为，验证与补测边界单列 |
 | 1.3.0 | 2026-10-31 | Product Engineering | FR-ENTRY-002同步固定模板版本顺序/显示名/金额类型、保存extras、通用兼容与JSON原样；不新增Excel导入/隐藏标记 |
 | 1.2.2 | 2026-10-18 | Product Engineering | FR-ENTRY-015：XLSX 样式按产品样例 sample-format.xlsx 细化（标题合并、字体、对齐、列宽、行高） |

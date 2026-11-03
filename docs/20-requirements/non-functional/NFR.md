@@ -3,8 +3,8 @@ doc_id: NFR-000
 title: "SaiFlow — 非功能需求"
 type: nfr
 status: active
-version: 1.2.0
-updated: 2026-10-31
+version: 1.2.1
+updated: 2026-11-03
 owner: Product Engineering
 source: "PRD-001 §5；document-template-mapping v2 R1–R6；ADR-006/007"
 ---
@@ -35,7 +35,7 @@ source: "PRD-001 §5；document-template-mapping v2 R1–R6；ADR-006/007"
 | ID | 需求 | 详细信息 | 优先级 |
 |----|------|----------|--------|
 | NFR-SEC-001 | 云端静态加密 | GCS 文档、历史 Firestore 原文归档和 Cloud SQL 数据（含不可变 llm_json、模板/版本、映射与结果）均启用云平台静态加密 | P0 |
-| NFR-SEC-002 | 私有云对象存储 | 文档字节仅存储于私有 GCS Bucket；不得使用公共 Bucket、匿名访问或由浏览器持有服务凭据 | P0 |
+| NFR-SEC-002 | 私有云对象存储 | 文档字节仅存储于私有 GCS Bucket；不得使用公共 Bucket、匿名访问或由浏览器持有服务凭据。FR-ENTRY-015 的 60 秒限时导出下载票据由后端签名并在兑换时重新校验会话/账号/任务归属，字节仍经后端代理，不属于匿名存储访问 | P0 |
 | NFR-SEC-003 | 隔离的操作权限 | 在服务端强制实施会话/任务归属/租户权限；本期 API/Worker 仅后端访问数据库与模型凭据；历史或另获批 Cloud Functions 仍使用职责分离的最小权限服务账号 | P0 |
 | NFR-SEC-009 | TextIn 密钥与跨境控制 | TextIn 凭据仅存储于 Secret Manager；生产调用须在 OQ-7 的 PDPA 与跨境评估通过后启用 | P0 |
 | NFR-SEC-010 | 原始识别载荷保护 | 历史 Firestore 原文按载荷版本不可变；本期 PostgreSQL raw 快照与模板版本只增不改（依法清理例外），浏览器不得直接读写存储，访问必须经服务端授权 | P0 |
@@ -115,6 +115,7 @@ source: "PRD-001 §5；document-template-mapping v2 R1–R6；ADR-006/007"
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.2.1 | 2026-11-03 | Product Engineering | NFR-SEC-002 注明 FR-ENTRY-015 限时导出下载票据（后端签名、兑换时重新鉴权、后端代理字节）不属于匿名存储访问 |
 | 1.2.0 | 2026-10-31 | Product Engineering | 范围化历史5s/2s事件投影、decimal(14,2)/佛历目标；新模板金额字符串保精度/日期原样，安全/持久性/追溯覆盖PostgreSQL快照与映射；不宣称真实质量/性能或共享库发布验收 |
 | 1.1.1 | 2026-10-18 | Product Engineering | 补充 NFR-USAB-004：LINE Mini App 统一品牌等待反馈，保留操作文案、上传进度与 OCR 阶段，支持减少动态效果；套餐审核不作为网络加载 |
 | 1.1.0 | 2026-10-07 | Product Engineering | 新增 TextIn、Firestore 原始载荷、Cloud Functions 转换延迟、幂等性与云端可靠性约束 |

@@ -1,21 +1,31 @@
 """结果导出（PRD §10.4）：POST 创建 → GET 查询 → GET /download 代理下发。
 
 同步生成（P0 数据量下毫秒级），创建即 READY；24h 后过期。
-字节经对象存储（storage.py：local / firebase）落地；下载必须携带会话 Cookie
-且通过对象级鉴权——不提供任何匿名或签名 URL，一律后端代理 send_file(BytesIO)。
+字节经对象存储（storage.py：local / firebase）落地，一律后端代理 send_file(BytesIO)，
+浏览器不接触存储凭据或存储 URL。两种下载入口：
+- GET /exports/<id>/download：会话 Cookie + 对象级鉴权（默认）。
+- GET /export-downloads/<ticket>：FR-ENTRY-015 限时下载票据。Android LINE 内置浏览器把下载交给
+  不带 Cookie 的系统下载器，前端改为先以会话 + CSRF 换取 60 秒票据，再在系统浏览器打开。
+  票据是 SECRET_KEY 的 HMAC 签名（绑定导出、用户与会话），不落库；兑换时重新校验会话、
+  账号状态、任务归属与导出状态，任一不满足按不存在处理。
 XLSX 全部单元格按字符串写入，保留前导零；CSV 带 UTF-8 BOM。
 """
 from __future__ import annotations
 
+import base64
 import csv
+import hashlib
+import hmac
 import io
 import json
 import math
+import os
 import re
+import time
 import unicodedata
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
-from flask import Blueprint, request, send_file
+from flask import Blueprint, current_app, g, request, send_file
 
 from auth import audit, current_user
 from errors import (
@@ -34,6 +44,16 @@ exports_bp = Blueprint("exports", __name__)
 
 FORMATS = {"XLSX", "CSV", "TXT", "JSON"}
 EXPORT_TTL = timedelta(hours=24)
+#: FR-ENTRY-015：下载票据有效期。只需覆盖「打开系统浏览器 → 下载器取文件」的几秒钟。
+DOWNLOAD_TICKET_TTL_SECONDS = 60
+_TICKET_CONTEXT = b"saiflow-export-download-v1\n"
+_DEFAULT_SECRET = "change-this-in-production"
+_MIME = {
+    "XLSX": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "CSV": "text/csv",
+    "TXT": "text/plain",
+    "JSON": "application/json",
+}
 
 
 def _current_version(job_id: str) -> ResultVersion | None:
@@ -706,9 +726,7 @@ def get_export(export_id: str):
     return ok(_get_export_for_user(export_id).to_dict())
 
 
-@exports_bp.get("/exports/<export_id>/download")
-def download_export(export_id: str):
-    exp = _get_export_for_user(export_id)
+def _send_export(exp: Export, detail: dict | None = None):
     if exp.status != "READY" or not exp.storage_path:
         raise state_conflict("export.not_ready")
     if not storage.exists(exp.storage_path):
@@ -717,15 +735,93 @@ def download_export(export_id: str):
 
     job = db.session.get(OcrJob, exp.job_id)
     base = _base_name(job) if job else exp.job_id
-    audit("export.download", "export", exp.id)
+    audit("export.download", "export", exp.id, detail)
     return send_file(
         io.BytesIO(storage.get_bytes(exp.storage_path)),
-        mimetype={
-            "XLSX": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "CSV": "text/csv",
-            "TXT": "text/plain",
-            "JSON": "application/json",
-        }[exp.format],
+        mimetype=_MIME[exp.format],
         as_attachment=True,
         download_name=f"{base}-v{exp.result_version_id[:8]}.{exp.format.lower()}",
     )
+
+
+@exports_bp.get("/exports/<export_id>/download")
+def download_export(export_id: str):
+    return _send_export(_get_export_for_user(export_id))
+
+
+# ---------- FR-ENTRY-015：限时下载票据（Android LINE 内置浏览器） ----------
+
+
+def _ticket_key() -> bytes:
+    key = str(current_app.config.get("SECRET_KEY") or "")
+    # 云端仍用默认密钥时票据可被伪造：宁可不提供，也不签发
+    if not key or (key == _DEFAULT_SECRET and "K_SERVICE" in os.environ):
+        raise service_unavailable("EXPORT_UNAVAILABLE", "error.export_unavailable")
+    return key.encode("utf-8")
+
+
+def _b64(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+
+def _ticket_sig(payload: str) -> str:
+    return _b64(hmac.new(_ticket_key(), _TICKET_CONTEXT + payload.encode("ascii"), hashlib.sha256).digest())
+
+
+def _issue_ticket(exp: Export, user_id: int, session_id: int) -> tuple[str, int]:
+    expires = int(time.time()) + DOWNLOAD_TICKET_TTL_SECONDS
+    payload = f"{exp.id}.{user_id}.{session_id}.{expires}"
+    return f"{payload}.{_ticket_sig(payload)}", expires
+
+
+_TICKET_RE = re.compile(r"^([0-9a-f]{32})\.(\d{1,20})\.(\d{1,20})\.(\d{1,12})\.([A-Za-z0-9_-]{43})$")
+
+
+def _redeem_ticket(token: str):
+    """校验票据并恢复用户上下文；任何不满足均返回 None（调用方统一 404）。"""
+    from models import Session, User, _now
+
+    m = _TICKET_RE.match(token or "")
+    if not m:
+        return None
+    export_id, user_id, session_id, expires, sig = m.groups()
+    payload = f"{export_id}.{user_id}.{session_id}.{expires}"
+    if not hmac.compare_digest(sig, _ticket_sig(payload)):
+        return None
+    now = int(time.time())
+    if not now < int(expires) <= now + DOWNLOAD_TICKET_TTL_SECONDS + 5:
+        return None
+    session = db.session.get(Session, int(session_id))
+    if session is None or session.user_id != int(user_id) or session.is_revoked or session.is_expired(_now()):
+        return None
+    user = db.session.get(User, int(user_id))
+    if user is None or user.status != "ACTIVE":
+        return None
+    if user.line_sub.startswith("dev:") and not current_app.config.get("AUTH_DEV_MODE", False):
+        return None
+    return export_id, session, user
+
+
+@exports_bp.post("/exports/<export_id>/download-ticket")
+def create_download_ticket(export_id: str):
+    exp = _get_export_for_user(export_id)
+    if exp.status != "READY" or not exp.storage_path:
+        raise state_conflict("export.not_ready")
+    token, expires = _issue_ticket(exp, current_user().id, g.current_session.id)
+    audit("export.download_ticket", "export", exp.id)
+    expires_at = datetime.fromtimestamp(expires, timezone.utc).replace(tzinfo=None)
+    return ok({"url": f"/api/v1/export-downloads/{token}", "expires_at": expires_at.isoformat()})
+
+
+@exports_bp.get("/export-downloads/<token>")
+def download_by_ticket(token: str):
+    redeemed = _redeem_ticket(token)
+    if redeemed is None:
+        raise not_found()
+    export_id, session, user = redeemed
+    g.current_session, g.current_user = session, user  # 供对象级鉴权与审计
+    response = _send_export(_get_export_for_user(export_id), {"via": "ticket"})
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response

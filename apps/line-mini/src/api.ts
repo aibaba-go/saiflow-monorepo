@@ -800,6 +800,17 @@ export function exportDownloadUrl(exportId: string): string {
   return `${API_BASE}/exports/${exportId}/download`;
 }
 
+export interface ExportDownloadTicket {
+  /** 以 /api/v1 开头的同源相对地址，60 秒内有效，不需要 Cookie */
+  url: string;
+  expires_at: string;
+}
+
+/** FR-ENTRY-015：Android LINE 内置浏览器把下载交给不带 Cookie 的系统下载器，改用限时票据 */
+export function createExportDownloadTicket(exportId: string): Promise<ExportDownloadTicket> {
+  return request<ExportDownloadTicket>(`/exports/${exportId}/download-ticket`, { method: 'POST' });
+}
+
 // ---------- 公司（添加/修改/编号绑定/解绑） ----------
 
 export function createCompany(input: CompanyInput): Promise<{ enterprise: CompanyDetail }> {

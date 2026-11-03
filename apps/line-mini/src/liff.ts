@@ -122,3 +122,28 @@ export function closeLiffWindow(): void {
     /* ignore */
   }
 }
+
+/**
+ * FR-ENTRY-015：Android 上 LINE 内置浏览器把附件下载交给系统下载器（不带会话 Cookie、无页面反馈），
+ * 需改为限时票据 + 系统浏览器打开。iOS 内置浏览器可直接预览/分享，不走此路径。
+ */
+export function isAndroidLineBrowser(): boolean {
+  try {
+    if (initialized && liff.isInClient()) return liff.getOS() === 'android';
+  } catch { /* 回落到 UA 判断 */ }
+  const ua = navigator.userAgent || '';
+  return /Android/i.test(ua) && /\bLine\//i.test(ua);
+}
+
+/** 在系统浏览器打开同源绝对地址；LIFF 不可用时用 LINE 内置浏览器支持的 openExternalBrowser 参数。 */
+export function openInExternalBrowser(url: string): void {
+  try {
+    if (initialized && liff.isInClient()) {
+      liff.openWindow({ url, external: true });
+      return;
+    }
+  } catch { /* 回落到参数方式 */ }
+  const target = new URL(url);
+  target.searchParams.set('openExternalBrowser', '1');
+  window.location.href = target.toString();
+}

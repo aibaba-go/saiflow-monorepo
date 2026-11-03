@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: SaiFlow API
-  version: 1.3.0
+  version: 1.3.1
   description: |
     SaiFlow 后端接口（Flask，`services/api`）。本文件是对外接口契约的唯一来源，
     `docs/30-design/API-Spec.md` 由其生成发布，请勿手写第二份。
@@ -33,6 +33,7 @@ info:
 
     ## 认证与 CSRF
     - 免登录白名单（精确匹配）：`POST /auth/line`、`POST /auth/guest`；其余接口必须携带会话 Cookie `saiflow_session`（HttpOnly，path=/api）。
+    - 唯一例外：`GET /export-downloads/{ticket}`（FR-ENTRY-015）以 60 秒限时签名票据代替 Cookie，仅 GET/HEAD 且路径完整匹配票据格式时放行；票据只能由已登录用户经 `POST /exports/{export_id}/download-ticket` 换取。
     - 写请求（POST/PUT/PATCH/DELETE）还必须携带请求头 `X-CSRF-Token`，其值来自登录 / `GET /auth/session` 响应中的 `csrf_token`。
     - 跨用户 / 跨租户访问不存在或无权的对象统一返回 404，不泄露资源存在性。
 
@@ -2040,8 +2041,9 @@ paths:
       tags: [Exports]
       summary: 下载导出文件
       description: |
-        后端代理下发导出文件（需会话 Cookie 与对象级鉴权，无匿名/签名 URL），始终以附件形式返回。
-        文件名：`<源文件名去扩展名>-v<result_version_id 前 8 位>.<xlsx|csv|txt>`（源文件缺失时用 job_id）。
+        后端代理下发导出文件（需会话 Cookie 与对象级鉴权），始终以附件形式返回。Cookie 不可用的场景（Android LINE 内置浏览器）改用
+        `POST /exports/{export_id}/download-ticket` 换取限时票据，见 `GET /export-downloads/{ticket}`。
+        文件名：`<源文件名去扩展名>-v<result_version_id 前 8 位>.<xlsx|csv|txt|json>`（源文件缺失时用 job_id）。
         - 不可见 → 404；已过期 → 409 `export.expired`；状态非 READY 或对象不存在 → 409 `export.not_ready`。
       operationId: downloadExport
       security:
@@ -2076,6 +2078,111 @@ paths:
                 format: binary
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /exports/{export_id}/download-ticket:
+    post:
+      tags: [Exports]
+      summary: 换取限时下载票据
+      description: |
+        FR-ENTRY-015：Android LINE 内置浏览器把附件交给系统下载器，下载器不携带会话 Cookie，页面也无反馈。
+        前端在该环境先调用本接口，再以 `liff.openWindow({external:true})` 在系统浏览器打开返回的 `url`；iOS / 桌面仍用 Cookie 下载。
+        - 需会话 Cookie + CSRF；对象级鉴权与 `GET /exports/{export_id}` 相同（不可见 → 404，已过期 → 409 `export.expired`）。
+        - 状态非 READY → 409 `export.not_ready`。
+        - 票据有效 60 秒，是 `SECRET_KEY` 的 HMAC-SHA256 签名，绑定 export_id、用户与签发会话，不落库、不新增导出记录；审计 `export.download_ticket`。
+        - 云端仍使用默认 SECRET_KEY 时拒绝签发：503 EXPORT_UNAVAILABLE。
+      operationId: createExportDownloadTicket
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - name: export_id
+          in: path
+          required: true
+          description: 导出 ID（32 位十六进制 UUID）。
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 已签发票据。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ExportDownloadTicket'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /export-downloads/{ticket}:
+    get:
+      tags: [Exports]
+      summary: 凭限时票据下载导出文件
+      description: |
+        FR-ENTRY-015：不需要会话 Cookie 的唯一下载入口（安全中间件仅对 GET/HEAD 且路径完整匹配票据格式时放行，不签发会话）。
+        - 兑换时重新校验：签名、60 秒有效期、签发会话未注销/未过期、账号 ACTIVE、任务对象级鉴权；任一不满足 → 404（不区分原因）。
+        - 有效期内可重复请求（兼容下载器的 HEAD/二次 GET），只能取票据绑定的导出。
+        - 导出本身已过期 → 409 `export.expired`；非 READY 或对象缺失 → 409 `export.not_ready`。
+        - 成功返回附件，文件名与 `GET /exports/{export_id}/download` 相同，附带 `Cache-Control: no-store`、`Referrer-Policy: no-referrer`、
+          `X-Content-Type-Options: nosniff`；审计 `export.download`（detail.via=ticket，记入票据所属用户）。
+      operationId: downloadExportByTicket
+      security: []
+      parameters:
+        - name: ticket
+          in: path
+          required: true
+          description: 由 download-ticket 接口返回的票据（`<export_id>.<user_id>.<session_id>.<exp>.<签名>`），客户端应视为不透明字符串。
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 导出文件字节。
+          headers:
+            Content-Disposition:
+              description: 形如 `attachment; filename=...`（非 ASCII 文件名附带 `filename*=UTF-8''...`）。
+              schema:
+                type: string
+            Cache-Control:
+              description: 固定 `no-store`。
+              schema:
+                type: string
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            text/plain:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: 票据格式不符时按普通 /api/v1 请求处理，无会话 → 401。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -3995,6 +4102,18 @@ components:
         created_at:
           type: string
           nullable: true
+
+    ExportDownloadTicket:
+      type: object
+      description: 限时下载票据（FR-ENTRY-015）。票据为服务端签名、不落库，绑定导出、用户与当前会话。
+      required: [url, expires_at]
+      properties:
+        url:
+          type: string
+          description: 同源相对地址 `/api/v1/export-downloads/<ticket>`；前端拼接 `location.origin` 后在系统浏览器打开。
+        expires_at:
+          type: string
+          description: 票据过期时间（签发后 60 秒，UTC ISO 8601，无时区后缀）。
 
     EnterpriseStatus:
       type: string

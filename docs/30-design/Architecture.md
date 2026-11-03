@@ -3,8 +3,8 @@ doc_id: DES-001
 title: "SaiFlow — 系统架构"
 type: design
 status: active
-version: 2.7.0
-updated: 2026-11-01
+version: 2.7.2
+updated: 2026-11-03
 owner: Product Engineering
 source: "PRD-001 §3.1, §4, §5；document-template-mapping v2 R1–R6；ADR-001/006/007"
 related: [DM-Document, DM-ExtractionPayload, DM-DocumentTemplate, DM-OcrRawResult, DM-TemplateMapping, DM-ResultVersion, OCR-Pipeline, API-Spec, NFR-SEC, ADR-001, ADR-005, ADR-006, ADR-007]
@@ -165,7 +165,7 @@ Firestore 完整原文归档契约与本期 raw 不可混同；Cloud Functions/D
   - 退出确认后先写 `localStorage` 非凭据 `logout-pending` 标记，再以 10 秒超时调用 `POST /api/v1/auth/logout` 撤销旧会话与应用 Cookie；清身份、工作空间、CSRF 与待续意图，最佳努力清 LIFF SDK 态。成功清标记并恢复游客首页；失败/超时保留标记并锁定主壳、提示重试，禁止复用正式 Cookie。刷新或点击 Back 重试均先读取旧会话仅取得撤销用 CSRF，不应用旧身份，再撤销旧会话并恢复游客 scan 首页，不保留旧 My 路由；撤销成功前不恢复旧身份，绝不静默复登。取消退出确认不建立标记或撤销会话。
   - 服务端 `confirm:true` 的所有路径必须 `_registered`：guest 401，已认证未注册 403 `PERMISSION_DENIED` / `registration.required`，在结果版本写入、当前版本切换与完成状态写入前拒绝。`confirm:false` 仍允许试用并沿用任务访问权限。legacy VERIFIED 仅由已注册且任务权益 ACTIVE 的用户显式完成，不批量转换。
   - 注册资料与 SMTP 边界保留：手机号默认取服务端验证的 LINE 返回值（若有），可编辑、手填或留空且保存提交值；邮箱默认只取验证后的 LINE token 的 email（需 email scope/用户授权），可编辑/手填且必填。FR-SYS-015 手机号现为个人中心可改可清空（`PATCH /me { phone }`，原「只读」表述作废），FR-SYS-016 换邮箱规则及登录刷新/注册行锁后重读保护不变。
-  - 认证验收仍见 [AC-FR-SYS-001-04/05/06](../40-acceptance/Acceptance-Criteria.md)；已配置 LINE Channel ID `2011688528` 与 LIFF ID `2011688528-9VP8cr3o`；认证 SDK `@line/liff` 升级至官方安全修复版 `2.31.1`（[LINE 发布说明](https://developers.line.biz/en/docs/liff/release-notes/#liff-v2-31-1)），对应 FR-SYS-001。真实 LINE 最终联调仍需核验渠道的 `openid`/`email` scope、Endpoint URL，并由用户完成授权，不视为已测试通过。
+  - 认证验收仍见 [AC-FR-SYS-001-04/05/06](../40-acceptance/Acceptance-Criteria.md)；已配置正式 LINE Channel ID `2012285578` 与 LIFF ID `2012285578-gUEaV9U1`（2026-11-02 起替换开发渠道 `2011688528` / `2011688528-9VP8cr3o`；后端 `LINE_CHANNEL_ID` 与前端构建期 `VITE_LIFF_ID` 必须属于同一渠道，否则 `aud` 校验失败）；认证 SDK `@line/liff` 升级至官方安全修复版 `2.31.1`（[LINE 发布说明](https://developers.line.biz/en/docs/liff/release-notes/#liff-v2-31-1)），对应 FR-SYS-001。真实 LINE 最终联调仍需核验渠道的 `openid`/`email` scope、Endpoint URL，并由用户完成授权，不视为已测试通过。
 - **租户订阅与到期（FR-SYS-012/013/017/018）：** 归属只有 `tenant_id`；个人用户（含游客）与每家企业各一行 `tenants`，`enterprises` 为企业租户的 1:1 扩展。权益由 `subscriptions` 持久化（一租户一行），不再由 `registered_at` 动态推导：个人租户自 `tenants.created_at`、企业租户自 `enterprises.verified_at` 起算 **Kinder 一个月**，企业未认证时不开通（`status=NONE`）。线下人工审批写入有效期起止（`source=APPROVED`），同档续费允许、降档 409；pending 申请独立保留，不阻挡当前订阅的显式确认。
   - **到期硬停：** 订阅非 `ACTIVE` 时新建/重跑 OCR 返回 `402 PLAN_EXPIRED` / `plan.expired`；历史任务、结果与导出仍可读。唯一计量单位为 `OCR_PAGE`：按 `Asia/Bangkok` 自然月实时 `SUM(ocr_jobs.page_count)`（`FAILED` / `CANCELLED` 不计），用尽返回 `402 QUOTA_EXCEEDED` / `quota.exceeded`。FREE 档位、赠送任务、额度流水（`quota_ledger`）与 `free_tasks` / `paid_pages` / `OCR_TASK` 计量全部删除，响应不再返回这些字段。企业租户天然汇总全体成员页数，与个人租户隔离。字段唯一语义见 Data-Model §2.13，验证目标见 AC-FR-SYS-012/013/017。
   - **套餐配置（FR-SYS-019）：** 套餐目录、价格展示、月页数、席位、卡片主题、泰英双语文案、档位排序、启停、默认套餐、`trial_months` 与 `approved_period_months` 存于 `plans` 表；`plans.py` 为唯一读取入口（进程内 60 秒 TTL 缓存、读失败缓存 10 秒，使用独立连接不影响请求会话；表为空或读库失败回退 `plans_seed.json`）。启动时 `plans.seed_if_empty()` 仅在空表时播种，不覆盖已有配置。修改对所有租户（含存量订阅）在缓存窗口内生效、不做快照；停用套餐不在 `GET /plans` 返回、不可新申请，但存量订阅仍按配置解析，未知 code 回退默认套餐并告警。维护只经 CLI `services/api/manage_plans.py`（list/show/export/validate/import/set/enable/disable/set-default/seed，写操作支持 dry-run、需确认或 `--yes`，写前校验整份目录并写审计 `plan_config.*`）；当前无管理 REST 接口，PC 管理端后续实现。多实例下各实例缓存独立，最长 60 秒不一致。
@@ -217,6 +217,8 @@ Firestore 完整原文归档契约与本期 raw 不可混同；Cloud Functions/D
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.7.2 | 2026-11-03 | Product Engineering | FR-ENTRY-015：Android LINE 内置浏览器导出改为 `POST /exports/{id}/download-ticket` 换取 60 秒 HMAC 签名票据（SECRET_KEY，绑定导出/用户/会话，不落库、无新表），经 `liff.openWindow({external:true})` 在系统浏览器打开 `GET /export-downloads/{ticket}`；安全中间件仅对 GET/HEAD 且完整匹配票据格式放行，路由内重新校验会话、账号与任务归属；iOS/桌面仍用 Cookie 下载 |
+| 2.7.1 | 2026-11-02 | Product Engineering | FR-SYS-001：LINE 渠道由开发渠道 `2011688528` 切换为正式渠道 `2012285578`（LIFF ID `2012285578-gUEaV9U1`）；后端 saiflow-api-00059-zew（镜像不变，仅 `LINE_CHANNEL_ID` 变更）、前端 saiflow-line-mini-00051-fig（bundle index-BOcc99x7.js，与上一版仅 LIFF ID 不同），资源按用户确认采用 2 CPU / 4Gi + CPU throttling（并发 12 不变）；no-traffic + tag 核验 /api/health 200、无效 token 登录 401 `auth.line_token_invalid`→前后端连续切 100%→移除标签，切流后无 ERROR/5xx；旧渠道 LINE userId 不跨渠道通用，未用真实账号做端到端登录核验 |
 | 2.7.0 | 2026-11-01 | Product Engineering | FR-SYS-019：套餐改为 `plans` 表配置 + `plans.py` 仓储缓存（60 秒 TTL、种子回退、空表启动播种）+ `manage_plans.py` CLI 维护，后端镜像新增 `manage_plans.py`、`plans_seed.json`；无管理 REST 接口，PC 管理端延后；863 项隔离后端测试通过，2026-11-01 正式发布：后端 saiflow-api-00056-ril、前端 saiflow-line-mini-00048-max（bundle index-SFvaHz8q.js）no-traffic 部署→tag 核验 /api/health 200、未登录接口 401、bundle 哈希一致→只读核验共享库自动建表并播种 4 个套餐（属主 saiflow_api，与种子一致）→手动切 100%，环境变量（22 项）与并发 12 与上一版一致；未建游客会话、未用真实账号做端到端核验 |
 | 2.6.2 | 2026-10-31 | Product Engineering | FR-SYS-018：通知中心收敛为账户变动类，新增个人/公司账户开通通知，worker 去掉 OCR 完成通知；2026-10-31 正式发布：后端 saiflow-api-00054-mol、前端 saiflow-line-mini-00046-god（bundle index-IPu3DEpl.js）no-traffic 部署→tag 核验 /api/health 200、通知接口未登录 401→手动切 100%，环境变量与并发 12 与上一版一致，切流后 15 分钟内无 5xx；含同日 TEMPLATE_MATCHING 三步流程；未用真实账号做端到端核验 |
 | 2.6.1 | 2026-10-31 | Product Engineering | 模板映射正式发布：Dockerfile 补拷模板模块并加守卫测试；后端 00049（开关关）迁移建表→seed 两个系统模板→前端 00043→后端 00052 开关开启；记录镜像、哈希、核验与未覆盖边界 |

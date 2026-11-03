@@ -1,6 +1,8 @@
 """全局安全中间件（PRD §14.3 请求处理顺序）。
 
-- 仅放行精确匹配 POST /api/v1/auth/line；其余 /api/v1 一律校验会话。
+- 仅放行精确匹配 POST /api/v1/auth/line、/auth/guest；其余 /api/v1 一律校验会话。
+- 唯一例外：GET /api/v1/export-downloads/<票据>（FR-ENTRY-015），以限时签名票据代替 Cookie，
+  票据格式严格匹配、只读、不签发会话；鉴权在路由内重新执行。
 - 未知版本（/api/v2/...）与旧无版本 /api 业务路径返回 404，不回落。
 - 写请求（POST/PUT/PATCH/DELETE）在有效会话下再校验 CSRF。
 - 跨用户/企业对象不存在时统一 404，不泄露资源存在性。
@@ -22,6 +24,8 @@ ANONYMOUS_EXACT = {
     ("POST", "/api/v1/auth/line"),
     ("POST", "/api/v1/auth/guest"),
 }
+# 限时下载票据：只允许 GET/HEAD，路径必须完整匹配票据格式（见 routes/exports.py）
+TICKET_DOWNLOAD = re.compile(r"^/api/v1/export-downloads/[0-9a-f]{32}(\.\d{1,20}){3}\.[A-Za-z0-9_-]{43}$")
 # 非版本化运维端点（非业务接口）
 OPS_EXACT = {"/api/health"}
 
@@ -44,6 +48,8 @@ def register_security(app: Flask) -> None:
                 raise not_found()  # 未启用版本 404，不回落
             # —— 已启用版本：登录白名单或统一会话校验 ——
             if (request.method, path) in ANONYMOUS_EXACT:
+                return None
+            if request.method in ("GET", "HEAD") and TICKET_DOWNLOAD.match(path):
                 return None
             session, user, err = resolve_session()
             if err:

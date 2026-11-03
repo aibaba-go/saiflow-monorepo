@@ -3,8 +3,8 @@ doc_id: AC-000
 title: "SaiFlow — 汇总验收标准（V1.0 / P0）"
 type: acceptance
 status: active
-version: 1.9.6
-updated: 2026-11-01
+version: 1.9.7
+updated: 2026-11-03
 owner: QA
 verified_requirements: [FR-UPLOAD, FR-OCR, FR-VERIFY, FR-ENTRY, FR-MGMT, FR-SYS, FR-TEMPLATE]
 ---
@@ -652,6 +652,13 @@ Feature: FR-ENTRY 导出与归档
     When 用户在最终结果页点击 "Export Excel"
     Then 生成仅含一个工作表的 XLSX，字段区块与表格区块的顺序、标题与列名与解析结果页一致
     And 导出内容反映当前已确认的结构化结果
+
+  Scenario: AC-FR-ENTRY-015-02 Android LINE 内置浏览器导出
+    Given 用户在 Android 手机的 LINE 内打开已确认文档的最终结果页
+    When 点击 "Export Excel"
+    Then 前端换取 60 秒限时下载票据并在系统浏览器打开，XLSX 以附件下载，页面提示文件保存位置
+    And 票据无需会话 Cookie，但签名被改、超过 60 秒、会话已注销、账号停用或无任务访问权时一律返回 404
+    And 连续点击复用同一导出记录；iOS 与桌面仍用会话 Cookie 下载且行为不变
 ```
 
 ## 5. EPIC-05 — 管理（P0 子集）
@@ -1308,6 +1315,7 @@ Feature: NFR V1.0 门槛
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.9.7 | 2026-11-03 | Product Engineering | 新增 AC-FR-ENTRY-015-02：Android LINE 内置浏览器经 60 秒限时下载票据在系统浏览器下载，票据篡改/过期/会话注销/账号停用/无权一律 404，重复点击复用导出，iOS/桌面不变 |
 | 1.9.6 | 2026-11-01 | Product Engineering | 新增 AC-FR-SYS-019-01..05（默认套餐/试用月数可配、月页数修改对存量订阅 ≤60 秒生效、停用套餐、泰英双语与审批缺省续期、CLI 校验/确认/审计与空表播种）；EPIC-06 计数 19；后端 863 项隔离测试、前端类型检查与构建通过，2026-11-01 正式发布：后端 saiflow-api-00056-ril、前端 saiflow-line-mini-00048-max（bundle index-SFvaHz8q.js）no-traffic 部署→tag 核验 /api/health 200、未登录接口 401、bundle 哈希一致→只读核验共享库自动建表并播种 4 个套餐（属主 saiflow_api，与种子一致）→手动切 100%，环境变量（22 项）与并发 12 与上一版一致；未建游客会话、未用真实账号做端到端核验 |
 | 1.9.5 | 2026-10-31 | Product Engineering | 新增 AC-FR-SYS-018-04（通知中心只显示账户变动类、OCR 完成不通知）与 AC-FR-SYS-018-05（个人/公司账户首次开通通知）；后端 831 项隔离测试通过；2026-10-31 正式发布：后端 saiflow-api-00054-mol、前端 saiflow-line-mini-00046-god（bundle index-IPu3DEpl.js）no-traffic 部署→tag 核验 /api/health 200、通知接口未登录 401→手动切 100%，环境变量与并发 12 与上一版一致，切流后 15 分钟内无 5xx；含同日 TEMPLATE_MATCHING 三步流程；未用真实账号做端到端核验 |
 | 1.9.4 | 2026-10-31 | Product Engineering | AC-FR-VERIFY-017-04 增加「模板匹配中」任务打开处理页；新增 AC-FR-VERIFY-017-05：处理进度三步流程（上传/OCR 处理/模板匹配）与 TEMPLATE_MATCHING 阶段筛选 |

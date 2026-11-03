@@ -3,8 +3,8 @@ doc_id: REQ-INDEX
 title: "SaiFlow — 需求索引与可追溯性矩阵"
 type: index
 status: active
-version: 1.6.0
-updated: 2026-11-01
+version: 1.6.1
+updated: 2026-11-03
 owner: Product Engineering
 ---
 
@@ -97,7 +97,7 @@ owner: Product Engineering
 | FR-ENTRY-012 | 管理系统字段映射 | P1 | §4.4 | ENTRY-010 | AC-FR-ENTRY-012-01 | API-6 | planned |
 | FR-ENTRY-013 | JSON/CSV/Excel 导出 | P1 | §3.1 | ENTRY-002 | AC-FR-ENTRY-013-01 | API-5 | planned |
 | FR-ENTRY-014 | 云端文件夹归档 | P2 | §4.4 | ENTRY-005 | AC-FR-ENTRY-014-01 | API-6 | planned |
-| FR-ENTRY-015 | 最终结果页查看与 XLSX 导出 | P0 | 界面调整 2026-10-17 | VERIFY-016 | AC-FR-ENTRY-015-01 | DM-ExportJob | active |
+| FR-ENTRY-015 | 最终结果页查看与 XLSX 导出（Android LINE 经限时下载票据） | P0 | 界面调整 2026-10-17；2026-11-03 | VERIFY-016 | AC-FR-ENTRY-015-01/02 | DM-ExportJob | active |
 | FR-MGMT-001 | 分类 | P0 | §4.5 | ENTRY-005 | AC-FR-MGMT-001-01 | DM-ArchiveRecord | active |
 | FR-MGMT-002 | 按编号搜索 | P1 | §4.5 | MGMT-001 | AC-FR-MGMT-002-01 | API-7 | planned |
 | FR-MGMT-003 | 按日期搜索 | P1 | §4.5 | MGMT-001 | AC-FR-MGMT-003-01 | API-7 | planned |
@@ -175,6 +175,7 @@ owner: Product Engineering
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.6.1 | 2026-11-03 | Product Engineering | FR-ENTRY-015 增补 Android LINE 内置浏览器限时下载票据，AC 列补 AC-FR-ENTRY-015-02 |
 | 1.6.0 | 2026-11-01 | Product Engineering | 新增 FR-SYS-019（套餐配置化：plans 表 + CLI 维护，默认套餐/试用月数/续期月数可配，泰英双语，立即生效），AC-FR-SYS-019-01..05 |
 | 1.5.3 | 2026-10-31 | Product Engineering | FR-SYS-018 通知中心收敛为账户变动类（新增 ACCOUNT_ACTIVATED / COMPANY_ACTIVATED），AC 列补齐至 AC-FR-SYS-018-05 |
 | 1.5.2 | 2026-10-31 | Product Engineering | FR-VERIFY-017 新增 TEMPLATE_MATCHING 阶段与处理页三步流程，AC 列补齐至 AC-FR-VERIFY-017-05 |

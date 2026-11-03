@@ -3,8 +3,8 @@ doc_id: EPIC-06
 title: "EPIC-06 — 基础系统（账户、权限、配置、i18n）"
 type: epic
 status: active
-version: 1.8.0
-updated: 2026-11-01
+version: 1.8.1
+updated: 2026-11-02
 owner: Product Engineering
 priority: P0
 source: "PRD-001 §4.6"
@@ -136,7 +136,7 @@ related: [DM-User, DM-Role, DM-OperationLog, API-8]
   - 发送与更换均记录审计（`me.email_code`、`me.email_change`）。
 - **实现与验证边界（FR-SYS-001/010..014）：** 2026-10-27 启动/认证、退出防复登与注册门禁已真实实现并正式发布，不再仅为文档契约或待验证目标。本轮 334 项隔离后端回归、最终生产构建 `index-BUTDgRGj.js` 的 21 项全 mock 浏览器场景、6 项 OAuth 源码模块模拟与 9 项前端会话边界测试均通过；类型检查、Vite 构建及 OpenAPI 283 个内部引用校验通过。当时默认 Kinder 由既有 `registered_at` 动态推导（该推导已于 2026-10-28 改为 `subscriptions` 持久化行，见 FR-SYS-012）。正式发布、生产只读核验与单次日志审查详见 [Architecture §5](../../30-design/Architecture.md#5-部署模型) / [§6](../../30-design/Architecture.md#6-安全性与可靠性) 的本轮记录；单次日志结果不是长期保证。
   - **本轮隔离与未验证边界：** 隔离测试从未连接数据库、真实 LINE 或 SMTP，也未创建生产账户记录；本轮未发送真实测试邮件，SMTP 模块与 Secret Manager 版本引用未改变，Cloud SQL `postgres.saiflow` 亦未改变。不宣称真实 LINE OAuth/完整注册、收件箱收件、真实数据库并发或验证码防猜码已验证。phone/email、TLS SMTP、锁后重读与换邮箱规则不变（个人中心手机号只读的旧约束已于 2026-10-28 作废，见 FR-SYS-015）。
-  - **历史注册/SMTP 证据（1.6.6/1.6.7，仅保留，不覆盖本轮）：** 注册资料与标准库 SMTP 代码及 221 项隔离后端测试、5 项模拟浏览器测试、前端类型检查/构建、OpenAPI YAML 校验曾通过；包含登录刷新与注册的锁后重读。发件人为 `fj168104@gmail.com`，Gmail 应用专用密码仅 Secret Manager 注入 `MAIL_SMTP_PASSWORD`，配置及历史发布记录见 [Architecture §6](../../30-design/Architecture.md#6-安全性与可靠性)，不记录任何凭据。历史本地/Cloud Run 向发件邮箱自身实发获 SMTP 确认接收，未独立检查收件箱、真实 LINE 注册或真实数据库并发；隔离测试/SMTP 接收不等于全流程验收。已收到 LINE Channel ID `2011688528` 与 LIFF ID `2011688528-9VP8cr3o`，真实联调仍需配置核验与用户授权。这些历史测试、SMTP 自测与发布不是本轮证据；1.6.4 临时生产 dev 例外已撤销，只保留历史。
+  - **历史注册/SMTP 证据（1.6.6/1.6.7，仅保留，不覆盖本轮）：** 注册资料与标准库 SMTP 代码及 221 项隔离后端测试、5 项模拟浏览器测试、前端类型检查/构建、OpenAPI YAML 校验曾通过；包含登录刷新与注册的锁后重读。发件人为 `fj168104@gmail.com`，Gmail 应用专用密码仅 Secret Manager 注入 `MAIL_SMTP_PASSWORD`，配置及历史发布记录见 [Architecture §6](../../30-design/Architecture.md#6-安全性与可靠性)，不记录任何凭据。历史本地/Cloud Run 向发件邮箱自身实发获 SMTP 确认接收，未独立检查收件箱、真实 LINE 注册或真实数据库并发；隔离测试/SMTP 接收不等于全流程验收。正式 LINE Channel ID 为 `2012285578`、LIFF ID 为 `2012285578-gUEaV9U1`（2026-11-02 起替换开发渠道 `2011688528`），真实联调仍需配置核验与用户授权。这些历史测试、SMTP 自测与发布不是本轮证据；1.6.4 临时生产 dev 例外已撤销，只保留历史。
 - **租户切换与隔离（FR-SYS-017）：** 可选租户 = 本人个人租户 + 本人为 `ACTIVE` 成员且企业为 `VERIFIED` 的企业租户（`GET /api/v1/me/tenants` 返回 `{tenant_id, tenant_type, name, role}`）；在首页身份 chip 或个人中心切换。
   - 保持：所选租户按用户记忆在本机（`localStorage`，仅存 `tenant_id`），刷新或重新登录后恢复；若该企业已解绑、成员资格失效或企业不再为 `VERIFIED`，回落本人个人租户。
   - 数据隔离：首页最近任务与历史页仅列出当前租户的任务（`GET /api/v1/ocr/jobs?tenant_id=…`，省略即本人个人租户），切换后立即刷新；个人租户仅含本人的个人任务，不出现企业任务，反之亦然。上传与 URL 导入的文件归属请求中的 `tenant_id`，其后的任务与结果随文件归属（任务的 `tenant_id` 继承源文件）。
@@ -589,6 +589,7 @@ Feature: EPIC-06 基础系统
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.8.1 | 2026-11-02 | Product Engineering | FR-SYS-001：LINE 渠道切换为正式渠道 Channel ID `2012285578` / LIFF ID `2012285578-gUEaV9U1`（替换开发渠道 `2011688528`），需求行为不变；发布记录见 Architecture 2.7.1 |
 | 1.8.0 | 2026-11-01 | Product Engineering | 新增 FR-SYS-019：套餐目录改为 `plans` 表配置 + `manage_plans.py` 命令行维护（PC 管理端延后）；名称/价格/特性泰英双语，月页数/席位/价格/主题/档位/启停及默认套餐、试用月数、审批缺省续期月数均可配置，修改对存量订阅即时生效（≤60 秒缓存）；FR-SYS-012/013 的 Kinder 与各档页数改为引用配置；新增 AC-FR-SYS-019-01..05；后端 863 项隔离测试、前端类型检查与构建通过，2026-11-01 正式发布：后端 saiflow-api-00056-ril、前端 saiflow-line-mini-00048-max（bundle index-SFvaHz8q.js）no-traffic 部署→tag 核验 /api/health 200、未登录接口 401、bundle 哈希一致→只读核验共享库自动建表并播种 4 个套餐（属主 saiflow_api，与种子一致）→手动切 100%，环境变量（22 项）与并发 12 与上一版一致；未建游客会话、未用真实账号做端到端核验 |
 | 1.7.3 | 2026-10-31 | Product Engineering | FR-SYS-018：通知中心只显示账户变动类通知（8 类白名单，新增个人账户开通 ACCOUNT_ACTIVATED、公司账户开通 COMPANY_ACTIVATED）；OCR 完成不再通知，历史 OCR_DONE/INFO 不返回不计未读；新增 AC-FR-SYS-018-04/05；后端 831 项隔离测试通过 |
 | 1.7.2 | 2026-10-29 | Product Engineering | FR-SYS-001/011：LINE 内无 token 不调用外部 OAuth，保持一次恢复标记；外部 OAuth 仅已登记 Endpoint 同源/路径下可用，不覆盖 redirectUri，不在 Cloud Run 别名域名启动跨源 PKCE；23 项源码检查通过，不以桌面授权入口代替真实手机验收 |

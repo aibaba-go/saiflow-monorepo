@@ -3,14 +3,17 @@ import { onMounted, ref } from 'vue';
 import {
   ApiError,
   createExport,
+  createExportDownloadTicket,
   exportDownloadUrl,
   getJob,
   getJobResults,
+  type ExportInfo,
   type JobResults,
   type JobSummary,
 } from '../api';
 import { messageText } from '../i18n';
 import { useT } from '../i18nVue';
+import { isAndroidLineBrowser, openInExternalBrowser } from '../liff';
 import { clearPendingJob, goTab } from '../store';
 import BrandLoading from '../components/BrandLoading.vue';
 import OriginalPreview from '../components/OriginalPreview.vue';
@@ -28,7 +31,8 @@ const results = ref<JobResults | null>(null);
 const job = ref<JobSummary | null>(null);
 const errorMsg = ref('');
 const exporting = ref(false);
-const exportReady = ref(false);
+const exportHint = ref<'' | 'ready' | 'external'>('');
+let cachedExport: ExportInfo | null = null;
 
 async function load() {
   try {
@@ -51,23 +55,51 @@ onMounted(() => {
 async function exportExcel() {
   if (exporting.value) return;
   errorMsg.value = '';
-  exportReady.value = false;
+  exportHint.value = '';
   exporting.value = true;
   try {
-    const info = await createExport(props.jobId, 'XLSX');
-    const link = document.createElement('a');
-    link.href = exportDownloadUrl(info.id);
-    link.rel = 'noopener';
-    link.download = '';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    exportReady.value = true;
+    const reused = usableExport(cachedExport);
+    try {
+      exportHint.value = await deliver(reused ?? await newExport());
+    } catch (e) {
+      // 复用的导出已过期或失效：重新生成一次再下载
+      if (!reused || !(e instanceof ApiError) || ![404, 409].includes(e.status)) throw e;
+      exportHint.value = await deliver(await newExport());
+    }
   } catch (e) {
     errorMsg.value = e instanceof ApiError ? messageText(e.messageKey) : t('export.failed');
   } finally {
     exporting.value = false;
   }
+}
+
+/** 同一页面内重复点击复用已生成的导出，不重复创建导出记录（距过期不足 1 分钟时重新生成）。 */
+function usableExport(info: ExportInfo | null): ExportInfo | null {
+  if (!info?.expires_at) return null;
+  const iso = /[zZ]|[+-]\d\d:?\d\d$/.test(info.expires_at) ? info.expires_at : `${info.expires_at}Z`;
+  return Date.parse(iso) - Date.now() > 60_000 ? info : null;
+}
+
+async function newExport(): Promise<ExportInfo> {
+  cachedExport = await createExport(props.jobId, 'XLSX');
+  return cachedExport;
+}
+
+async function deliver(info: ExportInfo): Promise<'ready' | 'external'> {
+  // FR-ENTRY-015：Android LINE 内置浏览器的下载器不带 Cookie，改用 60 秒票据在系统浏览器下载
+  if (isAndroidLineBrowser()) {
+    const ticket = await createExportDownloadTicket(info.id);
+    openInExternalBrowser(new URL(ticket.url, window.location.origin).toString());
+    return 'external';
+  }
+  const link = document.createElement('a');
+  link.href = exportDownloadUrl(info.id);
+  link.rel = 'noopener';
+  link.download = '';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  return 'ready';
 }
 </script>
 
@@ -103,7 +135,8 @@ async function exportExcel() {
         <StructuredDataView :data="results.structured" :schema="results.template_schema" />
 
         <p v-if="errorMsg" class="status-error">{{ errorMsg }}</p>
-        <p v-if="exportReady" class="export-ready">{{ t('final.exportReady') }}</p>
+        <p v-if="exportHint === 'ready'" class="export-ready">{{ t('final.exportReady') }}</p>
+        <p v-else-if="exportHint === 'external'" class="export-ready">{{ t('final.exportExternal') }}</p>
       </div>
 
       <div class="action-bar">

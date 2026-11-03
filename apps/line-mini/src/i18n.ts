@@ -239,6 +239,7 @@ const en: Dict = {
   'final.exportExcel': 'Export Excel',
   'final.exporting': 'Preparing Excel…',
   'final.exportReady': 'Excel export ready',
+  'final.exportExternal': 'Opening your phone browser to download. The Excel file is saved to Downloads — check the notification bar or the Files app.',
   'final.newScan': 'New scan',
 
   // P07 历史
@@ -634,6 +635,7 @@ const th: Dict = {
   'final.exportExcel': 'ส่งออก Excel',
   'final.exporting': 'กำลังเตรียม Excel…',
   'final.exportReady': 'ไฟล์ Excel พร้อมแล้ว',
+  'final.exportExternal': 'กำลังเปิดเบราว์เซอร์ของโทรศัพท์เพื่อดาวน์โหลด ไฟล์ Excel จะถูกบันทึกในโฟลเดอร์ดาวน์โหลด (Downloads) ดูได้ที่แถบการแจ้งเตือนหรือแอปไฟล์',
   'final.newScan': 'สแกนใหม่',
 
   // P07 历史
