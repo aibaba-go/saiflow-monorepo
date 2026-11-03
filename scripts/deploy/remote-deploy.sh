@@ -11,7 +11,10 @@ cd "$DEPLOY_DIR"
 
 IFS= read -r ghcr_user
 IFS= read -r ghcr_token
-[ -n "$ghcr_user" ] && [ -n "$ghcr_token" ] || { echo "remote-deploy: GHCR user/token missing on stdin" >&2; exit 2; }
+if [ -z "$ghcr_user" ] || [ -z "$ghcr_token" ]; then
+  echo "remote-deploy: GHCR user/token missing on stdin" >&2
+  exit 2
+fi
 
 trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
 printf '%s' "$ghcr_token" | docker login ghcr.io -u "$ghcr_user" --password-stdin >/dev/null

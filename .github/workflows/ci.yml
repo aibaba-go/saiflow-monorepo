@@ -144,8 +144,13 @@ jobs:
       - name: database port is not published (AC-FR-PLAT-005-06)
         working-directory: ${{ env.STACK_DIR }}
         run: |
-          if docker compose port postgres 5432 2>/dev/null | grep -q .; then
-            echo "::error::postgres port is published"; exit 1
+          # `docker port` lists only published mappings; `docker compose port` prints ":0"
+          # for an unpublished port, so it cannot be used for this check.
+          cid="$(docker compose ps -q postgres)"
+          test -n "$cid" || { echo "::error::postgres container not found"; exit 1; }
+          published="$(docker port "$cid")"
+          if [ -n "$published" ]; then
+            echo "::error::postgres port is published: $published"; exit 1
           fi
       - name: backup and restore drill (AC-FR-PLAT-006-04)
         working-directory: ${{ env.STACK_DIR }}

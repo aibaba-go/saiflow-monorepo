@@ -9,7 +9,7 @@ dump="${1:?usage: restore-check.sh <dump_file>}"
 
 name="saiflow-restore-check-$$"
 password="$(head -c 18 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')"
-# shellcheck disable=SC2329  # invoked by the EXIT trap
+# shellcheck disable=SC2317,SC2329  # invoked by the EXIT trap (code differs by shellcheck version)
 cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
