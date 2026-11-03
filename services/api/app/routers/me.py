@@ -10,12 +10,18 @@ from app.dependencies import (
     get_email_sender,
     get_principal,
     require_csrf_header,
+    require_registered_user,
     require_user,
 )
 from app.integrations.email import SmtpSender
 from app.schemas.auth import MeResponse
-from app.schemas.me import EmailCodeRequest
-from app.services import email_code_service, me_service
+from app.schemas.me import (
+    EmailChangeRequest,
+    EmailCodeRequest,
+    ProfileUpdate,
+    RegistrationRequest,
+)
+from app.services import email_code_service, me_service, user_service
 from app.services.session_service import Principal
 
 router = APIRouter(prefix="/api/v1/me", tags=["me"], dependencies=[Depends(require_csrf_header)])
@@ -39,3 +45,41 @@ async def send_email_code(
     email = email_code_service.normalize_email(req.email)
     await email_code_service.send_code(db, sender, principal.user_id, email)  # type: ignore[arg-type]
     return Response(status_code=204)
+
+
+Db = Annotated[AsyncSession, Depends(get_db)]
+
+
+@router.post("/registration", operation_id="register", response_model=MeResponse)
+async def register(
+    req: RegistrationRequest, db: Db, principal: Annotated[Principal, Depends(require_user)]
+) -> MeResponse:
+    await user_service.register(
+        db,
+        principal.user_id,
+        req.email,
+        req.code,
+        req.display_name,
+        req.phone,  # type: ignore[arg-type]
+    )
+    return await me_service.me(db, principal)
+
+
+@router.patch("", operation_id="updateMe", response_model=MeResponse)
+async def update_me(
+    req: ProfileUpdate,
+    db: Db,
+    principal: Annotated[Principal, Depends(require_registered_user)],
+) -> MeResponse:
+    await user_service.update_profile(db, principal.user_id, req.model_dump(exclude_unset=True))  # type: ignore[arg-type]
+    return await me_service.me(db, principal)
+
+
+@router.post("/email", operation_id="changeEmail", response_model=MeResponse)
+async def change_email(
+    req: EmailChangeRequest,
+    db: Db,
+    principal: Annotated[Principal, Depends(require_registered_user)],
+) -> MeResponse:
+    await user_service.change_email(db, principal.user_id, req.email, req.code)  # type: ignore[arg-type]
+    return await me_service.me(db, principal)
