@@ -12,7 +12,7 @@ from app.integrations.email import SmtpSender
 from app.integrations.line import LineClient
 from app.logging_setup import configure_logging
 from app.request_context import RequestIdMiddleware
-from app.routers import auth, health, me
+from app.routers import admin_auth, auth, health, me
 
 
 @asynccontextmanager
@@ -72,6 +72,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(me.router)
+    app.include_router(admin_auth.router)
     return app
 
 

@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -8,8 +9,9 @@ from app.config import Settings
 from app.errors import AppError
 from app.integrations.email import SmtpSender
 from app.integrations.line import LineClient
+from app.models import AdminAccount, AdminSession
 from app.repositories import user_repo
-from app.services import session_service
+from app.services import admin_service, session_service
 from app.services.session_service import Principal
 
 
@@ -86,3 +88,17 @@ def get_email_sender(request: Request) -> SmtpSender:
     if sender is None:
         raise AppError(503, "email_unavailable", "error.email_service_unavailable")
     return sender
+
+
+@dataclass(frozen=True)
+class AdminContext:
+    session: AdminSession
+    account: AdminAccount
+
+
+async def get_admin(request: Request, db: Annotated[AsyncSession, Depends(get_db)]) -> AdminContext:
+    token = request.cookies.get(admin_service.ADMIN_COOKIE)
+    found = await admin_service.resolve_admin(db, token) if token else None
+    if found is None:
+        raise AppError(401, "unauthenticated", "auth.required")
+    return AdminContext(*found)

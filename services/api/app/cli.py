@@ -24,13 +24,48 @@ async def _audit_verify() -> int:
         await engine.dispose()
 
 
+async def _admin(command: str, username: str) -> int:
+    from app.services import admin_service
+
+    password = "" if command == "admin-disable" else sys.stdin.readline().rstrip("\r\n")
+    engine = create_engine(load_settings())
+    try:
+        async with create_sessionmaker(engine)() as db:
+            try:
+                if command == "admin-create":
+                    await admin_service.create_admin(db, username, password)
+                elif command == "admin-reset-password":
+                    await admin_service.reset_password(db, username, password)
+                else:
+                    await admin_service.disable_admin(db, username)
+            except ValueError as exc:
+                print(f"{command} failed: {exc}")
+                return 1
+            await db.commit()
+            print(f"{command} OK: {username}")
+            return 0
+    finally:
+        await engine.dispose()
+
+
+ADMIN_COMMANDS = {
+    "admin-create": "create a platform admin account (password from standard input)",
+    "admin-reset-password": "set a new password (from standard input) and clear the lock",
+    "admin-disable": "disable an account and end its sessions",
+}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("audit-verify", help="check that the operation log was not altered")
+    for name, help_text in ADMIN_COMMANDS.items():
+        sub.add_parser(name, help=help_text).add_argument("username")
     args = parser.parse_args(argv)
     if args.command == "audit-verify":
         return asyncio.run(_audit_verify())
+    if args.command in ADMIN_COMMANDS:
+        return asyncio.run(_admin(args.command, args.username))
     return 2
 
 
