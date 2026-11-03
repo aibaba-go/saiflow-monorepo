@@ -3,7 +3,7 @@ doc_id: DES-001
 title: "SaiFlow — 系统架构"
 type: design
 status: active
-version: 3.2.1
+version: 3.2.2
 updated: 2026-11-03
 owner: Product Engineering
 source: "PRD-001 v3.3 §3.1, §3.2, §4, §4.9, §5; ADR-008"
@@ -120,7 +120,7 @@ graph TB
 |------|------|
 | 服务器 | 一台 LightNode VPS（曼谷机房），唯一的 dev 环境；公网只开放 80/443 与 SSH（11022） |
 | 后端 | 一个后端 API 容器 |
-| 前端 | 三个前端容器，各用一个子域名：`saiflow-app.aibaba.asia`（web-pc 企业版）、`saiflow-admin.aibaba.asia`（admin 后台）、`saiflow-line.aibaba.asia`（LINE 小程序）；每个子域名下的 `/api` 由 Caddy 转给后端，前后端同源 |
+| 前端 | 三个前端容器，各用一个子域名：`saiflow-app.aibaba.asia`（web-pc 企业版）、`saiflow-admin.aibaba.asia`（admin 后台）、`saiflow-line2.aibaba.asia`（LINE 小程序）；每个子域名下的 `/api` 由 Caddy 转给后端，前后端同源 |
 | 服务命名 | `saiflow-<be 或 fe>-<目录名>`：`saiflow-be-api`、`saiflow-fe-web-pc`、`saiflow-fe-web-admin`、`saiflow-fe-line-mini`；镜像与 Compose 服务同名 |
 | 入口 | Caddy 容器，自动申请 HTTPS 证书 |
 | 数据 | PostgreSQL 容器（数据在 Docker 数据卷，只在内部网络可达）；私有 GCS Bucket |
@@ -163,6 +163,7 @@ v2 中列为 proposed 的 ADR-002（可插拔 OCR 引擎）已由 PRD §4.6 的�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 3.2.2 | 2026-11-03 | Product Engineering | §5 LINE 小程序子域名改为 `saiflow-line2.aibaba.asia`（负责人 2026-11-03） |
 | 3.2.1 | 2026-11-03 | Product Engineering | B-1：§0 web-pc 拆为企业版与 admin 后台两个应用；§5 三个子域名与服务命名规则；部署说明见 `docs/deployment/README.md` |
 | 3.2.0 | 2026-11-02 | Product Engineering | 按 ADR-008：运行平台改为 LightNode VPS + Docker Compose，入口 Caddy；Firestore 与 Cloud SQL 合并为一个 PostgreSQL（识别结果用 jsonb）；GCS 保持并用签名 URL 下载；Secret Manager 改为服务器环境变量文件；部署改为 GHCR + SSH；新增备份与单点说明；ADR-001、ADR-007 标记取代 |
 | 3.1.0 | 2026-10-30 | Product Engineering | 按 PRD v3.2：月扫描配额计量；用量提醒与通知渠道；admin 后台职责含团队租户开通与成员人数上限 |

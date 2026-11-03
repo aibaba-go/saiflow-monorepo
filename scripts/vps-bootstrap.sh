@@ -49,7 +49,7 @@ if [ ! -f "$dir/.env" ]; then
       echo "DB_PASSWORD=$(openssl rand -hex 24)"
       echo "APP_HOST=saiflow-app.aibaba.asia"
       echo "ADMIN_HOST=saiflow-admin.aibaba.asia"
-      echo "LINE_HOST=saiflow-line.aibaba.asia"
+      echo "LINE_HOST=saiflow-line2.aibaba.asia"
       echo "IMAGE_TAG="
       echo "BACKUP_BUCKET=$bucket"
     } >"$dir/.env"

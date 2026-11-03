@@ -61,7 +61,7 @@
 | D3 | 运行环境（2026-11-02，ADR-008） | LightNode VPS，曼谷机房，Ubuntu 24.04；唯一的 dev 环境 |
 | D4 | 一次性配置（2026-11-03） | VPS 初始化由负责人以 root 执行一次；GCP 备份桶与服务账号由负责人或同事在 Cloud Shell 中执行一次 |
 | D5 | 外部服务重试（2026-10-30，留给后续） | 所有外部服务（OCR、大模型、LINE 消息、邮件）的临时性错误（超时、对方服务报错、限流）重试 3 次，间隔逐次加长；内容层面的错误不重试。OCR 重试后按 PRD §4.6 切换备用引擎，其余服务重试后标记失败并记录日志。B-1 不调用外部服务，不写入本 change 的需求；在 B-2（LINE、邮件）与 B-3（OCR、大模型）的需求中写成验收标准。OCR 单据重试次数默认 3 次已写入 PRD §4.6（v3.2.1） |
-| D6 | 域名（2026-11-03） | 主域名 `aibaba.asia`；`saiflow-app.aibaba.asia` → web-pc 企业版；`saiflow-admin.aibaba.asia` → admin 后台；`saiflow-line.aibaba.asia` → LINE 小程序。每个子域名下的 `/api` 由 Caddy 转给后端，前端与后端同源 |
+| D6 | 域名（2026-11-03） | 主域名 `aibaba.asia`；`saiflow-app.aibaba.asia` → web-pc 企业版；`saiflow-admin.aibaba.asia` → admin 后台；`saiflow-line2.aibaba.asia` → LINE 小程序（原定 `saiflow-line` 与之前调试地址冲突，负责人 2026-11-03 改名）。每个子域名下的 `/api` 由 Caddy 转给后端，前端与后端同源 |
 | D7 | 数据库备份（2026-11-03） | 纳入 B-1；验证时实际做一次从备份恢复的演练 |
 | D8 | 镜像拉取（2026-11-03） | 每次部署由 GitHub Actions 带当次有效的令牌登录 GHCR，部署结束即退出登录；服务器上不长期保存镜像仓库凭据 |
 | D9 | 部署账号（2026-11-03） | 服务器上建专用账号 `deploy`，只允许 SSH 密钥登录；该账号属于 `docker` 组，权限实际接近 root，dev 阶段接受，记为风险 |
@@ -77,4 +77,4 @@
 
 ## 评审结论
 
-负责人 2026-11-03 确认按 ADR-008 修订后的 proposal、spec（FR-PLAT-001..006）与 plan（11 个任务）执行；LINE 小程序子域名确认为 `saiflow-line.aibaba.asia`；执行方式 Native。
+负责人 2026-11-03 确认按 ADR-008 修订后的 proposal、spec（FR-PLAT-001..006）与 plan（11 个任务）执行；LINE 小程序子域名确认为 `saiflow-line.aibaba.asia`，后因与之前调试地址冲突改为 `saiflow-line2.aibaba.asia`（同日）；执行方式 Native。

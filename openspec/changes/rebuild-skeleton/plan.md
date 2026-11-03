@@ -17,7 +17,7 @@
 - Python 命令只在 `services/api/` 内执行；`services/` 不加入 pnpm workspace。
 - 依赖版本：实施时取各库当前稳定版并锁定（`uv.lock`、`pnpm-lock.yaml`）；Python `requires-python = ">=3.12,<3.13"`；React 固定 18.3.x（与 Ant Design 5、Ant Design Mobile 5 兼容）。
 - 服务、镜像与 Compose 服务名（D1）：`saiflow-be-api`、`saiflow-fe-web-pc`、`saiflow-fe-web-admin`、`saiflow-fe-line-mini`；镜像仓库 `ghcr.io/aibaba-go`。schema（D2）：`saiflow_v3`；数据库名 `saiflow`；应用账号 `saiflow_v3_app`。
-- 域名（D6）：`saiflow-app.aibaba.asia`（web-pc）、`saiflow-admin.aibaba.asia`（web-admin）、`saiflow-line.aibaba.asia`（line-mini）。VPS：SSH 端口 11022，账号 `deploy`，部署目录 `/opt/saiflow`（D9、D10）。
+- 域名（D6）：`saiflow-app.aibaba.asia`（web-pc）、`saiflow-admin.aibaba.asia`（web-admin）、`saiflow-line2.aibaba.asia`（line-mini）。VPS：SSH 端口 11022，账号 `deploy`，部署目录 `/opt/saiflow`（D9、D10）。
 - 接口路径前缀 `/api/v1`；健康检查为 `GET /api/v1/health`（与后续业务接口同一前缀，经 Caddy 的 `/api` 转发即可访问）。
 - 后端配置环境变量名：`DB_HOST`、`DB_PORT`（默认 5432）、`DB_NAME`、`DB_USER`、`DB_PASSWORD`、`DB_SCHEMA`（默认 `saiflow_v3`）、`APP_VERSION`（默认 `dev`）。凭据（`DB_PASSWORD`）无默认值。服务器上的凭据只在 `/opt/saiflow/.env`（权限 600）与 `/opt/saiflow/secrets/`；仓库中只有变量名。
 - 错误码与消息键固定为：`not_found`/`error.not_found`、`method_not_allowed`/`error.method_not_allowed`、`validation_error`/`error.validation`、`internal_error`/`error.internal`；其他 HTTP 错误为 `http_<status>`/`error.http`。
@@ -370,7 +370,7 @@ it("shows UNREACHABLE", async () => { mockHealth({ state: "unreachable" }); ...f
 - [ ] **Step 1: 请负责人确认推送** `chore/ai-workflow-v2` 到 `origin`。确认后 `git push origin chore/ai-workflow-v2`。
 - [ ] **Step 2: 观察 CI** `gh run watch`（工作流 `CI`）→ Expected: 6 个 job 全部成功；同时确认没有任何部署运行（AC-FR-PLAT-005-01）。失败按 systematic-debugging 修复后重新推送（推送前再次确认）。
 - [ ] **Step 3: 一次性配置**（负责人执行，按 `docs/deployment/README.md`）：
-  1. DNS：`saiflow-app`、`saiflow-admin`、`saiflow-line` 三条 A 记录指向 VPS；
+  1. DNS：`saiflow-app`、`saiflow-admin`、`saiflow-line2` 三条 A 记录指向 VPS；
   2. VPS：以 root 执行 `scripts/vps-bootstrap.sh <部署公钥>`；
   3. GCP：在 Cloud Shell 执行 `scripts/gcp-backup-bootstrap.sh`，把密钥文件放到 VPS；
   4. GitHub：填入 Secrets 与 Variables。

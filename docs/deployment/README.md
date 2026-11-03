@@ -3,7 +3,7 @@ doc_id: OPS-001
 title: "SaiFlow — 部署与运维说明（dev 环境）"
 type: guide
 status: active
-version: 1.0.0
+version: 1.0.1
 updated: 2026-11-03
 owner: Product Engineering
 related: [ADR-008, FR-PLAT-005, FR-PLAT-006]
@@ -20,7 +20,7 @@ doc_source: manual
 |------|------|--------------|
 | web-pc 企业版 | https://saiflow-app.aibaba.asia | `saiflow-fe-web-pc` |
 | admin 后台 | https://saiflow-admin.aibaba.asia | `saiflow-fe-web-admin` |
-| LINE 小程序 | https://saiflow-line.aibaba.asia | `saiflow-fe-line-mini` |
+| LINE 小程序 | https://saiflow-line2.aibaba.asia | `saiflow-fe-line-mini` |
 | 后端 | 以上每个地址下的 `/api`（健康检查 `/api/v1/health`） | `saiflow-be-api` |
 
 公网只开放 80、443（Caddy）与 SSH 11022；数据库端口不对外。
@@ -29,7 +29,7 @@ doc_source: manual
 
 ### 2.1 DNS
 
-在 `aibaba.asia` 的 DNS 中加三条 A 记录，都指向 VPS 的公网 IP：`saiflow-app`、`saiflow-admin`、`saiflow-line`。生效后 Caddy 才能申请证书。
+在 `aibaba.asia` 的 DNS 中加三条 A 记录，都指向 VPS 的公网 IP：`saiflow-app`、`saiflow-admin`、`saiflow-line2`。生效后 Caddy 才能申请证书。
 
 ### 2.2 部署密钥（在你自己的电脑上）
 
@@ -72,7 +72,7 @@ ssh -p 11022 root@<VPS_IP> 'chown deploy:deploy /opt/saiflow/secrets/gcs-backup.
 | Variable | `VPS_HOST` | VPS 公网 IP |
 | Variable | `APP_HOST` | `saiflow-app.aibaba.asia` |
 | Variable | `ADMIN_HOST` | `saiflow-admin.aibaba.asia` |
-| Variable | `LINE_HOST` | `saiflow-line.aibaba.asia` |
+| Variable | `LINE_HOST` | `saiflow-line2.aibaba.asia` |
 
 镜像推送与服务器拉取都用工作流自带的临时令牌，不需要另建镜像仓库密码；服务器在每次部署结束时退出登录（FR-PLAT-005）。
 
@@ -127,4 +127,5 @@ curl -s https://saiflow-app.aibaba.asia/api/v1/health
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.0.1 | 2026-11-03 | Product Engineering | LINE 小程序子域名改为 `saiflow-line2`（原名与之前调试地址冲突，负责人 2026-11-03） |
 | 1.0.0 | 2026-11-03 | Product Engineering | 初版（B-1 `rebuild-skeleton`）：地址、一次性配置、部署、回滚、备份与恢复、风险 |
