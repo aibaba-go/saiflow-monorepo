@@ -1,0 +1,120 @@
+# Manual deploy to the VPS (FR-PLAT-005, ADR-008). Only workflow_dispatch: pushes and
+# merged PRs never deploy. Deploys the commit selected when triggering (github.sha).
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  actions: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    env:
+      SHA: ${{ github.sha }}
+      REGISTRY: ghcr.io/aibaba-go
+      VPS_HOST: ${{ vars.VPS_HOST }}
+      SSH_PORT: "11022"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: only chore/ai-workflow-v2 may be deployed
+        run: bash scripts/require-deploy-branch.sh "$GITHUB_REF"
+
+      - name: CI must have passed for this commit (AC-FR-PLAT-005-02)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/require-ci-success.sh "$SHA"
+
+      - name: build and push images to GHCR
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+          docker build -t "$REGISTRY/saiflow-be-api:$SHA" --build-arg APP_VERSION="$SHA" services/api
+          docker push "$REGISTRY/saiflow-be-api:$SHA"
+          for app in web-pc web-admin line-mini; do
+            docker build -f scripts/docker/frontend.Dockerfile --build-arg APP="$app" \
+              -t "$REGISTRY/saiflow-fe-$app:$SHA" .
+            docker push "$REGISTRY/saiflow-fe-$app:$SHA"
+          done
+          docker logout ghcr.io
+
+      - name: SSH key and pinned host key
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" >~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$VPS_KNOWN_HOSTS" >~/.ssh/known_hosts
+          {
+            echo "Host vps"
+            echo "  HostName $VPS_HOST"
+            echo "  Port $SSH_PORT"
+            echo "  User deploy"
+            echo "  IdentityFile ~/.ssh/deploy_key"
+            echo "  IdentitiesOnly yes"
+            echo "  StrictHostKeyChecking yes"
+          } >~/.ssh/config
+
+      - name: copy stack files to /opt/saiflow
+        run: |
+          scp -r scripts/deploy/compose.yaml scripts/deploy/Caddyfile scripts/deploy/postgres-init \
+            scripts/deploy/remote-deploy.sh scripts/deploy/backup.sh scripts/deploy/restore-check.sh \
+            vps:/opt/saiflow/
+
+      - name: pull, migrate and restart on the VPS
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          # shellcheck disable=SC2029  # $SHA is meant to expand here, on the runner
+          printf '%s\n%s\n' "$GHCR_USER" "$GHCR_TOKEN" | ssh vps "bash /opt/saiflow/remote-deploy.sh $SHA"
+
+      - name: health on all three sites (AC-FR-PLAT-005-03)
+        env:
+          HOSTS: ${{ vars.APP_HOST }} ${{ vars.ADMIN_HOST }} ${{ vars.LINE_HOST }}
+        run: |
+          : >"$RUNNER_TEMP/smoke.txt"
+          read -r -a hosts <<<"$HOSTS"
+          if [ "${#hosts[@]}" -ne 3 ]; then
+            echo "::error::repository variables APP_HOST, ADMIN_HOST and LINE_HOST must all be set"; exit 1
+          fi
+          status=0
+          for host in "${hosts[@]}"; do
+            bash scripts/smoke-check.sh "https://$host" "$SHA" --timeout-seconds 120 \
+              >>"$RUNNER_TEMP/smoke.txt" 2>&1 || status=1
+          done
+          cat "$RUNNER_TEMP/smoke.txt"
+          exit "$status"
+
+      - name: database port is closed from outside (AC-FR-PLAT-005-06)
+        run: |
+          if nc -z -w 5 "$VPS_HOST" 5432; then
+            echo "::error::port 5432 on $VPS_HOST is reachable from the internet"; exit 1
+          fi
+          echo "port 5432 closed from outside"
+
+      - name: job summary
+        if: always()
+        run: |
+          {
+            echo "### Deploy $SHA"
+            echo '```'
+            cat "$RUNNER_TEMP/smoke.txt" 2>/dev/null || echo "(no smoke-check output)"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: remove SSH key from the runner
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
