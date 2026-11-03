@@ -66,3 +66,17 @@ class SmtpSender:
             await with_retries(call, is_transient=_is_transient, sleep=self.sleep)
         except Exception as exc:
             raise EmailUnavailable(type(exc).__name__) from None
+
+
+def smtp_sender_from(settings) -> SmtpSender | None:
+    """The sender configured by SMTP_* variables, or None when SMTP is not configured."""
+    if not (settings.smtp_host and settings.smtp_from):
+        return None
+    return SmtpSender(
+        settings.smtp_host,
+        settings.smtp_port,
+        settings.smtp_username,
+        settings.smtp_password.get_secret_value() if settings.smtp_password else None,
+        settings.smtp_from,
+        settings.smtp_security,
+    )

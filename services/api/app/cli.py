@@ -48,6 +48,22 @@ async def _admin(command: str, username: str) -> int:
         await engine.dispose()
 
 
+async def _smtp_check(to: str) -> int:
+    from app.integrations.email import EmailUnavailable, smtp_sender_from
+
+    sender = smtp_sender_from(load_settings())
+    if sender is None:
+        print("smtp not configured")
+        return 1
+    try:
+        await sender.send(to, "SaiFlow SMTP check", "This is a test message from SaiFlow.\n")
+    except EmailUnavailable as exc:
+        print(f"smtp FAILED: {type(exc).__name__}")
+        return 1
+    print("smtp OK")
+    return 0
+
+
 ADMIN_COMMANDS = {
     "admin-create": "create a platform admin account (password from standard input)",
     "admin-reset-password": "set a new password (from standard input) and clear the lock",
@@ -61,7 +77,12 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("audit-verify", help="check that the operation log was not altered")
     for name, help_text in ADMIN_COMMANDS.items():
         sub.add_parser(name, help=help_text).add_argument("username")
+    sub.add_parser("smtp-check", help="send a test email with the SMTP_* settings").add_argument(
+        "to"
+    )
     args = parser.parse_args(argv)
+    if args.command == "smtp-check":
+        return asyncio.run(_smtp_check(args.to))
     if args.command == "audit-verify":
         return asyncio.run(_audit_verify())
     if args.command in ADMIN_COMMANDS:
