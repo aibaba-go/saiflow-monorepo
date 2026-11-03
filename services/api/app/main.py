@@ -9,7 +9,7 @@ from app.db import create_engine, create_sessionmaker
 from app.errors import register_error_handlers
 from app.logging_setup import configure_logging
 from app.request_context import RequestIdMiddleware
-from app.routers import health
+from app.routers import auth, health, me
 
 
 @asynccontextmanager
@@ -37,6 +37,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     register_error_handlers(app)
     app.add_middleware(RequestIdMiddleware)
     app.include_router(health.router)
+    app.include_router(auth.router)
+    app.include_router(me.router)
     return app
 
 
