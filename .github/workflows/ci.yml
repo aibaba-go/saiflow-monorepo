@@ -77,7 +77,7 @@ jobs:
       - run: bash packages/api-client/scripts/generate.sh
       - name: api-client matches the backend (AC-FR-PLAT-004-01)
         run: |
-          if ! git diff --exit-code docs/30-design/openapi.json packages/api-client/src/generated; then
+          if ! bash scripts/check-generated-clean.sh docs/30-design/openapi.json packages/api-client/src/generated; then
             echo "::error::api-client is out of date; run pnpm generate:api-client"
             exit 1
           fi
