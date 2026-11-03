@@ -55,3 +55,12 @@ def test_schema_is_not_configurable(monkeypatch):
     monkeypatch.setenv("DB_SCHEMA", "other")
     settings = load_settings()
     assert not hasattr(settings, "db_schema")
+
+
+def test_optional_integrations_default_to_none(monkeypatch):
+    for key, value in {"DB_HOST": "h", "DB_NAME": "n", "DB_USER": "u", "DB_PASSWORD": "p"}.items():
+        monkeypatch.setenv(key, value)
+    settings = load_settings()
+    assert settings.line_channel_id is None
+    assert settings.smtp_host is None
+    assert settings.smtp_security == "starttls"

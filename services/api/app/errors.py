@@ -12,6 +12,15 @@ from app.schemas.common import ErrorResponse
 
 logger = logging.getLogger("app.errors")
 
+
+class AppError(Exception):
+    """A deliberate, documented error response (see the plan's error table)."""
+
+    def __init__(self, status: int, code: str, message_key: str, fields: list[str] | None = None):
+        super().__init__(code)
+        self.status, self.code, self.message_key, self.fields = status, code, message_key, fields
+
+
 _HTTP_CODES = {
     404: ("not_found", "error.not_found"),
     405: ("method_not_allowed", "error.method_not_allowed"),
@@ -23,6 +32,10 @@ def _respond(status: int, code: str, message_key: str, fields: list[str] | None 
         code=code, message_key=message_key, request_id=request_id_var.get(), fields=fields
     )
     return JSONResponse(status_code=status, content=body.model_dump())
+
+
+async def _app_error(request: Request, exc: AppError) -> JSONResponse:
+    return _respond(exc.status, exc.code, exc.message_key, exc.fields)
 
 
 async def _http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
@@ -51,6 +64,7 @@ async def _unhandled_error(request: Request, exc: Exception) -> JSONResponse:
 
 
 def register_error_handlers(app: FastAPI) -> None:
+    app.add_exception_handler(AppError, _app_error)
     app.add_exception_handler(StarletteHTTPException, _http_error)
     app.add_exception_handler(RequestValidationError, _validation_error)
     app.add_exception_handler(Exception, _unhandled_error)

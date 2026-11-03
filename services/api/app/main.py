@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.config import Settings, load_settings
-from app.db import create_engine
+from app.db import create_engine, create_sessionmaker
 from app.errors import register_error_handlers
 from app.logging_setup import configure_logging
 from app.request_context import RequestIdMiddleware
@@ -15,6 +15,7 @@ from app.routers import health
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.engine = create_engine(app.state.settings)
+    app.state.sessionmaker = create_sessionmaker(app.state.engine)
     try:
         yield
     finally:

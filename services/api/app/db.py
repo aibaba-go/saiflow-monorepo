@@ -5,7 +5,12 @@ import logging
 
 from sqlalchemy import MetaData, text
 from sqlalchemy.engine import URL
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.orm import DeclarativeBase
 
 from app.config import Settings
@@ -36,6 +41,10 @@ def create_engine(settings: Settings) -> AsyncEngine:
         pool_pre_ping=True,
         connect_args={"timeout": 3, "server_settings": {"search_path": SCHEMA}},
     )
+
+
+def create_sessionmaker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+    return async_sessionmaker(engine, expire_on_commit=False)
 
 
 async def check_database(engine: AsyncEngine | None, timeout: float = 3.0) -> bool:

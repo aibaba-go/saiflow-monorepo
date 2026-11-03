@@ -4,6 +4,8 @@ Credentials have no defaults. A missing value stops startup with an error that
 names the missing variables and never echoes any provided value.
 """
 
+from typing import Literal
+
 from pydantic import SecretStr, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -21,6 +23,16 @@ class Settings(BaseSettings):
     db_user: str
     db_password: SecretStr
     app_version: str = "dev"
+    # Optional integrations: when unset, the features that need them answer 503.
+    line_channel_id: str | None = None
+    line_channel_secret: SecretStr | None = None
+    line_login_redirect_uris: str = ""  # comma-separated allowlist for web-pc LINE login
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_from: str | None = None
+    smtp_security: Literal["starttls", "ssl"] = "starttls"
 
 
 def load_settings() -> Settings:
