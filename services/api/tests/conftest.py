@@ -95,8 +95,7 @@ async def silent_tcp_server():
     server.close()
 
 
-@pytest.fixture
-def db_settings() -> Settings:
+def _db_settings() -> Settings:
     import os
 
     names = ["TEST_DB_HOST", "TEST_DB_PORT", "TEST_DB_NAME", "TEST_DB_USER", "TEST_DB_PASSWORD"]
@@ -112,3 +111,22 @@ def db_settings() -> Settings:
         db_password=SecretStr(os.environ["TEST_DB_PASSWORD"]),
         app_version="test-sha",
     )
+
+
+@pytest.fixture
+def db_settings() -> Settings:
+    return _db_settings()
+
+
+@pytest.fixture(scope="session")
+def db_settings_session() -> Settings:
+    return _db_settings()
+
+
+from tests.integration.db_fixtures import (  # noqa: E402,F401  (shared DB fixtures)
+    api,
+    app_settings,
+    db,
+    db_engine,
+    migrated_db,
+)

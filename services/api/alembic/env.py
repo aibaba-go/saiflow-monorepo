@@ -7,6 +7,7 @@ from alembic import context
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
+import app.models  # noqa: F401  (registers every table on Base.metadata)
 from app.config import load_settings
 from app.db import SCHEMA, Base, create_engine
 
