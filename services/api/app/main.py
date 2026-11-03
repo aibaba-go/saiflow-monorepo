@@ -6,6 +6,7 @@ import httpx
 from fastapi import FastAPI
 
 from app.config import Settings, load_settings
+from app.cookies import install_cookie_refresh
 from app.db import create_engine, create_sessionmaker
 from app.errors import register_error_handlers
 from app.integrations.email import smtp_sender_from
@@ -55,6 +56,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     register_error_handlers(app)
+    install_cookie_refresh(app)
     app.add_middleware(RequestIdMiddleware)
     app.include_router(health.router)
     app.include_router(auth.router)

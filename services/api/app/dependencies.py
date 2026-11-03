@@ -6,6 +6,7 @@ from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.config import Settings
+from app.cookies import refresh_later
 from app.errors import AppError
 from app.integrations.email import SmtpSender
 from app.integrations.line import LineClient
@@ -49,6 +50,8 @@ async def get_optional_principal(
     principal = await session_service.resolve(db, token)
     if principal is not None:
         await db.commit()  # keep the extended lifetime
+        max_age = int(session_service.CUSTOMER_IDLE.total_seconds())
+        refresh_later(request, session_service.CUSTOMER_COOKIE, token, max_age)
     return principal
 
 
@@ -101,4 +104,6 @@ async def get_admin(request: Request, db: Annotated[AsyncSession, Depends(get_db
     found = await admin_service.resolve_admin(db, token) if token else None
     if found is None:
         raise AppError(401, "unauthenticated", "auth.required")
+    max_age = int(admin_service.ADMIN_IDLE.total_seconds())
+    refresh_later(request, admin_service.ADMIN_COOKIE, token, max_age)  # type: ignore[arg-type]
     return AdminContext(*found)

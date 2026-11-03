@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cookies import clear_session_cookie, set_session_cookie
 from app.dependencies import AdminContext, get_admin, get_db, require_csrf_header
 from app.schemas.admin import AdminLoginRequest, AdminMeResponse
 from app.services import admin_service
@@ -21,15 +22,7 @@ Admin = Annotated[AdminContext, Depends(get_admin)]
 @router.post("/auth/login", operation_id="adminLogin", response_model=AdminMeResponse)
 async def admin_login(req: AdminLoginRequest, response: Response, db: Db) -> AdminMeResponse:
     token, account = await admin_service.login(db, req.username, req.password)
-    response.set_cookie(
-        ADMIN_COOKIE,
-        token,
-        max_age=int(ADMIN_IDLE.total_seconds()),
-        path="/api",
-        secure=True,
-        httponly=True,
-        samesite="lax",
-    )
+    set_session_cookie(response, ADMIN_COOKIE, token, int(ADMIN_IDLE.total_seconds()))
     return AdminMeResponse(admin_id=account.id, username=account.username)
 
 
@@ -37,7 +30,7 @@ async def admin_login(req: AdminLoginRequest, response: Response, db: Db) -> Adm
 async def admin_logout(db: Db, admin: Admin) -> Response:
     await admin_service.logout(db, admin.session)
     response = Response(status_code=204)
-    response.delete_cookie(ADMIN_COOKIE, path="/api", secure=True, httponly=True, samesite="lax")
+    clear_session_cookie(response, ADMIN_COOKIE)
     return response
 
 

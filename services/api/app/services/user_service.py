@@ -74,14 +74,14 @@ async def register(
     display_name: str | None,
     phone: str | None,
 ) -> None:
+    user = await _load(db, user_id)
+    if user.registered_at is not None:  # AC-FR-SYS-014-04: whatever the body contains
+        raise AppError(409, "already_registered", "registration.already_done")
     clean_email, clean_name, clean_phone = _collect(
         lambda: email_code_service.normalize_email(email),
         lambda: normalize_display_name(display_name),
         lambda: normalize_phone(phone),
     )
-    user = await _load(db, user_id)
-    if user.registered_at is not None:
-        raise AppError(409, "already_registered", "registration.already_done")
     owner = await _email_owner(db, clean_email)
     if owner is not None and owner != user_id:
         raise _email_taken()

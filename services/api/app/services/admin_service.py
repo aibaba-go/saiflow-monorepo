@@ -4,6 +4,7 @@ Accounts are managed only by server commands. Passwords are argon2id hashes. Fiv
 passwords in a row lock the account for 15 minutes; a session ends after 30 idle
 minutes. Every login failure answers the same way, whatever the reason."""
 
+import asyncio
 from datetime import timedelta
 
 from argon2 import PasswordHasher
@@ -32,10 +33,23 @@ def _check_password(password: str) -> None:
         raise ValueError(f"password must be at least {MIN_PASSWORD} characters")
 
 
-async def _by_username(db: AsyncSession, username: str) -> AdminAccount | None:
-    return (
-        await db.execute(select(AdminAccount).where(AdminAccount.username == username))
-    ).scalar_one_or_none()
+async def _by_username(db: AsyncSession, username: str, lock: bool = False) -> AdminAccount | None:
+    query = select(AdminAccount).where(AdminAccount.username == username)
+    if lock:  # serialise concurrent logins so failed_attempts is never lost
+        query = query.with_for_update()
+    return (await db.execute(query)).scalar_one_or_none()
+
+
+async def _verify(password_hash: str, password: str) -> bool:
+    """argon2 is CPU-heavy: run it off the event loop so other requests keep flowing."""
+
+    def check() -> bool:
+        try:
+            return _hasher.verify(password_hash, password)
+        except VerificationError:
+            return False
+
+    return await asyncio.to_thread(check)
 
 
 async def _system(db: AsyncSession, action: str, username: str) -> None:
@@ -86,7 +100,8 @@ def _failed() -> AppError:
     return AppError(401, "admin_login_failed", "admin.login_failed")
 
 
-async def _log_failure(db: AsyncSession, username: str) -> None:
+async def _log_failure(db: AsyncSession, username: str | None) -> None:
+    """`username` only for an existing account: an unknown name may be a mistyped password."""
     await record(db, AuditEvent("admin", None, "admin.login", "admin_account", username, "failure"))
     await db.commit()
 
@@ -95,26 +110,23 @@ async def login(
     db: AsyncSession, username: str | None, password: str | None
 ) -> tuple[str, AdminAccount]:
     username, password = username or "", password or ""
-    account = await _by_username(db, username)
-    now = utcnow()
+    account = await _by_username(db, username, lock=True)
     if account is None:
-        try:
-            _hasher.verify(_DUMMY_HASH, password)
-        except VerificationError:
-            pass
-        await _log_failure(db, username)
+        await _verify(_DUMMY_HASH, password)  # same work as for a real account
+        await _log_failure(db, None)
         raise _failed()
-    try:
-        ok = _hasher.verify(account.password_hash, password)
-    except VerificationError:
-        ok = False
+    ok = await _verify(account.password_hash, password)
+    now = utcnow()
     locked = account.locked_until is not None and account.locked_until > now
     if account.disabled_at is not None or locked or not ok:
         if not ok and not locked and account.disabled_at is None:
             account.failed_attempts += 1
             if account.failed_attempts >= MAX_FAILED:
                 account.failed_attempts, account.locked_until = 0, now + LOCK_FOR
-                await _log_failure(db, username)
+                await record(
+                    db,
+                    AuditEvent("admin", None, "admin.login", "admin_account", username, "failure"),
+                )
                 await record(
                     db,
                     AuditEvent(

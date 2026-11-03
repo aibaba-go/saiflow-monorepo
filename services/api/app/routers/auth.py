@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
+from app.cookies import clear_session_cookie, set_session_cookie
 from app.dependencies import (
     get_db,
     get_line_client,
@@ -28,15 +29,7 @@ Db = Annotated[AsyncSession, Depends(get_db)]
 
 
 def set_customer_cookie(response: Response, token: str) -> None:
-    response.set_cookie(
-        CUSTOMER_COOKIE,
-        token,
-        max_age=int(CUSTOMER_IDLE.total_seconds()),
-        path="/api",
-        secure=True,
-        httponly=True,
-        samesite="lax",
-    )
+    set_session_cookie(response, CUSTOMER_COOKIE, token, int(CUSTOMER_IDLE.total_seconds()))
 
 
 @router.post("/guest", operation_id="createGuestSession", response_model=MeResponse)
@@ -70,7 +63,7 @@ async def logout(db: Db, principal: Annotated[Principal, Depends(get_principal)]
     )
     await db.commit()
     response = Response(status_code=204)
-    response.delete_cookie(CUSTOMER_COOKIE, path="/api", secure=True, httponly=True, samesite="lax")
+    clear_session_cookie(response, CUSTOMER_COOKIE)
     return response
 
 

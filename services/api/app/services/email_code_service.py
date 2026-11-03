@@ -9,7 +9,7 @@ import secrets
 from datetime import timedelta
 
 from email_validator import EmailNotValidError, validate_email
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clock import utcnow
@@ -22,6 +22,7 @@ CODE_TTL = timedelta(minutes=10)
 RESEND_INTERVAL = timedelta(seconds=60)
 MAX_FAILED = 5
 SUBJECT = "SaiFlow verification code"
+SEND_LOCK_NS = 4207002
 
 
 def normalize_email(raw: str | None, field: str = "email") -> str:
@@ -42,6 +43,11 @@ def _invalid() -> AppError:
 
 
 async def send_code(db: AsyncSession, sender: SmtpSender, user_id: int, email: str) -> None:
+    # One send at a time per user, held through the SMTP call: a double tap must not pass
+    # the 60 s check twice (lock released when this transaction ends).
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(:ns, :uid)"), {"ns": SEND_LOCK_NS, "uid": user_id}
+    )
     now = utcnow()
     last = (
         await db.execute(
