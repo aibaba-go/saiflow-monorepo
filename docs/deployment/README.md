@@ -3,7 +3,7 @@ doc_id: OPS-001
 title: "SaiFlow — 部署与运维说明（dev 环境）"
 type: guide
 status: active
-version: 1.0.1
+version: 1.0.2
 updated: 2026-11-03
 owner: Product Engineering
 related: [ADR-008, FR-PLAT-005, FR-PLAT-006]
@@ -45,7 +45,7 @@ ssh-keygen -t ed25519 -f saiflow_deploy_key -N "" -C "saiflow-deploy"
 GCP_PROJECT_ID=saiflow-509205 BACKUP_BUCKET=saiflow-db-backup bash scripts/gcp-backup-bootstrap.sh
 ```
 
-建私有桶（30 天后自动删除）与服务账号 `saiflow-v3-backup`（只能往这个桶写入），并在当前目录生成密钥文件。若组织策略禁止创建服务账号密钥，脚本会在最后一步报错，需要先在 GCP 中放开该策略。
+建私有桶（30 天后自动删除）与服务账号 `saiflow-v3-backup`（只能在这个桶里新增和读取文件，不能删除或覆盖），并在当前目录生成密钥文件。若组织策略禁止创建服务账号密钥，脚本会在最后一步报错，需要先在 GCP 中放开该策略。
 
 ### 2.4 VPS 初始化（以 root 执行）
 
@@ -120,12 +120,13 @@ curl -s https://saiflow-app.aibaba.asia/api/v1/health
 
 - **单台服务器：** 数据库与全部服务在同一台机器上，宕机即全部不可用；磁盘损坏时只能从备份桶恢复（ADR-008）。
 - **`deploy` 账号权限接近 root：** 它属于 `docker` 组，能运行任意容器。只允许密钥登录，私钥只在 GitHub Secrets 中；dev 阶段接受（B-1 决定 D9）。
-- **GCP 服务账号密钥是长期凭据：** 只授予备份桶写入；放在服务器上只有 `deploy` 可读的位置；需要定期轮换。
+- **GCP 服务账号密钥是长期凭据：** 只授予备份桶的新增与读取（上传工具需要读取权限），不能删除或覆盖已有备份；放在服务器上只有 `deploy` 可读的位置；需要定期轮换。
 - **备份桶在境外**（新加坡），见 OQ-7；集中日志与告警（OQ-29）、VPS 上的静态加密（OQ-30）在投产前决定。
 
 ## 版本历史
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.0.2 | 2026-11-03 | Product Engineering | 备份服务账号增加备份桶读取权限（`gcloud storage cp` 需要 `storage.objects.get`，首次备份演练发现） |
 | 1.0.1 | 2026-11-03 | Product Engineering | LINE 小程序子域名改为 `saiflow-line2`（原名与之前调试地址冲突，负责人 2026-11-03） |
 | 1.0.0 | 2026-11-03 | Product Engineering | 初版（B-1 `rebuild-skeleton`）：地址、一次性配置、部署、回滚、备份与恢复、风险 |

@@ -30,8 +30,13 @@ rm -f "$lifecycle"
 if ! gcloud iam service-accounts describe "$sa" >/dev/null 2>&1; then
   gcloud iam service-accounts create "$sa_name" --display-name="SaiFlow v3 database backup (write only)"
 fi
-gcloud storage buckets add-iam-policy-binding "$bucket" \
-  --member="serviceAccount:$sa" --role=roles/storage.objectCreator >/dev/null
+# objectCreator: upload. objectViewer: `gcloud storage cp` reads the object back
+# (storage.objects.get) and fails with 403 without it. Neither allows delete or
+# overwrite, so a leaked key cannot destroy existing backups.
+for role in roles/storage.objectCreator roles/storage.objectViewer; do
+  gcloud storage buckets add-iam-policy-binding "$bucket" \
+    --member="serviceAccount:$sa" --role="$role" >/dev/null
+done
 
 # -s, not -f: a failed `keys create` leaves an empty file behind, which must not count.
 if [ ! -s "$key_file" ]; then
@@ -47,7 +52,7 @@ fi
 
 cat <<MSG
 
-Done. Bucket: $bucket (delete after 30 days). Service account: $sa (objectCreator on this bucket only).
+Done. Bucket: $bucket (delete after 30 days). Service account: $sa (create + read on this bucket only; no delete).
 Next:
   1. Copy the key to the VPS, then delete it here:
        scp -P 11022 $key_file root@<vps-ip>:/opt/saiflow/secrets/gcs-backup.json
