@@ -16,10 +16,12 @@ from app.schemas.organization import (
     AssignRoleIn,
     InvitationCreatedOut,
     InvitationOut,
+    MemberOut,
     OrganizationOut,
     OrganizationProfileIn,
     RoleCreateIn,
     RoleOut,
+    TransferIn,
 )
 from app.services import membership_service, organization_service, role_service, tenant_access
 from app.services.organization_service import Actor
@@ -209,3 +211,31 @@ async def accept_invitation(req: AcceptIn, db: Db, principal: Registered) -> Acc
     ensure_text(req)
     tenant_id = await membership_service.accept(db, principal.user_id, req.token)  # type: ignore[arg-type]
     return AcceptedOut(tenant_id=tenant_id)
+
+
+@router.get(
+    "/organizations/{tenant_id}/members", operation_id="listMembers", response_model=list[MemberOut]
+)
+async def list_members(ctx: Org, db: Db) -> list[MemberOut]:
+    return [MemberOut(**m) for m in await membership_service.list_members(db, ctx)]
+
+
+@router.delete(
+    "/organizations/{tenant_id}/members/{user_id}", operation_id="removeMember", status_code=204
+)
+async def remove_member(user_id: int, ctx: Org, db: Db) -> Response:
+    await membership_service.remove_member(db, ctx, user_id)
+    return Response(status_code=204)
+
+
+@router.post("/organizations/{tenant_id}/leave", operation_id="leaveOrganization", status_code=204)
+async def leave_organization(ctx: Org, db: Db) -> Response:
+    await membership_service.leave(db, ctx)
+    return Response(status_code=204)
+
+
+@router.post("/organizations/{tenant_id}/owner-transfer", operation_id="transferOwner")
+async def transfer_owner(req: TransferIn, ctx: Org, db: Db) -> dict:
+    ensure_text(req)
+    await membership_service.transfer_owner(db, ctx, req.user_id)
+    return {"owner_user_id": req.user_id}

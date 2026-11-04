@@ -191,3 +191,90 @@ async def accept(db: AsyncSession, user_id: int, token: str | None) -> int:
     await record(db, Actor("user", user_id).event("invitation.accept", "invitation", invitation.id))
     await db.commit()
     return tenant_id
+
+
+def _owner_protected() -> AppError:
+    return AppError(409, "owner_protected", "organization.owner_protected")
+
+
+async def _active_member(db: AsyncSession, tenant_id: int, user_id: int) -> Membership | None:
+    return (
+        await db.execute(
+            select(Membership)
+            .where(
+                Membership.tenant_id == tenant_id,
+                Membership.user_id == user_id,
+                Membership.removed_at.is_(None),
+            )
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+
+
+async def remove_member(db: AsyncSession, ctx: TenantContext, user_id: int) -> None:
+    require(ctx, Permission.MEMBER_MANAGE)
+    await _lock_organization(db, ctx.tenant_id)
+    membership = await _active_member(db, ctx.tenant_id, user_id)
+    if membership is None:
+        raise not_found()
+    if membership.is_owner:
+        raise _owner_protected()
+    membership.removed_at = utcnow()
+    await record(db, Actor("user", ctx.user_id).event("member.remove", "membership", membership.id))  # type: ignore[arg-type]
+    await db.commit()
+
+
+async def leave(db: AsyncSession, ctx: TenantContext) -> None:
+    if ctx.is_owner:
+        raise _owner_protected()
+    await _lock_organization(db, ctx.tenant_id)
+    membership = await _active_member(db, ctx.tenant_id, ctx.user_id)  # type: ignore[arg-type]
+    if membership is None:
+        raise not_found()
+    membership.removed_at = utcnow()
+    await record(db, Actor("user", ctx.user_id).event("member.leave", "membership", membership.id))  # type: ignore[arg-type]
+    await db.commit()
+
+
+async def transfer_owner(db: AsyncSession, ctx: TenantContext, user_id: int | None) -> None:
+    """FR-SYS-029: one step; the old owner becomes a member with the default role (A9)."""
+    if not ctx.is_owner:
+        raise AppError(403, "permission_denied", "error.permission_denied")
+    await _lock_organization(db, ctx.tenant_id)
+    current = await _active_member(db, ctx.tenant_id, ctx.user_id)  # type: ignore[arg-type]
+    if current is None or not current.is_owner:  # lost a race with another transfer
+        raise AppError(403, "permission_denied", "error.permission_denied")
+    target = None if user_id is None else await _active_member(db, ctx.tenant_id, user_id)
+    if target is None or target.user_id == ctx.user_id:
+        raise fields_error(["user_id"])
+    current.is_owner, current.role_id = False, await default_role_id(db, ctx.tenant_id)
+    await db.flush()  # the old owner first, so the one-owner index holds
+    target.is_owner, target.role_id = True, None
+    await record(
+        db, Actor("user", ctx.user_id).event("org.owner_transfer", "organization", ctx.tenant_id)
+    )  # type: ignore[arg-type]
+    await db.commit()
+
+
+async def list_members(db: AsyncSession, ctx: TenantContext) -> list[dict]:
+    from app.models import Role, User
+
+    rows = (
+        await db.execute(
+            select(Membership, User.display_name, Role)
+            .join(User, User.id == Membership.user_id)
+            .outerjoin(Role, Role.id == Membership.role_id)
+            .where(Membership.tenant_id == ctx.tenant_id, Membership.removed_at.is_(None))
+            .order_by(Membership.id)
+        )
+    ).all()
+    return [
+        {
+            "user_id": m.user_id,
+            "display_name": name,
+            "is_owner": m.is_owner,
+            "role": None if role is None else {"id": role.id, "name": role.name},
+            "joined_at": m.joined_at,
+        }
+        for m, name, role in rows
+    ]
