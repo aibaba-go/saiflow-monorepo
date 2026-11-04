@@ -70,7 +70,7 @@
 | 不带 `X-Requested-With: SaiFlow` 的 `POST` | 403 |
 | 用假令牌 `POST /api/v1/auth/line` | 503 `line_unavailable`（服务器尚未配置 LINE，符合预期） |
 | admin 后台：不存在的用户名、错误口令、正确口令 | 401 / 401 / 200 |
-| 服务器 `audit-verify` | 待负责人运行 |
+| 服务器 `audit-verify`（2026-11-04，负责人以 root 在 `/opt/saiflow` 运行） | `audit log OK (9 entries)`：校验链完整 |
 
 ### 待补充配置后验证
 
