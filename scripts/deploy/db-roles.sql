@@ -24,4 +24,23 @@ GRANT CONNECT, CREATE ON DATABASE saiflow TO saiflow_v3_migrator;
 GRANT CONNECT ON DATABASE saiflow TO saiflow_v3_app;
 REVOKE CREATE ON DATABASE saiflow FROM saiflow_v3_app;
 -- Before this change the app role created and owned the schema; hand everything over.
+-- The app's data privileges are granted in the same transaction, so the running backend
+-- never loses access, even if the migration that follows fails (same grants as 0003).
+BEGIN;
 REASSIGN OWNED BY saiflow_v3_app TO saiflow_v3_migrator;
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM pg_namespace WHERE nspname = 'saiflow_v3') THEN
+    GRANT USAGE ON SCHEMA saiflow_v3 TO saiflow_v3_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA saiflow_v3 TO saiflow_v3_app;
+    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA saiflow_v3 TO saiflow_v3_app;
+    IF to_regclass('saiflow_v3.audit_log') IS NOT NULL THEN
+      REVOKE UPDATE, DELETE, TRUNCATE ON saiflow_v3.audit_log FROM saiflow_v3_app;
+    END IF;
+    IF to_regclass('saiflow_v3.alembic_version') IS NOT NULL THEN
+      REVOKE UPDATE, DELETE ON saiflow_v3.alembic_version FROM saiflow_v3_app;
+    END IF;
+  END IF;
+END
+$$;
+COMMIT;

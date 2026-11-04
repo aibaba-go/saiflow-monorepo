@@ -133,7 +133,13 @@ jobs:
         working-directory: ${{ env.STACK_DIR }}
         run: |
           docker compose up -d --wait postgres
+          # Start where servers set up before harden-identity are: schema created and owned
+          # by the app role (old flow, up to 0002).
+          docker compose run --rm saiflow-be-api alembic upgrade 0002
           DEPLOY_DIR="$STACK_DIR" bash "$GITHUB_WORKSPACE/scripts/deploy/db-roles.sh"
+          # The running backend must keep access between the role step and the migration.
+          docker compose exec -T postgres sh -c \
+            'PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -U saiflow_v3_app -d saiflow -tAc "select count(*) from saiflow_v3.tenants"'
           docker compose run --rm saiflow-be-migrate alembic upgrade head
           docker compose up -d --remove-orphans
       - name: health through Caddy on all three sites
