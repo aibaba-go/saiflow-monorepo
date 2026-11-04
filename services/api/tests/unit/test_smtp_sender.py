@@ -1,7 +1,7 @@
 import aiosmtplib
 import pytest
 
-from app.integrations.email import EmailUnavailable, SmtpSender
+from app.integrations.email import EmailRejected, EmailUnavailable, SmtpSender
 
 
 class Sleep:
@@ -82,3 +82,26 @@ async def test_unavailable_carries_connection_reason():
     with pytest.raises(EmailUnavailable) as info:
         await sender.send("a@example.com", "s", "b")
     assert str(info.value) == "SMTPServerDisconnected: Unexpected EOF received"
+
+
+async def test_recipient_refused_5xx_is_rejected_once():  # AC-FR-SYS-020-09 (adapter)
+    refused = aiosmtplib.SMTPRecipientRefused(550, "no such user", "a@example.com")
+    sender, calls, _ = make(aiosmtplib.SMTPRecipientsRefused([refused]))
+    with pytest.raises(EmailRejected):
+        await sender.send("a@example.com", "s", "b")
+    assert len(calls) == 1
+
+
+async def test_auth_failure_is_not_rejected():
+    sender, _, _ = make(aiosmtplib.SMTPAuthenticationError(535, "bad"))
+    with pytest.raises(EmailUnavailable) as info:
+        await sender.send("a@example.com", "s", "b")
+    assert not isinstance(info.value, EmailRejected)
+
+
+async def test_recipient_refused_4xx_is_not_rejected():
+    refused = aiosmtplib.SMTPRecipientRefused(450, "mailbox busy", "a@example.com")
+    sender, _, _ = make(aiosmtplib.SMTPRecipientsRefused([refused]))
+    with pytest.raises(EmailUnavailable) as info:
+        await sender.send("a@example.com", "s", "b")
+    assert not isinstance(info.value, EmailRejected)

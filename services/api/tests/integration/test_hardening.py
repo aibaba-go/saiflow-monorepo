@@ -149,3 +149,20 @@ async def test_guest_with_session_not_counted(api, limited_app):
     assert (await api.post("/api/v1/auth/guest")).status_code == 200
     for _ in range(40):  # same client, cookie carried: returns the existing guest
         assert (await api.post("/api/v1/auth/guest")).status_code == 200
+
+
+# Task 4: recipient rejected (AC-FR-SYS-020-09)
+
+
+async def test_email_rejected_400_and_can_resend(api, db, line, mail):
+    from app.integrations.email import EmailRejected
+
+    await login(api, line)
+    mail.fail_with = EmailRejected("SMTPRecipientsRefused: 550 no such user")
+    r = await api.post("/api/v1/me/email-code", json={"email": "bad@example.com"})
+    assert r.status_code == 400
+    assert r.json()["code"] == "email_rejected" and r.json()["fields"] == ["email"]
+    assert (await db.execute(text("select count(*) from email_codes"))).scalar_one() == 0
+    mail.fail_with = None
+    r = await api.post("/api/v1/me/email-code", json={"email": "good@example.com"})
+    assert r.status_code == 204

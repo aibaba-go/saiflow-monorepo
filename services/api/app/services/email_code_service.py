@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clock import utcnow
 from app.errors import AppError
-from app.integrations.email import EmailUnavailable, SmtpSender
+from app.integrations.email import EmailRejected, EmailUnavailable, SmtpSender
 from app.models import EmailCode
 from app.services.audit_service import AuditEvent, record
 
@@ -66,6 +66,8 @@ async def send_code(db: AsyncSession, sender: SmtpSender, user_id: int, email: s
     )
     try:
         await sender.send(email, SUBJECT, body)
+    except EmailRejected:
+        raise AppError(400, "email_rejected", "error.email_rejected", ["email"]) from None
     except EmailUnavailable:
         raise AppError(503, "email_unavailable", "error.email_service_unavailable") from None
     sent_at = utcnow()

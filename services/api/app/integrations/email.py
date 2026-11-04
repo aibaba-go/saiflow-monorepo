@@ -1,7 +1,8 @@
 """Outgoing mail over an encrypted SMTP connection (STARTTLS or implicit TLS).
 
 Transient failures (connection problems, timeouts, 4xx replies) are retried (D5);
-5xx replies are permanent. Either way the caller only sees EmailUnavailable."""
+5xx replies are permanent. The caller sees EmailRejected when the recipient was refused
+permanently, otherwise EmailUnavailable."""
 
 import asyncio
 from collections.abc import Awaitable, Callable
@@ -15,6 +16,17 @@ from app.retry import with_retries
 
 class EmailUnavailable(Exception):
     pass
+
+
+class EmailRejected(EmailUnavailable):
+    """The server refused the recipient permanently (5xx): the address is the problem,
+    not the service (AC-FR-SYS-020-09). Our own account being refused (535) is not this."""
+
+
+def _is_recipient_rejection(exc: BaseException) -> bool:
+    if isinstance(exc, aiosmtplib.SMTPRecipientsRefused):
+        return bool(exc.recipients) and all(r.code >= 500 for r in exc.recipients)
+    return isinstance(exc, aiosmtplib.SMTPRecipientRefused) and exc.code >= 500
 
 
 def _is_transient(exc: BaseException) -> bool:
@@ -72,6 +84,8 @@ class SmtpSender:
         try:
             await with_retries(call, is_transient=_is_transient, sleep=self.sleep)
         except Exception as exc:
+            if _is_recipient_rejection(exc):
+                raise EmailRejected(_reason(exc)) from None
             raise EmailUnavailable(_reason(exc)) from None
 
 
