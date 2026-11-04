@@ -286,7 +286,7 @@
 - **THEN** 最多一人成为成员，O 的成员人数不超过 2
 
 ### Requirement: FR-SYS-026 成员移除与退出
-组织中持有"成员管理"权限点的成员 SHALL 可以移除其他成员，但 SHALL NOT 移除 owner。成员 SHALL 可以自行退出组织；owner SHALL NOT 退出。被移除或退出的成员 SHALL 立即失去该组织的访问权，其在该组织中提交的数据 SHALL 仍属于该组织。
+组织中持有"成员管理"权限点的成员 SHALL 可以移除其他成员，但 SHALL NOT 移除 owner。成员 SHALL 可以自行退出组织；owner SHALL NOT 退出，须先转让 owner（FR-SYS-029）。被移除或退出的成员 SHALL 立即失去该组织的访问权，其在该组织中提交的数据 SHALL 仍属于该组织。
 
 #### Scenario: AC-FR-SYS-026-01 移除成员
 - **GIVEN** 组织 O 中成员 M 提交过数据
@@ -307,6 +307,33 @@
 - **GIVEN** 已被移除的用户 M
 - **WHEN** 组织 O 再次邀请 M，M 接受
 - **THEN** M 重新成为 O 的成员并持有默认角色
+
+### Requirement: FR-SYS-029 owner 转让
+组织的 owner SHALL 可以把 owner 身份转让给本组织的另一名有效成员。转让 SHALL 在一次操作中完成：
+- 受让人成为 owner；
+- 原 owner 成为普通成员，并持有默认角色。
+
+任何时刻每个组织 SHALL 恰好有一名 owner。只有 owner 本人 SHALL 可以发起转让；受让人 SHALL 是本组织的有效成员，且不是 owner 本人。转让后，原 owner MAY 按 FR-SYS-026 退出组织。
+
+#### Scenario: AC-FR-SYS-029-01 转让成功
+- **GIVEN** 组织 O 的 owner A 与成员 M
+- **WHEN** A 把 owner 转让给 M
+- **THEN** M 是 O 的 owner，拥有全部权限点；A 仍是 O 的成员，持有默认角色；O 只有一名 owner
+
+#### Scenario: AC-FR-SYS-029-02 转让后原 owner 可以退出
+- **GIVEN** 上一场景的组织 O
+- **WHEN** A 退出 O
+- **THEN** A 不再是 O 的成员，M 仍是 owner
+
+#### Scenario: AC-FR-SYS-029-03 只能转给本组织的其他成员
+- **GIVEN** 组织 O 的 owner A，用户 V 不是 O 的成员，用户 R 已被 O 移除
+- **WHEN** A 把 owner 转让给 V、R 或本人
+- **THEN** 三次都返回 HTTP 400 并指出受让人字段，O 的 owner 仍是 A
+
+#### Scenario: AC-FR-SYS-029-04 只有 owner 能转让
+- **GIVEN** 组织 O 中一名持有"成员管理"与"角色管理"但不是 owner 的成员 B
+- **WHEN** B 把 owner 转让给本人或其他成员
+- **THEN** 返回 HTTP 403，O 的 owner 不变
 
 ### Requirement: FR-SYS-027 企业认证
 组织的 owner 与持有"企业认证申请"权限点的成员 SHALL 可以提交企业认证申请。认证资料：
@@ -354,7 +381,7 @@
 - 组织资料修改，组织的停用与恢复；
 - 角色的新建、修改与删除，角色分配；
 - 邀请的生成、撤销与接受；
-- 成员的移除与退出；
+- 成员的移除与退出，owner 转让；
 - 企业认证的提交、批准、驳回、直接设定与取消；
 - 成员人数上限参数的修改。
 
