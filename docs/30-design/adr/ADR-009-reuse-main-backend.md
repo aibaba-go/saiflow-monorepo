@@ -3,7 +3,7 @@ doc_id: ADR-009
 title: "ADR-009 — 复用 main 分支后端的代码逻辑与数据库设计"
 type: adr
 status: accepted
-version: 1.1.0
+version: 1.2.0
 updated: 2026-11-04
 owner: Product Engineering
 related: [ADR-006, ADR-008, DM-File, DM-OcrJob, DM-ExtractionPayload, DM-FormDocument, DM-DocumentTemplate, NFR-SEC-002, NFR-SEC-010]
@@ -93,12 +93,14 @@ main 的 `02_base_data.sql` 是配置而不是业务数据，作为重建的初�
 - main 的后端从此只修演示环境的 bug，不再增加功能；新功能在本分支按 OpenSpec 流程开发。
 - 以下四个问题不得带入重建。在 main 上的处理方式如下（负责人 2026-11-04 决定）：
   - **TextIn 凭据**写死在 `config.py` 的默认值中：在 main 上暂时保持原样，重构结束、切换到新后端时再轮换。重建中按 FR-PLAT-003 只从环境变量读取，代码中不留默认值；可以沿用同一个凭据值，放在服务器的 `.env` 里。
-  - **`services/api/storage/` 下的 31 个文件**：负责人确认都是测试文件，不再需要，可以删除。
+  - **`services/api/storage/` 下的 31 个文件**：负责人确认都是测试文件，已从 main 删除（提交 `effd41c`，没有改写历史）。
   - **`POST /file-imports` 可以访问内网**：重建时要拦截私有地址，并逐次检查重定向的目标。
   - **`SECRET_KEY` 带有默认值**，而下载票据用它签名：重建时去掉默认值。
 - 分工（负责人 2026-11-04 决定）：
-  - **同事：** 负责后端的主要业务逻辑开发，主业务不再分工。
-  - **负责人：** 负责前端开发，以及和业务没有直接关系的后端功能。
+  - **同事：** 负责后端的主要业务逻辑，从 B-3（上传与 OCR）开始，之后是 B-4（核验、模板与导出），主业务不再分工。
+  - **负责人：** 负责前端开发，以及和业务没有直接关系的后端功能。B-2b（团队租户与权限，包括 B-2a 和 harden-identity 遗留的 9 个 Minor）与 B-2c（套餐与计量）作为平台基础，也由负责人完成。
+  - **分支：** 同事从 `chore/ai-workflow-v2` 拉出功能分支 `feat/<change>`，完成后通过 PR 合并回来。部署仍然只从 `chore/ai-workflow-v2` 发布。
+  - **B-3 依赖 B-2b、B-2c 的接口：** 租户访问检查和额度扣减。B-2b、B-2c 写需求时先把这两个接口定下来；在它们完成之前，同事按个人租户开发，额度扣减先用一个假的实现。
 
 ## 后果
 
@@ -116,5 +118,6 @@ main 的 `02_base_data.sql` 是配置而不是业务数据，作为重建的初�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.2.0 | 2026-11-04 | Product Engineering | §6：测试文件已删除（effd41c）；B-2b、B-2c 由负责人完成，同事从 B-3 开始；功能分支加 PR 的方式 |
 | 1.1.0 | 2026-11-04 | Product Engineering | §6：main 上 TextIn 凭据与测试文件的处理方式、分工 |
 | 1.0.0 | 2026-11-04 | Product Engineering | 初版：三类代码处理方式、业务表沿用与调整清单 T1–T9、隐藏假设、与 v3 需求的差异、基础数据与 main 后续开发 |
