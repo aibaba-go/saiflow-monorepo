@@ -62,7 +62,9 @@ async def _ensure_app_role(settings) -> None:
             text("select 1 from pg_roles where rolname = :r"), {"r": APP_ROLE}
         )
         if not exists:
-            await conn.execute(text(f"CREATE ROLE {APP_ROLE} LOGIN PASSWORD '{APP_ROLE_PASSWORD}'"))
+            await conn.execute(text(f"CREATE ROLE {APP_ROLE} LOGIN"))
+        # always reset: a local role left over with another password must still work (M6)
+        await conn.execute(text(f"ALTER ROLE {APP_ROLE} LOGIN PASSWORD '{APP_ROLE_PASSWORD}'"))
         await conn.execute(text(f'GRANT CONNECT ON DATABASE "{settings.db_name}" TO {APP_ROLE}'))
     await engine.dispose()
 
@@ -117,8 +119,16 @@ async def db(db_engine):
 
 @pytest.fixture
 def app_settings(migrated_db):
-    """Settings for the app under test; tests may replace fields with model_copy."""
-    return migrated_db.model_copy(update={"line_login_redirect_uris": WEB_REDIRECT})
+    """Settings for the app under test; tests may replace fields with model_copy. The app
+    connects as the least-privilege application role, as on the server (M6); `db` stays
+    the superuser for setup and assertions."""
+    return migrated_db.model_copy(
+        update={
+            "line_login_redirect_uris": WEB_REDIRECT,
+            "db_user": APP_ROLE,
+            "db_password": SecretStr(APP_ROLE_PASSWORD),
+        }
+    )
 
 
 @pytest.fixture
