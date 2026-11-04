@@ -4,11 +4,12 @@ from typing import Annotated
 import pytest
 from fastapi import Depends
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clock import utcnow
-from app.dependencies import get_principal
+from app.dependencies import get_db, get_principal
 from app.services.session_service import Principal
-from app.services.tenant_access import ensure_tenant_access
+from app.services.tenant_access import resolve_tenant
 
 pytestmark = pytest.mark.integration
 
@@ -37,9 +38,11 @@ async def test_guest_session_is_reused(api, db):
 
 async def test_guest_cannot_read_other_guest_tenant(api):  # AC-FR-SYS-010-02
     async def read_tenant(
-        tenant_id: int, principal: Annotated[Principal, Depends(get_principal)]
+        tenant_id: int,
+        principal: Annotated[Principal, Depends(get_principal)],
+        db: Annotated[AsyncSession, Depends(get_db)],
     ) -> dict:
-        ensure_tenant_access(principal, tenant_id)
+        await resolve_tenant(db, principal, tenant_id)
         return {"tenant_id": tenant_id, "secret": "tenant-data"}
 
     api.app.add_api_route("/api/v1/_test/tenants/{tenant_id}", read_tenant, methods=["GET"])

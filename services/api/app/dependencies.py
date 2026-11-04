@@ -13,8 +13,9 @@ from app.integrations.line import LineClient
 from app.models import AdminAccount, AdminSession
 from app.rate_limit import SlidingWindowLimiter
 from app.repositories import user_repo
-from app.services import admin_service, session_service
+from app.services import admin_service, session_service, tenant_access
 from app.services.session_service import Principal
+from app.services.tenant_access import TenantContext
 
 
 def get_settings(request: Request) -> Settings:
@@ -62,6 +63,25 @@ async def get_principal(
     if principal is None:
         raise AppError(401, "unauthenticated", "auth.required")
     return principal
+
+
+TENANT_HEADER = "X-Tenant-Id"
+
+
+async def get_tenant_context(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    principal: Annotated[Principal, Depends(get_principal)],
+) -> TenantContext:
+    """The tenant this request acts on (FR-SYS-017): header X-Tenant-Id, or the caller's own
+    tenant. A malformed value is treated like any unusable tenant (404)."""
+    raw = request.headers.get(TENANT_HEADER)
+    tenant_id: int | None = None
+    if raw is not None:
+        if not raw.isascii() or not raw.isdigit() or int(raw) <= 0:
+            raise tenant_access.not_found()
+        tenant_id = int(raw)
+    return await tenant_access.resolve_tenant(db, principal, tenant_id)
 
 
 async def require_user(principal: Annotated[Principal, Depends(get_principal)]) -> Principal:

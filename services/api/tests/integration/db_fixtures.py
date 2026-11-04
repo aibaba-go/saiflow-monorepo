@@ -26,6 +26,7 @@ test_tenant_items = Table(
     Column("id", BigInteger, primary_key=True, autoincrement=True),
     Column("tenant_id", BigInteger, ForeignKey(f"{SCHEMA}.tenants.id"), nullable=False),
     Column("label", Text, nullable=False),
+    Column("created_by_user_id", BigInteger),  # tenancy: "only what I submitted"
     info={"tenant_scoped": True},
 )
 
@@ -33,7 +34,8 @@ test_tenant_items = Table(
 async def _create_test_tables(settings) -> None:
     engine = create_engine(settings)
     async with engine.begin() as conn:
-        await conn.run_sync(test_tenant_items.create, checkfirst=True)
+        await conn.run_sync(test_tenant_items.drop, checkfirst=True)  # columns may have changed
+        await conn.run_sync(test_tenant_items.create)
     await engine.dispose()
 
 

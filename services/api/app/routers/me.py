@@ -22,7 +22,8 @@ from app.schemas.me import (
     ProfileUpdate,
     RegistrationRequest,
 )
-from app.services import email_code_service, me_service, user_service
+from app.schemas.organization import UsableTenantOut
+from app.services import email_code_service, me_service, tenant_access, user_service
 from app.services.session_service import Principal
 
 router = APIRouter(prefix="/api/v1/me", tags=["me"], dependencies=[Depends(require_csrf_header)])
@@ -34,6 +35,16 @@ async def get_me(
     principal: Annotated[Principal, Depends(get_principal)],
 ) -> MeResponse:
     return await me_service.me(db, principal)
+
+
+@router.get("/tenants", operation_id="listMyTenants", response_model=list[UsableTenantOut])
+async def list_my_tenants(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    principal: Annotated[Principal, Depends(require_user)],
+) -> list[UsableTenantOut]:
+    """Tenants the caller can use: the personal tenant and active organizations (FR-SYS-017)."""
+    found = await tenant_access.usable_tenants(db, principal.user_id)  # type: ignore[arg-type]
+    return [UsableTenantOut.model_validate(t, from_attributes=True) for t in found]
 
 
 @router.post("/email-code", operation_id="sendEmailCode", status_code=204)
