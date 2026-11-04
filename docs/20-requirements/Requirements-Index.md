@@ -3,8 +3,8 @@ doc_id: REQ-INDEX
 title: "SaiFlow — 需求索引与可追溯性矩阵"
 type: index
 status: active
-version: 1.6.1
-updated: 2026-11-03
+version: 1.7.1
+updated: 2026-11-04
 owner: Product Engineering
 ---
 
@@ -32,9 +32,9 @@ owner: Product Engineering
 |----|------|--------|------|--------|----------|----------|------|
 | FR-UPLOAD-001 | 手机相机上传 | P0 | §4.1 | — | AC-FR-UPLOAD-001-01 | API-1 | active |
 | FR-UPLOAD-002 | 扫描仪/文件导入 | P0 | §4.1 | — | AC-FR-UPLOAD-002-01 | API-1 | active |
-| FR-UPLOAD-003 | 接受 JPG/PNG/PDF | P0 | §4.1 | — | AC-FR-UPLOAD-003-01/02 | API-1 | active |
+| FR-UPLOAD-003 | 接受 JPG/PNG/PDF（LINE Files 可选任意文件，不支持的上传前拒绝） | P0 | §4.1 | — | AC-FR-UPLOAD-003-01/02/03 | API-1 | active |
 | FR-UPLOAD-004 | 拒绝不支持的格式 | P0 | §4.1 | 003 | AC-FR-UPLOAD-003-02 | API-1 | active |
-| FR-UPLOAD-005 | 批量上传 | P0 | §4.1 | — | AC-FR-UPLOAD-005-01 | API-1 | active |
+| FR-UPLOAD-005 | 批量上传（LINE Files 多选） | P0 | §4.1 | — | AC-FR-UPLOAD-005-01/02 | API-1、OCR-Pipeline | active |
 | FR-UPLOAD-006 | 自动矫正 | P0 | §4.1 | 001 | AC-FR-UPLOAD-006-01 | OCR-Pipeline | active |
 | FR-UPLOAD-007 | 去除阴影 | P1 | §4.1 | 001 | AC-FR-UPLOAD-007-01 | OCR-Pipeline | active |
 | FR-UPLOAD-008 | 降噪 | P1 | §4.1 | 001 | AC-FR-UPLOAD-008-01 | OCR-Pipeline | active |
@@ -42,6 +42,7 @@ owner: Product Engineering
 | FR-UPLOAD-010 | 上传状态队列 | P0 | §4.1 | 005 | AC-FR-UPLOAD-010-01 | API-1 | active |
 | FR-UPLOAD-011 | 保留原件 | P0 | §4.1 | — | AC-FR-UPLOAD-011-01 | DM-Document | active |
 | FR-UPLOAD-012 | 低质量警告 | P1 | §5.4 | 006 | AC-FR-UPLOAD-012-01 | OCR-Pipeline | active |
+| FR-UPLOAD-013 | Pending 待处理、批量处理/删除、取消上传 | P0 | 用户反馈 2026-11-04 | 005、010 | AC-FR-UPLOAD-013-01..04 | API-Spec、Data-Model DM-File | active |
 | FR-OCR-001 | 文档类型处理 | P0 | §4.2 | UPLOAD-006 | AC-FR-OCR-001-01 | OCR-Pipeline | active |
 | FR-OCR-002 | PO 字段提取 | P0 | §4.2 | OCR-001 | AC-FR-OCR-002-01 | DM-ExtractedField | active |
 | FR-OCR-003 | Delivery Note 提取 | P0 | §4.2 | OCR-001 | AC-FR-OCR-003-01 | DM-ExtractedField | active |
@@ -175,6 +176,9 @@ owner: Product Engineering
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.7.1 | 2026-11-04 | Product Engineering | FR-UPLOAD-003/005：移除 Photos 入口，Files 可选任意文件、仅上传 JPG/PNG/PDF |
+| 1.7.0 | 2026-11-04 | Product Engineering | 新增 FR-UPLOAD-013（Pending 待处理、单条/批量预览后处理、软删除、Cancel all 与单文件取消），关联 AC-FR-UPLOAD-013-01..04 |
+| 1.6.2 | 2026-11-04 | Product Engineering | FR-UPLOAD-003/005 补 Photos 图片限定和 LINE 多选上传，关联 AC-FR-UPLOAD-003-03/005-02；首页待处理区与批量开始处理仍仅为待确认设计 |
 | 1.6.1 | 2026-11-03 | Product Engineering | FR-ENTRY-015 增补 Android LINE 内置浏览器限时下载票据，AC 列补 AC-FR-ENTRY-015-02 |
 | 1.6.0 | 2026-11-01 | Product Engineering | 新增 FR-SYS-019（套餐配置化：plans 表 + CLI 维护，默认套餐/试用月数/续期月数可配，泰英双语，立即生效），AC-FR-SYS-019-01..05 |
 | 1.5.3 | 2026-10-31 | Product Engineering | FR-SYS-018 通知中心收敛为账户变动类（新增 ACCOUNT_ACTIVATED / COMPANY_ACTIVATED），AC 列补齐至 AC-FR-SYS-018-05 |

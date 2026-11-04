@@ -3124,6 +3124,11 @@ def test_guest_upload_and_job_carry_tenant_id(client, modules, fake_db, tenant_s
     uploaded.id = "synthetic-file"
     uploaded.status = "READY"
     monkeypatch.setattr(modules.ocr, "get_file_for_user", Mock(return_value=uploaded))
+    # FR-UPLOAD-013：建任务前按主键加锁重读文件，替身对该文件返回同一对象
+    tenant_get = fake_db.session.get.side_effect
+    fake_db.session.get.side_effect = lambda model, pk, **kw: (
+        uploaded if model is modules.models.File and pk == uploaded.id else tenant_get(model, pk)
+    )
     response = client.post("/api/v1/ocr/jobs", json={"file_id": uploaded.id})
     assert response.status_code == 201
     job = fake_db.session.add.call_args.args[0]

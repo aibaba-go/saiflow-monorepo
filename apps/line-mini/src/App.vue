@@ -194,7 +194,12 @@ const TABS = [
       <ScanHomePage v-if="route.name === 'scan'" />
       <HistoryPage v-else-if="route.name === 'history'" />
       <MyPage v-else-if="route.name === 'my'" />
-      <ConfirmPage v-else-if="route.name === 'confirm'" :file-id="route.params?.fileId ?? ''" />
+      <ConfirmPage
+        v-else-if="route.name === 'confirm'"
+        :key="route.params?.fileIds || route.params?.fileId || ''"
+        :file-id="route.params?.fileId ?? ''"
+        :file-ids="route.params?.fileIds ?? ''"
+      />
       <ProcessingPage v-else-if="route.name === 'processing'" :job-id="route.params?.jobId ?? ''" />
       <ResultPage v-else-if="route.name === 'result'" :job-id="route.params?.jobId ?? ''" />
       <FinalResultPage v-else-if="route.name === 'final'" :job-id="route.params?.jobId ?? ''" />

@@ -2,7 +2,8 @@
 
 三段式：POST /uploads 预检建会话 → PUT /uploads/{id}/content 流式收内容
 → POST /uploads/{id}/complete 校验完整性并置 READY。
-状态机：UPLOADING → UPLOADED → VALIDATING → READY / REJECTED。
+状态机：UPLOADING → UPLOADED → VALIDATING → READY / REJECTED；
+任一状态在没有 OCR 任务引用时可由创建者删除 → DELETED（FR-UPLOAD-013，终态）。
 """
 from __future__ import annotations
 
@@ -15,13 +16,14 @@ import uuid
 
 import httpx
 from flask import Blueprint, current_app, request, send_file
+from sqlalchemy import select
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from auth import audit, current_user
-from errors import ApiError, invalid_argument, not_found, ok
+from errors import ApiError, invalid_argument, not_found, ok, state_conflict
 from extensions import db
 from fileaccess import get_file_for_user
-from models import File
+from models import File, OcrJob
 from workspace import resolve_tenant
 import storage
 
@@ -61,7 +63,19 @@ def _detect_page_count(ext: str, data: bytes) -> int:
         raise ApiError(400, "INVALID_ARGUMENT", "files.corrupt_or_encrypted")
 
 
+PENDING_LIMIT = 100
+
+
+def _lock_file(file_id: str) -> File | None:
+    """行锁重读（FR-UPLOAD-013）：与删除 / 建任务串行，populate_existing 丢弃会话内旧快照。"""
+    return db.session.get(File, file_id, with_for_update=True, populate_existing=True)
+
+
 def _reject(f: File, reason_key: str) -> None:
+    f = _lock_file(f.id)
+    if f is None or f.status == "DELETED":  # 已被删除/取消：不得把 DELETED 覆盖回 REJECTED
+        db.session.rollback()
+        return
     f.status = "REJECTED"
     f.reject_reason = reason_key
     db.session.commit()
@@ -69,6 +83,10 @@ def _reject(f: File, reason_key: str) -> None:
 
 def _save_content(f: File, data: bytes, ext: str) -> None:
     f.storage_path = storage.put_bytes("files", f"{f.id}.{ext}", data, _EXT_MIME[ext])
+    _apply_content(f, data, ext)
+
+
+def _apply_content(f: File, data: bytes, ext: str) -> None:
     f.size_bytes = len(data)
     f.sha256 = hashlib.sha256(data).hexdigest()
     f.mime_type = _EXT_MIME[ext]
@@ -133,7 +151,15 @@ def upload_content(upload_id: str):
         _reject(f, "files.disguised_type")
         raise invalid_argument("files.disguised_type")
 
-    _save_content(f, data, ext)
+    path = storage.put_bytes("files", f"{f.id}.{ext}", data, _EXT_MIME[ext])
+    # FR-UPLOAD-013：写存储期间可能已被取消（DELETED）；加锁重读，不得把 DELETED 覆盖为 UPLOADED
+    f = _lock_file(upload_id)
+    if f is None or f.status == "DELETED":
+        db.session.rollback()
+        storage.delete(path)
+        raise state_conflict()
+    f.storage_path = path
+    _apply_content(f, data, ext)
     f.status = "UPLOADED"
     f.reject_reason = ""
     db.session.commit()
@@ -169,6 +195,11 @@ def upload_complete(upload_id: str):
             _reject(f, "files.invalid")
             raise invalid_argument("files.invalid")
 
+    # FR-UPLOAD-013：校验期间可能已被取消/删除；加锁重读后再置 READY
+    f = _lock_file(f.id)
+    if f is None or f.status == "DELETED":
+        db.session.rollback()
+        raise state_conflict()
     f.page_count = pages
     f.status = "READY"
     db.session.commit()
@@ -246,6 +277,57 @@ def file_import():
 
 
 # ---------- 文件读取 ----------
+
+
+@bp.get("/files/pending")
+def pending_files():
+    """待处理记录（FR-UPLOAD-013）：本人在该租户已 READY、尚未建过 OCR 任务的识别原件。"""
+    user = current_user()
+    tenant = resolve_tenant(user, request.args.get("tenant_id"))
+    has_job = select(OcrJob.id).where(OcrJob.file_id == File.id).exists()
+    rows = (
+        File.query.filter(
+            File.created_by_user_id == user.id,
+            File.tenant_id == tenant.id,
+            File.purpose == "OCR_TASK",
+            File.status == "READY",
+            ~has_job,
+        )
+        .order_by(File.created_at.desc())
+        .limit(PENDING_LIMIT)
+        .all()
+    )
+    return ok({"items": [f.to_dict() for f in rows]})
+
+
+@bp.delete("/files/<file_id>")
+def delete_file(file_id: str):
+    """删除待处理记录 / 取消上传（FR-UPLOAD-013）：仅创建者、仅 OCR_TASK、未被任何任务引用。"""
+    user = current_user()
+    f = db.session.get(File, file_id)
+    if f is None or f.created_by_user_id != user.id or f.purpose != "OCR_TASK":
+        raise not_found()  # 不泄露存在性
+    f = _lock_file(file_id)  # 与 content/complete/建任务串行
+    if f is None:
+        raise not_found()
+    if f.status == "DELETED":
+        db.session.rollback()
+        return ok({"file_id": file_id, "status": "DELETED"})  # 幂等
+    if db.session.query(OcrJob.id).filter(OcrJob.file_id == f.id).first() is not None:
+        db.session.rollback()
+        raise state_conflict("files.in_use")
+
+    from_status, storage_path, pages = f.status, f.storage_path, max(f.page_count or 0, 1)
+    f.status = "DELETED"
+    f.reject_reason = ""
+    db.session.commit()
+
+    # 提交后尽力清理原件与 PDF 预览缓存（失败不影响删除结果）
+    storage.delete(storage_path)
+    for page in range(1, pages + 1):
+        storage.delete(storage.stored_path("previews", f"{file_id}/page_{page}.png"))
+    audit("file.deleted", "file", file_id, {"from_status": from_status})
+    return ok({"file_id": file_id, "status": "DELETED"})
 
 
 @bp.get("/files/<file_id>")

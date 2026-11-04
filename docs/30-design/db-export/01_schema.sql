@@ -492,7 +492,7 @@ COMMENT ON COLUMN files.page_count IS '页数（PDF 解析得出，图片为 1�
 
 COMMENT ON COLUMN files.sha256 IS '文件内容 SHA-256';
 
-COMMENT ON COLUMN files.status IS '文件状态：UPLOADING=上传中 / UPLOADED=已上传 / VALIDATING=校验中 / READY=可用 / REJECTED=被拒绝';
+COMMENT ON COLUMN files.status IS '文件状态：UPLOADING=上传中 / UPLOADED=已上传 / VALIDATING=校验中 / READY=可用 / REJECTED=被拒绝 / DELETED=已删除（创建者删除待处理记录或取消上传）';
 
 COMMENT ON COLUMN files.reject_reason IS '被拒绝原因（消息键）';
 

@@ -3,8 +3,8 @@ doc_id: AC-000
 title: "SaiFlow — 汇总验收标准（V1.0 / P0）"
 type: acceptance
 status: active
-version: 1.9.7
-updated: 2026-11-03
+version: 1.10.2
+updated: 2026-11-04
 owner: QA
 verified_requirements: [FR-UPLOAD, FR-OCR, FR-VERIFY, FR-ENTRY, FR-MGMT, FR-SYS, FR-TEMPLATE]
 ---
@@ -53,6 +53,62 @@ Feature: FR-UPLOAD 文档接收
     When 提交该批次
     Then 全部 10 个文件均被排入队列，且显示每个文件的状态
 
+  Scenario: AC-FR-UPLOAD-003-03 Files 可选任意文件，仅上传支持的格式
+    Given 首页只显示 Camera 与 Files 两个入口，不显示 Photos
+    When 用户点击 Files
+    Then 原生选择器不设格式过滤，任意类型文件均可多选
+    When 选择中包含 Word、Excel、HEIC 等不支持的文件
+    Then 该文件行标记失败并显示本地化错误 "Unsupported file type. Use JPG, PNG or PDF."，不发起该文件上传
+    And 同批 JPG、PNG、PDF 照常上传并进入 Pending；不承诺网页可移除 iOS/LINE 原生菜单
+
+  Scenario: AC-FR-UPLOAD-005-02 LINE 多选与部分失败
+    Given 用户在 Files 一次选择多个支持的文件
+    When 开始上传
+    Then 全部文件按序使用各自的三段 XHR 上传，展示逐文件状态与百分比
+    And 固定批次租户，上传期间不能交叉切换身份或发起 URL 导入
+    When 某文件发生普通上传错误
+    Then 该文件标记失败且不自动重试，继续其余文件，并可查看成功文件
+    And 失败行提供 Retry 与 Cancel：Retry 将该文件重新排队上传（批次已结束则开始新一轮），Cancel 直接移除该记录且不弹确认
+    And 本地类型校验失败的行只提供 Cancel
+    When 收到 401 或会话已切换
+    Then 停止后续上传，旧文件结果不显示给新会话
+    When 全部上传成功
+    Then 不跳转确认页，全部文件进入首页 Pending，不创建 OCR 任务
+
+  Scenario: AC-FR-UPLOAD-013-01 Pending 待处理与预览后开始处理
+    Given 用户在当前租户上传成功若干文件且未开始处理
+    Then 首页 Recent tasks 上方的 Pending 列出这些文件，刷新后仍在，切换租户只显示该租户的本人文件
+    When 点击某条 Process
+    Then 打开原有上传确认页预览，Pending 与 Recent tasks 不变
+    When 点击 Start processing
+    Then 仅为该文件创建 OCR 任务并进入处理页，该文件不再出现在 Pending
+
+  Scenario: AC-FR-UPLOAD-013-02 批量预览后开始处理
+    Given 用户在 Pending 勾选 N 条并点击 Process (N)
+    Then 打开多文件预览，可切换文件，未点击开始前不创建任务
+    When 点击 Start processing (N files)
+    Then 按顺序为每个文件创建任务，全部成功回到首页并显示在 Recent tasks
+    When 中途某个创建失败
+    Then 停止并显示本地化错误，已开始的不重复创建，再次点击只处理剩余文件且复用各自幂等键
+
+  Scenario: AC-FR-UPLOAD-013-03 单条与批量删除
+    Given Pending 中有记录
+    When 点击单条垃圾桶或勾选后点击 Delete (N)
+    Then 先显示确认并列出文件名，点击 Keep records 不做任何改动
+    When 确认删除
+    Then 文件软删除（status=DELETED，尽力删除原件与预览），从 Pending 移除，Recent tasks 不变
+    And 他人文件 404，已被任务引用 409 files.in_use，失败条目保留并提示
+
+  Scenario: AC-FR-UPLOAD-013-04 取消上传
+    Given 多文件上传进行中
+    When 点击 Cancel all
+    Then 先确认将取消的份数与保留份数；确认后中止当前上传并移除上传中与等待中的记录，已上传的保留在 Pending
+    When 点击上传中文件的 Cancel
+    Then 先提示正在上传、确定取消吗；确认后只中止该文件并继续下一份，被中止的会话被清理且不显示 100%
+    When 点击等待中文件的 Cancel
+    Then 直接从队列移除且不上传，不影响其他文件
+    And 被删除的上传会话后续内容或完成请求返回 409，不会变回 UPLOADED/READY
+
   Scenario: AC-FR-UPLOAD-006-01 自动矫正
     Given 一张倾斜的文档照片
     When 运行预处理
@@ -62,7 +118,7 @@ Feature: FR-UPLOAD 文档接收
     Given 文员在 LINE Mini App 选择支持的相机照片、相册图片或本地文件
     When 文件处于上传预检、传输或后端校验阶段
     Then 百分比与进度条按文件大小估算和已上传字节持续更新且不回退
-    And 后端确认文件可用前不超过 95%，成功后为 100% 并进入上传确认页
+    And 后端确认文件可用前不超过 95%，成功后为 100% 并进入首页 Pending
     And 上传失败后停止进度、显示本地化错误并恢复选择入口，再次选择时从 0% 开始
     And 三段上传使用同源 XHR，既有 Cookie/CSRF 与原始字节保持不变，每阶段等待上限 120 秒
     Given 上传初始化、内容或完成阶段发生网络错误、中断、超时或状态 0
@@ -1315,6 +1371,10 @@ Feature: NFR V1.0 门槛
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.10.2 | 2026-11-04 | Product Engineering | AC-FR-UPLOAD-003-03 改写：首页只留 Camera/Files，Files 可选任意文件，不支持的格式上传前标失败（只可 Cancel）；AC-FR-UPLOAD-005-02 去掉 Photos |
+| 1.10.1 | 2026-11-04 | Product Engineering | AC-FR-UPLOAD-005-02 补充：失败行不中断后续上传，提供 Retry（重新排队）与 Cancel（直接移除）；Photos 类型校验失败只可 Cancel |
+| 1.10.0 | 2026-11-04 | Product Engineering | 新增 AC-FR-UPLOAD-013-01..04：首页 Pending、单条/批量预览后开始处理、单条/批量软删除、Cancel all 与单文件取消；AC-005-02/010-01 改为上传成功进入 Pending |
+| 1.9.8 | 2026-11-04 | Product Engineering | 新增 AC-FR-UPLOAD-003-03/005-02：Photos 图片限定、Photos/Files 多选逐文件上传、部分失败与会话边界、多文件逐条确认；首页待处理/批量开始处理未纳入实现，原生菜单与真机效果不由桌面验证代替 |
 | 1.9.7 | 2026-11-03 | Product Engineering | 新增 AC-FR-ENTRY-015-02：Android LINE 内置浏览器经 60 秒限时下载票据在系统浏览器下载，票据篡改/过期/会话注销/账号停用/无权一律 404，重复点击复用导出，iOS/桌面不变 |
 | 1.9.6 | 2026-11-01 | Product Engineering | 新增 AC-FR-SYS-019-01..05（默认套餐/试用月数可配、月页数修改对存量订阅 ≤60 秒生效、停用套餐、泰英双语与审批缺省续期、CLI 校验/确认/审计与空表播种）；EPIC-06 计数 19；后端 863 项隔离测试、前端类型检查与构建通过，2026-11-01 正式发布：后端 saiflow-api-00056-ril、前端 saiflow-line-mini-00048-max（bundle index-SFvaHz8q.js）no-traffic 部署→tag 核验 /api/health 200、未登录接口 401、bundle 哈希一致→只读核验共享库自动建表并播种 4 个套餐（属主 saiflow_api，与种子一致）→手动切 100%，环境变量（22 项）与并发 12 与上一版一致；未建游客会话、未用真实账号做端到端核验 |
 | 1.9.5 | 2026-10-31 | Product Engineering | 新增 AC-FR-SYS-018-04（通知中心只显示账户变动类、OCR 完成不通知）与 AC-FR-SYS-018-05（个人/公司账户首次开通通知）；后端 831 项隔离测试通过；2026-10-31 正式发布：后端 saiflow-api-00054-mol、前端 saiflow-line-mini-00046-god（bundle index-IPu3DEpl.js）no-traffic 部署→tag 核验 /api/health 200、通知接口未登录 401→手动切 100%，环境变量与并发 12 与上一版一致，切流后 15 分钟内无 5xx；含同日 TEMPLATE_MATCHING 三步流程；未用真实账号做端到端核验 |

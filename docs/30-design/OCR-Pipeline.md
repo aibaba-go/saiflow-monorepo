@@ -3,8 +3,8 @@ doc_id: DES-004
 title: "SaiFlow — OCR 与提取流水线"
 type: design
 status: active
-version: 1.2.1
-updated: 2026-10-31
+version: 1.2.4
+updated: 2026-11-04
 owner: Product Engineering
 source: "EPIC-01, EPIC-02, EPIC-03, EPIC-04, EPIC-08；document-template-mapping v2 R1–R6"
 related: [DM-ExtractionPayload, DM-OcrRawResult, DM-TemplateMapping, DM-DocumentTemplate, DM-ResultVersion, NFR-PERF, NFR-I18N]
@@ -52,6 +52,8 @@ flowchart LR
 ### 接收阶段的客户端进度（FR-UPLOAD-010）
 
 LINE Mini App 的上传为预检、内容传输、完成确认三段。内容传输使用 `XMLHttpRequest.upload.onprogress` 获取已发送字节比例；预检和后端存储、校验期间按文件大小与耗时估算，进度不回退且最多到 95%。完成确认成功才报告 100%；成功或失败都清除估算定时器。请求仍使用同源会话 Cookie、CSRF 请求头和统一 API 错误处理。
+
+多选上传按文件逐个复用同一三段通道，批次固定租户与会话；逐文件状态与失败继续规则以 [FR-UPLOAD-002/003/005](../20-requirements/functional/EPIC-01-document-upload.md) 为准。上传不创建 OCR 任务。成功文件进入首页 Pending，单条 Process 打开原确认页，批量 Process (N) 预览后由前端逐个 `createJob`（各自幂等键），不新增批量处理 API 或供应商调用；删除为文件软删除，取消上传会中止 XHR 并清理会话（FR-UPLOAD-013）。LINE 首页只有 Camera/Files，Files 不设格式过滤，JPG/PNG/PDF 以外的文件在前端上传前即被拒绝；原生菜单能力受 iOS/LINE 宿主限制。
 
 ## 2. 输入、输出与存储边界
 
@@ -166,6 +168,9 @@ FR-ENTRY-002：XLSX/CSV按历史固定模板顺序和显示名、金额type导�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.2.4 | 2026-11-04 | Product Engineering | FR-UPLOAD-003：LINE 只留 Camera/Files 入口，不支持的文件在前端上传前拒绝；上传通道与 OCR 不变 |
+| 1.2.3 | 2026-11-04 | Product Engineering | FR-UPLOAD-013：上传成功进入 Pending，预览确认后才创建任务（批量为前端逐个 createJob），软删除与取消上传不触发供应商调用 |
+| 1.2.2 | 2026-11-04 | Product Engineering | FR-UPLOAD-002/003/005/010：多选串行复用三段 XHR、逐文件反馈及多文件显式逐条确认；不改 OCR 创建/供应商通道，不实现待处理持久化或批量开始处理 |
 | 1.2.1 | 2026-10-31 | Product Engineering | 对齐raw返回、切回不升版/通用选择审计、force重试、同锁删除关联重读中止及正式JSON/TXT兼容；记录816隔离后端、两种子批准/validate、共享库只读证据，真实质量/耗时/token基线未运行 |
 | 1.2.0 | 2026-10-31 | Product Engineering | 同步Flask OcrWorker+独立MappingWorker、开关/不可变关系型快照、LLM-only/四类型/并发/核验/导出及错误恢复；保留历史TextIn重试和Firestore原文合法边界；移除错误ADR-002引擎引用 |
 | 1.1.2 | 2026-10-29 | Product Engineering | FR-OCR-017：当前 Flask OcrWorker / Prompt v2 的最多 4 次调用与 2/4/8 秒退避、HTTP/业务错误、取消/终态、保守恢复及锁行刷新、结果唯一与供应商扣费边界；284 项新增+366 项既有隔离回归通过，未发布；真实供应商及 PostgreSQL 多实例并发未验收，180×4+14 秒仅估算，见 §3.1/6.1 |

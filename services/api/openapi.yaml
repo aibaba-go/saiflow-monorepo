@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: SaiFlow API
-  version: 1.3.1
+  version: 1.3.2
   description: |
     SaiFlow 后端接口（Flask，`services/api`）。本文件是对外接口契约的唯一来源，
     `docs/30-design/API-Spec.md` 由其生成发布，请勿手写第二份。
@@ -17,7 +17,7 @@ info:
     - 业务归属的唯一表达是 `tenant_id`（`tenants` 表）。个人用户（含游客）各占一个 PERSONAL 租户，
       每个公司各占一个 ENTERPRISE 租户（`enterprises.tenant_id` 一对一扩展）。
     - 请求侧：`POST /uploads`、`POST /file-imports`、`POST /me/plan-applications` 在 JSON body 中接受可选
-      `tenant_id`；`GET /me/subscription`、`GET /ocr/jobs` 以查询参数接受 `tenant_id`。
+      `tenant_id`；`GET /me/subscription`、`GET /ocr/jobs`、`GET /files/pending` 以查询参数接受 `tenant_id`。
       缺省或空值 = 调用者本人的个人租户。
     - 响应侧：身份/租户列表与业务对象一律返回 `tenant_id`（企业租户另给 `tenant_type` / `name` / `role`）。
 
@@ -1018,7 +1018,7 @@ paths:
       summary: 创建上传会话
       description: |
         三段式上传第 1 步：POST /uploads（预检并建会话）→ PUT /uploads/{upload_id}/content（原始字节请求体）→ POST /uploads/{upload_id}/complete（校验并置 READY）。
-        文件状态机：UPLOADING → UPLOADED → VALIDATING → READY / REJECTED。
+        文件状态机：UPLOADING → UPLOADED → VALIDATING → READY / REJECTED；未被任何 OCR 任务引用的 OCR_TASK 文件可由创建者经 DELETE /files/{file_id} 置为 DELETED（终态，FR-UPLOAD-013）。
 
         本接口预检租户归属、用途、扩展名与声明大小，创建 status=UPLOADING 的文件记录，返回 201。
         - `file_name` 中 `[A-Za-z0-9._-]`、空格、泰文、中日韩统一表意文字以外的字符替换为 `_`，并截断为 255 字符；扩展名（小写）必须为 jpg/jpeg/png/pdf。
@@ -1069,6 +1069,7 @@ paths:
         - 字节大于 20MB：文件置 REJECTED，返回 400 `files.too_large`；请求体超过 MAX_CONTENT_LENGTH（20MB）时框架直接返回 400 INVALID_ARGUMENT `files.too_large`。
         - 魔数校验：jpg/jpeg 须为 JPEG（FF D8 FF）、png 须为 PNG 签名、pdf 须以 `%PDF` 开头，且须与会话文件名扩展名一致；否则文件置 REJECTED，返回 400 `files.disguised_type`。
         - 成功后写入对象存储，计算 size_bytes 与 sha256，文件置 UPLOADED 并清空 reject_reason。
+        - 并发取消（FR-UPLOAD-013）：写入对象存储后、改状态前加行锁重读文件；若期间已被删除（DELETED），删除刚写入的对象并返回 409 STATE_CONFLICT（`error.state_conflict`），不会把 DELETED 覆盖为 UPLOADED。已为 DELETED 的会话按上述状态规则直接 409。
       operationId: uploadContent
       security:
         - sessionCookie: []
@@ -1133,7 +1134,8 @@ paths:
         - 已为 READY 时幂等返回 200 与当前文件；状态非 UPLOADED（且非 READY）返回 409 STATE_CONFLICT。
         - PDF 用 pypdf 读取页数，损坏/加密 → 400 `files.corrupt_or_encrypted`；图片页数记为 1。
         - purpose=OCR_TASK 时：PDF 页数 > 50 → 400 `files.too_many_pages`；图片页数 > 1 → 400 `files.invalid`。APPLICATION_MATERIAL 不做页数限制。
-        - 以上校验失败时文件置 REJECTED，reject_reason 为对应 message_key。
+        - 以上校验失败时文件置 REJECTED，reject_reason 为对应 message_key（若期间已被删除则保持 DELETED）。
+        - 并发取消（FR-UPLOAD-013）：置 READY 前加行锁重读文件；若校验期间已被删除（DELETED）→ 409 STATE_CONFLICT（`error.state_conflict`），文件保持 DELETED。
         Body 无需参数（不读取请求体）。
       operationId: completeUpload
       security:
@@ -1209,6 +1211,46 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /files/pending:
+    get:
+      tags: [Files]
+      summary: 列出待处理记录
+      description: |
+        待处理记录（FR-UPLOAD-013）：已上传成功、尚未创建 OCR 任务的文件，供首页「Pending」区展示与删除。
+        - 返回当前用户本人创建（created_by_user_id = 当前用户）、归属 `tenant_id` 租户、purpose=OCR_TASK、status=READY，且没有任何 OCR 任务（任意状态，含 FAILED/CANCELLED）引用的文件。
+        - 按 created_at 倒序，最多 100 条，不分页。企业租户下同样只返回本人上传的文件，不含其他成员的文件。
+        - `tenant_id` 缺省或空值 = 本人个人租户；租户校验规则同 POST /uploads：无法解析为整数或租户不存在 → 400 `error.invalid_workspace`；他人的个人租户 / 无成员行 → 403 PERMISSION_DENIED；成员非 ACTIVE、企业未 VERIFIED 或租户非 ACTIVE → 403 ENTERPRISE_ACCESS_REVOKED。
+        - 文件一旦被创建 OCR 任务即不再出现在本列表中；被删除（DELETED）的文件同样不出现。
+      operationId: listPendingFiles
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: tenant_id
+          in: query
+          required: false
+          description: 归属租户 ID；缺省或空值为本人个人租户。
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: 待处理文件列表（可能为空数组）。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/PendingFileList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /files/{file_id}:
     get:
       tags: [Files]
@@ -1241,6 +1283,50 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Files]
+      summary: 删除待处理记录 / 取消上传
+      description: |
+        删除尚未创建 OCR 任务的文件，或取消进行中的上传会话（FR-UPLOAD-013）。
+        - 仅文件创建者可删除；他人文件（含同企业其他成员的文件）、文件不存在或 purpose 非 OCR_TASK → 404（不泄露存在性）。
+        - 对文件行加锁后判断，与 PUT content、POST complete、POST /ocr/jobs 串行。
+        - 已为 DELETED → 幂等返回 200（不重复审计）。
+        - 存在任何引用该文件的 OCR 任务（任意状态）→ 409 STATE_CONFLICT `files.in_use`。
+        - 其余任意状态（UPLOADING / UPLOADED / VALIDATING / READY / REJECTED）均可删除：文件置 DELETED、reject_reason 清空；提交后尽力删除对象存储中的原件与 PDF 页预览缓存（`previews/<file_id>/page_1..max(page_count,1).png`），清理失败不影响结果。
+        - 写审计 `file.deleted`（detail：`from_status` 为删除前状态）。
+        - 删除后：GET content / preview → 404；PUT content、POST complete → 409 STATE_CONFLICT；POST /ocr/jobs 与 rerun → 409 `job.file_not_ready`。文件元数据（GET /files/{file_id}）仍可读，status=DELETED。
+        无请求体。
+      operationId: deleteFile
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - name: file_id
+          in: path
+          required: true
+          description: 文件 ID（即上传会话 ID，32 位十六进制 UUID）。
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 文件已删除（含幂等重放）。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/FileDeleted'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /files/{file_id}/content:
     get:
@@ -1370,7 +1456,8 @@ paths:
       description: |
         基于 READY 且 purpose=OCR_TASK 的文件创建 OCR 任务（status=QUEUED，progress=0），由进程内 worker 异步处理；返回 201 与任务摘要。
         - 任务归属租户由源文件推导（与文件同 `tenant_id`）；创建前会再次解析该租户——企业租户会校验当前用户为 ACTIVE 成员、企业 VERIFIED 且租户 ACTIVE（否则 403 PERMISSION_DENIED / ENTERPRISE_ACCESS_REVOKED）。
-        - 文件不可见 → 404；purpose 非 OCR_TASK → 400 `job.file_purpose_invalid`；文件非 READY → 409 STATE_CONFLICT `job.file_not_ready`。
+        - 文件不可见 → 404；purpose 非 OCR_TASK → 400 `job.file_purpose_invalid`；文件非 READY（含已删除 DELETED）→ 409 STATE_CONFLICT `job.file_not_ready`。
+        - 入库前对源文件行加锁重读并再次确认 status=READY，与 DELETE /files/{file_id} 串行（FR-UPLOAD-013）：被并发删除时同样 409 `job.file_not_ready`，不会生成任务。
         - 页范围（文件 page_count > 0 时校验）：起始页 = `params.page`(0 起) + 1，超过文件页数 → 400 `job.page_out_of_range`；`params.page_count`（缺省为 min(文件页数, 50)）> 50 → 400 `job.page_count_exceeded`。
         - 幂等：`Idempotency-Key` 请求头优先，body `idempotency_key` 兜底（去首尾空白后 1~128 字符）。命中已有任务且当前用户可见（本人创建或任务租户可访问）→ 200 原样返回该任务摘要；命中但不可见 → 404。
         - 订阅门禁（在任务入库的同一事务内检查）：
@@ -3388,7 +3475,8 @@ components:
           description: 内容 SHA-256 十六进制摘要（内容上传前为空串）。
         status:
           type: string
-          enum: [UPLOADING, UPLOADED, VALIDATING, READY, REJECTED]
+          enum: [UPLOADING, UPLOADED, VALIDATING, READY, REJECTED, DELETED]
+          description: DELETED=创建者已删除待处理记录或取消上传（终态，FR-UPLOAD-013）。
         reject_reason:
           type: string
           description: 拒绝原因 message_key（如 files.too_large、files.disguised_type、files.too_many_pages、files.invalid、files.corrupt_or_encrypted）；未拒绝为空串。
@@ -3401,6 +3489,24 @@ components:
       properties:
         file:
           $ref: '#/components/schemas/FileObject'
+    PendingFileList:
+      type: object
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          description: 待处理文件，按 created_at 倒序。
+          items:
+            $ref: '#/components/schemas/FileObject'
+    FileDeleted:
+      type: object
+      properties:
+        file_id:
+          type: string
+          description: 文件 ID。
+        status:
+          type: string
+          enum: [DELETED]
     UploadCreateRequest:
       type: object
       required: [file_name]

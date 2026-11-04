@@ -3,8 +3,8 @@ doc_id: DES-001
 title: "SaiFlow — 系统架构"
 type: design
 status: active
-version: 2.7.2
-updated: 2026-11-03
+version: 2.8.1
+updated: 2026-11-04
 owner: Product Engineering
 source: "PRD-001 §3.1, §4, §5；document-template-mapping v2 R1–R6；ADR-001/006/007"
 related: [DM-Document, DM-ExtractionPayload, DM-DocumentTemplate, DM-OcrRawResult, DM-TemplateMapping, DM-ResultVersion, OCR-Pipeline, API-Spec, NFR-SEC, ADR-001, ADR-005, ADR-006, ADR-007]
@@ -116,7 +116,7 @@ Firestore 完整原文归档契约与本期 raw 不可混同；Cloud Functions/D
 | 数据库连接 | Cloud Run：Unix 套接字 `/cloudsql/saiflow-509205:asia-southeast1:saiflow-dev`，专用数据库用户 `saiflow_api`，口令经 Secret Manager `saiflow-cloudsql-password` **版本 1** 注入；本地：TLS TCP，`PGSSLMODE=require` | 最小权限数据库用户；未修改 `postgres` 旧密码；ADR-005 回切记录 |
 | 对象访问 | 专用 Cloud Run 服务账号 | 最小权限 GCS 对象访问 |
 | 后端并发容量 | `saiflow-api`：gunicorn `--workers 1 --threads 12`，Cloud Run `--concurrency 12`（二者必须相等），SQLAlchemy 连接池 `pool_size=5 + max_overflow=10 = 15` ≥ 12 请求线程 + 1 个 OCR worker + 1 个映射 worker（开启时）；`test_capacity.py` 守住仓库内约束 | NFR-PERF-005：原 `--threads 8` 对 `--concurrency 80` 时第 9 个起的请求只在进程内排队、不触发扩容；单进程保证每实例仅一个 OCR 轮询线程（认领为原子条件更新），最坏连接数（maxScale 20 × 15 = 300）与调整前相同 |
-| 移动端上传通道 | 预检 POST、原字节 PUT 与完成 POST 均使用同源 XHR，沿用 Cookie/CSRF、120 秒阶段上限、原字节与单调进度 | FR-UPLOAD-001/010；网络错误/中断/超时/状态 0 结束等待，不自动重发写请求；不修改 GCS/TextIn/IAM |
+| 移动端上传通道 | 预检 POST、原字节 PUT 与完成 POST 均使用同源 XHR，沿用 Cookie/CSRF、120 秒阶段上限、原字节与单调进度；Files 多选（无 accept 过滤，上传前前端只放行 JPG/PNG/PDF）后逐文件串行复用通道，批次固定租户/会话并展示逐文件状态；成功文件进入首页 Pending（GET /files/pending），Process 单条/批量预览后才创建任务，单条/批量软删除（DELETE /files/{id}），Cancel all 与单文件取消中止 XHR 并清理会话 | FR-UPLOAD-001..005/010/013；普通文件失败不阻断其余文件，401/会话变更停止批次，不自动重发写请求；不新增批量处理 API；首页待处理为派生查询、无新表，不修改 GCS/TextIn/IAM；原生选择器菜单不由网页保证 |
 | 前端读请求合并 | `refreshQuota()`：同会话进行中的 `/me/quota` 复用；成功结果 5 秒内且期间无任何写请求结束时复用；会话切换或任一写请求结束即失效，旧会话迟到响应不覆盖 | NFR-PERF-005：启动、登录与首页挂载原本在数秒内各发一次，跨境链路下每次一个完整往返 |
 | 密钥 | 在运行时注入 Secret Manager | 源码或镜像中不包含密钥 |
 | 区域 | 部署配置 | 必须为 PDPA/数据驻留需求确认 |
@@ -217,6 +217,9 @@ Firestore 完整原文归档契约与本期 raw 不可混同；Cloud Functions/D
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.8.1 | 2026-11-04 | Product Engineering | FR-UPLOAD-003/005：LINE 首页移除 Photos，Files 去掉 accept 过滤、前端上传前只放行 JPG/PNG/PDF；后端校验与云配置不变 |
+| 2.8.0 | 2026-11-04 | Product Engineering | FR-UPLOAD-013：首页 Pending（派生查询）、预览后单条/批量开始处理、软删除 DELETE /files/{id}、Cancel all 与单文件取消；无新表/DDL，不改云配置 |
+| 2.7.3 | 2026-11-04 | Product Engineering | FR-UPLOAD-002/003/005/010：LINE Photos 图片限定和 Photos/Files 多选逐文件串行上传、会话与租户固定、多文件确认；不增加待处理区/批量开始 API、不改后端或云配置；原生菜单由宿主控制 |
 | 2.7.2 | 2026-11-03 | Product Engineering | FR-ENTRY-015：Android LINE 内置浏览器导出改为 `POST /exports/{id}/download-ticket` 换取 60 秒 HMAC 签名票据（SECRET_KEY，绑定导出/用户/会话，不落库、无新表），经 `liff.openWindow({external:true})` 在系统浏览器打开 `GET /export-downloads/{ticket}`；安全中间件仅对 GET/HEAD 且完整匹配票据格式放行，路由内重新校验会话、账号与任务归属；iOS/桌面仍用 Cookie 下载 |
 | 2.7.1 | 2026-11-02 | Product Engineering | FR-SYS-001：LINE 渠道由开发渠道 `2011688528` 切换为正式渠道 `2012285578`（LIFF ID `2012285578-gUEaV9U1`）；后端 saiflow-api-00059-zew（镜像不变，仅 `LINE_CHANNEL_ID` 变更）、前端 saiflow-line-mini-00051-fig（bundle index-BOcc99x7.js，与上一版仅 LIFF ID 不同），资源按用户确认采用 2 CPU / 4Gi + CPU throttling（并发 12 不变）；no-traffic + tag 核验 /api/health 200、无效 token 登录 401 `auth.line_token_invalid`→前后端连续切 100%→移除标签，切流后无 ERROR/5xx；旧渠道 LINE userId 不跨渠道通用，未用真实账号做端到端登录核验 |
 | 2.7.0 | 2026-11-01 | Product Engineering | FR-SYS-019：套餐改为 `plans` 表配置 + `plans.py` 仓储缓存（60 秒 TTL、种子回退、空表启动播种）+ `manage_plans.py` CLI 维护，后端镜像新增 `manage_plans.py`、`plans_seed.json`；无管理 REST 接口，PC 管理端延后；863 项隔离后端测试通过，2026-11-01 正式发布：后端 saiflow-api-00056-ril、前端 saiflow-line-mini-00048-max（bundle index-SFvaHz8q.js）no-traffic 部署→tag 核验 /api/health 200、未登录接口 401、bundle 哈希一致→只读核验共享库自动建表并播种 4 个套餐（属主 saiflow_api，与种子一致）→手动切 100%，环境变量（22 项）与并发 12 与上一版一致；未建游客会话、未用真实账号做端到端核验 |

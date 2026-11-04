@@ -167,6 +167,13 @@ def create_job():
     if field_names:
         stored_params["field_names"] = field_names
 
+    # FR-UPLOAD-013：加锁重读文件，与删除待处理记录串行；已被删除（DELETED）则不能再建任务
+    locked = db.session.get(File, file.id, with_for_update=True, populate_existing=True)
+    if locked is None or locked.status != "READY":
+        db.session.rollback()
+        raise state_conflict("job.file_not_ready")
+    file = locked
+
     job = OcrJob(
         tenant_id=tenant.id,
         created_by_user_id=user.id,

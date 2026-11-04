@@ -3,7 +3,7 @@ doc_id: DES-002
 title: "SaiFlow — 数据模型"
 type: data-model
 status: active
-version: 1.8.0
+version: 1.8.1
 updated: 2026-11-01
 owner: Product Engineering
 source: "EPIC-02, EPIC-03, EPIC-04, EPIC-06, EPIC-07, EPIC-08"
@@ -65,6 +65,8 @@ erDiagram
 | created_at / updated_at | timestamptz | Y | | | |
 
 **状态（`DocStatus`）：** `uploaded → preprocessed → extraction_requested → payload_stored → converting → extracted → in_review → verified → pending_review_level_1 → pending_review_level_2 → approved_for_business → entered → archived`（另有 `failed`）。复核策略为 `0` 时，核验确认后直接进入 `approved_for_business`；复核策略为 `1` 或 `2` 时，必须经最终复核通过。
+
+**当前实现 `files` 表状态（FR-UPLOAD-013）：** `UPLOADING → UPLOADED → VALIDATING → READY / REJECTED`，新增 `DELETED`（软删除：Pending 删除或取消上传会话，行保留用于审计，尽力删除存储原件与预览缓存）。Pending 不是独立表，为派生查询：本人、当前租户、`purpose=OCR_TASK`、`status=READY` 且无 `ocr_jobs.file_id` 引用。删除与创建任务对文件行加锁；`status` 仍为 varchar(16)，无 DDL。
 
 ### 2.2 `DM-ExtractionPayload`
 
@@ -443,6 +445,7 @@ EPIC-02 第3节的规范字段属于历史分类/业务投影设计，不限制�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.8.1 | 2026-11-04 | Product Engineering | FR-UPLOAD-013：`files.status` 新增 `DELETED` 软删除；Pending 为派生查询（本人/当前租户/OCR_TASK/READY/无任务引用）；删除与建任务行锁串行化；无 DDL |
 | 1.8.0 | 2026-11-01 | Product Engineering | 新增 `plans` 套餐配置表（FR-SYS-019）：泰英双语名称/价格文案/特性、月/年价、月页额度、席位、主题、档位、启停与默认开通/试用月数/审批缺省续期月数；`subscriptions.plan_code` 改为逻辑引用 `plans.code`；启动时空表自动从 `plans_seed.json` 写入；DDL 仅新增表（`_ensure_tables`） |
 | 1.7.3 | 2026-10-31 | Product Engineering | `notifications.type` 账户变动类 8 值白名单（新增 ACCOUNT_ACTIVATED / COMPANY_ACTIVATED），OCR_DONE 不再写入（FR-SYS-018）；无 DDL |
 | 1.7.2 | 2026-10-31 | Product Engineering | 记录 `pending_mapping_id` 驱动的任务阶段 `TEMPLATE_MATCHING`（FR-VERIFY-017）；仅推导规则变化，无 DDL |

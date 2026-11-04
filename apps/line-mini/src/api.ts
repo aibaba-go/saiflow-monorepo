@@ -37,6 +37,15 @@ export class ApiError extends Error {
   }
 }
 
+/** FR-UPLOAD-013：用户主动取消（AbortSignal）时的专用错误，区别于网络失败，调用方不得当作失败重试。 */
+export class UploadCancelledError extends Error {
+  readonly cancelled = true;
+  constructor() {
+    super('Upload cancelled');
+    this.name = 'UploadCancelledError';
+  }
+}
+
 let csrfToken: string | null = null;
 let sessionEpoch = 0;
 // 每个写请求结束（无论成败）递增：读缓存据此判断期间是否可能有数据变化（NFR-PERF-005）。
@@ -80,10 +89,13 @@ interface RequestOptions {
   timeoutMs?: number;
   /** FR-UPLOAD-001/010：三段上传统一使用移动 WebView 的同源 XHR 通道。 */
   transport?: 'xhr';
+  /** FR-UPLOAD-013：取消信号；中止后以 UploadCancelledError 拒绝，不转成网络错误。 */
+  signal?: AbortSignal;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', json, rawBody, contentType, headers = {}, idempotencyKey, onUploadProgress } = options;
+  const { method = 'GET', json, rawBody, contentType, headers = {}, idempotencyKey, onUploadProgress, signal } = options;
+  if (signal?.aborted) throw new UploadCancelledError();
 
   const requestEpoch = sessionEpoch;
   const h: Record<string, string> = { ...headers };
@@ -105,12 +117,23 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   let res: Response;
   const useXhr = options.transport === 'xhr' || (!!onUploadProgress && rawBody instanceof Blob);
-  const controller = options.timeoutMs && !useXhr ? new AbortController() : null;
-  const timer = controller ? window.setTimeout(() => controller.abort(), options.timeoutMs) : null;
+  const controller = (options.timeoutMs || signal) && !useXhr ? new AbortController() : null;
+  const timer = controller && options.timeoutMs ? window.setTimeout(() => controller.abort(), options.timeoutMs) : null;
+  let detachSignal: (() => void) | null = null;
+  if (controller && signal) {
+    const forward = () => controller.abort();
+    signal.addEventListener('abort', forward, { once: true });
+    detachSignal = () => signal.removeEventListener('abort', forward);
+  }
   try {
     if (useXhr) {
       res = await new Promise<Response>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
+        if (signal) {
+          const abort = () => xhr.abort();
+          signal.addEventListener('abort', abort, { once: true });
+          detachSignal = () => signal.removeEventListener('abort', abort);
+        }
         xhr.open(method, `${API_BASE}${path}`);
         xhr.withCredentials = true;
         xhr.timeout = options.timeoutMs ?? 0;
@@ -132,7 +155,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
           } catch (error) { reject(error); }
         };
         xhr.onerror = () => reject(new Error('Upload failed'));
-        xhr.onabort = () => reject(new Error('Upload aborted'));
+        xhr.onabort = () => reject(signal?.aborted ? new UploadCancelledError() : new Error('Upload aborted'));
         xhr.ontimeout = () => reject(new Error('Upload timed out'));
         xhr.send(body);
       });
@@ -140,6 +163,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       res = await fetch(`${API_BASE}${path}`, { method, headers: h, body, credentials: 'same-origin', signal: controller?.signal });
     }
   } catch {
+    if (signal?.aborted) throw new UploadCancelledError();
     throw new ApiError(0, {
       code: 'NETWORK_ERROR',
       message_key: 'error.network',
@@ -149,6 +173,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     });
   } finally {
     if (timer !== null) window.clearTimeout(timer);
+    detachSignal?.();
     // 响应已到达或网络失败：服务端都可能已执行写入，读缓存一律失效
     if (isWrite) writeEpoch += 1;
   }
@@ -230,7 +255,7 @@ export interface FileInfo {
   tenant_id: number;
   original_name: string;
   mime_type: string;
-  status: 'UPLOADING' | 'UPLOADED' | 'VALIDATING' | 'READY' | 'REJECTED';
+  status: 'UPLOADING' | 'UPLOADED' | 'VALIDATING' | 'READY' | 'REJECTED' | 'DELETED';
   reject_reason: string;
   size_bytes: number;
   page_count: number;
@@ -642,12 +667,14 @@ export function createUpload(
   sizeBytes: number,
   tenantId?: TenantRef,
   purpose: 'OCR_TASK' | 'APPLICATION_MATERIAL' = 'OCR_TASK',
+  signal?: AbortSignal,
 ): Promise<{ file: FileInfo; upload_id: string }> {
   return request('/uploads', {
     method: 'POST',
     json: { file_name: fileName, size_bytes: sizeBytes, purpose, ...tenantBody(tenantId) },
     transport: 'xhr',
     timeoutMs: 120000,
+    signal,
   });
 }
 
@@ -656,6 +683,7 @@ export function uploadContent(
   data: Blob,
   contentType: string,
   onUploadProgress?: (fraction: number) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   return request(`/uploads/${uploadId}/content`, {
     method: 'PUT',
@@ -664,11 +692,12 @@ export function uploadContent(
     onUploadProgress,
     transport: 'xhr',
     timeoutMs: 120000,
+    signal,
   });
 }
 
-export function completeUpload(uploadId: string): Promise<{ file: FileInfo }> {
-  return request(`/uploads/${uploadId}/complete`, { method: 'POST', transport: 'xhr', timeoutMs: 120000 });
+export function completeUpload(uploadId: string, signal?: AbortSignal): Promise<{ file: FileInfo }> {
+  return request(`/uploads/${uploadId}/complete`, { method: 'POST', transport: 'xhr', timeoutMs: 120000, signal });
 }
 
 export function importFromUrl(url: string, tenantId?: TenantRef): Promise<{ file: FileInfo }> {
@@ -677,6 +706,17 @@ export function importFromUrl(url: string, tenantId?: TenantRef): Promise<{ file
 
 export function getFile(fileId: string): Promise<{ file: FileInfo }> {
   return request(`/files/${fileId}`);
+}
+
+/** FR-UPLOAD-013：本人在该租户已上传、READY 且未建任务的 OCR 文件（Pending，最新在前） */
+export function listPendingFiles(tenantId?: TenantRef): Promise<{ items: FileInfo[] }> {
+  const qs = tenantId != null ? `?tenant_id=${tenantId}` : '';
+  return request<{ items: FileInfo[] }>(`/files/pending${qs}`);
+}
+
+/** 删除未建任务的文件（Pending 记录或已取消的上传会话）；已删幂等，已建任务返回 409 files.in_use */
+export function deleteFile(fileId: string): Promise<{ file_id: string; status: 'DELETED' }> {
+  return request(`/files/${fileId}`, { method: 'DELETE' });
 }
 
 /** 文件内容/预览走 cookie 鉴权的同源 URL，直接给 <img>/<a> 用 */

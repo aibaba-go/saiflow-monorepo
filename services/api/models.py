@@ -361,7 +361,8 @@ class File(db.Model, TimestampMixin):
     sha256 = db.Column(db.String(64), nullable=False, default="", comment="文件内容 SHA-256")
     status = db.Column(
         db.String(16), nullable=False, default="UPLOADING",
-        comment="文件状态：UPLOADING=上传中 / UPLOADED=已上传 / VALIDATING=校验中 / READY=可用 / REJECTED=被拒绝",
+        comment="文件状态：UPLOADING=上传中 / UPLOADED=已上传 / VALIDATING=校验中 / READY=可用 / REJECTED=被拒绝"
+                " / DELETED=已删除（创建者删除待处理记录或取消上传）",
     )
     reject_reason = db.Column(db.String(255), nullable=False, default="", comment="被拒绝原因（消息键）")
 

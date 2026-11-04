@@ -3,7 +3,7 @@ doc_id: DES-003
 title: "SaiFlow — API 规范"
 type: api
 status: active
-version: 1.3.6
+version: 1.3.7
 updated: 2026-11-03
 owner: Product Engineering
 source: "services/api/openapi.yaml info.version=1.3.1；document-template-mapping v2"
@@ -13,7 +13,7 @@ doc_source: openapi-derived-index
 
 # SaiFlow — API 规范
 
-> 接口唯一定义来源为 [后端 OpenAPI YAML](../../services/api/openapi.yaml)，发布镜像为 [openapi.json](openapi.json)，当前 info.version=1.3.1。本文件是源契约的导航、说明及批准方案核对表，不是第二份手工契约；`doc_source` 表示来源关系，不表示本文件由自动生成流程产出。
+> 接口唯一定义来源为 [后端 OpenAPI YAML](../../services/api/openapi.yaml)，发布镜像为 [openapi.json](openapi.json)，当前 info.version=1.3.2。本文件是源契约的导航、说明及批准方案核对表，不是第二份手工契约；`doc_source` 表示来源关系，不表示本文件由自动生成流程产出。
 
 ## 1. 通用契约
 
@@ -21,6 +21,7 @@ doc_source: openapi-derived-index
 - 沿用 HttpOnly `saiflow_session` Cookie（path=/api）、现有会话/注册/租户校验；写请求需要 `X-CSRF-Token`。系统模板可被有效会话（含游客）读取；租户模板仅该租户成员。停用/软删除不使历史版本不可读。
 - 唯一不用 Cookie 的接口是 GET/HEAD `/api/v1/export-downloads/{ticket}`（FR-ENTRY-015）：票据由已登录用户经 POST `/api/v1/exports/{export_id}/download-ticket`（会话 + CSRF）换取，60 秒有效，HMAC 签名绑定导出/用户/会话、不落库；兑换时重新校验会话、账号与任务归属，任一失败统一 404，有效期内可重复请求同一文件；响应 `Cache-Control: no-store`、`Referrer-Policy: no-referrer`。
 - 成功信封为 `{code:"OK",data:...}`；错误使用 code、message_key、request_id、retryable 及可选 field_errors。不得另造数据/错误结构。
+- Pending 待处理（FR-UPLOAD-013）：GET `/api/v1/files/pending?tenant_id=` 返回本人在该租户、READY、未建任务的 OCR 文件（最多 100 条，最新在前）；DELETE `/api/v1/files/{file_id}`（会话 + CSRF）仅创建者可用，软删除为 `DELETED` 并尽力删除原件/预览，幂等，他人或非 OCR 文件 404，已有任务 409 `files.in_use`；同一接口用于清理被取消的上传会话。删除后的会话内容/完成请求返回 409。
 - 任务归属先于开关错误判定，不可访问任务返回 404；开关关闭不应泄漏任务是否存在。新映射不新增订阅/页额度扣减，原认证/注册/租户/确认边界不变。
 
 ## 2. 模板与映射接口索引
@@ -78,6 +79,7 @@ ResultVersion 扩展 raw_result_id、current_mapping、template_schema、pending
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.3.7 | 2026-11-04 | Product Engineering | OpenAPI 1.3.2：新增 GET `/files/pending` 与 DELETE `/files/{file_id}`（FR-UPLOAD-013）；FileObject.status 增加 DELETED |
 | 1.3.6 | 2026-11-03 | Product Engineering | OpenAPI 1.3.1：新增 POST `/exports/{export_id}/download-ticket` 与 GET `/export-downloads/{ticket}`（FR-ENTRY-015，Android LINE 内置浏览器限时下载票据）；认证白名单注明票据下载例外；原 Cookie 下载接口不变 |
 | 1.3.5 | 2026-11-01 | Product Engineering | OpenAPI 1.3.0：套餐改为 `plans` 表配置（FR-SYS-019）。`Plan` 新增 `theme`、`is_default`、`i18n`（en/th 的 `PlanText`：name/price_display/features）；各处 `plan_code` 取消硬编码枚举，合法值以套餐配置为准；`QuotaTenant.plan` 新增 `name_i18n`；`GET /plans` 只返回启用套餐，停用套餐不可申请但已有订阅仍可解析；配置只经 CLI `manage_plans.py` 维护，无管理 REST 接口 |
 | 1.3.4 | 2026-10-31 | Product Engineering | OpenAPI 1.2.2：`GET /me/notifications` 与已读接口只作用于账户变动类通知（`Notification.type` 8 值枚举，新增 ACCOUNT_ACTIVATED / COMPANY_ACTIVATED）；OCR 完成不再产生通知，历史 OCR_DONE / INFO 不返回、不计未读（FR-SYS-018） |
