@@ -17,4 +17,8 @@ for var in LINE_CHANNEL_ID LINE_CHANNEL_SECRET LINE_LOGIN_REDIRECT_URIS SMTP_HOS
   check "backend receives $var" grep -q "$var: \${$var:-" <<<"$backend"
   check "env.example lists $var" grep -q "^$var=" "$deploy/env.example"
 done
+# harden-identity: uvicorn must trust Caddy's X-Forwarded-For, or every guest shares one
+# rate-limit bucket (AC-FR-SYS-010-07). Safe because the backend publishes no port.
+check "backend trusts the proxy's forwarded address" grep -q "FORWARDED_ALLOW_IPS: \"\*\"" <<<"$backend"
+check "backend publishes no ports" bash -c "! grep -v '^ *#' <<<\"\$1\" | grep -q 'ports:'" _ "$backend"
 finish

@@ -2,19 +2,22 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
 from app.cookies import clear_session_cookie, set_session_cookie
 from app.dependencies import (
     get_db,
+    get_guest_limiter,
     get_line_client,
     get_optional_principal,
     get_settings,
     require_csrf_header,
 )
+from app.errors import AppError
 from app.integrations.line import LineClient
+from app.rate_limit import SlidingWindowLimiter
 from app.schemas.auth import LineLoginRequest, MeResponse
 from app.schemas.loose import ensure_text
 from app.services import auth_service, me_service, session_service
@@ -34,12 +37,17 @@ def set_customer_cookie(response: Response, token: str) -> None:
 
 @router.post("/guest", operation_id="createGuestSession", response_model=MeResponse)
 async def create_guest_session(
+    request: Request,
     response: Response,
     db: Db,
     current: Annotated[Principal | None, Depends(get_optional_principal)],
+    limiter: Annotated[SlidingWindowLimiter, Depends(get_guest_limiter)],
 ) -> MeResponse:
     if current is not None:
         return await me_service.me(db, current)
+    ip = request.client.host if request.client else "unknown"
+    if not limiter.hit(ip):
+        raise AppError(429, "guest_too_many", "error.guest_too_many")
     token, principal = await session_service.create_guest(db)
     await db.commit()
     set_customer_cookie(response, token)

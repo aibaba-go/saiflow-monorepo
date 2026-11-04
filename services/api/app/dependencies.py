@@ -11,6 +11,7 @@ from app.errors import AppError
 from app.integrations.email import SmtpSender
 from app.integrations.line import LineClient
 from app.models import AdminAccount, AdminSession
+from app.rate_limit import SlidingWindowLimiter
 from app.repositories import user_repo
 from app.services import admin_service, session_service
 from app.services.session_service import Principal
@@ -77,6 +78,10 @@ async def require_registered_user(
     if user is None or user.registered_at is None:
         raise AppError(403, "registration_required", "auth.registration_required")
     return principal
+
+
+def get_guest_limiter(request: Request) -> SlidingWindowLimiter:
+    return request.app.state.guest_limiter
 
 
 def get_line_client(request: Request) -> LineClient:

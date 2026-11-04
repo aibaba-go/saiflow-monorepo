@@ -1,7 +1,10 @@
 """harden-identity: fixes for the issues left by the rebuild-identity final review."""
 
+from datetime import UTC, datetime, timedelta
+
 import httpx
 import pytest
+from sqlalchemy import text
 
 from tests.integration.db_fixtures import login
 from tests.integration.test_registration import register
@@ -96,3 +99,53 @@ async def test_logout_with_dead_session_succeeds(api, line):
         async with fresh_client(api, cookie) as c:
             r = await c.post("/api/v1/auth/logout")
             assert r.status_code == 204 and cleared(r), (cookie, r.status_code)
+
+
+# Task 3: guest session rate limit (AC-FR-SYS-010-07)
+
+
+@pytest.fixture
+def guest_clock():
+    class Clock:
+        now = datetime(2026, 11, 4, tzinfo=UTC)
+
+        def __call__(self):
+            return self.now
+
+    return Clock()
+
+
+@pytest.fixture
+def limited_app(guest_clock):
+    """Hook used by the `api` fixture: a limiter with a controllable clock."""
+    from app.rate_limit import SlidingWindowLimiter
+
+    return SlidingWindowLimiter(30, timedelta(seconds=60), guest_clock)
+
+
+async def _guest_from(api, ip: str) -> int:
+    transport = httpx.ASGITransport(app=api._transport.app, client=(ip, 1))
+    async with httpx.AsyncClient(
+        transport=transport, base_url="https://test", headers=dict(api.headers)
+    ) as c:
+        return (await c.post("/api/v1/auth/guest")).status_code
+
+
+async def test_guest_limit_per_ip(api, db, limited_app, guest_clock):
+    api.app.state.guest_limiter = limited_app
+    statuses = [await _guest_from(api, "203.0.113.1") for _ in range(30)]
+    assert statuses == [200] * 30
+    tenants = (await db.execute(text("select count(*) from tenants"))).scalar_one()
+    r = await _guest_from(api, "203.0.113.1")
+    assert r == 429
+    assert (await db.execute(text("select count(*) from tenants"))).scalar_one() == tenants
+    assert await _guest_from(api, "203.0.113.2") == 200
+    guest_clock.now += timedelta(seconds=61)
+    assert await _guest_from(api, "203.0.113.1") == 200
+
+
+async def test_guest_with_session_not_counted(api, limited_app):
+    api.app.state.guest_limiter = limited_app
+    assert (await api.post("/api/v1/auth/guest")).status_code == 200
+    for _ in range(40):  # same client, cookie carried: returns the existing guest
+        assert (await api.post("/api/v1/auth/guest")).status_code == 200

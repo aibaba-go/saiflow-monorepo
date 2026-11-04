@@ -40,6 +40,10 @@ services:
       DB_NAME: saiflow
       DB_USER: saiflow_v3_app
       DB_PASSWORD: ${DB_PASSWORD:?}
+      # Trust X-Forwarded-For so the guest rate limit sees the visitor's IP (AC-FR-SYS-010-07).
+      # Safe: this service publishes no port, only Caddy reaches it, and Caddy replaces any
+      # X-Forwarded-For sent by the client.
+      FORWARDED_ALLOW_IPS: "*"
       # LINE login and SMTP (FR-SYS-001, FR-SYS-020); empty = that feature answers 503
       LINE_CHANNEL_ID: ${LINE_CHANNEL_ID:-}
       LINE_CHANNEL_SECRET: ${LINE_CHANNEL_SECRET:-}
