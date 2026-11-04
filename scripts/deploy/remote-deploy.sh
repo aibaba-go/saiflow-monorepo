@@ -10,10 +10,7 @@ export DEPLOY_DIR="${DEPLOY_DIR:-/opt/saiflow}"
 cd "$DEPLOY_DIR"
 
 # Checked before anything changes: migrations need the migration account (harden-identity).
-if ! grep -q '^DB_MIGRATE_PASSWORD=.' .env; then
-  echo "remote-deploy: DB_MIGRATE_PASSWORD missing in $DEPLOY_DIR/.env (docs/deployment/README.md)" >&2
-  exit 2
-fi
+bash "$DEPLOY_DIR/db-roles.sh" --check
 
 IFS= read -r ghcr_user
 IFS= read -r ghcr_token

@@ -44,6 +44,28 @@ check "missing DB_MIGRATE_PASSWORD changes nothing" test ! -s "$FAKE_LOG"
 check "missing DB_MIGRATE_PASSWORD keeps IMAGE_TAG" grep -qx 'IMAGE_TAG=oldsha' "$work/.env"
 rm -rf "$work"
 
+# M5: a quoted value in .env reaches psql without the quotes, as compose would read it
+for quoted in '"mig-secret-9"' "'mig-secret-9'"; do
+  setup
+  grep -v '^DB_MIGRATE_PASSWORD=' "$work/.env" >"$work/.env.new" && mv "$work/.env.new" "$work/.env"
+  echo "DB_MIGRATE_PASSWORD=$quoted" >>"$work/.env"
+  export FAKE_ENV_LOG="$work/roles.env"
+  printf 'bot\ntoken-123\n' | bash "$script" newsha >/dev/null 2>&1; code=$?
+  check "quoted password $quoted deploys" test "$code" -eq 0
+  check "quoted password $quoted reaches psql unquoted" test "$(cat "$work/roles.env")" = "mig-secret-9"
+  unset FAKE_ENV_LOG
+  rm -rf "$work"
+done
+
+# M5: an empty quoted value counts as missing, before anything changes
+setup
+grep -v '^DB_MIGRATE_PASSWORD=' "$work/.env" >"$work/.env.new" && mv "$work/.env.new" "$work/.env"
+echo 'DB_MIGRATE_PASSWORD=""' >>"$work/.env"
+printf 'bot\ntoken-123\n' | bash "$script" newsha >/dev/null 2>&1; code=$?
+check "empty quoted password exits non-zero" test "$code" -ne 0
+check "empty quoted password changes nothing" test ! -s "$FAKE_LOG"
+rm -rf "$work"
+
 setup
 printf 'bot\ntoken-123\n' | FAKE_ROLES_FAIL=1 bash "$script" newsha >/dev/null 2>&1; code=$?
 check "role setup failure exits non-zero" test "$code" -ne 0

@@ -35,4 +35,6 @@ check "role SQL is outside postgres-init (initdb runs *.sql)" test -f "$deploy/d
 wf="$here/../../.github/workflows"
 check "deploy copies the role setup files" bash -c "grep -q 'scripts/deploy/db-roles.sh' '$wf/deploy.yml' && grep -q 'scripts/deploy/db-roles.sql' '$wf/deploy.yml'"
 check "CI stack uses the role setup and migrate service" bash -c "grep -q 'db-roles.sh' '$wf/ci.yml' && grep -q 'saiflow-be-migrate' '$wf/ci.yml' && grep -q DB_MIGRATE_PASSWORD '$wf/ci.yml'"
+# M4: the app role never creates objects; the migration account does
+check "01-app-user.sh grants no CREATE" bash -c "! grep -q 'CREATE ON DATABASE' '$deploy/postgres-init/01-app-user.sh'"
 finish

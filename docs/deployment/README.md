@@ -137,6 +137,7 @@ cd /opt/saiflow && echo "DB_MIGRATE_PASSWORD=$(openssl rand -hex 24)" >> .env
 
 - **推荐：** 用 `git revert` 提交一个撤销问题改动的新提交，等 CI 通过后再运行 `Deploy`（工作流总是部署所选分支的最新提交）。
 - **紧急：** 在 VPS 上以 `deploy` 把 `/opt/saiflow/.env` 中的 `IMAGE_TAG` 改回上一个 sha，然后 `cd /opt/saiflow && docker compose up -d`。数据库迁移不会自动回退；含迁移的版本回滚前先确认迁移可逆。
+- **不要把数据库回退到 0003 之前：** `alembic downgrade` 到 0003 以下会收回应用账号的全部数据权限，而表仍属迁移账号，后端将无法读写，只能再用 `db-roles.sql` 与手工授权补救。需要回到旧版本时，只回滚镜像（上一条），数据库保持在当前版本；0003 之后的迁移只增加表与权限，旧镜像照常可用。
 
 ## 5. 备份与恢复
 

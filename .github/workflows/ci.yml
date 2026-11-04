@@ -134,7 +134,10 @@ jobs:
         run: |
           docker compose up -d --wait postgres
           # Start where servers set up before harden-identity are: schema created and owned
-          # by the app role (old flow, up to 0002).
+          # by the app role (old flow, up to 0002). The old init script gave the app role
+          # CREATE; today's no longer does (M4), so grant it here; db-roles.sh revokes it.
+          docker compose exec -T postgres sh -c \
+            'psql -U "$POSTGRES_USER" -d saiflow -qc "GRANT CREATE ON DATABASE saiflow TO saiflow_v3_app"'
           docker compose run --rm saiflow-be-api alembic upgrade 0002
           DEPLOY_DIR="$STACK_DIR" bash "$GITHUB_WORKSPACE/scripts/deploy/db-roles.sh"
           # The running backend must keep access between the role step and the migration.
