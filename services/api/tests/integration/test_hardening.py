@@ -215,3 +215,16 @@ async def test_noop_profile_update_not_audited(api, db, line, mail):
     assert (await db.execute(text(count))).scalar_one() == before
     assert (await api.patch("/api/v1/me", json={"display_name": "New"})).status_code == 200
     assert (await db.execute(text(count))).scalar_one() == before + 1
+
+
+# rebuild-tenant-rbac Task 4 finding: a refreshed session cookie belongs to its own request
+
+
+async def test_session_cookie_never_sent_to_another_client(api, line):
+    await login(api, line, "A")
+    assert (await api.get("/api/v1/me")).status_code == 200  # refreshes A's cookie
+    async with fresh_client(api) as other:
+        r = await other.get("/api/v1/health")
+        assert r.headers.get_list("set-cookie") == []
+        assert not other.cookies.get("saiflow_session")
+        assert (await other.get("/api/v1/me")).status_code == 401

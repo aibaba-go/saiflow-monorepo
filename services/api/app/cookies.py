@@ -14,17 +14,21 @@ def clear_session_cookie(response: Response, name: str) -> None:
     response.delete_cookie(name, path="/api", secure=True, httponly=True, samesite="lax")
 
 
+_REFRESH_KEY = "saiflow.refresh_cookies"
+
+
 def refresh_later(request: Request, name: str, token: str, max_age: int) -> None:
-    refresh = getattr(request.state, "refresh_cookies", None) or {}
-    refresh[name] = (token, max_age)
-    request.state.refresh_cookies = refresh
+    # Kept in the request's own ASGI scope, not request.state: request.state is backed by
+    # the lifespan state dict, which some servers (and the test harness) share across
+    # requests, so a token stored there could be sent to another client.
+    request.scope.setdefault(_REFRESH_KEY, {})[name] = (token, max_age)
 
 
 def install_cookie_refresh(app: FastAPI) -> None:
     @app.middleware("http")
     async def refresh_session_cookies(request: Request, call_next):
         response = await call_next(request)
-        refresh = getattr(request.state, "refresh_cookies", None) or {}
+        refresh = request.scope.get(_REFRESH_KEY) or {}
         already = [h for k, h in response.raw_headers if k.lower() == b"set-cookie"]
         for name, (token, max_age) in refresh.items():
             if not any(h.startswith(f"{name}=".encode()) for h in already):
