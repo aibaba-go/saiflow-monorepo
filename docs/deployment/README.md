@@ -4,7 +4,7 @@ title: "SaiFlow — 部署与运维说明（dev 环境）"
 type: guide
 status: active
 version: 1.2.0
-updated: 2026-11-03
+updated: 2026-11-04
 owner: Product Engineering
 related: [ADR-008, FR-PLAT-005, FR-PLAT-006]
 doc_source: manual

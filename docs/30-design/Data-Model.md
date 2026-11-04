@@ -4,7 +4,7 @@ title: "SaiFlow — 数据模型"
 type: data-model
 status: active
 version: 2.4.0
-updated: 2026-11-03
+updated: 2026-11-04
 owner: Product Engineering
 source: "PRD-001 v3.3 §3, §4, §4.9; ADR-008"
 related: [ADR-008, DM-FormDocument, DM-ExtractionPayload, DM-OcrJob, DM-DocumentTemplate, DM-Tenant, DM-Subscription]
