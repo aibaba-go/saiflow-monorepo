@@ -171,3 +171,58 @@ async def member_count(db: AsyncSession, tenant_id: int) -> int:
             .where(Membership.tenant_id == tenant_id, Membership.removed_at.is_(None))
         )
     ).scalar_one()
+
+
+async def _organization(db: AsyncSession, tenant_id: int, *, lock: bool = False) -> Organization:
+    org = await db.get(Organization, tenant_id, with_for_update=lock, populate_existing=lock)
+    if org is None:
+        raise AppError(404, "not_found", "error.not_found")
+    return org
+
+
+async def organization_view(db: AsyncSession, tenant_id: int) -> dict:
+    org = await _organization(db, tenant_id)
+    return {
+        "tenant_id": org.tenant_id,
+        "name": org.name,
+        "contact_phone": org.contact_phone,
+        "address": org.address,
+        "status": org.status,
+        "verification_status": org.verification_status,
+        "member_count": await member_count(db, tenant_id),
+        "created_at": org.created_at,
+    }
+
+
+async def list_organizations(db: AsyncSession) -> list[dict]:
+    ids = (
+        await db.execute(select(Organization.tenant_id).order_by(Organization.tenant_id))
+    ).scalars()
+    return [await organization_view(db, tid) for tid in list(ids)]
+
+
+async def update_profile(
+    db: AsyncSession,
+    tenant_id: int,
+    actor: Actor,
+    name: str | None,
+    contact_phone: str | None,
+    address: str | None,
+) -> None:
+    """Change any of name, contact phone and address (FR-SYS-022/023); no re-approval."""
+    changes = check_profile(name, contact_phone, address, partial=True)
+    org = await _organization(db, tenant_id, lock=True)
+    for key, value in changes.items():
+        setattr(org, key, value)
+    await record(db, actor.event("org.update", "organization", tenant_id))
+    await db.commit()
+
+
+async def set_status(
+    db: AsyncSession, admin_id: int, tenant_id: int, status: Literal["active", "disabled"]
+) -> None:
+    org = await _organization(db, tenant_id, lock=True)
+    org.status = status
+    action = "org.enable" if status == "active" else "org.disable"
+    await record(db, Actor("admin", admin_id).event(action, "organization", tenant_id))
+    await db.commit()
