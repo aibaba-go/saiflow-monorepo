@@ -10,11 +10,13 @@ from app.schemas.loose import ensure_text
 from app.schemas.organization import (
     AcceptedOut,
     AdminApplicationOut,
+    IntSettingIn,
+    IntSettingOut,
     OrganizationOut,
     OrganizationProfileIn,
     RejectIn,
 )
-from app.services import organization_service
+from app.services import organization_service, settings_service
 from app.services.organization_service import Actor
 
 router = APIRouter(
@@ -100,3 +102,24 @@ async def disable_organization(tenant_id: int, db: Db, admin: Admin) -> dict:
 async def enable_organization(tenant_id: int, db: Db, admin: Admin) -> dict:
     await organization_service.set_status(db, admin.account.id, tenant_id, "active")
     return {"status": "active"}
+
+
+@router.get(
+    "/settings/org-member-limit-unpaid",
+    operation_id="adminGetOrgMemberLimit",
+    response_model=IntSettingOut,
+)
+async def get_member_limit(db: Db, admin: Admin) -> IntSettingOut:
+    key = settings_service.ORG_MEMBER_LIMIT_UNPAID
+    return IntSettingOut(value=await settings_service.get_int(db, key, 2))
+
+
+@router.put(
+    "/settings/org-member-limit-unpaid",
+    operation_id="adminSetOrgMemberLimit",
+    response_model=IntSettingOut,
+)
+async def set_member_limit(req: IntSettingIn, db: Db, admin: Admin) -> IntSettingOut:
+    key = settings_service.ORG_MEMBER_LIMIT_UNPAID
+    await settings_service.set_int(db, key, req.value, admin.account.id)
+    return IntSettingOut(value=req.value)

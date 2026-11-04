@@ -10,14 +10,18 @@ from app.dependencies import get_db, get_principal, require_csrf_header, require
 from app.permissions import Permission
 from app.schemas.loose import ensure_text
 from app.schemas.organization import (
+    AcceptedOut,
+    AcceptIn,
     ApplicationOut,
     AssignRoleIn,
+    InvitationCreatedOut,
+    InvitationOut,
     OrganizationOut,
     OrganizationProfileIn,
     RoleCreateIn,
     RoleOut,
 )
-from app.services import organization_service, role_service, tenant_access
+from app.services import membership_service, organization_service, role_service, tenant_access
 from app.services.organization_service import Actor
 from app.services.session_service import Principal
 from app.services.tenant_access import TenantContext
@@ -151,3 +155,57 @@ async def assign_role(user_id: int, req: AssignRoleIn, ctx: Org, db: Db) -> dict
         raise organization_service.fields_error(["role_id"])
     await role_service.assign_role(db, ctx, user_id, req.role_id)
     return {"user_id": user_id, "role_id": req.role_id}
+
+
+async def path_tenant(
+    tenant_id: int, db: Db, principal: Annotated[Principal, Depends(get_principal)]
+) -> TenantContext:
+    """Like org_context, but lets a personal tenant through so the service can say why it
+    is not allowed (400) instead of 404."""
+    return await tenant_access.resolve_tenant(db, principal, tenant_id)
+
+
+AnyTenant = Annotated[TenantContext, Depends(path_tenant)]
+
+
+@router.post(
+    "/organizations/{tenant_id}/invitations",
+    operation_id="createInvitation",
+    status_code=201,
+    response_model=InvitationCreatedOut,
+)
+async def create_invitation(ctx: AnyTenant, db: Db) -> InvitationCreatedOut:
+    invitation, token = await membership_service.create_invitation(db, ctx)
+    return InvitationCreatedOut(
+        id=invitation.id,
+        created_at=invitation.created_at,
+        expires_at=invitation.expires_at,
+        token=token,
+    )
+
+
+@router.get(
+    "/organizations/{tenant_id}/invitations",
+    operation_id="listInvitations",
+    response_model=list[InvitationOut],
+)
+async def list_invitations(ctx: Org, db: Db) -> list[InvitationOut]:
+    found = await membership_service.list_open_invitations(db, ctx)
+    return [InvitationOut.model_validate(i, from_attributes=True) for i in found]
+
+
+@router.delete(
+    "/organizations/{tenant_id}/invitations/{invitation_id}",
+    operation_id="revokeInvitation",
+    status_code=204,
+)
+async def revoke_invitation(invitation_id: int, ctx: Org, db: Db) -> Response:
+    await membership_service.revoke_invitation(db, ctx, invitation_id)
+    return Response(status_code=204)
+
+
+@router.post("/invitations/accept", operation_id="acceptInvitation", response_model=AcceptedOut)
+async def accept_invitation(req: AcceptIn, db: Db, principal: Registered) -> AcceptedOut:
+    ensure_text(req)
+    tenant_id = await membership_service.accept(db, principal.user_id, req.token)  # type: ignore[arg-type]
+    return AcceptedOut(tenant_id=tenant_id)
