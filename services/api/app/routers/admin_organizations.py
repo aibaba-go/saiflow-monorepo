@@ -10,13 +10,15 @@ from app.schemas.loose import ensure_text
 from app.schemas.organization import (
     AcceptedOut,
     AdminApplicationOut,
+    AdminVerificationOut,
     IntSettingIn,
     IntSettingOut,
     OrganizationOut,
     OrganizationProfileIn,
     RejectIn,
+    SetVerifiedIn,
 )
-from app.services import organization_service, settings_service
+from app.services import organization_service, settings_service, verification_service
 from app.services.organization_service import Actor
 
 router = APIRouter(
@@ -123,3 +125,42 @@ async def set_member_limit(req: IntSettingIn, db: Db, admin: Admin) -> IntSettin
     key = settings_service.ORG_MEMBER_LIMIT_UNPAID
     await settings_service.set_int(db, key, req.value, admin.account.id)
     return IntSettingOut(value=req.value)
+
+
+@router.get(
+    "/verification-applications",
+    operation_id="adminListVerificationApplications",
+    response_model=list[AdminVerificationOut],
+)
+async def list_verification_applications(
+    db: Db, admin: Admin, status: Literal["pending", "approved", "rejected"] | None = None
+) -> list[AdminVerificationOut]:
+    found = await verification_service.list_applications(db, status)
+    return [AdminVerificationOut.model_validate(a, from_attributes=True) for a in found]
+
+
+@router.post(
+    "/verification-applications/{application_id}/approve",
+    operation_id="adminApproveVerification",
+)
+async def approve_verification(application_id: int, db: Db, admin: Admin) -> dict:
+    await verification_service.approve(db, admin.account.id, application_id)
+    return {"status": "approved"}
+
+
+@router.post(
+    "/verification-applications/{application_id}/reject", operation_id="adminRejectVerification"
+)
+async def reject_verification(
+    application_id: int, db: Db, admin: Admin, req: RejectIn | None = None
+) -> dict:
+    req = req or RejectIn()
+    ensure_text(req)
+    await verification_service.reject(db, admin.account.id, application_id, req.reason)
+    return {"status": "rejected"}
+
+
+@router.put("/organizations/{tenant_id}/verification", operation_id="adminSetVerification")
+async def set_verification(tenant_id: int, req: SetVerifiedIn, db: Db, admin: Admin) -> dict:
+    await verification_service.set_verified(db, admin.account.id, tenant_id, req.verified)
+    return {"verified": req.verified}

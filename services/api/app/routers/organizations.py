@@ -22,8 +22,16 @@ from app.schemas.organization import (
     RoleCreateIn,
     RoleOut,
     TransferIn,
+    VerificationIn,
+    VerificationOut,
 )
-from app.services import membership_service, organization_service, role_service, tenant_access
+from app.services import (
+    membership_service,
+    organization_service,
+    role_service,
+    tenant_access,
+    verification_service,
+)
 from app.services.organization_service import Actor
 from app.services.session_service import Principal
 from app.services.tenant_access import TenantContext
@@ -239,3 +247,24 @@ async def transfer_owner(req: TransferIn, ctx: Org, db: Db) -> dict:
     ensure_text(req)
     await membership_service.transfer_owner(db, ctx, req.user_id)
     return {"owner_user_id": req.user_id}
+
+
+@router.get(
+    "/organizations/{tenant_id}/verification",
+    operation_id="getVerification",
+    response_model=VerificationOut,
+)
+async def get_verification(ctx: Org, db: Db) -> VerificationOut:
+    return VerificationOut(**await verification_service.status(db, ctx.tenant_id))
+
+
+@router.post(
+    "/organizations/{tenant_id}/verification",
+    operation_id="submitVerification",
+    status_code=201,
+    response_model=VerificationOut,
+)
+async def submit_verification(req: VerificationIn, ctx: Org, db: Db) -> VerificationOut:
+    ensure_text(req)
+    await verification_service.submit(db, ctx, req.legal_name, req.tax_id, req.registered_address)
+    return VerificationOut(**await verification_service.status(db, ctx.tenant_id))
