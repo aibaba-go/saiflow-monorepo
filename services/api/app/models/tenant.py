@@ -17,11 +17,12 @@ from app.db import Base
 
 
 class Tenant(Base):
-    """Minimal tenant (B-2a): a user's personal tenant or a guest's temporary tenant."""
+    """A tenant: a user's personal tenant, a guest's temporary tenant, or an organization
+    (rebuild-tenant-rbac; its profile is in `organizations`)."""
 
     __tablename__ = "tenants"
     __table_args__ = (
-        CheckConstraint("kind in ('personal', 'guest')", name="tenants_kind"),
+        CheckConstraint("kind in ('personal', 'guest', 'organization')", name="tenants_kind"),
         CheckConstraint("status in ('active', 'claimed')", name="tenants_status"),
         Index(
             "tenants_one_personal_per_user",

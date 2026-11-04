@@ -38,7 +38,7 @@ BEGIN
       REVOKE UPDATE, DELETE, TRUNCATE ON saiflow_v3.audit_log FROM saiflow_v3_app;
     END IF;
     IF to_regclass('saiflow_v3.alembic_version') IS NOT NULL THEN
-      REVOKE UPDATE, DELETE ON saiflow_v3.alembic_version FROM saiflow_v3_app;
+      REVOKE INSERT, UPDATE, DELETE ON saiflow_v3.alembic_version FROM saiflow_v3_app;
     END IF;
   END IF;
 END

@@ -90,6 +90,13 @@ async def _truncate_all(engine) -> None:
         # replica role skips the append-only trigger on audit_log (superuser test DB only)
         await conn.execute(text("SET LOCAL session_replication_role = replica"))
         await conn.execute(text(f"TRUNCATE {', '.join(names)} RESTART IDENTITY CASCADE"))
+        # seed rows written by migrations (0004)
+        await conn.execute(
+            text(
+                f'INSERT INTO "{SCHEMA}".system_settings (key, value) '
+                "VALUES ('org_member_limit_unpaid', '2')"
+            )
+        )
 
 
 @pytest.fixture
