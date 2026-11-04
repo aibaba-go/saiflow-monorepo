@@ -3,7 +3,7 @@ doc_id: DES-002
 title: "SaiFlow — 数据模型"
 type: data-model
 status: active
-version: 2.4.0
+version: 2.5.0
 updated: 2026-11-04
 owner: Product Engineering
 source: "PRD-001 v3.3 §3, §4, §4.9; ADR-008"
@@ -24,9 +24,9 @@ erDiagram
     DM-User ||--o{ DM-UserIdentity : "关联身份"
     DM-User ||--o{ DM-Membership : "加入"
     DM-Tenant ||--o{ DM-Membership : "成员"
-    DM-Tenant ||--o| DM-Enterprise : "企业认证（可选）"
+    DM-Tenant ||--o| DM-Enterprise : "组织资料与企业认证"
     DM-Tenant ||--o{ DM-Role : "定义"
-    DM-Membership }o--o{ DM-Role : "分配"
+    DM-Membership }o--|| DM-Role : "分配（每个成员一个）"
     DM-Tenant ||--o{ DM-Invitation : "邀请"
     DM-Plan ||--o{ DM-Subscription : "档位"
     DM-Tenant ||--o| DM-Subscription : "订阅"
@@ -53,11 +53,11 @@ erDiagram
 |---------|------|------|------|----------|----------|
 | `DM-User` | 用户；内部唯一用户 ID | PostgreSQL | 全局 | 1:N 关联身份、成员关系、通知 | 游客 → 已注册；游客注册后数据归入个人租户 |
 | `DM-UserIdentity` | 关联身份：LINE 身份 ID、邮箱、手机号、将来的 OAuth | PostgreSQL | 用户 | N:1 用户；同类身份全局唯一 | 绑定 → 验证（邮箱）→ 解绑 |
-| `DM-Tenant` | 租户：业务数据的归属单位 | PostgreSQL | — | 1:N 成员关系、文件、表单文档；0..1 企业认证、订阅 | 游客临时 / 个人 / 团队；个人 → 团队（付费原地升级，不可逆）；开通 → 关闭（平台 admin） |
-| `DM-Enterprise` | 团队租户的企业信息与企业认证（可选，只影响身份显示，后续如规划开发票则为其前提） | PostgreSQL | 租户（1:1） | 1:1 团队租户 | 未认证 → 已认证（审核开通或 admin 直接开通） |
+| `DM-Tenant` | 租户：业务数据的归属单位 | PostgreSQL | — | 1:N 成员关系、文件、表单文档；0..1 企业认证、订阅 | 游客临时 / 个人 / 组织；个人租户永久存在，数据不迁移；组织：建组织申请 → 平台 admin 批准后成立；启用 ↔ 停用（平台 admin） |
+| `DM-Enterprise` | 组织的资料（名称、联系电话、地址）与企业认证（可选；法定名称、税号、注册地址；解锁的功能以后设计）；建组织申请与企业认证申请为其申请记录 | PostgreSQL | 租户（1:1） | 1:1 组织 | 认证：未认证 → 审核中 → 已认证 / 已驳回（admin 也可直接设定） |
 | `DM-Membership` | 用户在租户中的成员关系 | PostgreSQL | 租户 | N:1 用户、N:1 租户、N:M 角色 | 加入 → 移除；个人租户只有本人 |
 | `DM-Role` | 角色：owner、默认角色与 owner 自定义角色，由权限点组合 | PostgreSQL | 租户 | N:M 成员关系 | 创建 → 修改权限点 → 删除（owner 与默认角色不可删除） |
-| `DM-Invitation` | 团队租户的成员邀请（受成员人数上限约束） | PostgreSQL | 租户 | N:1 团队租户 | 待接受 → 已接受 / 已过期 / 已撤销 |
+| `DM-Invitation` | 组织的一次性成员邀请（7 天有效，凭据只存摘要；受成员人数上限约束） | PostgreSQL | 租户 | N:1 组织 | 待接受 → 已接受 / 已过期 / 已撤销 |
 | `DM-Plan` | 套餐目录：四档及月扫描配额 | PostgreSQL | 全局 | 1:N 订阅 | 由平台维护 |
 | `DM-Subscription` | 租户当前订阅：档位、开通周期（按月 / 按年）与有效期 | PostgreSQL | 租户（一租户一个） | N:1 套餐；1:N 提醒记录 | 未开通 → 有效 → 已到期；续费/升级后重新有效 |
 | `DM-Application` | 续费/升级申请、企业认证申请 | PostgreSQL | 租户 | N:1 目标租户 | 已提交 → 处理中 / 需补充 → 已批准 / 已拒绝 |
@@ -75,7 +75,8 @@ erDiagram
 | `DM-StoredObject` | 对象：原始单据、导入文件、导出文件、头像 | 私有 GCS | 租户 | 1:1 文件元数据 | 原件不可变；按保留策略删除 |
 
 - 登录会话、邮箱验证码等短期技术数据不作为实体登记，设计见 B-2a 的 `openspec/changes/archive/2026-11-03-rebuild-identity/plan.md`。
-- **B-2a 已实现（`rebuild-identity`）：** `DM-User`（LINE 身份 ID 与邮箱作为唯一的关联身份直接存在用户上，邮箱统一小写；手机号不要求唯一）；`DM-Tenant` 只有个人租户与游客临时租户两类（团队租户随 B-2b）；`DM-OperationLog` 仅可追加（数据库触发器禁止修改与删除），每条记录带前一条的校验值，服务器命令 `audit-verify` 检查是否被改动；`DM-AdminAccount` 口令为 argon2id 哈希，连续 5 次错误锁定 15 分钟。`DM-UserIdentity` 在接入第三种身份（如 Google）时再拆成独立的表。
+- **B-2b 已实现（`rebuild-tenant-rbac`）：** `DM-Tenant` 增加组织；组织资料与企业认证存在组织上，建组织申请与企业认证申请各自留有申请记录；`DM-Membership` 每个成员一个角色，owner 不持有角色、拥有全部权限点，每个组织恰好一名 owner（可转让）；`DM-Role` 每个组织一个默认角色；`DM-Invitation` 只存凭据摘要；`DM-SystemSetting` 先有“组织开通套餐前的成员人数上限”一项。这些记录都不随游客数据归集。
+- **B-2a 已实现（`rebuild-identity`）：** `DM-User`（LINE 身份 ID 与邮箱作为唯一的关联身份直接存在用户上，邮箱统一小写；手机号不要求唯一）；`DM-Tenant` 只有个人租户与游客临时租户两类（组织随 B-2b）；`DM-OperationLog` 仅可追加（数据库触发器禁止修改与删除），每条记录带前一条的校验值，服务器命令 `audit-verify` 检查是否被改动；`DM-AdminAccount` 口令为 argon2id 哈希，连续 5 次错误锁定 15 分钟。`DM-UserIdentity` 在接入第三种身份（如 Google）时再拆成独立的表。
 - 报表数据（方式 B，PostgreSQL 内的报表汇总表）为后续能力（OQ-8），实现时再登记实体。
 - 数据库备份文件（VPS 本地 7 天、GCS 备份桶 30 天）是运维数据，不作为实体登记（ADR-008）。
 
@@ -132,6 +133,7 @@ erDiagram
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.5.0 | 2026-11-04 | Product Engineering | 按 PRD v3.4：团队租户改称组织，取消原地升级；`DM-Enterprise` 改为组织资料与企业认证；每个成员一个角色；记录 B-2b 已实现的实体范围 |
 | 2.4.0 | 2026-11-04 | Product Engineering | 新增 §5 数据库账号与权限：结构归迁移账号，应用账号最小权限 |
 | 2.3.0 | 2026-11-03 | Product Engineering | §2 记录 B-2a 已实现的实体范围：用户与关联身份、个人与游客租户、操作日志校验链、平台 admin 账号 |
 | 2.2.0 | 2026-11-02 | Product Engineering | 按 ADR-008：Cloud SQL 与 Firestore 合并为 PostgreSQL；DM-ExtractionPayload 与 DM-FormDocument 的结构化结果用 jsonb，版本、状态、核验与复核记录用普通字段；报表方式 B 改为 PostgreSQL 内汇总表；静态加密与删除协调改写；实体数不变（22） |

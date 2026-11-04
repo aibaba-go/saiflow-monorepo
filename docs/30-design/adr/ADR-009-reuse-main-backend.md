@@ -3,7 +3,7 @@ doc_id: ADR-009
 title: "ADR-009 — 复用 main 分支后端的代码逻辑与数据库设计"
 type: adr
 status: accepted
-version: 1.2.0
+version: 1.3.0
 updated: 2026-11-04
 owner: Product Engineering
 related: [ADR-006, ADR-008, DM-File, DM-OcrJob, DM-ExtractionPayload, DM-FormDocument, DM-DocumentTemplate, NFR-SEC-002, NFR-SEC-010]
@@ -81,7 +81,7 @@ main 的实现与当前 v3 需求（`docs/10-product`、`docs/30-design/Data-Mod
 | 一次性免费额度 `DM-FreeQuota` | 明确不设免费档 | B-2c 定 |
 | 系统参数 `DM-SystemSetting`：OCR 首选与备用引擎、切换参数 | 只接了 TextIn | B-3 定 |
 | 角色与权限点 `DM-Role` | `memberships.role` 只是一个字符串 | B-2b 定 |
-| 一个用户可以拥有多个租户（个人租户与团队租户） | `tenants.owner_user_id UNIQUE` | B-2b 定（负责人 2026-11-04：届时再定） |
+| 一个用户可以拥有或加入多个组织，个人租户永久存在 | `tenants.owner_user_id UNIQUE` | B-2b 已定（D1）：个人租户与组织分开，组织的 owner 记在成员关系上，不用 `owner_user_id` |
 | 订阅历史 | `subscriptions` 每个租户一行，续费时覆盖 | B-2c 定（负责人 2026-11-04：届时再定） |
 
 ### 5. 基础数据
@@ -118,6 +118,7 @@ main 的 `02_base_data.sql` 是配置而不是业务数据，作为重建的初�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.3.0 | 2026-11-04 | Product Engineering | §4：多租户一行按 B-2b 的决定 D1 改写 |
 | 1.2.0 | 2026-11-04 | Product Engineering | §6：测试文件已删除（effd41c）；B-2b、B-2c 由负责人完成，同事从 B-3 开始；功能分支加 PR 的方式 |
 | 1.1.0 | 2026-11-04 | Product Engineering | §6：main 上 TextIn 凭据与测试文件的处理方式、分工 |
 | 1.0.0 | 2026-11-04 | Product Engineering | 初版：三类代码处理方式、业务表沿用与调整清单 T1–T9、隐藏假设、与 v3 需求的差异、基础数据与 main 后续开发 |

@@ -3,8 +3,8 @@ doc_id: REQ-INDEX
 title: "SaiFlow — 需求索引与可追溯性矩阵"
 type: index
 status: active
-version: 1.4.0
-updated: 2026-10-28
+version: 1.5.0
+updated: 2026-11-04
 owner: Product Engineering
 ---
 
@@ -107,21 +107,30 @@ owner: Product Engineering
 | FR-MGMT-009 | 重复检测 | P1 | §4.5 | OCR-002 | AC-FR-MGMT-009-01 | DM-Document | planned |
 | FR-MGMT-010 | 去重 | P2 | §4.5 | MGMT-009 | AC-FR-MGMT-010-01 | DM-Document | planned |
 | FR-SYS-001 | 注册/登录：线上真实 LINE 联合认证；本地开发明确启用的独立 Developer sign-in | P0 | §4.6；用户认证边界调整 2026-10-27 | — | AC-FR-SYS-001-01/02/03/04/05/06 | DM-User, API-8, Architecture §6 | active |
-| FR-SYS-002 | RBAC 权限 | P0 | §4.6 | SYS-001 | AC-FR-SYS-002-01 | DM-Role | active |
+| FR-SYS-002 | 角色与权限点（含原 FR-SYS-009） | P0 | PRD §4.9 v3.4 | SYS-001 | `openspec/specs/tenancy/spec.md` | `openspec/specs/tenancy/spec.md` | active |
 | FR-SYS-003 | 操作日志 | P0 | §4.6/§5.3 | SYS-001 | AC-FR-SYS-003-01 | DM-OperationLog | active |
 | FR-SYS-004 | 语言切换 | P0 | §4.6 | — | AC-FR-SYS-004-01 | NFR-I18N-003 | active |
 | FR-SYS-005 | 参数配置 | P0 | §4.6 | SYS-002 | AC-FR-SYS-005-01 | DM-Settings | active |
 | FR-SYS-006 | 归档与 GCS 存储设置 | P0 | §4.6 | SYS-002 | AC-FR-SYS-006-01 | DM-Settings | active |
 | FR-SYS-007 | 账户锁定 | P1 | §5.3 | SYS-001 | AC-FR-SYS-007-01 | DM-User | planned |
 | FR-SYS-008 | 用户偏好 | P1 | §4.6 | SYS-001 | AC-FR-SYS-008-01 | DM-Settings | planned |
-| FR-SYS-009 | 配置复核与报表权限 | P0 | §1.2/§4.6 | SYS-002 | AC-FR-SYS-009-01 | DM-Role | active |
+| FR-SYS-009 | 并入 FR-SYS-002 | P0 | PRD §4.9 v3.4 | SYS-001 | `openspec/specs/tenancy/spec.md` | `openspec/specs/tenancy/spec.md` | active |
 | FR-SYS-010 | 游客试用与数据归集 | P0 | 用户流程调整 2026-10-17 | SYS-001 | AC-FR-SYS-010-01/02 | DM-User | active |
 | FR-SYS-011 | LINE 确认前登录/注册；认证后按任务工作空间订阅恢复，不自动确认 | P0 | 用户流程调整 2026-10-17/18 | SYS-001/SYS-010 | AC-FR-SYS-011-01 | API-8 | active |
 | FR-SYS-012 | 每租户只开通一个月 Kinder（个人自 tenants.created_at、企业自 enterprises.verified_at，未认证为 NONE），到期硬停 402 plan.expired、历史仍可读；续费/升级由线下审批写入有效期后惰性生效 | P0 | 用户流程调整 2026-10-17/18；套餐到期调整 2026-10-28 | SYS-011 | AC-FR-SYS-012-01/02/03/04/05 | DM-ResultVersion, API-8 | active |
 | FR-SYS-013 | 唯一计量 OCR_PAGE 月页数（按泰国自然月实时统计，FAILED/CANCELLED 不计），无 FREE 档与赠送额度；用尽返回 402 quota.exceeded | P0 | 用户流程调整 2026-10-27；套餐到期调整 2026-10-28 | SYS-012 | AC-FR-SYS-013-01/02/03/04 | API-8 | active |
 | FR-SYS-015 | 个人中心可修改昵称、头像与手机号（可清空，按格式校验，游客不可改） | P0 | 用户流程调整 2026-10-17；资料调整 2026-10-28 | SYS-014 | AC-FR-SYS-015-01/02 | DM-User, API-8 | active |
-| FR-SYS-017 | 租户保持、个人/企业隔离与企业成员共享（含企业单独申请套餐） | P0 | 用户流程调整 2026-10-18；归属调整 2026-10-28 | SYS-002/SYS-012 | AC-FR-SYS-017-01/02/03 | DM-Application, API-8 | active |
+| FR-SYS-017 | 租户访问规则 | P0 | PRD §4.9 v3.4 | SYS-001 | `openspec/specs/tenancy/spec.md` | `openspec/specs/tenancy/spec.md` | active |
 | FR-SYS-018 | 套餐到期提醒（D7/D3/D1/D0/EXPIRED，按 (tenant_id, period_end, stage) 幂等、不回补、游客不提醒）与通知中心未读数/标记已读 | P0 | 套餐到期调整 2026-10-28 | SYS-012 | AC-FR-SYS-018-01/02/03 | API-8 | active |
+| FR-SYS-021 | 组织的申请与审批 | P0 | PRD §4.9 v3.4 | SYS-017 | `openspec/specs/tenancy/spec.md` | `openspec/specs/tenancy/spec.md` | active |
+| FR-SYS-022 | 平台 admin 管理组织 | P0 | PRD §4.9 v3.4 | SYS-017 | `openspec/specs/tenancy/spec.md` | `openspec/specs/tenancy/spec.md` | active |
+| FR-SYS-023 | 组织资料修改 | P0 | PRD §4.9 v3.4 | SYS-017 | `openspec/specs/tenancy/spec.md` | `openspec/specs/tenancy/spec.md` | active |
+| FR-SYS-024 | 成员邀请（一次性链接） | P0 | PRD §4.9 v3.4 | SYS-017 | `openspec/specs/tenancy/spec.md` | `openspec/specs/tenancy/spec.md` | active |
+| FR-SYS-025 | 成员人数上限 | P0 | PRD §4.9 v3.4 | SYS-017 | `openspec/specs/tenancy/spec.md` | `openspec/specs/tenancy/spec.md` | active |
+| FR-SYS-026 | 成员移除与退出 | P0 | PRD §4.9 v3.4 | SYS-017 | `openspec/specs/tenancy/spec.md` | `openspec/specs/tenancy/spec.md` | active |
+| FR-SYS-027 | 企业认证 | P0 | PRD §4.9 v3.4 | SYS-017 | `openspec/specs/tenancy/spec.md` | `openspec/specs/tenancy/spec.md` | active |
+| FR-SYS-028 | 组织操作写入操作日志 | P0 | PRD §4.9 v3.4 | SYS-017 | `openspec/specs/tenancy/spec.md` | `openspec/specs/tenancy/spec.md` | active |
+| FR-SYS-029 | owner 转让 | P0 | PRD §4.9 v3.4 | SYS-017 | `openspec/specs/tenancy/spec.md` | `openspec/specs/tenancy/spec.md` | active |
 | FR-REPORT-001 | 管理层访问运营报表 | P1 | §3.1/§4.7 | SYS-002 | AC-FR-REPORT-001-01 | API-9（待设计） | in-review |
 | FR-REPORT-002 | 展示已配置运营指标 | P1 | §1.2/§4.7 | REPORT-001/OQ-5 | AC-FR-REPORT-002-01 | DM-ReportDefinition（待设计） | in-review |
 | FR-REPORT-003 | 报表授权范围限制 | P1 | §4.7 | SYS-002 | AC-FR-REPORT-003-01 | API-9（待设计） | in-review |
@@ -172,6 +181,7 @@ owner: Product Engineering
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.5.0 | 2026-11-04 | Product Engineering | 新增 FR-SYS-021…029（组织、成员、角色、企业认证）；FR-SYS-002、009、017 指向 `openspec/specs/tenancy/spec.md` |
 | 1.4.0 | 2026-10-28 | Product Engineering | 新增 FR-SYS-018（套餐到期提醒与通知中心标记已读）；补录并改写 FR-SYS-012（每租户一个月 Kinder、到期硬停）、FR-SYS-013（唯一 OCR_PAGE 月页计量，无 FREE 与赠送）、FR-SYS-015（个人中心可改手机号）与 FR-SYS-017（按租户隔离）索引行，与 EPIC-06 v1.7.0 对齐 |
 | 1.3.8 | 2026-10-27 | Product Engineering | 仅同步既有 FR-SYS-001：线上真实 LINE 联合认证、本地开发明确启用的独立 Developer sign-in；新增 AC-FR-SYS-001-04/05/06 与 Architecture §6 引用，不补录无关索引项 |
 | 1.3.7 | 2026-10-20 | Product Engineering | FR-VERIFY-015 扩展为字段/表格行增删与 Reset 放弃改动，新增 AC-FR-VERIFY-015-04/05 |

@@ -3,8 +3,8 @@ doc_id: EPIC-06
 title: "EPIC-06 — 基础系统（账户、权限、配置、i18n）"
 type: epic
 status: active
-version: 1.7.1
-updated: 2026-10-28
+version: 1.7.2
+updated: 2026-11-04
 owner: Product Engineering
 priority: P0
 source: "PRD-001 §4.6"
@@ -26,12 +26,12 @@ related: [DM-User, DM-Role, DM-OperationLog, API-8]
 | ID | 陈述（系统必须……） | 优先级 | 来源 | 依赖项 | 验证方式 |
 |----|--------------------|--------|------|--------|----------|
 | FR-SYS-001 | 支持用户注册和登录：线上仅通过真实 LINE 联合认证，本地开发仅在明确启用时允许独立的 Developer sign-in（dev 身份） | P0 | §4.6；用户认证边界调整 2026-10-27；初始化恢复修复 2026-10-28 | — | AC-FR-SYS-001-01/02/03/04/05/06/07 |
-| FR-SYS-002 | 强制实施基于角色的访问权限 | P0 | §4.6 | FR-SYS-001 | AC-FR-SYS-002-01 |
+| FR-SYS-002 | **已迁移至 `openspec/specs/tenancy/spec.md`（deprecated）** 强制实施基于角色的访问权限 | P0 | §4.6 | FR-SYS-001 | AC-FR-SYS-002-01 |
 | FR-SYS-003 | 为每个改变状态的操作记录操作日志 | P0 | §4.6,§5.3 | FR-SYS-001 | AC-FR-SYS-003-01 |
 | FR-SYS-004 | 允许在泰语 / 英语 / 中文之间切换 UI 语言 | P0 | §4.6 | — | AC-FR-SYS-004-01 |
 | FR-SYS-005 | 提供基础参数配置（路径、阈值、模板） | P0 | §4.6 | FR-SYS-002 | AC-FR-SYS-005-01 |
 | FR-SYS-006 | 提供归档与存储设置（GCS 对象前缀、命名规则） | P0 | §4.6 | FR-SYS-002 | AC-FR-SYS-006-01 |
-| FR-SYS-009 | 允许管理员为角色授予复核与报表查看权限 | P0 | PRD §1.2, §4.6 | FR-SYS-002 | AC-FR-SYS-009-01 |
+| FR-SYS-009 | **已迁移至 `openspec/specs/tenancy/spec.md`（deprecated）** 允许管理员为角色授予复核与报表查看权限 | P0 | PRD §1.2, §4.6 | FR-SYS-002 | AC-FR-SYS-009-01 |
 | FR-SYS-007 | 重复登录失败后锁定账户 | P1 | §5.3 | FR-SYS-001 | AC-FR-SYS-007-01 |
 | FR-SYS-008 | 保留每位用户的偏好（语言、默认导出路径） | P1 | §4.6 | FR-SYS-001 | AC-FR-SYS-008-01 |
 | FR-SYS-010 | 启动以有效应用 Cookie 或游客会话进入主壳，不以残留 LIFF token 自动登录；游客可上传、识别、编辑核验草稿，显式登录后归集其数据 | P0 | 用户流程调整 2026-10-17/27 | FR-SYS-001 | AC-FR-SYS-010-01/02 |
@@ -41,7 +41,7 @@ related: [DM-User, DM-Role, DM-OperationLog, API-8]
 | FR-SYS-014 | 通过 LINE 注册：仅 route=auth 且 needsRegistration 时显示注册框，首页/上传/开始 OCR 不弹；手机号默认取 LINE 返回值，可编辑保存或手填且可选；邮箱默认取服务端验证的 LINE token（email scope/用户授权），可编辑且必填，须凭 TLS SMTP 实发验证码确认；昵称、头像取 LINE 且可改，校验后完成注册 | P0 | 用户流程调整 2026-10-17/18/27 | FR-SYS-001 | AC-FR-SYS-014-01/02/03/04/05 |
 | FR-SYS-015 | 个人中心（My）可修改用户昵称、头像与手机号（手机号可清空，按格式校验，游客不可修改） | P0 | 用户流程调整 2026-10-17；资料调整 2026-10-28 | FR-SYS-014 | AC-FR-SYS-015-01/02 |
 | FR-SYS-016 | 个人中心（My）可更换邮箱：输入新邮箱，系统向新邮箱发送验证码，凭验证码确认更换 | P0 | 用户流程调整 2026-10-17 | FR-SYS-014 | AC-FR-SYS-016-01/02 |
-| FR-SYS-017 | 租户（个人 / 已认证企业）可切换且刷新后保持；各租户的任务数据、订阅与月页计量相互隔离，企业租户的数据、订阅与月页由该企业全体有效成员共享 | P0 | 用户流程调整 2026-10-18；归属调整 2026-10-28 | FR-SYS-002, FR-SYS-012 | AC-FR-SYS-017-01/02/03 |
+| FR-SYS-017 | **已迁移至 `openspec/specs/tenancy/spec.md`（deprecated）** 租户（个人 / 已认证企业）可切换且刷新后保持；各租户的任务数据、订阅与月页计量相互隔离，企业租户的数据、订阅与月页由该企业全体有效成员共享 | P0 | 用户流程调整 2026-10-18；归属调整 2026-10-28 | FR-SYS-002, FR-SYS-012 | AC-FR-SYS-017-01/02/03 |
 | FR-SYS-018 | 在到期前 7/3/1 天、到期当天与到期后各发一次站内通知（并在有邮箱的已注册用户上附带邮件），同一租户同一周期同一节点不重复、错过的节点不回补，游客不提醒；通知中心可查询未读数并将通知标记已读 | P0 | 套餐到期调整 2026-10-28 | FR-SYS-012 | AC-FR-SYS-018-01/02/03 |
 
 ## 3. 角色与权限（RBAC）
@@ -524,6 +524,7 @@ Feature: EPIC-06 基础系统
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.7.2 | 2026-11-04 | Product Engineering | FR-SYS-002、009、017 已迁移至 `openspec/specs/tenancy/spec.md`（rebuild-tenant-rbac）；本处保留为历史参考 |
 | 1.7.1 | 2026-10-28 | Product Engineering | FR-SYS-001/011：LIFF 20 秒超时、安全失败分类、显式按钮一次官方入口重开（同一 sessionStorage 上下文）、保留意图/任务、不转发凭据与不回退 dev；取消 SDK 等待失效与迟到结果保护；新增 AC-001-07，真实手机 WebView/授权另验 |
 | 1.7.0 | 2026-10-28 | Product Engineering | 归属改为单一 `tenant_id`（`tenants` / `enterprises.tenant_id` / `applications.target_tenant_id`，保留 `error.invalid_workspace`、`error.enterprise_access_revoked` 等旧 message_key）；重写 FR-SYS-012（每租户只开通一个月 Kinder：个人自 `tenants.created_at`、企业自 `enterprises.verified_at`，未认证为 NONE，到期硬停 402 `plan.expired`、历史仍可读，线下审批写有效期并惰性顺延、同档续费允许、降档 409）与 FR-SYS-013（唯一计量 `OCR_PAGE`，按泰国自然月实时统计 `ocr_jobs.page_count`，FAILED/CANCELLED 不计，页数用尽 402 `quota.exceeded`；删除 FREE 档、赠送额度、额度流水与 `free_tasks`/`paid_pages`）；FR-SYS-015 手机号改为个人中心可改可清空（原「只读」表述全部作废）；FR-SYS-017 改为按租户隔离；新增 FR-SYS-018 到期提醒（D7/D3/D1/D0/EXPIRED，`uq_plan_reminder_stage` 幂等、不回补、游客不提醒、worker 内低频扫描、`PLAN_REMINDERS_ENABLED`）与通知中心标记已读；新增 AC-FR-SYS-012-04/05、015-02、018-01/02/03 并改写 012/013/014-01/014-03/017 相关 AC。本次为文档与 OpenAPI 契约对齐，未运行任何测试 |
 | 1.6.9 | 2026-10-27 | Product Engineering | FR-SYS-001/010..014：认证/退出/注册默认 Kinder 已真实实现并正式发布；334 项隔离后端、final index-BUTDgRGj.js 的 21 项全 mock 浏览器、6 项 OAuth 源码模拟、9 项前端会话边界及类型检查/Vite 构建/OpenAPI 283 个内部引用通过；AC-001-03 明确失败/10 秒超时锁主壳，Back/刷新按 session CSRF-only→logout→guest 重试并回 scan，不留旧 My、不自动 LINE 兑换；registered_at 动态默认每泰国月 1,000 页，无新增 schema/默认申请/付款/历史迁移；发布引用 Architecture §5/§6，历史 221/5 与 SMTP 接收非本轮证据，SMTP 模块/秘密版本引用不变、本轮未实发邮件，隔离不连接数据库/真实 LINE/SMTP、不创建生产账户；真实 LINE/收件箱/数据库并发/防猜码仍未验证，原业务规则不变 |

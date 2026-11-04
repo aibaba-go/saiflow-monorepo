@@ -3,8 +3,8 @@ doc_id: DES-001
 title: "SaiFlow — 系统架构"
 type: design
 status: active
-version: 3.2.2
-updated: 2026-11-03
+version: 3.3.0
+updated: 2026-11-04
 owner: Product Engineering
 source: "PRD-001 v3.3 §3.1, §3.2, §4, §4.9, §5; ADR-008"
 related: [DM-FormDocument, DM-ExtractionPayload, DM-OcrJob, OCR-Pipeline, API-Spec, NFR-SEC, ADR-006, ADR-008]
@@ -83,7 +83,7 @@ graph TB
 |------|------|---------------|
 | LINE 小程序 | 游客试用、上传、核验、确认、管理操作（成员与角色、复核） | §3.1、§4.1、§4.3、§4.9 |
 | web-pc 企业版 | 管理层浏览本租户结构化数据；管理操作 | §4.9 使用入口 |
-| web-pc admin 后台 | 平台运营：租户、团队租户升级、企业认证审核、套餐档位与有效期、免费额度与成员人数上限、OCR 引擎与大模型配置、首批模板预置 | §4.6、§4.9 |
+| web-pc admin 后台 | 平台运营：组织申请审批与停用、企业认证审核、套餐档位与有效期、免费额度与成员人数上限、OCR 引擎与大模型配置、首批模板预置 | §4.6、§4.9 |
 | 后端 API | 认证与会话、租户隔离与权限点校验、上传编排、OCR 调用与切换、大模型模板匹配与结构化转换、表单状态流转、导出、计量与到期判断、用量提醒与到期提醒（站内通知、LINE OA 消息、邮件；Intermediate / Advance 另加短信）、操作日志 | §3–§4 |
 | OCR 引擎（首选/备用） | 对单据图像执行 OCR，返回原始 JSON | §3.2、§4.2、§4.6 |
 | 大模型 | 模板匹配；按模板结构化转换并给出字段置信度 | §3.2、§4.2 |
@@ -163,6 +163,7 @@ v2 中列为 proposed 的 ADR-002（可插拔 OCR 引擎）已由 PRD §4.6 的�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 3.3.0 | 2026-11-04 | Product Engineering | 按 PRD v3.4：团队租户改称组织，取消原地升级，组织由申请与审批建立 |
 | 3.2.2 | 2026-11-03 | Product Engineering | §5 LINE 小程序子域名改为 `saiflow-line2.aibaba.asia`（负责人 2026-11-03） |
 | 3.2.1 | 2026-11-03 | Product Engineering | B-1：§0 web-pc 拆为企业版与 admin 后台两个应用；§5 三个子域名与服务命名规则；部署说明见 `docs/deployment/README.md` |
 | 3.2.0 | 2026-11-02 | Product Engineering | 按 ADR-008：运行平台改为 LightNode VPS + Docker Compose，入口 Caddy；Firestore 与 Cloud SQL 合并为一个 PostgreSQL（识别结果用 jsonb）；GCS 保持并用签名 URL 下载；Secret Manager 改为服务器环境变量文件；部署改为 GHCR + SSH；新增备份与单点说明；ADR-001、ADR-007 标记取代 |
