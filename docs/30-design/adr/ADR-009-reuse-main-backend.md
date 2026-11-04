@@ -3,7 +3,7 @@ doc_id: ADR-009
 title: "ADR-009 — 复用 main 分支后端的代码逻辑与数据库设计"
 type: adr
 status: accepted
-version: 1.0.0
+version: 1.1.0
 updated: 2026-11-04
 owner: Product Engineering
 related: [ADR-006, ADR-008, DM-File, DM-OcrJob, DM-ExtractionPayload, DM-FormDocument, DM-DocumentTemplate, NFR-SEC-002, NFR-SEC-010]
@@ -91,11 +91,14 @@ main 的 `02_base_data.sql` 是配置而不是业务数据，作为重建的初�
 ### 6. main 后端的后续开发
 
 - main 的后端从此只修演示环境的 bug，不再增加功能；新功能在本分支按 OpenSpec 流程开发。
-- 以下四个安全问题不得带入重建，并建议在 main 上尽快处理：
-  - TextIn 凭据写死在 `config.py` 的默认值中，并且已经推送到 GitHub：需要轮换。
-  - 31 个上传文件提交在 `services/api/storage/` 中：涉及 PDPA。
-  - `POST /file-imports` 可以访问内网：要拦截私有地址，并逐次检查重定向的目标。
-  - `SECRET_KEY` 带有默认值，而下载票据用它签名。
+- 以下四个问题不得带入重建。在 main 上的处理方式如下（负责人 2026-11-04 决定）：
+  - **TextIn 凭据**写死在 `config.py` 的默认值中：在 main 上暂时保持原样，重构结束、切换到新后端时再轮换。重建中按 FR-PLAT-003 只从环境变量读取，代码中不留默认值；可以沿用同一个凭据值，放在服务器的 `.env` 里。
+  - **`services/api/storage/` 下的 31 个文件**：负责人确认都是测试文件，不再需要，可以删除。
+  - **`POST /file-imports` 可以访问内网**：重建时要拦截私有地址，并逐次检查重定向的目标。
+  - **`SECRET_KEY` 带有默认值**，而下载票据用它签名：重建时去掉默认值。
+- 分工（负责人 2026-11-04 决定）：
+  - **同事：** 负责后端的主要业务逻辑开发，主业务不再分工。
+  - **负责人：** 负责前端开发，以及和业务没有直接关系的后端功能。
 
 ## 后果
 
@@ -113,4 +116,5 @@ main 的 `02_base_data.sql` 是配置而不是业务数据，作为重建的初�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.1.0 | 2026-11-04 | Product Engineering | §6：main 上 TextIn 凭据与测试文件的处理方式、分工 |
 | 1.0.0 | 2026-11-04 | Product Engineering | 初版：三类代码处理方式、业务表沿用与调整清单 T1–T9、隐藏假设、与 v3 需求的差异、基础数据与 main 后续开发 |
