@@ -9,6 +9,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from pydantic import SecretStr
 from sqlalchemy import BigInteger, Column, ForeignKey, Table, Text, text
 
 from app.db import SCHEMA, Base, create_engine, create_sessionmaker
@@ -47,8 +48,26 @@ def _env_for(settings) -> dict:
     }
 
 
+APP_ROLE = "saiflow_v3_app"  # what migration 0003 grants to (DB_APP_USER default)
+APP_ROLE_PASSWORD = "local-app"
+
+
+async def _ensure_app_role(settings) -> None:
+    """The least-privilege application role, as the server has it (AC-FR-SYS-003-06)."""
+    engine = create_engine(settings)
+    async with engine.begin() as conn:
+        exists = await conn.scalar(
+            text("select 1 from pg_roles where rolname = :r"), {"r": APP_ROLE}
+        )
+        if not exists:
+            await conn.execute(text(f"CREATE ROLE {APP_ROLE} LOGIN PASSWORD '{APP_ROLE_PASSWORD}'"))
+        await conn.execute(text(f'GRANT CONNECT ON DATABASE "{settings.db_name}" TO {APP_ROLE}'))
+    await engine.dispose()
+
+
 @pytest.fixture(scope="session")
 def migrated_db(db_settings_session):
+    asyncio.run(_ensure_app_role(db_settings_session))
     result = subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"],
         cwd=API_DIR,
@@ -129,3 +148,15 @@ async def api(db_engine, app_settings, line, mail):
         ) as client:
             client.app = app
             yield client
+
+
+@pytest.fixture
+async def app_role_db(migrated_db, db_engine):
+    """A session connected as the application role instead of the test superuser."""
+    settings = migrated_db.model_copy(
+        update={"db_user": APP_ROLE, "db_password": SecretStr(APP_ROLE_PASSWORD)}
+    )
+    engine = create_engine(settings)
+    async with create_sessionmaker(engine)() as session:
+        yield session
+    await engine.dispose()

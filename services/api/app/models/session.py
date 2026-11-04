@@ -6,6 +6,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Identity,
+    Index,
     LargeBinary,
     Text,
     func,
@@ -19,7 +20,10 @@ class CustomerSession(Base):
     """A guest or user session; only the SHA-256 of the cookie token is stored."""
 
     __tablename__ = "customer_sessions"
-    __table_args__ = (CheckConstraint("kind in ('guest', 'user')", name="customer_sessions_kind"),)
+    __table_args__ = (
+        CheckConstraint("kind in ('guest', 'user')", name="customer_sessions_kind"),
+        Index("ix_customer_sessions_user", "user_id"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     token_hash: Mapped[bytes] = mapped_column(LargeBinary, unique=True)

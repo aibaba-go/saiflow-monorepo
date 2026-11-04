@@ -125,6 +125,7 @@ def db_settings_session() -> Settings:
 
 from tests.integration.db_fixtures import (  # noqa: E402,F401  (shared DB fixtures)
     api,
+    app_role_db,
     app_settings,
     db,
     db_engine,

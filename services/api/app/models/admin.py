@@ -1,6 +1,16 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Identity, Integer, LargeBinary, Text, func
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Identity,
+    Integer,
+    LargeBinary,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -10,6 +20,11 @@ class AdminAccount(Base):
     """Platform admin back-office account, separate from customer users (FR-SYS-019)."""
 
     __tablename__ = "admin_accounts"
+    __table_args__ = (
+        CheckConstraint(
+            "username = lower(btrim(username))", name="ck_admin_accounts_username_normalized"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     username: Mapped[str] = mapped_column(Text, unique=True)
