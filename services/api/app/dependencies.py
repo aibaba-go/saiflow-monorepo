@@ -2,7 +2,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Annotated
 
-from fastapi import Depends, Request
+from fastapi import Depends, Header, Request
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.config import Settings
@@ -68,19 +68,30 @@ async def get_principal(
 TENANT_HEADER = "X-Tenant-Id"
 
 
+BIGINT_MAX = 2**63 - 1
+
+
 async def get_tenant_context(
-    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     principal: Annotated[Principal, Depends(get_principal)],
+    raw: Annotated[
+        str | None,
+        Header(
+            alias=TENANT_HEADER,
+            description="Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+        ),
+    ] = None,
 ) -> TenantContext:
     """The tenant this request acts on (FR-SYS-017): header X-Tenant-Id, or the caller's own
-    tenant. A malformed value is treated like any unusable tenant (404)."""
-    raw = request.headers.get(TENANT_HEADER)
+    tenant. Any value that cannot name a usable tenant (not digits, zero, beyond bigint) is
+    404, exactly like a tenant the caller is not a member of."""
     tenant_id: int | None = None
     if raw is not None:
-        if not raw.isascii() or not raw.isdigit() or int(raw) <= 0:
+        if not raw.isascii() or not raw.isdigit() or len(raw) > 19:
             raise tenant_access.not_found()
         tenant_id = int(raw)
+        if not 0 < tenant_id <= BIGINT_MAX:
+            raise tenant_access.not_found()
     return await tenant_access.resolve_tenant(db, principal, tenant_id)
 
 

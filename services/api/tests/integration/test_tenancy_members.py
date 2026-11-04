@@ -165,3 +165,35 @@ async def test_remove_requires_member_manage(api, db, line, mail):
     _, owner_id, org, _, [(ca, _), (_, b)] = await _org_with(api, db, line, mail, ["A", "B"])
     assert (await ca.delete(f"{members_url(org)}/{b}")).status_code == 403
     assert b in await _active(db, org)
+
+
+async def test_leave_with_stale_context_after_transfer_keeps_owner(api, db, line, mail):
+    """Final review: M's leave resolved its context before A transferred owner to M."""
+    from app.services import membership_service
+    from app.services.session_service import Principal
+    from app.services.tenant_access import resolve_tenant
+
+    owner, owner_id, org, _, [(_, m)] = await _org_with(api, db, line, mail, ["M"])
+    personal = (
+        await db.execute(
+            text("select id from tenants where kind='personal' and owner_user_id=:u"), {"u": m}
+        )
+    ).scalar_one()
+    stale = await resolve_tenant(db, Principal("user", 0, personal, m), org)
+    assert stale.is_owner is False
+    await owner.post(f"/api/v1/organizations/{org}/owner-transfer", json={"user_id": m})
+    db.expire_all()
+    with pytest.raises(Exception) as info:
+        await membership_service.leave(db, stale)
+    assert getattr(info.value, "code", None) == "owner_protected"
+    await db.rollback()
+    assert await _owners(db, org) == [m]
+
+
+async def test_concurrent_transfer_and_leave_one_owner(api, db, line, mail):
+    owner, _, org, _, [(cm, m)] = await _org_with(api, db, line, mail, ["M"])
+    await asyncio.gather(
+        owner.post(f"/api/v1/organizations/{org}/owner-transfer", json={"user_id": m}),
+        cm.post(f"/api/v1/organizations/{org}/leave"),
+    )
+    assert len(await _owners(db, org)) == 1

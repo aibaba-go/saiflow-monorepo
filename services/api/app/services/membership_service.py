@@ -231,6 +231,8 @@ async def leave(db: AsyncSession, ctx: TenantContext) -> None:
     membership = await _active_member(db, ctx.tenant_id, ctx.user_id)  # type: ignore[arg-type]
     if membership is None:
         raise not_found()
+    if membership.is_owner:  # re-checked under the lock: a transfer may have just made us owner
+        raise _owner_protected()
     membership.removed_at = utcnow()
     await record(db, Actor("user", ctx.user_id).event("member.leave", "membership", membership.id))  # type: ignore[arg-type]
     await db.commit()

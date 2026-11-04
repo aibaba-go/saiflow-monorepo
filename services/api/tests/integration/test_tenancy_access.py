@@ -125,7 +125,15 @@ async def test_bad_tenant_header_is_404(api, db, line):  # Review Focus 3
     ).scalar_one()
     guest = (await api.post("/api/v1/auth/guest")).json()["tenant_id"]
     bodies = []
-    for value in ["abc", "-1", "0", str(other_personal), str(guest)]:
+    for value in [
+        "abc",
+        "-1",
+        "0",
+        "9223372036854775808",
+        "9" * 5000,
+        str(other_personal),
+        str(guest),
+    ]:
         r = await cu.get("/api/v1/_test/items", headers=tenant(value))
         assert r.status_code == 404, value
         bodies.append((r.json()["code"], r.json()["message_key"]))
@@ -140,3 +148,10 @@ async def test_guest_own_tenant_and_list_tenants_401(api):  # Review Focus 3/4
     ] == guest
     assert (await api.get("/api/v1/_test/items", headers=tenant(guest))).json() == ["g"]
     assert (await api.get("/api/v1/me/tenants")).status_code == 401
+
+
+async def test_tenant_header_declared_in_openapi(api):  # final review: B-3 client needs it
+    mount_items(api)
+    api.app.openapi_schema = None
+    params = api.app.openapi()["paths"]["/api/v1/_test/items"]["get"].get("parameters", [])
+    assert any(p["name"] == "X-Tenant-Id" and p["in"] == "header" for p in params)
