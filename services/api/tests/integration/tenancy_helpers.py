@@ -108,3 +108,39 @@ def mount_items(api) -> None:
 
 def tenant(tid: int | str) -> dict:
     return {"X-Tenant-Id": str(tid)}
+
+
+ADMIN_PASSWORD = "correct-horse-battery"
+ORG = {"name": "Siam Tools", "contact_phone": "081 234 5678", "address": "Bangkok"}
+
+
+async def registered_client(api, line, mail, sub: str) -> tuple[httpx.AsyncClient, int]:
+    from tests.integration.test_registration import register
+
+    c = client_like(api)
+    me = await register(c, line, mail, sub=sub, email=f"{sub.lower()}@example.com")
+    return c, me["user_id"]
+
+
+async def admin_client(api, db, username: str = "ops") -> httpx.AsyncClient:
+    from app.services import admin_service
+
+    await admin_service.create_admin(db, username, ADMIN_PASSWORD)
+    await db.commit()
+    c = client_like(api)
+    r = await c.post(
+        "/api/v1/admin/auth/login", json={"username": username, "password": ADMIN_PASSWORD}
+    )
+    assert r.status_code == 200, r.text
+    return c
+
+
+async def approved_org(api, db, line, mail, sub: str = "OWNER", admin=None):
+    """Apply as a new registered user and approve. Returns
+    (owner client, owner user ID, organization tenant ID, admin client)."""
+    c, uid = await registered_client(api, line, mail, sub)
+    app_id = (await c.post("/api/v1/organization-applications", json=ORG)).json()["id"]
+    admin = admin or await admin_client(api, db)
+    r = await admin.post(f"/api/v1/admin/organization-applications/{app_id}/approve")
+    assert r.status_code == 200, r.text
+    return c, uid, r.json()["tenant_id"], admin
