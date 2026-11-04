@@ -105,7 +105,10 @@ async def update_profile(db: AsyncSession, user_id: int, fields: dict[str, str |
         checks.append(lambda: ("phone", normalize_phone(fields["phone"])))
     changes = dict(_collect(*checks))
     user = await _load(db, user_id)
-    for name, value in changes.items():
+    changed = {name: value for name, value in changes.items() if getattr(user, name) != value}
+    if not changed:  # nothing changed state, so nothing to log (FR-SYS-003)
+        return
+    for name, value in changed.items():
         setattr(user, name, value)
     await record(
         db, AuditEvent("user", str(user_id), "user.update_profile", "user", str(user_id), "success")

@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import getpass
 import sys
 
 from app.config import load_settings
@@ -24,10 +25,17 @@ async def _audit_verify() -> int:
         await engine.dispose()
 
 
+def _read_password() -> str:
+    """From a terminal: prompt without echo. From a pipe: the first line, as before."""
+    if sys.stdin.isatty():
+        return getpass.getpass("password: ")
+    return sys.stdin.readline().rstrip("\r\n")
+
+
 async def _admin(command: str, username: str) -> int:
     from app.services import admin_service
 
-    password = "" if command == "admin-disable" else sys.stdin.readline().rstrip("\r\n")
+    password = "" if command == "admin-disable" else _read_password()
     engine = create_engine(load_settings())
     try:
         async with create_sessionmaker(engine)() as db:

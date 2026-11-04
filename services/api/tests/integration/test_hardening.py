@@ -200,3 +200,18 @@ async def test_admin_blank_username_rejected(db):
 
     with pytest.raises(ValueError):
         await admin_service.create_admin(db, "   ", PASSWORD)
+
+
+# Task 6: unchanged profile is not audited
+
+
+async def test_noop_profile_update_not_audited(api, db, line, mail):
+    me = await register(api, line, mail)
+    count = "select count(*) from audit_log where action = 'user.update_profile'"
+    before = (await db.execute(text(count))).scalar_one()
+    assert (await api.patch("/api/v1/me", json={})).status_code == 200
+    same = {"display_name": me["display_name"]}
+    assert (await api.patch("/api/v1/me", json=same)).status_code == 200
+    assert (await db.execute(text(count))).scalar_one() == before
+    assert (await api.patch("/api/v1/me", json={"display_name": "New"})).status_code == 200
+    assert (await db.execute(text(count))).scalar_one() == before + 1
