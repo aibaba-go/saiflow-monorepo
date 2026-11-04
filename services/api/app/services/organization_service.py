@@ -31,7 +31,7 @@ class Actor:
         return AuditEvent(self.type, str(self.id), action, target_type, str(target_id), "success")
 
 
-def _fields_error(fields: list[str]) -> AppError:
+def fields_error(fields: list[str]) -> AppError:
     return AppError(400, "validation_error", "error.validation", fields)
 
 
@@ -64,7 +64,7 @@ def check_profile(
         else:
             bad.append("address")
     if bad:
-        raise _fields_error(bad)
+        raise fields_error(bad)
     return out
 
 
@@ -153,7 +153,7 @@ async def approve(db: AsyncSession, admin_id: int, application_id: int) -> int:
 async def reject(db: AsyncSession, admin_id: int, application_id: int, reason: str | None) -> None:
     clean = (reason or "").strip()
     if not clean:
-        raise _fields_error(["reason"])
+        raise fields_error(["reason"])
     application = await _pending_for_update(db, application_id)
     application.status, application.reject_reason = "rejected", clean
     application.decided_by_admin_id, application.decided_at = admin_id, utcnow()
