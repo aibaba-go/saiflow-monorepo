@@ -166,3 +166,37 @@ async def test_email_rejected_400_and_can_resend(api, db, line, mail):
     mail.fail_with = None
     r = await api.post("/api/v1/me/email-code", json={"email": "good@example.com"})
     assert r.status_code == 204
+
+
+# Task 5: admin usernames (AC-FR-SYS-019-08)
+
+
+async def test_admin_username_case_insensitive(api, db):
+    from app.services import admin_service
+
+    await admin_service.create_admin(db, "Ops", PASSWORD)
+    await db.commit()
+    r = await api.post("/api/v1/admin/auth/login", json={"username": " ops ", "password": PASSWORD})
+    assert r.status_code == 200
+    with pytest.raises(ValueError):
+        await admin_service.create_admin(db, "OPS", PASSWORD)
+    await db.rollback()
+    assert (await db.execute(text("select count(*) from admin_accounts"))).scalar_one() == 1
+    names = (await db.execute(text("select username from admin_accounts"))).scalars().all()
+    assert names == ["ops"]
+
+
+async def test_admin_commands_accept_any_case(db):
+    from app.services import admin_service
+
+    await admin_service.create_admin(db, "ops", PASSWORD)
+    await admin_service.reset_password(db, " OPS", PASSWORD + "-new")
+    await admin_service.disable_admin(db, "Ops ")
+    await db.commit()
+
+
+async def test_admin_blank_username_rejected(db):
+    from app.services import admin_service
+
+    with pytest.raises(ValueError):
+        await admin_service.create_admin(db, "   ", PASSWORD)

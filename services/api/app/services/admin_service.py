@@ -56,8 +56,14 @@ async def _system(db: AsyncSession, action: str, username: str) -> None:
     await record(db, AuditEvent("system", None, action, "admin_account", username, "success"))
 
 
+def normalize_username(raw: str) -> str:
+    """Usernames differing only in case or surrounding spaces are one (AC-FR-SYS-019-08)."""
+    return raw.strip().lower()
+
+
 async def create_admin(db: AsyncSession, username: str, password: str) -> int:
     _check_password(password)
+    username = normalize_username(username)
     if not username or await _by_username(db, username) is not None:
         raise ValueError(f"admin account {username!r} already exists or is empty")
     account = AdminAccount(
@@ -77,6 +83,7 @@ async def _require(db: AsyncSession, username: str) -> AdminAccount:
 
 
 async def disable_admin(db: AsyncSession, username: str) -> None:
+    username = normalize_username(username)
     account = await _require(db, username)
     now = utcnow()
     account.disabled_at = now
@@ -90,6 +97,7 @@ async def disable_admin(db: AsyncSession, username: str) -> None:
 
 async def reset_password(db: AsyncSession, username: str, password: str) -> None:
     _check_password(password)
+    username = normalize_username(username)
     account = await _require(db, username)
     account.password_hash = _hasher.hash(password)
     account.failed_attempts, account.locked_until = 0, None
@@ -109,7 +117,7 @@ async def _log_failure(db: AsyncSession, username: str | None) -> None:
 async def login(
     db: AsyncSession, username: str | None, password: str | None
 ) -> tuple[str, AdminAccount]:
-    username, password = username or "", password or ""
+    username, password = normalize_username(username or ""), password or ""
     account = await _by_username(db, username, lock=True)
     if account is None:
         await _verify(_DUMMY_HASH, password)  # same work as for a real account
