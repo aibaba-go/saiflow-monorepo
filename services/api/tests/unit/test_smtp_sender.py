@@ -66,3 +66,19 @@ async def test_smtp_ssl_vs_starttls_flags(security, use_tls, start_tls):
     assert call["hostname"] == "smtp.example.com" and call["port"] == 587
     assert call["username"] == "user" and call["password"] == "pw"
     assert call["message"]["To"] == "a@example.com" and call["message"]["Subject"] == "Subject"
+
+
+async def test_unavailable_carries_server_reply():
+    sender, _, _ = make(
+        aiosmtplib.SMTPAuthenticationError(535, "5.7.3 Authentication unsuccessful")
+    )
+    with pytest.raises(EmailUnavailable) as info:
+        await sender.send("a@example.com", "s", "b")
+    assert str(info.value) == "SMTPAuthenticationError: 535 5.7.3 Authentication unsuccessful"
+
+
+async def test_unavailable_carries_connection_reason():
+    sender, _, _ = make(aiosmtplib.SMTPServerDisconnected("Unexpected EOF received"))
+    with pytest.raises(EmailUnavailable) as info:
+        await sender.send("a@example.com", "s", "b")
+    assert str(info.value) == "SMTPServerDisconnected: Unexpected EOF received"

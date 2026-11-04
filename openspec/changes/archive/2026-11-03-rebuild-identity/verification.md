@@ -19,7 +19,7 @@
 |----|---------|------|
 | AC-FR-SYS-001-01 首次登录创建用户与个人租户 | `integration/test_line_login.py::test_first_login_creates_user_and_personal_tenant` | 通过 |
 | AC-FR-SYS-001-02 再次登录找到同一用户 | `test_line_login.py::test_second_login_same_user`（LIFF 令牌与网页授权码两种方式） | 通过 |
-| AC-FR-SYS-001-03 无效令牌被拒绝 | `test_line_login.py::test_invalid_token_401_creates_nothing`；`unit/test_line_client.py`（受众、签发方、400） | 通过；真实 LINE 校验待补充配置（第 3 节） |
+| AC-FR-SYS-001-03 无效令牌被拒绝 | `test_line_login.py::test_invalid_token_401_creates_nothing`；`unit/test_line_client.py`（受众、签发方、400） | 通过；真实 LINE 校验已在服务器确认（第 3 节） |
 | AC-FR-SYS-001-04 模拟身份被拒绝 | `test_line_login.py::test_dev_identity_rejected` | 通过 |
 | AC-FR-SYS-001-05 LINE 临时不可用 | `test_line_client.py::test_verify_retries_5xx_then_unavailable`（4 次调用，间隔 0.5/1/2 s）、`test_line_login.py::test_line_unavailable_503` | 通过 |
 | AC-FR-SYS-001-06 30 天未使用失效 | `integration/test_sessions.py::test_session_expires_after_30_idle_days` | 通过 |
@@ -37,7 +37,7 @@
 | AC-FR-SYS-014-04 重复注册 | `test_registration.py::test_register_twice_409`、`test_review_fixes.py::test_registered_user_resubmitting_bad_body_gets_409` | 通过 |
 | AC-FR-SYS-014-05 邮箱已被他人使用 | `test_registration.py::test_register_email_taken_409`、`test_email_taken_is_case_insensitive` | 通过 |
 | AC-FR-SYS-014-06 再次登录不覆盖资料 | `test_line_login.py::test_relogin_keeps_saved_profile` | 通过 |
-| AC-FR-SYS-020-01 发送成功 | `test_email_code.py::test_send_code_ok` | 通过；真实发信待补充配置（第 3 节） |
+| AC-FR-SYS-020-01 发送成功 | `test_email_code.py::test_send_code_ok` | 通过；真实发信已在服务器确认（第 3 节） |
 | AC-FR-SYS-020-02 60 秒内重发 | `test_email_code.py::test_resend_within_60s_is_429`、`test_review_fixes.py::test_double_tap_send_code_sends_once` | 通过 |
 | AC-FR-SYS-020-03 新码使旧码作废 | `test_email_code.py::test_new_code_voids_old` | 通过 |
 | AC-FR-SYS-020-04 过期 | `test_email_code.py::test_code_expires_after_10_minutes` | 通过 |
@@ -72,12 +72,16 @@
 | admin 后台：不存在的用户名、错误口令、正确口令 | 401 / 401 / 200 |
 | 服务器 `audit-verify`（2026-11-04，负责人以 root 在 `/opt/saiflow` 运行） | `audit log OK (9 entries)`：校验链完整 |
 
-### 待补充配置后验证
+### 补充配置后的验证（2026-11-04）
 
-负责人决定 `/opt/saiflow/.env` 中的 LINE 与 SMTP 配置稍后填写（`docs/deployment/README.md` §2.6）。填写并重新部署后补做：
+负责人填写 `/opt/saiflow/.env` 中的 LINE 与 SMTP 配置（`docs/deployment/README.md` §2.6）后，重新部署 682b674（Deploy run 41770637762，成功）：
 
-1. 用假令牌 `POST /api/v1/auth/line` → 期望 401 `line_token_invalid`（证明后端确实调用了 LINE 并拒绝）。
-2. 服务器上 `python -m app.cli smtp-check <负责人邮箱>` → 期望 `smtp OK`，负责人确认收到邮件。
+| 检查 | 结果 |
+|---|---|
+| 用假令牌 `POST /api/v1/auth/line` | 401 `line_token_invalid`：后端确实调用了 LINE 并被拒绝（配置前为 503） |
+| 服务器 `python -m app.cli smtp-check <负责人邮箱>` | `smtp OK`，负责人确认收到 "SaiFlow SMTP check" 邮件 |
+
+发信排查中的发现：个人 Outlook.com / Hotmail 账号已不接受口令登录 SMTP（`535 5.7.3`），不能作为发信账号；Gmail 需使用 16 位应用专用密码。排查时 `smtp-check` 只显示 `EmailUnavailable`，已改为显示失败原因（服务器回复码与说明，不含口令）。
 
 ### 待 B-5 验证
 

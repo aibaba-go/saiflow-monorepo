@@ -30,6 +30,13 @@ def _is_transient(exc: BaseException) -> bool:
     )
 
 
+def _reason(exc: BaseException) -> str:
+    """Error class plus the server reply or connection message; never the password."""
+    if isinstance(exc, aiosmtplib.SMTPResponseException):
+        return f"{type(exc).__name__}: {exc.code} {exc.message}"
+    return f"{type(exc).__name__}: {exc}"
+
+
 class SmtpSender:
     def __init__(
         self,
@@ -65,7 +72,7 @@ class SmtpSender:
         try:
             await with_retries(call, is_transient=_is_transient, sleep=self.sleep)
         except Exception as exc:
-            raise EmailUnavailable(type(exc).__name__) from None
+            raise EmailUnavailable(_reason(exc)) from None
 
 
 def smtp_sender_from(settings) -> SmtpSender | None:

@@ -3,7 +3,7 @@ doc_id: OPS-001
 title: "SaiFlow — 部署与运维说明（dev 环境）"
 type: guide
 status: active
-version: 1.1.0
+version: 1.1.1
 updated: 2026-11-03
 owner: Product Engineering
 related: [ADR-008, FR-PLAT-005, FR-PLAT-006]
@@ -93,7 +93,7 @@ ssh -p 11022 root@<VPS_IP> 'chown deploy:deploy /opt/saiflow/secrets/gcs-backup.
    | `SMTP_FROM` | 发件人，如 `SaiFlow <账号地址>` |
 
    较早初始化的服务器没有这些行，手工追加即可。改完后重新运行一次 `Deploy`（或 `docker compose up -d`）使后端读到新值。
-3. 验证发信：`docker compose exec -T saiflow-be-api python -m app.cli smtp-check <你的邮箱>` → `smtp OK`，并确认收到邮件。
+3. 验证发信：`docker compose exec -T saiflow-be-api python -m app.cli smtp-check <你的邮箱>` → `smtp OK`，并确认收到邮件。失败时会显示原因：`535` 表示账号或密码被拒（Gmail 须用 16 位应用专用密码；个人 Outlook.com / Hotmail 账号已不支持口令发信，不能使用），连接断开或超时则检查端口与 `SMTP_SECURITY` 是否对应。改 `.env` 后须 `docker compose up -d --force-recreate saiflow-be-api` 才会生效。
 
 ### 2.7 平台 admin 后台账号
 

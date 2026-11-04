@@ -41,10 +41,10 @@ def test_ok(smtp_env, monkeypatch, capsys):
 
 def test_failure_hides_password(smtp_env, monkeypatch, capsys):
     async def failing(self, to, subject, body):
-        raise EmailUnavailable("SMTPAuthenticationError")
+        raise EmailUnavailable("SMTPAuthenticationError: 535 bad login")
 
     monkeypatch.setattr(SmtpSender, "send", failing)
     assert cli.main(["smtp-check", "a@example.com"]) == 1
     out = capsys.readouterr()
-    assert "smtp FAILED: EmailUnavailable" in out.out
+    assert "smtp FAILED: SMTPAuthenticationError: 535 bad login" in out.out
     assert SECRET not in out.out + out.err

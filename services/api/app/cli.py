@@ -58,7 +58,7 @@ async def _smtp_check(to: str) -> int:
     try:
         await sender.send(to, "SaiFlow SMTP check", "This is a test message from SaiFlow.\n")
     except EmailUnavailable as exc:
-        print(f"smtp FAILED: {type(exc).__name__}")
+        print(f"smtp FAILED: {exc}")
         return 1
     print("smtp OK")
     return 0
