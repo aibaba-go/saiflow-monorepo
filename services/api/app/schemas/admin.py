@@ -1,9 +1,9 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
+
+from app.schemas.loose import LooseRequest
 
 
-class AdminLoginRequest(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class AdminLoginRequest(LooseRequest):
     username: str | None = None
     password: str | None = None
 

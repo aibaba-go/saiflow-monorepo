@@ -1,10 +1,4 @@
-from pydantic import BaseModel, ConfigDict
-
-
-class _Loose(BaseModel):
-    """Fields are optional strings; content rules are checked in services (HTTP 400)."""
-
-    model_config = ConfigDict(extra="ignore")
+from app.schemas.loose import LooseRequest as _Loose
 
 
 class EmailCodeRequest(_Loose):

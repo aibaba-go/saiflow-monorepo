@@ -17,6 +17,7 @@ from app.dependencies import (
 )
 from app.integrations.line import LineClient
 from app.schemas.auth import LineLoginRequest, MeResponse
+from app.schemas.loose import ensure_text
 from app.services import auth_service, me_service, session_service
 from app.services.audit_service import AuditEvent, record
 from app.services.session_service import CUSTOMER_COOKIE, CUSTOMER_IDLE, Principal
@@ -76,6 +77,7 @@ async def login_with_line(
     line: Annotated[LineClient, Depends(get_line_client)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> MeResponse:
+    ensure_text(req)
     allowed = {u.strip() for u in settings.line_login_redirect_uris.split(",") if u.strip()}
     token, principal = await auth_service.login_with_line(db, line, current, req, allowed)
     set_customer_cookie(response, token)

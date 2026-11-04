@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.cookies import clear_session_cookie, set_session_cookie
 from app.dependencies import AdminContext, get_admin, get_db, require_csrf_header
 from app.schemas.admin import AdminLoginRequest, AdminMeResponse
+from app.schemas.loose import ensure_text
 from app.services import admin_service
 from app.services.admin_service import ADMIN_COOKIE, ADMIN_IDLE
 
@@ -21,6 +22,7 @@ Admin = Annotated[AdminContext, Depends(get_admin)]
 
 @router.post("/auth/login", operation_id="adminLogin", response_model=AdminMeResponse)
 async def admin_login(req: AdminLoginRequest, response: Response, db: Db) -> AdminMeResponse:
+    ensure_text(req)
     token, account = await admin_service.login(db, req.username, req.password)
     set_session_cookie(response, ADMIN_COOKIE, token, int(ADMIN_IDLE.total_seconds()))
     return AdminMeResponse(admin_id=account.id, username=account.username)

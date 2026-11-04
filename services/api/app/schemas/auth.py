@@ -1,13 +1,13 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
+
+from app.schemas.loose import LooseRequest
 
 
-class LineLoginRequest(BaseModel):
+class LineLoginRequest(LooseRequest):
     """Either an ID token (LIFF) or an authorization code with its redirect URI (web-pc).
     Every field is optional here; the service decides what is acceptable."""
-
-    model_config = ConfigDict(extra="ignore")
 
     id_token: str | None = None
     code: str | None = None

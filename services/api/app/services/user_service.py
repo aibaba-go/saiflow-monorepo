@@ -53,16 +53,17 @@ async def _load(db: AsyncSession, user_id: int) -> User:
     return user
 
 
-def _collect(*checks) -> list:
-    """Run each normaliser; raise one 400 listing every failing field."""
-    values, failed = [], []
+def _collect(*checks, invalid: list[str] | None = None) -> list:
+    """Run each normaliser; raise one 400 listing every failing field (plus `invalid`,
+    fields whose value was not a string)."""
+    values, failed = [], list(invalid or [])
     for check in checks:
         try:
             values.append(check())
         except AppError as exc:
             failed.extend(exc.fields or [])
     if failed:
-        raise _field_error(*failed)
+        raise _field_error(*dict.fromkeys(failed))
     return values
 
 
@@ -73,6 +74,7 @@ async def register(
     code: str | None,
     display_name: str | None,
     phone: str | None,
+    invalid_fields: list[str] | None = None,
 ) -> None:
     user = await _load(db, user_id)
     if user.registered_at is not None:  # AC-FR-SYS-014-04: whatever the body contains
@@ -81,6 +83,7 @@ async def register(
         lambda: email_code_service.normalize_email(email),
         lambda: normalize_display_name(display_name),
         lambda: normalize_phone(phone),
+        invalid=invalid_fields or [],
     )
     owner = await _email_owner(db, clean_email)
     if owner is not None and owner != user_id:

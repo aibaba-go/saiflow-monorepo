@@ -15,6 +15,7 @@ from app.dependencies import (
 )
 from app.integrations.email import SmtpSender
 from app.schemas.auth import MeResponse
+from app.schemas.loose import ensure_text
 from app.schemas.me import (
     EmailChangeRequest,
     EmailCodeRequest,
@@ -42,6 +43,7 @@ async def send_email_code(
     principal: Annotated[Principal, Depends(require_user)],
     sender: Annotated[SmtpSender, Depends(get_email_sender)],
 ) -> Response:
+    ensure_text(req)
     email = email_code_service.normalize_email(req.email)
     await email_code_service.send_code(db, sender, principal.user_id, email)  # type: ignore[arg-type]
     return Response(status_code=204)
@@ -61,6 +63,7 @@ async def register(
         req.code,
         req.display_name,
         req.phone,  # type: ignore[arg-type]
+        invalid_fields=req.invalid_fields,
     )
     return await me_service.me(db, principal)
 
@@ -71,6 +74,7 @@ async def update_me(
     db: Db,
     principal: Annotated[Principal, Depends(require_registered_user)],
 ) -> MeResponse:
+    ensure_text(req)
     await user_service.update_profile(db, principal.user_id, req.model_dump(exclude_unset=True))  # type: ignore[arg-type]
     return await me_service.me(db, principal)
 
@@ -81,5 +85,6 @@ async def change_email(
     db: Db,
     principal: Annotated[Principal, Depends(require_registered_user)],
 ) -> MeResponse:
+    ensure_text(req)
     await user_service.change_email(db, principal.user_id, req.email, req.code)  # type: ignore[arg-type]
     return await me_service.me(db, principal)
