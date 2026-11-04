@@ -11,7 +11,6 @@ from app.dependencies import (
     get_db,
     get_line_client,
     get_optional_principal,
-    get_principal,
     get_settings,
     require_csrf_header,
 )
@@ -48,21 +47,25 @@ async def create_guest_session(
 
 
 @router.post("/logout", operation_id="logout", status_code=204)
-async def logout(db: Db, principal: Annotated[Principal, Depends(get_principal)]) -> Response:
-    await session_service.revoke(db, principal.session_id)
-    actor = str(principal.user_id) if principal.kind == "user" else str(principal.tenant_id)
-    await record(
-        db,
-        AuditEvent(
-            principal.kind,
-            actor,
-            "customer.logout",
-            "session",
-            str(principal.session_id),
-            "success",
-        ),
-    )
-    await db.commit()
+async def logout(
+    db: Db, principal: Annotated[Principal | None, Depends(get_optional_principal)]
+) -> Response:
+    """Always 204 and clears the cookie, even when the session is already gone (AC-001-10)."""
+    if principal is not None:
+        await session_service.revoke(db, principal.session_id)
+        actor = str(principal.user_id) if principal.kind == "user" else str(principal.tenant_id)
+        await record(
+            db,
+            AuditEvent(
+                principal.kind,
+                actor,
+                "customer.logout",
+                "session",
+                str(principal.session_id),
+                "success",
+            ),
+        )
+        await db.commit()
     response = Response(status_code=204)
     clear_session_cookie(response, CUSTOMER_COOKIE)
     return response

@@ -83,6 +83,8 @@ async def login_with_line(
                     "user", str(user.id), "guest.claim", "tenant", str(current.tenant_id), "success"
                 ),
             )
+        elif current is not None:  # a user session on this device is replaced (AC-001-09)
+            await session_service.revoke(db, current.session_id)
         token = await session_service.create_user_session(db, user.id, personal_tenant_id)
         await record(
             db, AuditEvent("user", str(user.id), "customer.login", "user", str(user.id), "success")
