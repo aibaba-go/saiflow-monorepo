@@ -122,6 +122,7 @@ jobs:
             echo "POSTGRES_USER=saiflow_admin"
             echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)"
             echo "DB_PASSWORD=$(openssl rand -hex 16)"
+            echo "DB_MIGRATE_PASSWORD=$(openssl rand -hex 16)"
             echo "APP_HOST=app.localhost"
             echo "ADMIN_HOST=admin.localhost"
             echo "LINE_HOST=line.localhost"
@@ -132,7 +133,8 @@ jobs:
         working-directory: ${{ env.STACK_DIR }}
         run: |
           docker compose up -d --wait postgres
-          docker compose run --rm saiflow-be-api alembic upgrade head
+          DEPLOY_DIR="$STACK_DIR" bash "$GITHUB_WORKSPACE/scripts/deploy/db-roles.sh"
+          docker compose run --rm saiflow-be-migrate alembic upgrade head
           docker compose up -d --remove-orphans
       - name: health through Caddy on all three sites
         env:

@@ -3,7 +3,7 @@ doc_id: OPS-001
 title: "SaiFlow — 部署与运维说明（dev 环境）"
 type: guide
 status: active
-version: 1.1.1
+version: 1.2.0
 updated: 2026-11-03
 owner: Product Engineering
 related: [ADR-008, FR-PLAT-005, FR-PLAT-006]
@@ -117,6 +117,22 @@ docker compose exec -T saiflow-be-api python -m app.cli admin-disable <用户名
 
 推送代码或合并 PR **不会**触发部署。
 
+### 3.1 数据库账号
+
+| 账号 | 用途 | 口令（`.env`） |
+|------|------|------|
+| `POSTGRES_USER`（`saiflow_admin`） | 数据库超级账号：建账号、备份 | `POSTGRES_PASSWORD` |
+| `saiflow_v3_migrator` | 拥有 schema `saiflow_v3` 中的全部表，只用于执行数据库迁移 | `DB_MIGRATE_PASSWORD` |
+| `saiflow_v3_app` | 后端运行时使用；只能读写数据，不能改表结构，操作日志只能读取与追加 | `DB_PASSWORD` |
+
+每次部署在迁移前运行 `db-roles.sh`：建立或更新迁移账号，并把表的所有者转给它（可重复执行）。`.env` 缺少 `DB_MIGRATE_PASSWORD` 时部署在任何改动之前失败，正在运行的版本不受影响。
+
+**2026-11-04 之前初始化的服务器**需在部署 `harden-identity` 之前补一行（以 root 执行一次）：
+
+```bash
+cd /opt/saiflow && echo "DB_MIGRATE_PASSWORD=$(openssl rand -hex 24)" >> .env
+```
+
 ## 4. 回滚
 
 - **推荐：** 用 `git revert` 提交一个撤销问题改动的新提交，等 CI 通过后再运行 `Deploy`（工作流总是部署所选分支的最新提交）。
@@ -160,6 +176,8 @@ docker compose exec -T saiflow-be-api python -m app.cli audit-verify   # 操作�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.2.0 | 2026-11-04 | Product Engineering | harden-identity：§3.1 数据库账号（迁移账号与应用账号分离，新增 `DB_MIGRATE_PASSWORD`） |
+| 1.1.1 | 2026-11-04 | Product Engineering | §2.6 发信失败原因说明；改 `.env` 后须重建后端容器 |
 | 1.1.0 | 2026-11-03 | Product Engineering | B-2a：§2.6 LINE 登录与发信配置、§2.7 平台 admin 账号命令；§6 加操作日志检查 |
 | 1.0.2 | 2026-11-03 | Product Engineering | 备份服务账号增加备份桶读取权限（`gcloud storage cp` 需要 `storage.objects.get`，首次备份演练发现） |
 | 1.0.1 | 2026-11-03 | Product Engineering | LINE 小程序子域名改为 `saiflow-line2`（原名与之前调试地址冲突，负责人 2026-11-03） |

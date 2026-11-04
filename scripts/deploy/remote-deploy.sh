@@ -6,8 +6,14 @@
 set -euo pipefail
 
 tag="${1:?usage: remote-deploy.sh <image_tag>  (GHCR user and token on stdin)}"
-DEPLOY_DIR="${DEPLOY_DIR:-/opt/saiflow}"
+export DEPLOY_DIR="${DEPLOY_DIR:-/opt/saiflow}"
 cd "$DEPLOY_DIR"
+
+# Checked before anything changes: migrations need the migration account (harden-identity).
+if ! grep -q '^DB_MIGRATE_PASSWORD=.' .env; then
+  echo "remote-deploy: DB_MIGRATE_PASSWORD missing in $DEPLOY_DIR/.env (docs/deployment/README.md)" >&2
+  exit 2
+fi
 
 IFS= read -r ghcr_user
 IFS= read -r ghcr_token
@@ -31,8 +37,9 @@ compose=(docker compose --project-directory "$DEPLOY_DIR" -f "$DEPLOY_DIR/compos
 echo "remote-deploy: pulling $tag"
 "${compose[@]}" pull
 "${compose[@]}" up -d --wait postgres
+bash "$DEPLOY_DIR/db-roles.sh"
 echo "remote-deploy: migrating"
-"${compose[@]}" run --rm saiflow-be-api alembic upgrade head
+"${compose[@]}" run --rm saiflow-be-migrate alembic upgrade head
 "${compose[@]}" up -d --remove-orphans
 # The Caddyfile is bind-mounted and not watched: reload so edits take effect.
 "${compose[@]}" exec -T caddy caddy reload --config /etc/caddy/Caddyfile

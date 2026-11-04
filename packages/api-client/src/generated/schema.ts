@@ -98,7 +98,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Logout */
+        /**
+         * Logout
+         * @description Always 204 and clears the cookie, even when the session is already gone (AC-001-10).
+         */
         post: operations["logout"];
         delete?: never;
         options?: never;

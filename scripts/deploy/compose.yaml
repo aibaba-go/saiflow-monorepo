@@ -1,6 +1,7 @@
 # SaiFlow stack on the VPS (ADR-008). Lives in /opt/saiflow next to .env (mode 600).
 #   docker compose up -d postgres
-#   docker compose run --rm saiflow-be-api alembic upgrade head
+#   bash db-roles.sh                     # database accounts (needs DB_MIGRATE_PASSWORD)
+#   docker compose run --rm saiflow-be-migrate alembic upgrade head
 #   docker compose up -d --remove-orphans
 name: saiflow
 
@@ -54,6 +55,24 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
       SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Runs migrations as the account that owns the schema; never started by `up`
+  # (harden-identity, AC-FR-SYS-003-06). remote-deploy.sh checks DB_MIGRATE_PASSWORD first,
+  # so a missing value fails the deploy without breaking other compose commands (backups).
+  saiflow-be-migrate:
+    image: ${IMAGE_REGISTRY:-ghcr.io/aibaba-go}/saiflow-be-api:${IMAGE_TAG:?}
+    profiles: ["tools"]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: saiflow
+      DB_USER: saiflow_v3_migrator
+      DB_PASSWORD: ${DB_MIGRATE_PASSWORD:-}
+      DB_APP_USER: saiflow_v3_app
+    command: ["alembic", "upgrade", "head"]
     depends_on:
       postgres:
         condition: service_healthy

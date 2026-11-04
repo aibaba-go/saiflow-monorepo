@@ -21,4 +21,18 @@ done
 # rate-limit bucket (AC-FR-SYS-010-07). Safe because the backend publishes no port.
 check "backend trusts the proxy's forwarded address" grep -q "FORWARDED_ALLOW_IPS: \"\*\"" <<<"$backend"
 check "backend publishes no ports" bash -c "! grep -v '^ *#' <<<\"\$1\" | grep -q 'ports:'" _ "$backend"
+# harden-identity: a separate migration account (AC-FR-SYS-003-06)
+migrate="$(awk '/^  saiflow-be-migrate:/{p=1;next} /^  [a-z]/{p=0} p' "$deploy/compose.yaml")"
+check "migrate service runs as the migration account" grep -q 'DB_USER: saiflow_v3_migrator' <<<"$migrate"
+check "migrate service reads DB_MIGRATE_PASSWORD" grep -qF "DB_PASSWORD: \${DB_MIGRATE_PASSWORD:-}" <<<"$migrate"
+check "migrate service grants to the app role" grep -q 'DB_APP_USER: saiflow_v3_app' <<<"$migrate"
+check "migrate service is a tool, not started by up" grep -qF 'profiles: ["tools"]' <<<"$migrate"
+check "backend still runs as the app role" grep -q 'DB_USER: saiflow_v3_app' <<<"$backend"
+check "env.example lists DB_MIGRATE_PASSWORD" grep -q '^DB_MIGRATE_PASSWORD=' "$deploy/env.example"
+check "bootstrap generates DB_MIGRATE_PASSWORD" grep -qF "DB_MIGRATE_PASSWORD=\$(openssl rand" "$here/../vps-bootstrap.sh"
+check "restore-check creates the migration role" grep -q 'CREATE ROLE saiflow_v3_migrator' "$deploy/restore-check.sh"
+check "role SQL is outside postgres-init (initdb runs *.sql)" test -f "$deploy/db-roles.sql" -a ! -e "$deploy/postgres-init/db-roles.sql"
+wf="$here/../../.github/workflows"
+check "deploy copies the role setup files" bash -c "grep -q 'scripts/deploy/db-roles.sh' '$wf/deploy.yml' && grep -q 'scripts/deploy/db-roles.sql' '$wf/deploy.yml'"
+check "CI stack uses the role setup and migrate service" bash -c "grep -q 'db-roles.sh' '$wf/ci.yml' && grep -q 'saiflow-be-migrate' '$wf/ci.yml' && grep -q DB_MIGRATE_PASSWORD '$wf/ci.yml'"
 finish

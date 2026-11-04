@@ -36,6 +36,8 @@ uv run ruff check . && uv run ruff format --check .
 uv run alembic upgrade head  # 在固定的 schema saiflow_v3 中建表与版本表
 ```
 
+迁移用拥有 schema 的账号执行（服务器上是 `saiflow_v3_migrator`）；迁移 0003 起把数据权限授予 `DB_APP_USER`（默认 `saiflow_v3_app`），后端运行时用该账号。集成测试会在测试库中建立同名的应用账号。
+
 ## 导出接口描述
 
 ```bash

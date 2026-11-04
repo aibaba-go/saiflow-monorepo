@@ -11,6 +11,10 @@ case "$args" in
   *"gcloud storage cp"*)
     [ "${FAKE_UPLOAD_FAIL:-0}" = "1" ] && { echo "AccessDenied" >&2; exit 1; }
     ;;
+  *"exec -T -e DB_MIGRATE_PASSWORD postgres"*)
+    cat >/dev/null
+    [ "${FAKE_ROLES_FAIL:-0}" = "1" ] && { echo "role setup failed" >&2; exit 1; }
+    ;;
   *alembic*)
     [ "${FAKE_MIGRATE_FAIL:-0}" = "1" ] && { echo "migration failed" >&2; exit 1; }
     ;;

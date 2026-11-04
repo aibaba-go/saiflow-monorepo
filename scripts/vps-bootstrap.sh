@@ -47,6 +47,7 @@ if [ ! -f "$dir/.env" ]; then
       echo "POSTGRES_USER=saiflow_admin"
       echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)"
       echo "DB_PASSWORD=$(openssl rand -hex 24)"
+      echo "DB_MIGRATE_PASSWORD=$(openssl rand -hex 24)"
       echo "APP_HOST=saiflow-app.aibaba.asia"
       echo "ADMIN_HOST=saiflow-admin.aibaba.asia"
       echo "LINE_HOST=saiflow-line2.aibaba.asia"

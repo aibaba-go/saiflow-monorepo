@@ -3,7 +3,7 @@ doc_id: DES-002
 title: "SaiFlow — 数据模型"
 type: data-model
 status: active
-version: 2.3.0
+version: 2.4.0
 updated: 2026-11-03
 owner: Product Engineering
 source: "PRD-001 v3.3 §3, §4, §4.9; ADR-008"
@@ -115,6 +115,12 @@ erDiagram
 - 保留/删除策略可配置（NFR-DATA-003；PRD OQ-4 / PDPA）；删除须同时协调 GCS 对象与数据库记录（含 GCS 备份桶中的旧备份按保留期自然过期），并记录操作日志。
 - 原件在 GCS 中不可变；浏览器客户端永远不会获得 GCS、数据库、OCR 引擎或大模型凭据；对象下载只用后端签发的有时效签名 URL。
 
+## 5. 数据库账号与权限
+
+- schema `saiflow_v3` 及其中所有对象归迁移账号所有，结构只由迁移变更。
+- 应用运行账号只有各表的读、插入、修改、删除权限；对操作日志只能读取与追加，不能修改、删除、清空，也不能停用或删除其防改动保护（NFR-SEC-003、NFR-SEC-004，AC-FR-SYS-003-06）。
+- 账号的名称与建立方式见 `docs/deployment/README.md` §3.1。
+
 ## 链接
 
 - 存储边界：[`adr/ADR-008-vps-docker-hosting.md`](./adr/ADR-008-vps-docker-hosting.md)（取代 [`ADR-007`](./adr/ADR-007-v3-storage-boundary.md)）
@@ -126,6 +132,7 @@ erDiagram
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.4.0 | 2026-11-04 | Product Engineering | 新增 §5 数据库账号与权限：结构归迁移账号，应用账号最小权限 |
 | 2.3.0 | 2026-11-03 | Product Engineering | §2 记录 B-2a 已实现的实体范围：用户与关联身份、个人与游客租户、操作日志校验链、平台 admin 账号 |
 | 2.2.0 | 2026-11-02 | Product Engineering | 按 ADR-008：Cloud SQL 与 Firestore 合并为 PostgreSQL；DM-ExtractionPayload 与 DM-FormDocument 的结构化结果用 jsonb，版本、状态、核验与复核记录用普通字段；报表方式 B 改为 PostgreSQL 内汇总表；静态加密与删除协调改写；实体数不变（22） |
 | 2.1.0 | 2026-10-30 | Product Engineering | 按 PRD v3.2：企业租户改称团队租户、企业认证改为可选；新增 DM-FreeQuota（归属租户；共 22 个实体）；个人租户原地升级为团队租户；订阅状态去掉“未开通”；订阅含开通周期；提醒记录含用量提醒；系统参数含成员人数上限 |

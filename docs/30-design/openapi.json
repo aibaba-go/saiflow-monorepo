@@ -537,6 +537,7 @@
     },
     "/api/v1/auth/logout": {
       "post": {
+        "description": "Always 204 and clears the cookie, even when the session is already gone (AC-001-10).",
         "operationId": "logout",
         "responses": {
           "204": {
