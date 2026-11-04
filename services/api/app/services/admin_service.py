@@ -5,6 +5,7 @@ passwords in a row lock the account for 15 minutes; a session ends after 30 idle
 minutes. Every login failure answers the same way, whatever the reason."""
 
 import asyncio
+import re
 from datetime import timedelta
 
 from argon2 import PasswordHasher
@@ -56,15 +57,21 @@ async def _system(db: AsyncSession, action: str, username: str) -> None:
     await record(db, AuditEvent("system", None, action, "admin_account", username, "success"))
 
 
+USERNAME = re.compile(r"^[a-z0-9._-]{1,64}$")
+
+
 def normalize_username(raw: str) -> str:
-    """Usernames differing only in case or surrounding spaces are one (AC-FR-SYS-019-08)."""
-    return raw.strip().lower()
+    """Usernames differing only in case or surrounding spaces are one (AC-FR-SYS-019-08).
+    Only spaces are trimmed, exactly like SQL btrim (M8)."""
+    return raw.strip(" ").lower()
 
 
 async def create_admin(db: AsyncSession, username: str, password: str) -> int:
     _check_password(password)
     username = normalize_username(username)
-    if not username or await _by_username(db, username) is not None:
+    if not USERNAME.match(username):  # M8: ASCII only, so Python and SQL agree
+        raise ValueError(f"admin username {username!r} must be 1-64 of a-z 0-9 . _ -")
+    if await _by_username(db, username) is not None:
         raise ValueError(f"admin account {username!r} already exists or is empty")
     account = AdminAccount(
         username=username, password_hash=_hasher.hash(password), failed_attempts=0

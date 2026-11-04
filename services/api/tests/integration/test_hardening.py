@@ -217,6 +217,22 @@ async def test_noop_profile_update_not_audited(api, db, line, mail):
     assert (await db.execute(text(count))).scalar_one() == before + 1
 
 
+# rebuild-tenant-rbac M8: usernames that Python and SQL would normalise differently
+
+
+async def test_admin_username_charset(db):
+    from app.services import admin_service
+
+    for bad in ["op s", "ops\t", "Ünï", "x" * 65]:
+        with pytest.raises(ValueError):
+            await admin_service.create_admin(db, bad, PASSWORD)
+        await db.rollback()
+    await admin_service.create_admin(db, " Ops.Team-1_ ", PASSWORD)
+    await db.commit()
+    names = (await db.execute(text("select username from admin_accounts"))).scalars().all()
+    assert names == ["ops.team-1_"]
+
+
 # rebuild-tenant-rbac Task 4 finding: a refreshed session cookie belongs to its own request
 
 

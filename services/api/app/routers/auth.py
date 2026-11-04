@@ -17,7 +17,7 @@ from app.dependencies import (
 )
 from app.errors import AppError
 from app.integrations.line import LineClient
-from app.rate_limit import SlidingWindowLimiter
+from app.rate_limit import SlidingWindowLimiter, client_key
 from app.schemas.auth import LineLoginRequest, MeResponse
 from app.schemas.loose import ensure_text
 from app.services import auth_service, me_service, session_service
@@ -46,7 +46,7 @@ async def create_guest_session(
     if current is not None:
         return await me_service.me(db, current)
     ip = request.client.host if request.client else "unknown"
-    if not limiter.hit(ip):
+    if not limiter.hit(client_key(ip)):
         raise AppError(429, "guest_too_many", "error.guest_too_many")
     token, principal = await session_service.create_guest(db)
     await db.commit()

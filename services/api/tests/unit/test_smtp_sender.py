@@ -105,3 +105,34 @@ async def test_recipient_refused_4xx_is_not_rejected():
     with pytest.raises(EmailUnavailable) as info:
         await sender.send("a@example.com", "s", "b")
     assert not isinstance(info.value, EmailRejected)
+
+
+def _refused(code: int, message: str) -> aiosmtplib.SMTPRecipientsRefused:
+    return aiosmtplib.SMTPRecipientsRefused(
+        [aiosmtplib.SMTPRecipientRefused(code, message, "a@example.com")]
+    )
+
+
+@pytest.mark.parametrize(
+    "code,message",
+    [(554, "5.7.1 Relay access denied"), (550, "5.7.1 Message rejected by policy")],
+)
+async def test_relay_or_policy_refusal_is_not_rejected(code, message):  # M2
+    sender, _, _ = make(_refused(code, message))
+    with pytest.raises(EmailUnavailable) as info:
+        await sender.send("a@example.com", "s", "b")
+    assert not isinstance(info.value, EmailRejected)
+
+
+async def test_550_511_is_rejected():  # M2
+    sender, calls, _ = make(_refused(550, "5.1.1 The email account does not exist"))
+    with pytest.raises(EmailRejected):
+        await sender.send("a@example.com", "s", "b")
+    assert len(calls) == 1
+
+
+async def test_rcpt_4xx_retried():  # M3
+    sender, calls, sleep = make(_refused(450, "4.2.0 Mailbox busy, try later"))
+    with pytest.raises(EmailUnavailable):
+        await sender.send("a@example.com", "s", "b")
+    assert len(calls) == 4 and sleep.delays == [0.5, 1.0, 2.0]

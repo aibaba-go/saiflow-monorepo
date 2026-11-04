@@ -5,6 +5,7 @@ Transient failures (connection problems, timeouts, 4xx replies) are retried (D5)
 permanently, otherwise EmailUnavailable."""
 
 import asyncio
+import re
 from collections.abc import Awaitable, Callable
 from email.message import EmailMessage
 from typing import Literal
@@ -23,13 +24,33 @@ class EmailRejected(EmailUnavailable):
     not the service (AC-FR-SYS-020-09). Our own account being refused (535) is not this."""
 
 
+_ENHANCED = re.compile(r"^\s*([245])\.(\d{1,3})\.(\d{1,3})(?:\s|$)")
+_ADDRESS_CODES = {550, 551, 553}
+
+
+def _address_refused(code: int, message: str) -> bool:
+    """Whether a refusal means the address itself is bad (M2). An enhanced status code
+    decides when present (5.1.x = addressing); otherwise only 550/551/553 count. Relay
+    and policy refusals (e.g. 554 5.7.1) are our setup, not the user's address."""
+    enhanced = _ENHANCED.match(message or "")
+    if enhanced:
+        return enhanced.group(1) == "5" and enhanced.group(2) == "1"
+    return code in _ADDRESS_CODES
+
+
 def _is_recipient_rejection(exc: BaseException) -> bool:
     if isinstance(exc, aiosmtplib.SMTPRecipientsRefused):
-        return bool(exc.recipients) and all(r.code >= 500 for r in exc.recipients)
-    return isinstance(exc, aiosmtplib.SMTPRecipientRefused) and exc.code >= 500
+        return bool(exc.recipients) and all(
+            _address_refused(r.code, r.message) for r in exc.recipients
+        )
+    return isinstance(exc, aiosmtplib.SMTPRecipientRefused) and _address_refused(
+        exc.code, exc.message
+    )
 
 
 def _is_transient(exc: BaseException) -> bool:
+    if isinstance(exc, aiosmtplib.SMTPRecipientsRefused):  # M3: 4xx at RCPT (greylisting)
+        return bool(exc.recipients) and all(400 <= r.code < 500 for r in exc.recipients)
     if isinstance(exc, aiosmtplib.SMTPResponseException):
         return 400 <= exc.code < 500
     return isinstance(
