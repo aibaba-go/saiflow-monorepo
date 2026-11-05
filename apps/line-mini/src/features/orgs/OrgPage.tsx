@@ -151,7 +151,25 @@ function InviteSection({ org, tenant }: { org: OrgView; tenant: CurrentTenant })
   const refresh = useRefreshOrg(org.tenant_id);
   const invitations = useInvitations(org.tenant_id, true);
   const [error, setError] = useState<unknown>(null);
+  const [link, setLink] = useState<string | null>(null);
   const full = org.member_limit !== null && org.seats_used >= org.member_limit;
+  const liff = authLiff();
+  const canShare = liff.isApiAvailable("shareTargetPicker");
+
+  /** Share in LINE, or copy; the link stays on screen either way (it is shown only once). */
+  const share = async (url: string) => {
+    if (canShare) {
+      await liff.shareTargetPicker([{ type: "text", text: t("invite.message", { name: org.name, url }) }]);
+      return;
+    }
+    try {
+      if (!navigator.clipboard) return;
+      await navigator.clipboard.writeText(url);
+      Toast.show({ content: t("invite.copied") });
+    } catch {
+      // no clipboard permission: the user copies the link shown below
+    }
+  };
 
   const invite = useSubmit(async () => {
     setError(null);
@@ -160,14 +178,9 @@ function InviteSection({ org, tenant }: { org: OrgView; tenant: CurrentTenant })
         api.POST("/api/v1/organizations/{tenant_id}/invitations", orgPath(org.tenant_id)),
       );
       const url = inviteUrl(created.token);
-      const liff = authLiff();
-      if (liff.isApiAvailable("shareTargetPicker")) {
-        await liff.shareTargetPicker([{ type: "text", text: t("invite.message", { name: org.name, url }) }]);
-      } else {
-        await navigator.clipboard?.writeText(url);
-        Toast.show({ content: t("invite.copied") });
-      }
+      setLink(url);
       await refresh();
+      await share(url);
     } catch (err) {
       setError(err);
     }
@@ -194,6 +207,15 @@ function InviteSection({ org, tenant }: { org: OrgView; tenant: CurrentTenant })
         {t("org.invite")}
       </Button>
       {full && <div className="card-row__meta">{t("err.member_limit_reached")}</div>}
+      {link && (
+        <div className="card-row">
+          <div className="card-row__meta">{t("invite.linkHint")}</div>
+          <div className="invite-link">{link}</div>
+          <Button size="mini" onClick={() => void share(link)}>
+            {canShare ? t("invite.shareAgain") : t("invite.copy")}
+          </Button>
+        </div>
+      )}
       <ErrorText error={error} />
       {invitations.data?.map((inv) => (
         <div key={inv.id} className="card-row card-row--inline">

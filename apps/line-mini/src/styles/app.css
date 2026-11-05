@@ -143,3 +143,8 @@ body {
 .notif--read {
   opacity: 0.75;
 }
+.invite-link {
+  font-size: 12px;
+  word-break: break-all;
+  user-select: all;
+}

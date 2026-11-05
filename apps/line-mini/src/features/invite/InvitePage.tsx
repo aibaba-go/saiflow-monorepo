@@ -10,12 +10,10 @@ import { api, call } from "../../services/api";
 import { ApiError, errorMessage } from "../../services/errors";
 import { useSession } from "../../stores/session";
 import { formatBangkokDate } from "../../utils/format";
-import { INVITE_KEY, loadIdentity, startLogin } from "../auth/session";
+import { INVITE_KEY, JOIN_KEY, loadIdentity, startLogin } from "../auth/session";
 import { useCurrentTenant } from "../tenants/useCurrentTenant";
 
 export { INVITE_KEY } from "../auth/session";
-/** Set when the user tapped Join, so the join continues after login and registration. */
-const JOIN_KEY = "saiflow.invite-join";
 
 function session(key: string): string | null {
   try {
@@ -89,15 +87,18 @@ export function InvitePage() {
       await accept.run();
       return;
     }
-    setSession(JOIN_KEY, "1");
+    setSession(JOIN_KEY, token);
     if (me?.kind === "user") useSession.getState().set({ registerOpen: true });
     else await startLogin("/invite");
   };
 
-  // Back from login and registration with Join pending: finish it.
+  // Back from login and registration with Join pending on this very invitation: finish it.
+  const previewed = preview.isSuccess;
   useEffect(() => {
-    if (registered && session(JOIN_KEY) && !accept.pending && !error) void accept.run();
-  }, [registered, accept, error]);
+    if (registered && previewed && token && session(JOIN_KEY) === token && !accept.pending && !error) {
+      void accept.run();
+    }
+  }, [registered, previewed, token, accept, error]);
 
   if (token === null) return <Gone error={null} />;
   if (preview.isPending) return <BrandLoading label={t("common.loading")} />;

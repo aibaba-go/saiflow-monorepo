@@ -12,6 +12,8 @@ export const LOGOUT_FLAG = "saiflow.logout-pending";
 export const INTENT_KEY = "saiflow.auth-intent";
 /** An invitation token from ?invite=, kept for this visit only (FR-SYS-052). */
 export const INVITE_KEY = "saiflow.invite";
+/** The invitation token the user tapped Join on (FR-SYS-052): the join resumes only for it. */
+export const JOIN_KEY = "saiflow.invite-join";
 const INTENT_MAX_AGE_MS = 5 * 60_000;
 
 export interface AuthDeps {
@@ -28,6 +30,8 @@ export interface AuthDeps {
 
 let deps: AuthDeps;
 let recovering = false;
+/** A login or logout is changing the identity: its own requests may 401 meanwhile. */
+let transitioning = false;
 
 export function configureAuth(d: AuthDeps): void {
   deps = d;
@@ -96,6 +100,7 @@ export async function boot(): Promise<void> {
     const invite = params.get("invite");
     if (invite && invite.length <= 128) {
       safe(() => sessionStorage.setItem(INVITE_KEY, invite));
+      safe(() => sessionStorage.removeItem(JOIN_KEY));
       deps.navigate("/invite");
     }
     if (intent && deps.liff.isLoggedIn()) {
@@ -124,6 +129,7 @@ export async function startLogin(returnTo: string = deps.currentPath()): Promise
 }
 
 async function completeLogin(returnTo: string): Promise<void> {
+  transitioning = true;
   try {
     const token = deps.liff.getIDToken();
     if (!token) throw new ApiError(0, "line_token_required", []);
@@ -134,10 +140,21 @@ async function completeLogin(returnTo: string): Promise<void> {
     deps.navigate(returnTo);
   } catch (error) {
     store().set({ loginError: error });
+  } finally {
+    transitioning = false;
   }
 }
 
 async function finishLogout(): Promise<void> {
+  transitioning = true;
+  try {
+    await revokeAndBecomeGuest();
+  } finally {
+    transitioning = false;
+  }
+}
+
+async function revokeAndBecomeGuest(): Promise<void> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), deps.logoutTimeoutMs);
   try {
@@ -149,10 +166,10 @@ async function finishLogout(): Promise<void> {
     clearTimeout(timer);
   }
   safe(() => localStorage.removeItem(LOGOUT_FLAG));
+  deps.onIdentityChange(); // drop the old identity's data before anything re-renders
   useTenantChoice.getState().choose(null);
   safe(() => sessionStorage.removeItem(INTENT_KEY));
   safe(() => deps.liff.logout());
-  deps.onIdentityChange();
   await loadIdentity();
   store().set({ status: "ready", registerOpen: false, loginError: null });
   deps.navigate("/");
@@ -175,7 +192,7 @@ export async function retryLogout(): Promise<void> {
 /** FR-SYS-055-04: a 401 elsewhere means the session expired; carry on as a guest. */
 export async function handleUnauthenticated(): Promise<void> {
   const { status } = store();
-  if (recovering || status === "locked" || status === "booting") return;
+  if (recovering || transitioning || status === "locked" || status === "booting") return;
   recovering = true;
   try {
     deps.onIdentityChange();

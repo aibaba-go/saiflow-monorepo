@@ -213,4 +213,7 @@ export const zh: Record<MessageKey, string> = {
   "notif.free_quota_expiry.d1": "组织的免费额度将在 1 天后过期",
   "notif.free_quota_expiry.d0": "组织的免费额度今天过期",
   "notif.free_quota_expiry.body": "{tenant}：免费额度剩余 {remaining} 次 · {date} 过期",
+  "invite.linkHint": "把这个链接发给被邀请的人，只能使用一次，7 天内有效。",
+  "invite.shareAgain": "再次分享",
+  "invite.copy": "复制链接",
 };

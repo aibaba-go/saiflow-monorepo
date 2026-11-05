@@ -211,6 +211,9 @@ export const en = {
   "notif.free_quota_expiry.d1": "Your organization's free scans expire in 1 day",
   "notif.free_quota_expiry.d0": "Your organization's free scans expire today",
   "notif.free_quota_expiry.body": "{tenant}: {remaining} free scans left · expire {date}",
+  "invite.linkHint": "Send this link to the person you invite. It works once and for 7 days.",
+  "invite.shareAgain": "Share again",
+  "invite.copy": "Copy link",
 } as const;
 
 export type MessageKey = keyof typeof en;

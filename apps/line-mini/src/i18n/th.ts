@@ -213,4 +213,7 @@ export const th: Record<MessageKey, string> = {
   "notif.free_quota_expiry.d1": "สแกนฟรีขององค์กรจะหมดอายุในอีก 1 วัน",
   "notif.free_quota_expiry.d0": "สแกนฟรีขององค์กรหมดอายุวันนี้",
   "notif.free_quota_expiry.body": "{tenant}: สแกนฟรีเหลือ {remaining} · หมดอายุ {date}",
+  "invite.linkHint": "ส่งลิงก์นี้ให้ผู้ที่คุณเชิญ ใช้ได้ครั้งเดียวภายใน 7 วัน",
+  "invite.shareAgain": "แชร์อีกครั้ง",
+  "invite.copy": "คัดลอกลิงก์",
 };
