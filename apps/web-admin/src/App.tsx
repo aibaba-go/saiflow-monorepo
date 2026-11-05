@@ -2,42 +2,32 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App as AntApp, ConfigProvider, Result } from "antd";
 import enUS from "antd/locale/en_US";
 import zhCN from "antd/locale/zh_CN";
-import { useEffect, type ReactElement } from "react";
+import { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { RequireAdmin } from "./auth/RequireAdmin";
 import { useForgetAdmin } from "./auth/session";
-import { Page } from "./components/Page";
 import { useT } from "./i18n";
-import { AdminLayout, MENU } from "./layout/AdminLayout";
+import { AdminLayout } from "./layout/AdminLayout";
 import {
   OrgApplicationsPage,
   PlanApplicationsPage,
   VerificationApplicationsPage,
 } from "./pages/ApplicationPages";
+import { AuditLogPage } from "./pages/AuditLogPage";
+import { ChangePasswordPage } from "./pages/ChangePasswordPage";
 import { HealthPage } from "./pages/HealthPage";
 import { HomePage } from "./pages/HomePage";
-import { OrganizationDetailPage } from "./pages/OrganizationDetailPage";
-import { OrganizationsPage } from "./pages/OrganizationsPage";
-import { TenantBillingPage } from "./pages/TenantBillingPage";
 import { LoginPage } from "./pages/LoginPage";
 import { OcrSettingsPage } from "./pages/OcrSettingsPage";
+import { OrganizationDetailPage } from "./pages/OrganizationDetailPage";
+import { OrganizationsPage } from "./pages/OrganizationsPage";
 import { PlansPage } from "./pages/PlansPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { TenantBillingPage } from "./pages/TenantBillingPage";
+import { UsersPage } from "./pages/UsersPage";
 import { setUnauthenticatedHandler } from "./services/api";
 import { useLanguage } from "./stores/language";
-
-/** Pages that have landed; the rest of the menu shows a placeholder. */
-const PAGES: Record<string, ReactElement> = {
-  "/": <HomePage />,
-  "/organization-applications": <OrgApplicationsPage />,
-  "/verification-applications": <VerificationApplicationsPage />,
-  "/plan-applications": <PlanApplicationsPage />,
-  "/organizations": <OrganizationsPage />,
-  "/plans": <PlansPage />,
-  "/settings": <SettingsPage />,
-  "/ocr": <OcrSettingsPage />,
-};
 
 /** Any 401 outside login: drop the session; RequireAdmin then goes to /login?next= (060-03). */
 function SessionWatcher() {
@@ -47,12 +37,6 @@ function SessionWatcher() {
     return () => setUnauthenticatedHandler(() => {});
   }, [forget]);
   return null;
-}
-
-/** Placeholder until the page's task lands. */
-function Pending({ title }: { title: Parameters<ReturnType<typeof useT>>[0] }) {
-  const t = useT();
-  return <Page title={t(title)} />;
 }
 
 function NotFound() {
@@ -76,12 +60,19 @@ export function AppRoutes() {
               </RequireAdmin>
             }
           >
-            {MENU.map((m) => (
-              <Route key={m.path} path={m.path} element={PAGES[m.path] ?? <Pending title={m.label} />} />
-            ))}
+            <Route path="/" element={<HomePage />} />
+            <Route path="/organization-applications" element={<OrgApplicationsPage />} />
+            <Route path="/organizations" element={<OrganizationsPage />} />
             <Route path="/organizations/:id" element={<OrganizationDetailPage />} />
+            <Route path="/verification-applications" element={<VerificationApplicationsPage />} />
+            <Route path="/plan-applications" element={<PlanApplicationsPage />} />
             <Route path="/tenants/:id/billing" element={<TenantBillingPage />} />
-            <Route path="/password" element={<Pending title="nav.changePassword" />} />
+            <Route path="/plans" element={<PlansPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/users" element={<UsersPage />} />
+            <Route path="/audit-log" element={<AuditLogPage />} />
+            <Route path="/ocr" element={<OcrSettingsPage />} />
+            <Route path="/password" element={<ChangePasswordPage />} />
             <Route path="*" element={<NotFound />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
