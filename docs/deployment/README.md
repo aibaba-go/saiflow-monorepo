@@ -3,7 +3,7 @@ doc_id: OPS-001
 title: "SaiFlow — 部署与运维说明（dev 环境）"
 type: guide
 status: active
-version: 1.2.1
+version: 1.3.0
 updated: 2026-11-05
 owner: Product Engineering
 related: [ADR-008, FR-PLAT-005, FR-PLAT-006]
@@ -108,6 +108,19 @@ docker compose exec -T saiflow-be-api python -m app.cli admin-disable <用户名
 
 连续 5 次输错口令锁定 15 分钟；后台 30 分钟无操作需重新登录。
 
+### 2.8 提醒（B-2d 起）
+
+服务 `saiflow-be-reminders` 每 15 分钟检查一次到期提醒、用量提醒与组织免费额度的到期提醒（FR-SYS-018、035、038、037），发站内通知，并用 §2.6 的发信配置发邮件。它随部署自动启动，不对外开放端口。
+
+```bash
+cd /opt/saiflow
+docker compose logs --tail 50 saiflow-be-reminders                                  # 每次检查一行：reminders OK (<n> created)
+docker compose exec -T saiflow-be-reminders python -m app.cli reminders-run-once    # 立即检查一次
+```
+
+- **停用发送：** 在 `.env` 中设 `REMINDERS_ENABLED=false`，然后 `docker compose up -d saiflow-be-reminders`。恢复时改回 `true` 并执行同一命令。停用期间错过的提醒不会补发。
+- 同一提醒最多发送一次；邮件发送失败不重试，站内通知照常保留。
+
 ## 3. 部署
 
 1. 确认要部署的提交在 GitHub Actions 的 `CI` 中已通过。
@@ -137,6 +150,7 @@ cd /opt/saiflow && echo "DB_MIGRATE_PASSWORD=$(openssl rand -hex 24)" >> .env
 
 - **推荐：** 用 `git revert` 提交一个撤销问题改动的新提交，等 CI 通过后再运行 `Deploy`（工作流总是部署所选分支的最新提交）。
 - **紧急：** 在 VPS 上以 `deploy` 把 `/opt/saiflow/.env` 中的 `IMAGE_TAG` 改回上一个 sha，然后 `cd /opt/saiflow && docker compose up -d`。数据库迁移不会自动回退；含迁移的版本回滚前先确认迁移可逆。
+- **0006 的回退：** 有任何通知或提醒记录时主动拒绝执行，不会删除通知。需要回到旧版本时只回滚镜像。
 - **0004、0005 的回退：** 已有组织时，0004 的回退会因约束失败并整体撤销；0005 的回退在有任何订阅、免费额度、预占或申请记录时主动拒绝执行（上线时已为现有租户补开通订阅，所以 dev 与生产环境都会拒绝），不会删除计费数据。需要回到旧版本时只回滚镜像。
 - **不要把数据库回退到 0003 之前：** `alembic downgrade` 到 0003 以下会收回应用账号的全部数据权限，而表仍属迁移账号，后端将无法读写，只能再用 `db-roles.sql` 与手工授权补救。需要回到旧版本时，只回滚镜像（上一条），数据库保持在当前版本；0003 之后的迁移只增加表与权限，旧镜像照常可用。
 
@@ -148,10 +162,10 @@ cd /opt/saiflow && echo "DB_MIGRATE_PASSWORD=$(openssl rand -hex 24)" >> .env
 - **真正恢复（数据丢失时）：** 以 `deploy` 在 `/opt/saiflow` 中执行：
 
   ```bash
-  docker compose stop saiflow-be-api
+  docker compose stop saiflow-be-api saiflow-be-reminders
   # 用户名在容器内展开（单引号），文件从宿主机经标准输入传入
   docker compose exec -T postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d saiflow --clean --if-exists --exit-on-error' < backups/<文件>.dump
-  docker compose start saiflow-be-api
+  docker compose start saiflow-be-api saiflow-be-reminders
   curl -s https://saiflow-app.aibaba.asia/api/v1/health
   ```
 
@@ -163,6 +177,7 @@ cd /opt/saiflow && echo "DB_MIGRATE_PASSWORD=$(openssl rand -hex 24)" >> .env
 cd /opt/saiflow
 docker compose ps
 docker compose logs --tail 100 saiflow-be-api
+docker compose logs --tail 20 saiflow-be-reminders
 curl -s https://saiflow-app.aibaba.asia/api/v1/health
 docker compose exec -T saiflow-be-api python -m app.cli audit-verify   # 操作日志是否被改动
 ```
@@ -178,6 +193,7 @@ docker compose exec -T saiflow-be-api python -m app.cli audit-verify   # 操作�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.3.0 | 2026-11-05 | Product Engineering | B-2d：§2.8 提醒服务 `saiflow-be-reminders`（查看、立即检查、停用）；§4 0006 的回退；§5 恢复时一并停止提醒服务 |
 | 1.2.1 | 2026-11-05 | Product Engineering | §4 补充 0004、0005 回退的说明 |
 | 1.2.0 | 2026-11-04 | Product Engineering | harden-identity：§3.1 数据库账号（迁移账号与应用账号分离，新增 `DB_MIGRATE_PASSWORD`） |
 | 1.1.1 | 2026-11-04 | Product Engineering | §2.6 发信失败原因说明；改 `.env` 后须重建后端容器 |

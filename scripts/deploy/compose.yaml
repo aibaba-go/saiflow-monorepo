@@ -59,6 +59,29 @@ services:
       postgres:
         condition: service_healthy
 
+  # Reminder passes (rebuild-notifications, FR-SYS-037): expiry, usage and free-quota
+  # reminders, at least every 30 minutes. REMINDERS_ENABLED=false in .env stops sending.
+  saiflow-be-reminders:
+    <<: *common
+    image: ${IMAGE_REGISTRY:-ghcr.io/aibaba-go}/saiflow-be-api:${IMAGE_TAG:?}
+    command: ["python", "-m", "app.cli", "reminders-loop"]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: saiflow
+      DB_USER: saiflow_v3_app
+      DB_PASSWORD: ${DB_PASSWORD:?}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+      REMINDERS_ENABLED: ${REMINDERS_ENABLED:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   # Runs migrations as the account that owns the schema; never started by `up`
   # (harden-identity, AC-FR-SYS-003-06). remote-deploy.sh checks DB_MIGRATE_PASSWORD first,
   # so a missing value fails the deploy without breaking other compose commands (backups).

@@ -37,4 +37,15 @@ check "deploy copies the role setup files" bash -c "grep -q 'scripts/deploy/db-r
 check "CI stack uses the role setup and migrate service" bash -c "grep -q 'db-roles.sh' '$wf/ci.yml' && grep -q 'saiflow-be-migrate' '$wf/ci.yml' && grep -q DB_MIGRATE_PASSWORD '$wf/ci.yml'"
 # M4: the app role never creates objects; the migration account does
 check "01-app-user.sh grants no CREATE" bash -c "! grep -q 'CREATE ON DATABASE' '$deploy/postgres-init/01-app-user.sh'"
+# rebuild-notifications: the reminder process (FR-SYS-037)
+reminders="$(awk '/^  saiflow-be-reminders:/{p=1;next} /^  [a-z]/{p=0} p' "$deploy/compose.yaml")"
+check "reminders service exists" test -n "$reminders"
+check "reminders service runs the loop" grep -qF 'command: ["python", "-m", "app.cli", "reminders-loop"]' <<<"$reminders"
+check "reminders service runs as the app role" grep -q 'DB_USER: saiflow_v3_app' <<<"$reminders"
+check "reminders service publishes no ports" bash -c "! grep -v '^ *#' <<<\"\$1\" | grep -q 'ports:'" _ "$reminders"
+for var in SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD SMTP_FROM SMTP_SECURITY; do
+  check "reminders service receives $var" grep -q "$var: \${$var:-" <<<"$reminders"
+done
+check "reminders service receives REMINDERS_ENABLED" grep -qF 'REMINDERS_ENABLED: ${REMINDERS_ENABLED:-true}' <<<"$reminders"
+check "env.example lists REMINDERS_ENABLED" grep -q '^REMINDERS_ENABLED=' "$deploy/env.example"
 finish

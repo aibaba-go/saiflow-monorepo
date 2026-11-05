@@ -152,6 +152,11 @@ jobs:
           for host in app.localhost admin.localhost line.localhost; do
             bash scripts/smoke-check.sh "https://$host" ci --timeout-seconds 90
           done
+      - name: reminder process runs a pass (FR-SYS-037)
+        working-directory: ${{ env.STACK_DIR }}
+        run: |
+          test "$(docker compose ps --status running -q saiflow-be-reminders)" != ""
+          docker compose exec -T saiflow-be-reminders python -m app.cli reminders-run-once             | grep -q '^reminders OK'
       - name: database port is not published (AC-FR-PLAT-005-06)
         working-directory: ${{ env.STACK_DIR }}
         run: |

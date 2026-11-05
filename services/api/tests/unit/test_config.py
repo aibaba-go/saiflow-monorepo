@@ -64,3 +64,31 @@ def test_optional_integrations_default_to_none(monkeypatch):
     assert settings.line_channel_id is None
     assert settings.smtp_host is None
     assert settings.smtp_security == "starttls"
+
+
+def _base_env(monkeypatch):
+    for key, value in {"DB_HOST": "h", "DB_NAME": "n", "DB_USER": "u", "DB_PASSWORD": "p"}.items():
+        monkeypatch.setenv(key, value)
+
+
+def test_reminder_defaults(monkeypatch):  # rebuild-notifications Task 4
+    _base_env(monkeypatch)
+    monkeypatch.delenv("REMINDERS_ENABLED", raising=False)
+    monkeypatch.delenv("REMINDER_INTERVAL_SECONDS", raising=False)
+    settings = load_settings()
+    assert settings.reminders_enabled is True and settings.reminder_interval_seconds == 900
+
+
+@pytest.mark.parametrize("value", ["59", "1801", "abc"])
+def test_reminder_interval_bounds(monkeypatch, value):  # at least every 30 minutes
+    _base_env(monkeypatch)
+    monkeypatch.setenv("REMINDER_INTERVAL_SECONDS", value)
+    with pytest.raises(ConfigError) as e:
+        load_settings()
+    assert str(e.value) == "invalid configuration: REMINDER_INTERVAL_SECONDS"
+
+
+def test_reminders_can_be_disabled(monkeypatch):
+    _base_env(monkeypatch)
+    monkeypatch.setenv("REMINDERS_ENABLED", "false")
+    assert load_settings().reminders_enabled is False

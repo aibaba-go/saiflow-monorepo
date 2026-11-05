@@ -6,7 +6,7 @@ names the missing variables and never echoes any provided value.
 
 from typing import Literal
 
-from pydantic import SecretStr, ValidationError
+from pydantic import Field, SecretStr, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     smtp_password: SecretStr | None = None
     smtp_from: str | None = None
     smtp_security: Literal["starttls", "ssl"] = "starttls"
+    # Reminder process (rebuild-notifications, FR-SYS-037): a pass at least every 30 minutes
+    reminders_enabled: bool = True
+    reminder_interval_seconds: int = Field(default=900, ge=60, le=1800)
 
 
 def load_settings() -> Settings:
