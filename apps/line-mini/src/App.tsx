@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Button, Toast } from "antd-mobile";
 import { useEffect, useRef } from "react";
-import { HashRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { BrandLoading } from "./components/BrandLoading";
 import { ErrorText } from "./components/ErrorText";
@@ -136,7 +136,9 @@ function MainShell() {
         <Route path="/plans" element={<PlansPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/health" element={<HealthPage />} />
-        <Route path="*" element={<HomePage />} />
+        {/* Anything else is not a page: e.g. LIFF hands its tokens over in the URL fragment
+            (#access_token=...), which the hash router would read as a path. */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {TAB_PATHS.has(pathname) && <TabBar showReport={report} />}
       <RegisterDialog />

@@ -73,4 +73,11 @@ describe("shell (FR-SYS-056)", () => {
     expect(within(nav).getAllByRole("tab").map((t) => t.textContent)).toEqual(["首页", "历史", "我的"]);
     expect(localStorage.getItem("saiflow.lang")).toBe("zh");
   });
+
+  it("a LIFF fragment (#access_token=...) is not a page: back to Home with the tabs", async () => {
+    boot(USER, "/access_token=abc&context_token=def&feature_token=x");
+    const nav = await screen.findByRole("navigation");
+    expect(within(nav).getAllByRole("tab").map((t) => t.textContent)).toEqual(["Home", "History", "My"]);
+    expect(within(nav).getByRole("tab", { name: "Home" })).toHaveAttribute("aria-selected", "true");
+  });
 });
