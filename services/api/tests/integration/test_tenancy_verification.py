@@ -106,3 +106,14 @@ async def test_member_with_verification_apply_can_submit(api, db, line, mail):
     cm, m = await registered_client(api, line, mail, "M")
     await add_member(db, org, m, rid)
     assert (await cm.post(ver_url(org), json=DATA)).status_code == 201
+
+
+async def test_verified_org_cannot_resubmit(api, db, line, mail):  # AC-FR-SYS-027-07
+    owner, _, org, admin = await approved_org(api, db, line, mail)
+    await admin.put(f"/api/v1/admin/organizations/{org}/verification", json={"verified": True})
+    r = await owner.post(ver_url(org), json=DATA)
+    assert r.status_code == 409 and r.json()["code"] == "already_verified"
+    body = (await owner.get(ver_url(org))).json()
+    assert body["status"] == "verified" and body["legal_name"] is None
+    count = (await db.execute(text("select count(*) from verification_applications"))).scalar_one()
+    assert count == 0

@@ -61,6 +61,8 @@ async def submit(
         require(ctx, Permission.VERIFICATION_APPLY)
     data = _check(legal_name, tax_id, registered_address)
     org = await _organization(db, ctx.tenant_id)
+    if org.verification_status == "verified":  # AC-FR-SYS-027-07 (D9)
+        raise AppError(409, "already_verified", "organization.already_verified")
     application = VerificationApplication(
         tenant_id=ctx.tenant_id, submitted_by_user_id=ctx.user_id, **data
     )
