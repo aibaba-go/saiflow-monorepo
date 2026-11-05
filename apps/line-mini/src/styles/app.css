@@ -77,3 +77,47 @@ body {
   color: #1f5fbf;
   font-weight: 600;
 }
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.card-row {
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.card-row--inline {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+.card-row__title {
+  font-weight: 600;
+}
+.card-row__meta {
+  font-size: 13px;
+  color: #666;
+}
+.card-row__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.checks {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.checks__item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 14px;
+}

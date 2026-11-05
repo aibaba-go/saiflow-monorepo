@@ -14,6 +14,10 @@ import { HistoryPage, HomePage, ReportPage } from "./pages/HomePage";
 import { MyPage } from "./pages/MyPage";
 import { RegisterDialog } from "./features/auth/RegisterDialog";
 import { ProfilePage } from "./features/profile/ProfilePage";
+import { ApplyOrgPage } from "./features/orgs/ApplyOrgPage";
+import { OrgPage } from "./features/orgs/OrgPage";
+import { RolesPage } from "./features/orgs/RolesPage";
+import { VerificationPage } from "./features/orgs/VerificationPage";
 import { TabBar } from "./components/TabBar";
 import { useUsage } from "./features/billing/useUsage";
 import { showReportTab } from "./features/tenants/reportTab";
@@ -121,6 +125,10 @@ function MainShell() {
         <Route path="/report" element={report ? <ReportPage /> : <HomePage />} />
         <Route path="/my" element={<MyPage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/orgs/apply" element={<ApplyOrgPage />} />
+        <Route path="/org" element={<OrgPage />} />
+        <Route path="/org/roles" element={<RolesPage />} />
+        <Route path="/org/verification" element={<VerificationPage />} />
         <Route path="/health" element={<HealthPage />} />
         <Route path="*" element={<HomePage />} />
       </Routes>

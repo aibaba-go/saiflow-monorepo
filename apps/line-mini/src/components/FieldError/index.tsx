@@ -13,7 +13,11 @@ export function FieldError({ error, field }: FieldErrorProps) {
   if (!(error instanceof ApiError) || !error.fields.includes(field)) return null;
   const key = `field.${field}`;
   const text =
-    error.code === "validation_error" && isMessageKey(key) ? t(key) : errorMessage(error, t);
+    error.code === "required"
+      ? t("field.required")
+      : error.code === "validation_error" && isMessageKey(key)
+        ? t(key)
+        : errorMessage(error, t);
   return (
     <div role="alert" className="field-error">
       {text}
@@ -24,4 +28,12 @@ export function FieldError({ error, field }: FieldErrorProps) {
 /** An error that belongs to no field, for the form's own message line. */
 export function formLevel(error: unknown): unknown {
   return error instanceof ApiError && error.fields.length > 0 ? null : error;
+}
+
+/** A client-side "required" error for the empty fields, or null when all are filled. */
+export function requireFields(values: Record<string, string>): ApiError | null {
+  const missing = Object.entries(values)
+    .filter(([, v]) => !v.trim())
+    .map(([k]) => k);
+  return missing.length ? new ApiError(400, "required", missing) : null;
 }

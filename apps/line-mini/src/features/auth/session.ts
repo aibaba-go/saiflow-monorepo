@@ -34,6 +34,11 @@ export function configureAuth(d: AuthDeps): void {
 
 const store = () => useSession.getState();
 
+/** The LIFF SDK the app runs with (invite sharing uses it). */
+export function authLiff(): Liff {
+  return deps.liff;
+}
+
 function safe<T>(fn: () => T): T | undefined {
   try {
     return fn();

@@ -5,6 +5,8 @@ import { ErrorText } from "../components/ErrorText";
 import { logout, startLogin } from "../features/auth/session";
 import { LanguagePicker } from "../features/profile/LanguagePicker";
 import { TenantSwitcher } from "../features/tenants/TenantSwitcher";
+import { useCurrentTenant } from "../features/tenants/useCurrentTenant";
+import { useRequireRegistered } from "../features/auth/useRequireRegistered";
 import { useSubmit } from "../hooks/useSubmit";
 import { useT } from "../i18n";
 import { isUser, useSession } from "../stores/session";
@@ -14,6 +16,8 @@ import { isUser, useSession } from "../stores/session";
 export function MyPage() {
   const t = useT();
   const navigate = useNavigate();
+  const requireRegistered = useRequireRegistered();
+  const { tenant } = useCurrentTenant();
   const me = useSession((s) => s.me);
   const loginError = useSession((s) => s.loginError);
   const login = useSubmit(() => startLogin("/my"));
@@ -43,6 +47,14 @@ export function MyPage() {
             </List.Item>
           </List>
           <TenantSwitcher />
+          <List>
+            {tenant?.kind === "organization" && (
+              <List.Item onClick={() => navigate("/org")}>{t("my.organization")}</List.Item>
+            )}
+            <List.Item onClick={() => requireRegistered() && navigate("/orgs/apply")}>
+              {t("my.createOrg")}
+            </List.Item>
+          </List>
           <Button block color="danger" fill="outline" loading={out.pending} onClick={confirmLogout}>
             {t("my.logout")}
           </Button>
