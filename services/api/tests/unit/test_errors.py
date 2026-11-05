@@ -81,3 +81,10 @@ async def test_access_log_omits_query_string(client, caplog):
     await client.get("/api/v1/_test/required", params={"q": "secret-query-value"})
     server_logs = [r.getMessage() for r in caplog.records if r.name.startswith("app")]
     assert server_logs and not any("secret-query-value" in m for m in server_logs)
+
+
+async def test_app_error_details_in_body(client):  # rebuild-plans-metering: quota_exceeded
+    r = await client.get("/api/v1/_test/details")
+    body = r.json()
+    assert r.status_code == 402 and body["code"] == "quota_exceeded"
+    assert body["details"] == {"available": 5} and body["fields"] is None

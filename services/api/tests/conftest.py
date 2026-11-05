@@ -25,8 +25,14 @@ def _add_test_routes(app):
     async def boom() -> dict:
         raise RuntimeError("internal detail xyz")
 
+    async def short() -> dict:
+        from app.errors import AppError
+
+        raise AppError(402, "quota_exceeded", "billing.quota_exceeded", details={"available": 5})
+
     app.add_api_route("/api/v1/_test/required", required, methods=["GET"])
     app.add_api_route("/api/v1/_test/boom", boom, methods=["GET"])
+    app.add_api_route("/api/v1/_test/details", short, methods=["GET"])
 
 
 @pytest.fixture

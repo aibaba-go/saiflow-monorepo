@@ -8,3 +8,4 @@ class ErrorResponse(BaseModel):
     message_key: str
     request_id: str
     fields: list[str] | None = None
+    details: dict | None = None  # e.g. {"available": 5} for quota_exceeded

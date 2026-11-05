@@ -16,9 +16,17 @@ logger = logging.getLogger("app.errors")
 class AppError(Exception):
     """A deliberate, documented error response (see the plan's error table)."""
 
-    def __init__(self, status: int, code: str, message_key: str, fields: list[str] | None = None):
+    def __init__(
+        self,
+        status: int,
+        code: str,
+        message_key: str,
+        fields: list[str] | None = None,
+        details: dict | None = None,
+    ):
         super().__init__(code)
         self.status, self.code, self.message_key, self.fields = status, code, message_key, fields
+        self.details = details
 
 
 _HTTP_CODES = {
@@ -27,15 +35,26 @@ _HTTP_CODES = {
 }
 
 
-def _respond(status: int, code: str, message_key: str, fields: list[str] | None = None):
+def _respond(
+    status: int,
+    code: str,
+    message_key: str,
+    fields: list[str] | None = None,
+    details: dict | None = None,
+):
     body = ErrorResponse(
-        code=code, message_key=message_key, request_id=request_id_var.get(), fields=fields
+        code=code,
+        message_key=message_key,
+        request_id=request_id_var.get(),
+        fields=fields,
+        details=details,
     )
-    return JSONResponse(status_code=status, content=body.model_dump())
+    content = body.model_dump(exclude={"details"} if details is None else None)
+    return JSONResponse(status_code=status, content=content)
 
 
 async def _app_error(request: Request, exc: AppError) -> JSONResponse:
-    return _respond(exc.status, exc.code, exc.message_key, exc.fields)
+    return _respond(exc.status, exc.code, exc.message_key, exc.fields, exc.details)
 
 
 async def _http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:

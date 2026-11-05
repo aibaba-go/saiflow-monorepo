@@ -2,6 +2,7 @@
 
 from app.models.admin import AdminAccount, AdminSession
 from app.models.audit import AuditLog
+from app.models.billing import FreeQuota, Plan, PlanApplication, QuotaReservation, Subscription
 from app.models.email_code import EmailCode
 from app.models.organization import (
     Invitation,
@@ -22,6 +23,11 @@ __all__ = [
     "AuditLog",
     "CustomerSession",
     "EmailCode",
+    "FreeQuota",
+    "Plan",
+    "PlanApplication",
+    "QuotaReservation",
+    "Subscription",
     "Invitation",
     "Membership",
     "Organization",
