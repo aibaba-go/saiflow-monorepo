@@ -3,7 +3,7 @@ doc_id: OPS-001
 title: "SaiFlow — 部署与运维说明（dev 环境）"
 type: guide
 status: active
-version: 1.3.0
+version: 1.4.0
 updated: 2026-11-05
 owner: Product Engineering
 related: [ADR-008, FR-PLAT-005, FR-PLAT-006]
@@ -79,7 +79,8 @@ ssh -p 11022 root@<VPS_IP> 'chown deploy:deploy /opt/saiflow/secrets/gcs-backup.
 ### 2.6 LINE 登录与发信（B-2a 起；不填则对应功能返回 503）
 
 1. **LINE Developers**（与 LINE OA、LIFF 同一个 Provider，NFR-COMPAT-008）：
-   - LIFF 端点：`https://saiflow-line2.aibaba.asia/`；
+   - LIFF 端点：`https://saiflow-line2.aibaba.asia/`；记下 LIFF ID，在 GitHub 仓库 Settings → Secrets and variables → Actions → **Variables** 中新建 `LIFF_ID`（公开值，不是密钥），部署时写入小程序；
+   - LINE OA 底部菜单的 `register` 按钮链接：`https://liff.line.me/<LIFF_ID>?entry=register`；成员邀请链接的格式为 `https://liff.line.me/<LIFF_ID>?invite=<凭据>`，由小程序生成；
    - LINE 登录回调地址（web-pc）：`https://saiflow-app.aibaba.asia/login`（B-5 页面上线时按实际地址核对）；
    - 记下 Channel ID 与 Channel secret。
 2. 以 `deploy` 编辑 `/opt/saiflow/.env`（权限保持 600），填写：
@@ -193,6 +194,7 @@ docker compose exec -T saiflow-be-api python -m app.cli audit-verify   # 操作�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.4.0 | 2026-11-05 | Product Engineering | B-5a：§2.6 GitHub 变量 `LIFF_ID`、LINE OA 的 `register` 菜单链接与邀请链接格式 |
 | 1.3.0 | 2026-11-05 | Product Engineering | B-2d：§2.8 提醒服务 `saiflow-be-reminders`（查看、立即检查、停用）；§4 0006 的回退；§5 恢复时一并停止提醒服务 |
 | 1.2.1 | 2026-11-05 | Product Engineering | §4 补充 0004、0005 回退的说明 |
 | 1.2.0 | 2026-11-04 | Product Engineering | harden-identity：§3.1 数据库账号（迁移账号与应用账号分离，新增 `DB_MIGRATE_PASSWORD`） |

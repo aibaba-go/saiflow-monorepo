@@ -3,7 +3,7 @@ doc_id: REQ-INDEX
 title: "SaiFlow — 需求索引与可追溯性矩阵"
 type: index
 status: active
-version: 1.7.0
+version: 1.8.0
 updated: 2026-11-05
 owner: Product Engineering
 ---
@@ -109,7 +109,7 @@ owner: Product Engineering
 | FR-SYS-001 | LINE 登录与会话 | P0 | EPIC-06 v1.7.3（已迁移） | — | `openspec/specs/identity/spec.md` | `openspec/specs/identity/spec.md` | active |
 | FR-SYS-002 | 角色与权限点（含原 FR-SYS-009） | P0 | PRD §4.9 v3.4 | SYS-001 | `openspec/specs/tenancy/spec.md` | `openspec/specs/tenancy/spec.md` | active |
 | FR-SYS-003 | 操作日志 | P0 | EPIC-06 v1.7.3（已迁移） | — | `openspec/specs/identity/spec.md` | `openspec/specs/identity/spec.md` | active |
-| FR-SYS-004 | 语言切换 | P0 | §4.6 | — | AC-FR-SYS-004-01 | NFR-I18N-003 | active |
+| FR-SYS-004 | 界面语言（英语默认） | P0 | PRD §4.6 v3.7 | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
 | FR-SYS-005 | 参数配置 | P0 | §4.6 | SYS-002 | AC-FR-SYS-005-01 | DM-Settings | active |
 | FR-SYS-006 | 归档与 GCS 存储设置 | P0 | §4.6 | SYS-002 | AC-FR-SYS-006-01 | DM-Settings | active |
 | FR-SYS-007 | 账户锁定 | P1 | §5.3 | SYS-001 | AC-FR-SYS-007-01 | DM-User | planned |
@@ -144,6 +144,22 @@ owner: Product Engineering
 | FR-SYS-036 | 通知中心 | P0 | PRD §4.9 v3.6 | SYS-012 | `openspec/specs/notifications/spec.md` | `openspec/specs/notifications/spec.md` | active |
 | FR-SYS-037 | 提醒的收件人与投递 | P0 | PRD §4.9 v3.6 | SYS-012 | `openspec/specs/notifications/spec.md` | `openspec/specs/notifications/spec.md` | active |
 | FR-SYS-038 | 组织免费额度的到期提醒 | P0 | PRD §4.9 v3.6 | SYS-012 | `openspec/specs/notifications/spec.md` | `openspec/specs/notifications/spec.md` | active |
+| FR-SYS-040 | LINE 小程序启动与身份恢复 | P0 | PRD §4.9 v3.7 | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-041 | LINE 登录 | P0 | PRD §4.9 v3.7 | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-042 | 注册（小程序） | P0 | PRD §4.9 v3.7 | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-043 | 登出 | P0 | PRD §4.9 v3.7 | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-044 | 个人中心 | P0 | PRD §4.9 v3.7 | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-046 | 租户切换 | P0 | PRD §4.9 v3.7 | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-047 | 建组织申请（小程序） | P0 | PRD §4.9 v3.7 | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-048 | 组织资料与成员 | P0 | PRD §4.9 v3.7 | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-049 | 角色管理（小程序） | P0 | PRD §4.9 v3.7 | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-050 | owner 转让与退出组织（小程序） | P0 | PRD §4.9 v3.7 | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-051 | 企业认证申请（小程序） | P0 | PRD §4.9 v3.7 | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-052 | 接受邀请 | P0 | PRD §4.9 v3.7 | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-053 | 套餐、用量与续费申请（小程序） | P0 | PRD §4.9 v3.7 | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-054 | 通知中心（小程序） | P0 | PRD §4.9 v3.7 | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-055 | 等待与错误反馈 | P0 | PRD §4.9 v3.7 | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-056 | 底部导航 | P0 | PRD §4.9 v3.7 | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
 | FR-REPORT-001 | 管理层访问运营报表 | P1 | §3.1/§4.7 | SYS-002 | AC-FR-REPORT-001-01 | API-9（待设计） | in-review |
 | FR-REPORT-002 | 展示已配置运营指标 | P1 | §1.2/§4.7 | REPORT-001/OQ-5 | AC-FR-REPORT-002-01 | DM-ReportDefinition（待设计） | in-review |
 | FR-REPORT-003 | 报表授权范围限制 | P1 | §4.7 | SYS-002 | AC-FR-REPORT-003-01 | API-9（待设计） | in-review |
@@ -194,6 +210,7 @@ owner: Product Engineering
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.8.0 | 2026-11-05 | Product Engineering | B-5a：FR-SYS-004 指向 `openspec/specs/line-mini/spec.md`；新增 FR-SYS-040…044、046…056（LINE 小程序） |
 | 1.7.0 | 2026-11-05 | Product Engineering | FR-SYS-018 指向 `openspec/specs/notifications/spec.md`；新增 FR-SYS-035…038；身份类需求的来源改为 EPIC-06，FR-SYS 行按编号排序（rebuild-notifications M7） |
 | 1.6.0 | 2026-11-05 | Product Engineering | 身份类需求指向 `openspec/specs/identity/spec.md`；FR-SYS-012、013 与新增 FR-SYS-030…034 指向 `openspec/specs/billing/spec.md` |
 | 1.5.0 | 2026-11-04 | Product Engineering | 新增 FR-SYS-021…029（组织、成员、角色、企业认证）；FR-SYS-002、009、017 指向 `openspec/specs/tenancy/spec.md` |

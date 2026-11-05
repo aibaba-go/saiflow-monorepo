@@ -3,7 +3,7 @@ doc_id: DES-002
 title: "SaiFlow — 数据模型"
 type: data-model
 status: active
-version: 2.7.0
+version: 2.8.0
 updated: 2026-11-05
 owner: Product Engineering
 source: "PRD-001 v3.3 §3, §4, §4.9; ADR-008"
@@ -58,7 +58,7 @@ erDiagram
 | `DM-Membership` | 用户在租户中的成员关系 | PostgreSQL | 租户 | N:1 用户、N:1 租户、N:M 角色 | 加入 → 移除；个人租户只有本人 |
 | `DM-Role` | 角色：owner、默认角色与 owner 自定义角色，由权限点组合 | PostgreSQL | 租户 | N:M 成员关系 | 创建 → 修改权限点 → 删除（owner 与默认角色不可删除） |
 | `DM-Invitation` | 组织的一次性成员邀请（7 天有效，凭据只存摘要；受成员人数上限约束） | PostgreSQL | 租户 | N:1 组织 | 待接受 → 已接受 / 已过期 / 已撤销 |
-| `DM-Plan` | 套餐目录：四档、每月扫描配额与成员人数上限（Kinder 固定 1）、适用的租户类型 | PostgreSQL | 全局 | 1:N 订阅 | 四档固定；数值由平台 admin 修改，立即对已有订阅生效 |
+| `DM-Plan` | 套餐目录：四档、每月扫描配额与成员人数上限（Kinder 固定 1）、按月价与按年价（泰铢，未设定 = 联系我们）、适用的租户类型 | PostgreSQL | 全局 | 1:N 订阅 | 四档固定；数值由平台 admin 修改，立即对已有订阅生效 |
 | `DM-Subscription` | 订阅：档位、开通周期（按月 / 按年）、开始与结束时间、来源（自动开通 / admin 设定 / 批准申请）；每次变化留一段记录，当前订阅为正在生效或最近的一段 | PostgreSQL | 租户 | N:1 套餐；0..1 申请 | 个人与游客：建立时自动开通一个月 Kinder；组织：admin 开通；到期即停 |
 | `DM-Application` | 续费与开通申请、建组织申请、企业认证申请（各有自己的记录） | PostgreSQL | 租户或用户 | N:1 目标租户 | 待审批 → 已批准 / 已驳回（同一对象同时最多一条待审批） |
 | `DM-PlanReminder` | 提醒的发送记录：到期提醒、用量提醒、组织免费额度到期提醒；记录租户、类型与节点、对应的到期时间或自然月、收件人、时间与邮件结果（同一租户、类型、周期、节点只一次） | PostgreSQL | 租户 | N:1 租户、收件用户；1:1 站内通知 | 发送时写入；只回写邮件结果 |
@@ -135,6 +135,7 @@ erDiagram
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.8.0 | 2026-11-05 | Product Engineering | 按 B-5a：`DM-Plan` 增加按月价与按年价 |
 | 2.7.0 | 2026-11-05 | Product Engineering | 按 B-2d：`DM-PlanReminder` 覆盖三类提醒并改为归属租户；`DM-Notification` 不删除；记录 B-2d 已实现的范围 |
 | 2.6.0 | 2026-11-05 | Product Engineering | 按 B-2c：套餐、订阅（含历史）、免费额度（个人与组织）、申请与预占记录；记录 B-2c 已实现的范围 |
 | 2.5.0 | 2026-11-04 | Product Engineering | 按 PRD v3.4：团队租户改称组织，取消原地升级；`DM-Enterprise` 改为组织资料与企业认证；每个成员一个角色；记录 B-2b 已实现的实体范围 |
