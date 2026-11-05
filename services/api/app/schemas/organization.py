@@ -59,6 +59,14 @@ class OrganizationOut(BaseModel):
     created_at: datetime
 
 
+class OrganizationDetailOut(OrganizationOut):
+    """What members see: also the member limit (None = unlimited) and the seats in use,
+    open invitations included (FR-SYS-025, FR-SYS-048)."""
+
+    member_limit: int | None
+    seats_used: int
+
+
 class RoleIn(LooseRequest):
     name: str | None = None
 

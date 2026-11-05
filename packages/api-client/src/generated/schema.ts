@@ -1219,6 +1219,42 @@ export interface components {
             /** Type */
             type: string;
         };
+        /**
+         * OrganizationDetailOut
+         * @description What members see: also the member limit (None = unlimited) and the seats in use,
+         *     open invitations included (FR-SYS-025, FR-SYS-048).
+         */
+        OrganizationDetailOut: {
+            /** Address */
+            address: string | null;
+            /** Contact Phone */
+            contact_phone: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Member Count */
+            member_count: number;
+            /** Member Limit */
+            member_limit: number | null;
+            /** Name */
+            name: string;
+            /** Seats Used */
+            seats_used: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "disabled";
+            /** Tenant Id */
+            tenant_id: number;
+            /**
+             * Verification Status
+             * @enum {string}
+             */
+            verification_status: "none" | "pending" | "verified" | "rejected";
+        };
         /** OrganizationOut */
         OrganizationOut: {
             /** Address */
@@ -3023,7 +3059,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OrganizationOut"];
+                    "application/json": components["schemas"]["OrganizationDetailOut"];
                 };
             };
             /** @description Validation Error */
@@ -3058,7 +3094,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OrganizationOut"];
+                    "application/json": components["schemas"]["OrganizationDetailOut"];
                 };
             };
             /** @description Validation Error */

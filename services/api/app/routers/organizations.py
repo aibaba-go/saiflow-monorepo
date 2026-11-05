@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.clock import utcnow
 from app.dependencies import (
     PathId,
     get_db,
@@ -23,7 +24,7 @@ from app.schemas.organization import (
     InvitationCreatedOut,
     InvitationOut,
     MemberOut,
-    OrganizationOut,
+    OrganizationDetailOut,
     OrganizationProfileIn,
     OwnerTransferredOut,
     RoleAssignedOut,
@@ -103,16 +104,22 @@ def require_manager(ctx: TenantContext) -> None:
 
 
 @router.get(
-    "/organizations/{tenant_id}", operation_id="getOrganization", response_model=OrganizationOut
+    "/organizations/{tenant_id}",
+    operation_id="getOrganization",
+    response_model=OrganizationDetailOut,
 )
-async def get_organization(ctx: Org, db: Db) -> OrganizationOut:
-    return OrganizationOut(**await organization_service.organization_view(db, ctx.tenant_id))
+async def get_organization(ctx: Org, db: Db) -> OrganizationDetailOut:
+    return await _detail(db, ctx.tenant_id)
 
 
 @router.patch(
-    "/organizations/{tenant_id}", operation_id="updateOrganization", response_model=OrganizationOut
+    "/organizations/{tenant_id}",
+    operation_id="updateOrganization",
+    response_model=OrganizationDetailOut,
 )
-async def update_organization(req: OrganizationProfileIn, ctx: Org, db: Db) -> OrganizationOut:
+async def update_organization(
+    req: OrganizationProfileIn, ctx: Org, db: Db
+) -> OrganizationDetailOut:
     ensure_text(req)
     require_manager(ctx)
     await organization_service.update_profile(
@@ -124,7 +131,16 @@ async def update_organization(req: OrganizationProfileIn, ctx: Org, db: Db) -> O
         req.address,  # type: ignore[arg-type]
         ctx=ctx,
     )
-    return OrganizationOut(**await organization_service.organization_view(db, ctx.tenant_id))
+    return await _detail(db, ctx.tenant_id)
+
+
+async def _detail(db: AsyncSession, tenant_id: int) -> OrganizationDetailOut:
+    view = await organization_service.organization_view(db, tenant_id)
+    return OrganizationDetailOut(
+        **view,
+        member_limit=await membership_service.member_limit(db, tenant_id),
+        seats_used=await membership_service.seats_used(db, tenant_id, utcnow()),
+    )
 
 
 def _role_out(role) -> RoleOut:
