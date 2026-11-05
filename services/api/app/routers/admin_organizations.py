@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import AdminContext, get_admin, get_db, require_csrf_header
+from app.dependencies import AdminContext, PathId, get_admin, get_db, require_csrf_header
 from app.schemas.loose import ensure_text
 from app.schemas.organization import (
     AcceptedOut,
@@ -17,6 +17,8 @@ from app.schemas.organization import (
     OrganizationProfileIn,
     RejectIn,
     SetVerifiedIn,
+    StatusOut,
+    VerifiedOut,
 )
 from app.services import organization_service, settings_service, verification_service
 from app.services.organization_service import Actor
@@ -46,7 +48,7 @@ async def list_applications(
     operation_id="adminApproveOrganization",
     response_model=AcceptedOut,
 )
-async def approve(application_id: int, db: Db, admin: Admin) -> AcceptedOut:
+async def approve(application_id: PathId, db: Db, admin: Admin) -> AcceptedOut:
     tenant_id = await organization_service.approve(db, admin.account.id, application_id)
     return AcceptedOut(tenant_id=tenant_id)
 
@@ -56,11 +58,13 @@ async def approve(application_id: int, db: Db, admin: Admin) -> AcceptedOut:
     operation_id="adminRejectOrganization",
     status_code=200,
 )
-async def reject(application_id: int, db: Db, admin: Admin, req: RejectIn | None = None) -> dict:
+async def reject(
+    application_id: PathId, db: Db, admin: Admin, req: RejectIn | None = None
+) -> StatusOut:
     req = req or RejectIn()
     ensure_text(req)
     await organization_service.reject(db, admin.account.id, application_id, req.reason)
-    return {"status": "rejected"}
+    return StatusOut(status="rejected")
 
 
 @router.get(
@@ -75,7 +79,7 @@ async def list_organizations(db: Db, admin: Admin) -> list[OrganizationOut]:
     operation_id="adminGetOrganization",
     response_model=OrganizationOut,
 )
-async def get_organization(tenant_id: int, db: Db, admin: Admin) -> OrganizationOut:
+async def get_organization(tenant_id: PathId, db: Db, admin: Admin) -> OrganizationOut:
     return OrganizationOut(**await organization_service.organization_view(db, tenant_id))
 
 
@@ -85,7 +89,7 @@ async def get_organization(tenant_id: int, db: Db, admin: Admin) -> Organization
     response_model=OrganizationOut,
 )
 async def update_organization(
-    tenant_id: int, req: OrganizationProfileIn, db: Db, admin: Admin
+    tenant_id: PathId, req: OrganizationProfileIn, db: Db, admin: Admin
 ) -> OrganizationOut:
     ensure_text(req)
     await organization_service.update_profile(
@@ -95,15 +99,15 @@ async def update_organization(
 
 
 @router.post("/organizations/{tenant_id}/disable", operation_id="adminDisableOrganization")
-async def disable_organization(tenant_id: int, db: Db, admin: Admin) -> dict:
+async def disable_organization(tenant_id: PathId, db: Db, admin: Admin) -> StatusOut:
     await organization_service.set_status(db, admin.account.id, tenant_id, "disabled")
-    return {"status": "disabled"}
+    return StatusOut(status="disabled")
 
 
 @router.post("/organizations/{tenant_id}/enable", operation_id="adminEnableOrganization")
-async def enable_organization(tenant_id: int, db: Db, admin: Admin) -> dict:
+async def enable_organization(tenant_id: PathId, db: Db, admin: Admin) -> StatusOut:
     await organization_service.set_status(db, admin.account.id, tenant_id, "active")
-    return {"status": "active"}
+    return StatusOut(status="active")
 
 
 @router.get(
@@ -122,6 +126,9 @@ async def get_member_limit(db: Db, admin: Admin) -> IntSettingOut:
     response_model=IntSettingOut,
 )
 async def set_member_limit(req: IntSettingIn, db: Db, admin: Admin) -> IntSettingOut:
+    ensure_text(req)
+    if req.value is None:
+        raise organization_service.fields_error(["value"])
     key = settings_service.ORG_MEMBER_LIMIT_UNPAID
     await settings_service.set_int(db, key, req.value, admin.account.id)
     return IntSettingOut(value=req.value)
@@ -143,24 +150,29 @@ async def list_verification_applications(
     "/verification-applications/{application_id}/approve",
     operation_id="adminApproveVerification",
 )
-async def approve_verification(application_id: int, db: Db, admin: Admin) -> dict:
+async def approve_verification(application_id: PathId, db: Db, admin: Admin) -> StatusOut:
     await verification_service.approve(db, admin.account.id, application_id)
-    return {"status": "approved"}
+    return StatusOut(status="approved")
 
 
 @router.post(
     "/verification-applications/{application_id}/reject", operation_id="adminRejectVerification"
 )
 async def reject_verification(
-    application_id: int, db: Db, admin: Admin, req: RejectIn | None = None
-) -> dict:
+    application_id: PathId, db: Db, admin: Admin, req: RejectIn | None = None
+) -> StatusOut:
     req = req or RejectIn()
     ensure_text(req)
     await verification_service.reject(db, admin.account.id, application_id, req.reason)
-    return {"status": "rejected"}
+    return StatusOut(status="rejected")
 
 
 @router.put("/organizations/{tenant_id}/verification", operation_id="adminSetVerification")
-async def set_verification(tenant_id: int, req: SetVerifiedIn, db: Db, admin: Admin) -> dict:
+async def set_verification(
+    tenant_id: PathId, req: SetVerifiedIn, db: Db, admin: Admin
+) -> VerifiedOut:
+    ensure_text(req)
+    if req.verified is None:
+        raise organization_service.fields_error(["verified"])
     await verification_service.set_verified(db, admin.account.id, tenant_id, req.verified)
-    return {"verified": req.verified}
+    return VerifiedOut(verified=req.verified)

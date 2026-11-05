@@ -68,6 +68,14 @@ async def resolve_tenant(
     )
 
 
+async def refresh(db: AsyncSession, ctx: TenantContext) -> TenantContext:
+    """Re-read the caller's membership and role, e.g. after taking the organization lock,
+    so a change committed meanwhile (removal, demotion) is seen (N2)."""
+    if ctx.kind != "organization":
+        return ctx
+    return await resolve_tenant(db, Principal("user", 0, -1, ctx.user_id), ctx.tenant_id)
+
+
 def require(ctx: TenantContext, p: Permission) -> None:
     if not ctx.has(p):
         raise AppError(403, "permission_denied", "error.permission_denied")

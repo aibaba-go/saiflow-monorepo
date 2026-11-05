@@ -66,6 +66,9 @@ async def _http_error(request: Request, exc: StarletteHTTPException) -> JSONResp
 
 
 async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    if any(err.get("loc", ("",))[0] == "path" for err in exc.errors()):
+        # an ID in the path that cannot name anything is "not found", not a client typo (N1)
+        return _respond(404, "not_found", "error.not_found")
     fields: list[str] = []
     for err in exc.errors():
         name = str(err["loc"][-1]) if err.get("loc") else ""

@@ -2,7 +2,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Annotated
 
-from fastapi import Depends, Header, Request
+from fastapi import Depends, Header, Path, Request
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.config import Settings
@@ -69,6 +69,9 @@ TENANT_HEADER = "X-Tenant-Id"
 
 
 BIGINT_MAX = 2**63 - 1
+
+# Path IDs: anything outside 1..bigint is answered 404 by the validation handler (N1)
+PathId = Annotated[int, Path(gt=0, le=BIGINT_MAX)]
 
 
 async def get_tenant_context(

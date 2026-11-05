@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import AdminContext, get_admin, get_db, require_csrf_header
+from app.dependencies import AdminContext, PathId, get_admin, get_db, require_csrf_header
 from app.schemas.billing import (
     ApproveIn,
     PlanApplicationOut,
@@ -26,6 +26,7 @@ from app.services import (
     settings_service,
     subscription_service,
 )
+from app.services.organization_service import fields_error
 
 router = APIRouter(
     prefix="/api/v1/admin", tags=["admin"], dependencies=[Depends(require_csrf_header)]
@@ -55,7 +56,7 @@ async def update_plan(code: str, req: PlanUpdateIn, db: Db, admin: Admin) -> Pla
     operation_id="adminListSubscriptions",
     response_model=list[SubscriptionOut],
 )
-async def list_subscriptions(tenant_id: int, db: Db, admin: Admin) -> list[SubscriptionOut]:
+async def list_subscriptions(tenant_id: PathId, db: Db, admin: Admin) -> list[SubscriptionOut]:
     found = await subscription_service.history(db, tenant_id)
     return [SubscriptionOut.model_validate(s, from_attributes=True) for s in found]
 
@@ -66,7 +67,7 @@ async def list_subscriptions(tenant_id: int, db: Db, admin: Admin) -> list[Subsc
     response_model=SubscriptionOut,
 )
 async def set_subscription(
-    tenant_id: int, req: SubscriptionIn, db: Db, admin: Admin
+    tenant_id: PathId, req: SubscriptionIn, db: Db, admin: Admin
 ) -> SubscriptionOut:
     ensure_text(req)
     sub = await subscription_service.set_subscription(
@@ -89,7 +90,7 @@ async def set_subscription(
     operation_id="adminListReservations",
     response_model=list[ReservationOut],
 )
-async def list_reservations(tenant_id: int, db: Db, admin: Admin) -> list[ReservationOut]:
+async def list_reservations(tenant_id: PathId, db: Db, admin: Admin) -> list[ReservationOut]:
     found = await metering_service.reservations(db, tenant_id)
     return [ReservationOut.model_validate(r, from_attributes=True) for r in found]
 
@@ -101,6 +102,9 @@ def _free_quota_setting(path: str, key: str, name: str) -> None:
 
     @router.put(f"/settings/{path}", operation_id=f"adminSet{name}", response_model=IntSettingOut)
     async def set_setting(req: IntSettingIn, db: Db, admin: Admin) -> IntSettingOut:
+        ensure_text(req)
+        if req.value is None:
+            raise fields_error(["value"])
         await settings_service.set_int(db, key, req.value, admin.account.id)
         return IntSettingOut(value=req.value)
 
@@ -131,7 +135,7 @@ async def list_plan_applications(
     response_model=SubscriptionOut,
 )
 async def approve_plan_application(
-    application_id: int, db: Db, admin: Admin, req: ApproveIn | None = None
+    application_id: PathId, db: Db, admin: Admin, req: ApproveIn | None = None
 ) -> SubscriptionOut:
     req = req or ApproveIn()
     ensure_text(req)
@@ -151,7 +155,7 @@ async def approve_plan_application(
     response_model=PlanApplicationOut,
 )
 async def reject_plan_application(
-    application_id: int, db: Db, admin: Admin, req: RejectIn | None = None
+    application_id: PathId, db: Db, admin: Admin, req: RejectIn | None = None
 ) -> PlanApplicationOut:
     req = req or RejectIn()
     ensure_text(req)

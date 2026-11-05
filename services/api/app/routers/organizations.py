@@ -6,7 +6,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_db, get_principal, require_csrf_header, require_registered_user
+from app.dependencies import (
+    PathId,
+    get_db,
+    get_principal,
+    require_csrf_header,
+    require_registered_user,
+)
 from app.permissions import Permission
 from app.schemas.loose import ensure_text
 from app.schemas.organization import (
@@ -19,6 +25,8 @@ from app.schemas.organization import (
     MemberOut,
     OrganizationOut,
     OrganizationProfileIn,
+    OwnerTransferredOut,
+    RoleAssignedOut,
     RoleCreateIn,
     RoleOut,
     TransferIn,
@@ -75,7 +83,7 @@ async def list_my_applications(db: Db, principal: Registered) -> list[Applicatio
 
 
 async def org_context(
-    tenant_id: int, db: Db, principal: Annotated[Principal, Depends(get_principal)]
+    tenant_id: PathId, db: Db, principal: Annotated[Principal, Depends(get_principal)]
 ) -> TenantContext:
     """The caller's context in organization {tenant_id}; 404 unless it is an organization
     the caller can use (FR-SYS-017)."""
@@ -114,6 +122,7 @@ async def update_organization(req: OrganizationProfileIn, ctx: Org, db: Db) -> O
         req.name,
         req.contact_phone,
         req.address,  # type: ignore[arg-type]
+        ctx=ctx,
     )
     return OrganizationOut(**await organization_service.organization_view(db, ctx.tenant_id))
 
@@ -145,7 +154,7 @@ async def create_role(req: RoleCreateIn, ctx: Org, db: Db) -> RoleOut:
 @router.patch(
     "/organizations/{tenant_id}/roles/{role_id}", operation_id="updateRole", response_model=RoleOut
 )
-async def update_role(role_id: int, req: RoleCreateIn, ctx: Org, db: Db) -> RoleOut:
+async def update_role(role_id: PathId, req: RoleCreateIn, ctx: Org, db: Db) -> RoleOut:
     ensure_text(req)
     return _role_out(await role_service.update_role(db, ctx, role_id, req.name, req.permissions))
 
@@ -153,22 +162,26 @@ async def update_role(role_id: int, req: RoleCreateIn, ctx: Org, db: Db) -> Role
 @router.delete(
     "/organizations/{tenant_id}/roles/{role_id}", operation_id="deleteRole", status_code=204
 )
-async def delete_role(role_id: int, ctx: Org, db: Db) -> Response:
+async def delete_role(role_id: PathId, ctx: Org, db: Db) -> Response:
     await role_service.delete_role(db, ctx, role_id)
     return Response(status_code=204)
 
 
-@router.put("/organizations/{tenant_id}/members/{user_id}/role", operation_id="assignRole")
-async def assign_role(user_id: int, req: AssignRoleIn, ctx: Org, db: Db) -> dict:
+@router.put(
+    "/organizations/{tenant_id}/members/{user_id}/role",
+    operation_id="assignRole",
+    response_model=RoleAssignedOut,
+)
+async def assign_role(user_id: PathId, req: AssignRoleIn, ctx: Org, db: Db) -> RoleAssignedOut:
     ensure_text(req)
     if req.role_id is None:
         raise organization_service.fields_error(["role_id"])
     await role_service.assign_role(db, ctx, user_id, req.role_id)
-    return {"user_id": user_id, "role_id": req.role_id}
+    return RoleAssignedOut(user_id=user_id, role_id=req.role_id)
 
 
 async def path_tenant(
-    tenant_id: int, db: Db, principal: Annotated[Principal, Depends(get_principal)]
+    tenant_id: PathId, db: Db, principal: Annotated[Principal, Depends(get_principal)]
 ) -> TenantContext:
     """Like org_context, but lets a personal tenant through so the service can say why it
     is not allowed (400) instead of 404."""
@@ -209,7 +222,7 @@ async def list_invitations(ctx: Org, db: Db) -> list[InvitationOut]:
     operation_id="revokeInvitation",
     status_code=204,
 )
-async def revoke_invitation(invitation_id: int, ctx: Org, db: Db) -> Response:
+async def revoke_invitation(invitation_id: PathId, ctx: Org, db: Db) -> Response:
     await membership_service.revoke_invitation(db, ctx, invitation_id)
     return Response(status_code=204)
 
@@ -231,7 +244,7 @@ async def list_members(ctx: Org, db: Db) -> list[MemberOut]:
 @router.delete(
     "/organizations/{tenant_id}/members/{user_id}", operation_id="removeMember", status_code=204
 )
-async def remove_member(user_id: int, ctx: Org, db: Db) -> Response:
+async def remove_member(user_id: PathId, ctx: Org, db: Db) -> Response:
     await membership_service.remove_member(db, ctx, user_id)
     return Response(status_code=204)
 
@@ -242,11 +255,15 @@ async def leave_organization(ctx: Org, db: Db) -> Response:
     return Response(status_code=204)
 
 
-@router.post("/organizations/{tenant_id}/owner-transfer", operation_id="transferOwner")
-async def transfer_owner(req: TransferIn, ctx: Org, db: Db) -> dict:
+@router.post(
+    "/organizations/{tenant_id}/owner-transfer",
+    operation_id="transferOwner",
+    response_model=OwnerTransferredOut,
+)
+async def transfer_owner(req: TransferIn, ctx: Org, db: Db) -> OwnerTransferredOut:
     ensure_text(req)
     await membership_service.transfer_owner(db, ctx, req.user_id)
-    return {"owner_user_id": req.user_id}
+    return OwnerTransferredOut(owner_user_id=req.user_id)  # type: ignore[arg-type]
 
 
 @router.get(

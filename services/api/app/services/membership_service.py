@@ -17,7 +17,7 @@ from app.services import settings_service
 from app.services.audit_service import record
 from app.services.organization_service import Actor, fields_error
 from app.services.role_service import default_role_id
-from app.services.tenant_access import TenantContext, not_found, require
+from app.services.tenant_access import TenantContext, not_found, refresh, require
 
 INVITATION_TTL = timedelta(days=7)
 
@@ -101,6 +101,7 @@ async def create_invitation(db: AsyncSession, ctx: TenantContext) -> tuple[Invit
     org = await _lock_organization(db, ctx.tenant_id)
     if org.status != "active":
         raise not_found()
+    require(await refresh(db, ctx), Permission.MEMBER_MANAGE)  # N2: as of the lock
     now = utcnow()
     if not await _has_seat(db, ctx.tenant_id, now):
         raise _limit_reached()
@@ -139,6 +140,8 @@ async def list_open_invitations(db: AsyncSession, ctx: TenantContext) -> list[In
 async def revoke_invitation(db: AsyncSession, ctx: TenantContext, invitation_id: int) -> None:
     _require_org(ctx)
     require(ctx, Permission.MEMBER_MANAGE)
+    await _lock_organization(db, ctx.tenant_id)
+    require(await refresh(db, ctx), Permission.MEMBER_MANAGE)  # N2
     invitation = await db.get(Invitation, invitation_id, with_for_update=True)
     if invitation is None or invitation.tenant_id != ctx.tenant_id:
         raise not_found()
@@ -222,6 +225,7 @@ async def _active_member(db: AsyncSession, tenant_id: int, user_id: int) -> Memb
 async def remove_member(db: AsyncSession, ctx: TenantContext, user_id: int) -> None:
     require(ctx, Permission.MEMBER_MANAGE)
     await _lock_organization(db, ctx.tenant_id)
+    require(await refresh(db, ctx), Permission.MEMBER_MANAGE)  # N2
     membership = await _active_member(db, ctx.tenant_id, user_id)
     if membership is None:
         raise not_found()

@@ -4,7 +4,7 @@ organization; it unlocks nothing yet (D4, D14)."""
 
 import re
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -93,9 +93,17 @@ async def _pending(db: AsyncSession, application_id: int) -> VerificationApplica
     return application
 
 
+async def _locked_pair(db: AsyncSession, application_id: int):
+    """Lock the organization, then the application: the same order as submit (N4)."""
+    found = await db.get(VerificationApplication, application_id)
+    if found is None:
+        raise not_found()
+    org = await _organization(db, found.tenant_id)
+    return await _pending(db, application_id), org
+
+
 async def approve(db: AsyncSession, admin_id: int, application_id: int) -> None:
-    application = await _pending(db, application_id)
-    org = await _organization(db, application.tenant_id)
+    application, org = await _locked_pair(db, application_id)
     now = utcnow()
     application.status, application.decided_by_admin_id, application.decided_at = (
         "approved",
@@ -115,8 +123,7 @@ async def reject(db: AsyncSession, admin_id: int, application_id: int, reason: s
     clean = (reason or "").strip()
     if not clean:
         raise fields_error(["reason"])
-    application = await _pending(db, application_id)
-    org = await _organization(db, application.tenant_id)
+    application, org = await _locked_pair(db, application_id)
     application.status, application.reject_reason = "rejected", clean
     application.decided_by_admin_id, application.decided_at = admin_id, utcnow()
     org.verification_status = "rejected"
@@ -128,6 +135,19 @@ async def reject(db: AsyncSession, admin_id: int, application_id: int, reason: s
 
 async def set_verified(db: AsyncSession, admin_id: int, tenant_id: int, verified: bool) -> None:
     org = await _organization(db, tenant_id)
+    await db.execute(  # N5: a direct decision closes any open application
+        update(VerificationApplication)
+        .where(
+            VerificationApplication.tenant_id == tenant_id,
+            VerificationApplication.status == "pending",
+        )
+        .values(
+            status="rejected",
+            reject_reason="set by admin",
+            decided_by_admin_id=admin_id,
+            decided_at=utcnow(),
+        )
+    )
     org.verification_status = "verified" if verified else "none"
     org.verified_at = utcnow() if verified else None
     action = "verification.set" if verified else "verification.unset"

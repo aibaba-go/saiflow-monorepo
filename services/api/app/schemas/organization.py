@@ -133,13 +133,30 @@ class AdminVerificationOut(BaseModel):
     created_at: datetime
 
 
-class SetVerifiedIn(BaseModel):
-    verified: bool
+class SetVerifiedIn(LooseRequest):
+    verified: bool | None = None
 
 
 class IntSettingOut(BaseModel):
     value: int
 
 
-class IntSettingIn(BaseModel):
-    value: int
+class IntSettingIn(LooseRequest):
+    value: int | None = None
+
+
+class RoleAssignedOut(BaseModel):
+    user_id: int
+    role_id: int
+
+
+class OwnerTransferredOut(BaseModel):
+    owner_user_id: int
+
+
+class StatusOut(BaseModel):
+    status: str
+
+
+class VerifiedOut(BaseModel):
+    verified: bool

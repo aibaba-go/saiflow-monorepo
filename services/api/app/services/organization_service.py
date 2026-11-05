@@ -211,11 +211,25 @@ async def update_profile(
     name: str | None,
     contact_phone: str | None,
     address: str | None,
+    ctx=None,
 ) -> None:
-    """Change any of name, contact phone and address (FR-SYS-022/023); no re-approval."""
+    """Change any of name, contact phone and address (FR-SYS-022/023); no re-approval.
+    With a customer `ctx`, the caller must still be owner or 成员管理 once the organization
+    is locked (N2). A request that changes nothing writes no audit row (N6)."""
+    from app.permissions import Permission
+    from app.services.tenant_access import refresh, require
+
     changes = check_profile(name, contact_phone, address, partial=True)
     org = await _organization(db, tenant_id, lock=True)
-    for key, value in changes.items():
+    if ctx is not None:
+        fresh = await refresh(db, ctx)
+        if not fresh.is_owner:
+            require(fresh, Permission.MEMBER_MANAGE)
+    changed = {k: v for k, v in changes.items() if getattr(org, k) != v}
+    if not changed:
+        await db.commit()
+        return
+    for key, value in changed.items():
         setattr(org, key, value)
     await record(db, actor.event("org.update", "organization", tenant_id))
     await db.commit()

@@ -42,8 +42,8 @@ async def list_roles(db: AsyncSession, ctx: TenantContext) -> list[Role]:
     )
 
 
-async def _role(db: AsyncSession, ctx: TenantContext, role_id: int) -> Role:
-    role = await db.get(Role, role_id)
+async def _role(db: AsyncSession, ctx: TenantContext, role_id: int, lock: bool = False) -> Role:
+    role = await db.get(Role, role_id, with_for_update=lock, populate_existing=lock)
     if role is None or role.tenant_id != ctx.tenant_id:
         raise not_found()
     return role
@@ -105,7 +105,7 @@ async def default_role_id(db: AsyncSession, tenant_id: int) -> int:
 
 async def delete_role(db: AsyncSession, ctx: TenantContext, role_id: int) -> None:
     require(ctx, Permission.ROLE_MANAGE)
-    role = await _role(db, ctx, role_id)
+    role = await _role(db, ctx, role_id, lock=True)  # N3
     if role.is_default:
         raise AppError(409, "default_role_protected", "role.default_protected")
     if role_id == ctx.role_id:
@@ -142,7 +142,7 @@ async def assign_role(db: AsyncSession, ctx: TenantContext, user_id: int, role_i
     membership = await active_membership(db, ctx.tenant_id, user_id, lock=True)
     if membership.is_owner:
         raise _denied()
-    await _role(db, ctx, role_id)
+    await _role(db, ctx, role_id, lock=True)  # N3: not deleted until we commit
     membership.role_id = role_id
     await record(
         db,
