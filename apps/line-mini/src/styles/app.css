@@ -19,3 +19,19 @@ body {
   font-size: 20px;
   margin: 0 0 4px;
 }
+.section__label {
+  font-size: 13px;
+  color: #888;
+  margin: 8px 0 6px;
+}
+.usage__count {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 8px 0 0;
+}
+.usage__hint,
+.usage__free,
+.usage__validity {
+  font-size: 13px;
+  color: #666;
+}

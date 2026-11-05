@@ -10,7 +10,12 @@ import { boot, configureAuth, retryLogout } from "./features/auth/session";
 import { useSubmit } from "./hooks/useSubmit";
 import { useT } from "./i18n";
 import { HealthPage } from "./pages/HealthPage";
+import { HistoryPage, HomePage, ReportPage } from "./pages/HomePage";
 import { MyPage } from "./pages/MyPage";
+import { TabBar } from "./components/TabBar";
+import { useUsage } from "./features/billing/useUsage";
+import { showReportTab } from "./features/tenants/reportTab";
+import { useCurrentTenant } from "./features/tenants/useCurrentTenant";
 import { realLiff } from "./services/liff";
 import type { Liff } from "./services/liffTypes";
 import { useSession } from "./stores/session";
@@ -95,12 +100,29 @@ export function Shell({ liff, search, liffTimeoutMs = 20_000, logoutTimeoutMs = 
   if (status === "booting") return <Splash />;
   if (status === "error") return <BootError />;
   if (status === "locked") return <Locked />;
+  return <MainShell />;
+}
+
+const TAB_PATHS = new Set(["/", "/history", "/report", "/my"]);
+
+/** The signed-in or guest app: pages plus the bottom navigation on the four tab pages. */
+function MainShell() {
+  const { pathname } = useLocation();
+  const { tenant } = useCurrentTenant();
+  const usage = useUsage();
+  const report = showReportTab(tenant, usage.data);
   return (
-    <Routes>
-      <Route path="/my" element={<MyPage />} />
-      <Route path="/health" element={<HealthPage />} />
-      <Route path="*" element={<MyPage />} />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/history" element={<HistoryPage />} />
+        <Route path="/report" element={report ? <ReportPage /> : <HomePage />} />
+        <Route path="/my" element={<MyPage />} />
+        <Route path="/health" element={<HealthPage />} />
+        <Route path="*" element={<HomePage />} />
+      </Routes>
+      {TAB_PATHS.has(pathname) && <TabBar showReport={report} />}
+    </>
   );
 }
 

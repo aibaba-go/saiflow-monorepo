@@ -1,0 +1,24 @@
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #fff;
+  border-top: 1px solid #e5e6eb;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tabbar__list {
+  display: flex;
+}
+.tabbar__tab {
+  flex: 1;
+  border: 0;
+  background: none;
+  padding: 12px 0;
+  font-size: 13px;
+  color: #666;
+}
+.tabbar__tab[aria-selected="true"] {
+  color: #1f5fbf;
+  font-weight: 600;
+}

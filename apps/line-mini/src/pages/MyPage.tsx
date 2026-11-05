@@ -2,6 +2,7 @@ import { Button, Dialog, List } from "antd-mobile";
 
 import { ErrorText } from "../components/ErrorText";
 import { logout, startLogin } from "../features/auth/session";
+import { LanguagePicker } from "../features/profile/LanguagePicker";
 import { useSubmit } from "../hooks/useSubmit";
 import { useT } from "../i18n";
 import { isUser, useSession } from "../stores/session";
@@ -48,6 +49,7 @@ export function MyPage() {
           <ErrorText error={loginError} />
         </>
       )}
+      <LanguagePicker />
     </div>
   );
 }
