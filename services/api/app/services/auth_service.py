@@ -4,12 +4,13 @@ data (FR-SYS-010), and open a user session."""
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.clock import utcnow
 from app.errors import AppError
 from app.integrations.line import LineClient, LineIdentity, LineInvalidToken, LineUnavailable
 from app.models import User
 from app.repositories import tenant_repo, user_repo
 from app.schemas.auth import LineLoginRequest
-from app.services import claim_service, session_service
+from app.services import claim_service, session_service, subscription_service
 from app.services.audit_service import AuditEvent, record
 from app.services.session_service import Principal
 
@@ -50,6 +51,7 @@ async def _ensure_user(db: AsyncSession, identity: LineIdentity) -> tuple[User, 
                 line_email=identity.email,
             )
             tenant = await tenant_repo.create(db, "personal", user.id)
+            await subscription_service.start_default(db, tenant.id, utcnow())  # FR-SYS-012
             await db.commit()
             return user, tenant.id
         except IntegrityError:  # the same LINE user logged in concurrently

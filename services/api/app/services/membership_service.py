@@ -42,8 +42,16 @@ async def _lock_organization(db: AsyncSession, tenant_id: int) -> Organization:
 
 
 async def member_limit(db: AsyncSession, tenant_id: int) -> int | None:
-    """Seats allowed (None = unlimited). B-2c extends this with plan-based limits; until a
-    plan is active the admin-configured unpaid limit applies (D8)."""
+    """Seats allowed (None = unlimited): the active plan's member limit (FR-SYS-025), or the
+    admin-configured limit for organizations without an active plan (D8, A9)."""
+    from app.models import Plan
+    from app.services import subscription_service
+
+    now = utcnow()
+    sub = await subscription_service.current(db, tenant_id, now)
+    if subscription_service.is_active(sub, now):
+        plan = await db.get(Plan, sub.plan_code)  # type: ignore[union-attr]
+        return plan.member_limit  # type: ignore[union-attr]
     return await settings_service.get_int(db, settings_service.ORG_MEMBER_LIMIT_UNPAID, 2)
 
 

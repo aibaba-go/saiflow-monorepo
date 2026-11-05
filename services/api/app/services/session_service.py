@@ -34,7 +34,10 @@ def hash_token(token: str) -> bytes:
 
 
 async def create_guest(db: AsyncSession) -> tuple[str, Principal]:
+    from app.services import subscription_service  # import here: it depends on this module's peers
+
     tenant = await tenant_repo.create(db, "guest")
+    await subscription_service.start_default(db, tenant.id, utcnow())  # FR-SYS-012
     token = new_token()
     row = await session_repo.create(db, hash_token(token), "guest", tenant.id, None)
     await record(
