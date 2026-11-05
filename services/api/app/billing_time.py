@@ -22,3 +22,8 @@ def add_months(dt: datetime, n: int) -> datetime:
 
 
 PERIOD_MONTHS = {"month": 1, "year": 12}
+
+
+def bangkok_date(dt: datetime) -> date:
+    """dt's calendar date in Bangkok (reminder days follow Asia/Bangkok)."""
+    return dt.astimezone(BANGKOK).date()
