@@ -2,14 +2,15 @@
 
     reservation = await metering_service.reserve(db, ctx.tenant_id, page_count, job_id)
         # in the SAME transaction that inserts the job; commit both together
-    await metering_service.release(db, reservation.id)
+    await metering_service.release(db, ctx.tenant_id, reservation.id)
         # in the transaction that marks the job FAILED or CANCELLED; never on SUCCEEDED
 
 Neither function commits. `reserve` with a reference it has seen before returns the
 earlier reservation, so a retried job creation never charges twice; the same reference
 with a different page count, or after it was released, is 409 `reservation_conflict`
 (use a new reference for a rerun). Errors (AppError): 402 `quota_exceeded` with details
-{"available": n}, 402 `plan_expired`, 400 `pages`, 404 for an unknown tenant.
+{"available": n}, 402 `plan_expired`, 400 `pages`, 404 for an unknown tenant, and 404
+from `release` for a reservation of another tenant.
 
 Lock order: call `reserve` and `release` BEFORE writing any audit row in the same
 transaction. `audit_service.record` takes a global lock held until commit; taking the
@@ -112,9 +113,9 @@ async def reserve(db: AsyncSession, tenant_id: int, pages: int, reference: str) 
     return reservation
 
 
-async def release(db: AsyncSession, reservation_id: int) -> None:
+async def release(db: AsyncSession, tenant_id: int, reservation_id: int) -> None:
     row = await db.get(QuotaReservation, reservation_id)
-    if row is None:
+    if row is None or row.tenant_id != tenant_id:  # never another tenant's reservation
         raise not_found()
     await _lock(db, row.tenant_id)
     await db.refresh(row)
@@ -132,8 +133,8 @@ async def release(db: AsyncSession, reservation_id: int) -> None:
 async def usage(db: AsyncSession, ctx: TenantContext) -> dict:
     now = utcnow()
     kind, sub, plan, free_row = await _state(db, ctx.tenant_id, now)
-    if sub is None:
-        latest = await subscription_service.current(db, ctx.tenant_id, now)
+    if sub is None:  # the latest started period; a queued future one is not shown
+        latest = await subscription_service.latest_started(db, ctx.tenant_id, now)
     else:
         latest = sub
     month = month_key(now)

@@ -131,7 +131,7 @@ async def test_reused_reference_with_other_pages_or_released_is_409(api, db, lin
         await metering_service.reserve(db, personal, 8, "job-1")
     assert info.value.status == 409 and info.value.code == "reservation_conflict"
     await db.rollback()
-    await metering_service.release(db, rid)
+    await metering_service.release(db, personal, rid)
     await db.commit()
     with pytest.raises(AppError) as info:
         await metering_service.reserve(db, personal, 3, "job-1")

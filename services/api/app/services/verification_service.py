@@ -133,21 +133,31 @@ async def reject(db: AsyncSession, admin_id: int, application_id: int, reason: s
     await db.commit()
 
 
+SET_BY_ADMIN = "set_by_admin"
+
+
 async def set_verified(db: AsyncSession, admin_id: int, tenant_id: int, verified: bool) -> None:
     org = await _organization(db, tenant_id)
-    await db.execute(  # N5: a direct decision closes any open application
-        update(VerificationApplication)
-        .where(
-            VerificationApplication.tenant_id == tenant_id,
-            VerificationApplication.status == "pending",
+    closed = (
+        await db.execute(  # N5: a direct decision closes any open application
+            update(VerificationApplication)
+            .where(
+                VerificationApplication.tenant_id == tenant_id,
+                VerificationApplication.status == "pending",
+            )
+            .values(
+                status="rejected",
+                reject_reason=SET_BY_ADMIN,  # a code; the frontend words it (M2)
+                decided_by_admin_id=admin_id,
+                decided_at=utcnow(),
+            )
+            .returning(VerificationApplication.id)
         )
-        .values(
-            status="rejected",
-            reject_reason="set by admin",
-            decided_by_admin_id=admin_id,
-            decided_at=utcnow(),
+    ).all()
+    for _ in closed:
+        await record(
+            db, Actor("admin", admin_id).event("verification.reject", "organization", tenant_id)
         )
-    )
     org.verification_status = "verified" if verified else "none"
     org.verified_at = utcnow() if verified else None
     action = "verification.set" if verified else "verification.unset"

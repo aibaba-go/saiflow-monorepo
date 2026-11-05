@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import AdminContext, PathId, get_admin, get_db, require_csrf_header
+from app.errors import AppError
+from app.models import Tenant
 from app.schemas.billing import (
     ApproveIn,
     PlanApplicationOut,
@@ -51,12 +53,18 @@ async def update_plan(code: str, req: PlanUpdateIn, db: Db, admin: Admin) -> Pla
     return PlanOut.model_validate(plan, from_attributes=True)
 
 
+async def _existing_tenant(db: AsyncSession, tenant_id: int) -> None:
+    if await db.get(Tenant, tenant_id) is None:  # M5: unknown tenant is 404, not []
+        raise AppError(404, "not_found", "error.not_found")
+
+
 @router.get(
     "/tenants/{tenant_id}/subscriptions",
     operation_id="adminListSubscriptions",
     response_model=list[SubscriptionOut],
 )
 async def list_subscriptions(tenant_id: PathId, db: Db, admin: Admin) -> list[SubscriptionOut]:
+    await _existing_tenant(db, tenant_id)
     found = await subscription_service.history(db, tenant_id)
     return [SubscriptionOut.model_validate(s, from_attributes=True) for s in found]
 
@@ -91,6 +99,7 @@ async def set_subscription(
     response_model=list[ReservationOut],
 )
 async def list_reservations(tenant_id: PathId, db: Db, admin: Admin) -> list[ReservationOut]:
+    await _existing_tenant(db, tenant_id)
     found = await metering_service.reservations(db, tenant_id)
     return [ReservationOut.model_validate(r, from_attributes=True) for r in found]
 

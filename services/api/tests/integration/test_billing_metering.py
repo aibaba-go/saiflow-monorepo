@@ -204,7 +204,7 @@ async def test_release_returns_once(api, db, line, mail):  # AC-FR-SYS-013-04
     r = await _reserve(db, personal, 8, "j1")
     assert (r.from_free, r.from_monthly) == (2, 6)
     for _ in range(2):
-        await metering_service.release(db, r.id)
+        await metering_service.release(db, r.tenant_id, r.id)
         await db.commit()
         body = (await c.get(USAGE)).json()
         assert body["free"]["remaining"] == 2 and body["month"]["used"] == 0
@@ -278,7 +278,7 @@ async def test_release_across_month_returns_to_old_month(api, db, line, mail, mo
     r = await _reserve(db, org, 6, "jan")
     feb = datetime(2027, 2, 1, 0, 1, tzinfo=BANGKOK)
     monkeypatch.setattr("app.services.metering_service.utcnow", lambda: feb)
-    await metering_service.release(db, r.id)
+    await metering_service.release(db, r.tenant_id, r.id)
     await db.commit()
     jan_used = (
         await db.execute(
@@ -309,7 +309,7 @@ async def test_release_after_org_free_expiry_does_not_restore(api, db, line, mai
     assert r.from_free == 4
     later = datetime.now(UTC) + timedelta(days=32)
     monkeypatch.setattr("app.services.metering_service.utcnow", lambda: later)
-    await metering_service.release(db, r.id)
+    await metering_service.release(db, r.tenant_id, r.id)
     await db.commit()
     assert await _free(db, org) == 96
     assert (await owner.get(USAGE, headers=tenant(org))).json()["free"]["remaining"] == 0
@@ -377,7 +377,7 @@ async def test_admin_sees_reservation_with_split(api, db, line, mail):  # AC-FR-
     await _set_plan(admin, org, "starter", now - timedelta(days=1), now + timedelta(days=29))
     await _set_free(db, org, 3)
     r = await _reserve(db, org, 8, "job-42")
-    await metering_service.release(db, r.id)
+    await metering_service.release(db, r.tenant_id, r.id)
     await db.commit()
     [row] = (await admin.get(f"/api/v1/admin/tenants/{org}/reservations")).json()
     assert (row["reference"], row["pages"], row["from_free"], row["from_monthly"]) == (

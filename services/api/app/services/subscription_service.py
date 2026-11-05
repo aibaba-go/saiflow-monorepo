@@ -46,6 +46,18 @@ async def current(db: AsyncSession, tenant_id: int, now: datetime) -> Subscripti
     return rows[0] if rows else None
 
 
+async def latest_started(db: AsyncSession, tenant_id: int, now: datetime) -> Subscription | None:
+    """The most recent period that has started (active or ended); never a future one."""
+    return (
+        await db.execute(
+            select(Subscription)
+            .where(Subscription.tenant_id == tenant_id, Subscription.starts_at <= now)
+            .order_by(Subscription.starts_at.desc(), Subscription.id.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+
 async def history(db: AsyncSession, tenant_id: int) -> list[Subscription]:
     return list(
         (
@@ -94,6 +106,9 @@ async def check_plan_rules(
     return tenant, plan, sub
 
 
+MAX_YEAR = 9998
+
+
 def parse_time(raw: str | None, field: str) -> datetime | None:
     if raw is None:
         return None
@@ -101,7 +116,7 @@ def parse_time(raw: str | None, field: str) -> datetime | None:
         value = datetime.fromisoformat(raw)
     except ValueError:
         raise fields_error([field]) from None
-    if value.tzinfo is None:
+    if value.tzinfo is None or value.year > MAX_YEAR:  # M3: no 500 near year 9999
         raise fields_error([field])
     return value
 
@@ -140,7 +155,10 @@ async def set_subscription(
         else:
             starts_at = now
     if ends_at is None:
-        ends_at = add_months(starts_at, PERIOD_MONTHS[period])
+        try:
+            ends_at = add_months(starts_at, PERIOD_MONTHS[period])
+        except (ValueError, OverflowError):
+            raise fields_error(["starts_at"]) from None
     if ends_at <= starts_at:
         raise fields_error(["ends_at"])
     new = Subscription(
