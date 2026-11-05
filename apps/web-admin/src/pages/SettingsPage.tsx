@@ -1,11 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, Card, Form, Input, Space, Spin, Typography } from "antd";
+import { Alert, Card, Form, Input, Space, Spin, Typography } from "antd";
 import { useState } from "react";
 
+import { ConfirmButton } from "../components/ConfirmButton";
 import { ErrorText } from "../components/ErrorText";
 import { fieldErrorText, formLevel } from "../components/FieldError";
 import { Page } from "../components/Page";
-import { useSubmit } from "../hooks/useSubmit";
 import { useT, type MessageKey } from "../i18n";
 import { asInt, catalog, catalogKeys, type SettingPath } from "../services/catalog";
 
@@ -52,7 +52,8 @@ function SettingForm({ path, label, value }: { path: SettingPath; label: Message
   const [text, setText] = useState(String(value));
   const [error, setError] = useState<unknown>(null);
   const [saved, setSaved] = useState(false);
-  const { run, pending } = useSubmit(async () => {
+  /** Runs after the confirmation (FR-SYS-073); ConfirmButton keeps it to one at a time. */
+  async function save() {
     setError(null);
     setSaved(false);
     try {
@@ -62,11 +63,11 @@ function SettingForm({ path, label, value }: { path: SettingPath; label: Message
     } catch (e) {
       setError(e);
     }
-  });
+  }
   const fieldError = fieldErrorText(error, "value", t);
   const id = `setting-${path}-input`;
   return (
-    <Form layout="vertical" onFinish={() => void run()}>
+    <Form layout="vertical">
       <Form.Item label={t(label)} htmlFor={id} validateStatus={fieldError ? "error" : undefined} help={fieldError}>
         <Input
           id={id}
@@ -80,9 +81,7 @@ function SettingForm({ path, label, value }: { path: SettingPath; label: Message
         />
       </Form.Item>
       <Space>
-        <Button type="primary" htmlType="submit" loading={pending}>
-          {t("common.save")}
-        </Button>
+        <ConfirmButton type="primary" label={t("common.save")} title={t("settings.confirmSave")} onConfirm={save} />
         {saved && <Typography.Text type="success">{t("settings.saved")}</Typography.Text>}
       </Space>
       <ErrorText error={formLevel(error)} />

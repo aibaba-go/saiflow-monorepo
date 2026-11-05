@@ -139,6 +139,8 @@ describe("tenant subscriptions and reservations (FR-SYS-066)", () => {
     await screen.findByRole("heading", { name: zh("billing.title", { id: 5 }) });
     await pick(zh("billing.plan"), "Starter");
     await userEvent.click(screen.getByRole("button", { name: zh("billing.save") }));
+    expect(api.count("PUT /api/v1/admin/tenants/5/subscription")).toBe(0);
+    await userEvent.click(await screen.findByRole("button", { name: zh("common.confirm") }));
     const history = await screen.findByTestId("subscription-history");
     expect(await within(history).findByText("Starter")).toBeInTheDocument();
     expect(within(history).getByText(zh("source.admin"))).toBeInTheDocument();
@@ -158,6 +160,7 @@ describe("tenant subscriptions and reservations (FR-SYS-066)", () => {
     await screen.findByText(zh("billing.kind.personal"));
     await pick(zh("billing.plan"), "Starter");
     await userEvent.click(screen.getByRole("button", { name: zh("billing.save") }));
+    await userEvent.click(await screen.findByRole("button", { name: zh("common.confirm") }));
     expect(await screen.findByText(zh("field.plan_code"))).toBeInTheDocument();
   });
 

@@ -64,6 +64,21 @@ async def test_wrong_current_counts_and_locks(api, db):  # Review Focus 2
     assert locks == 1
 
 
+async def test_locked_account_cannot_change_password(api, db):  # final review I-3
+    """While locked, the form refuses even the right current password: the lock stops
+    guessing through this endpoint as it does through login."""
+    me = await admin_client(api, db)
+    for _ in range(5):
+        await me.post(URL, json={"current_password": "wrong-password-123", "new_password": NEW})
+    r = await me.post(URL, json={"current_password": ADMIN_PASSWORD, "new_password": NEW})
+    assert r.status_code == 400 and r.json()["fields"] == ["current_password"], r.text
+    assert (await _login(api, NEW))[1].status_code == 401
+    locked = (
+        await db.execute(text("select locked_until is not null from admin_accounts"))
+    ).scalar_one()
+    assert locked
+
+
 async def test_change_password_needs_admin_session(api):
     r = await client_like(api).post(URL, json={"current_password": "x", "new_password": NEW})
     assert r.status_code == 401

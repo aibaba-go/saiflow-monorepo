@@ -121,6 +121,8 @@ describe("parameters (FR-SYS-069)", () => {
     const card = screen.getByTestId("setting-free-quota-organization");
     await retype(await within(card).findByDisplayValue("100"), "200");
     await userEvent.click(within(card).getByRole("button", { name: zh("common.save") }));
+    expect(api.count("PUT /api/v1/admin/settings/free-quota-organization")).toBe(0);
+    await userEvent.click(await screen.findByRole("button", { name: zh("common.confirm") }));
     expect(await within(card).findByText(zh("settings.saved"))).toBeInTheDocument();
     expect(await api.bodies("PUT /api/v1/admin/settings/free-quota-organization")).toEqual([{ value: 200 }]);
     expect(within(card).getByDisplayValue("200")).toBeInTheDocument();
@@ -136,6 +138,7 @@ describe("parameters (FR-SYS-069)", () => {
     const card = await screen.findByTestId("setting-org-member-limit-unpaid");
     await retype(await within(card).findByDisplayValue("2"), "0");
     await userEvent.click(within(card).getByRole("button", { name: zh("common.save") }));
+    await userEvent.click(await screen.findByRole("button", { name: zh("common.confirm") }));
     expect(await within(card).findByText(zh("field.value"))).toBeInTheDocument();
   });
 });

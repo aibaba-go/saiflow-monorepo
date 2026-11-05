@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
+import { create } from "zustand";
 
 import { api, call } from "../services/api";
 import { ApiError } from "../services/errors";
@@ -27,12 +28,20 @@ export function useAdmin() {
   });
 }
 
-/** Mark the session as gone: RequireAdmin then sends the admin to login. */
+/** Whether the admin was sent to login because the session expired (060-03: 提示重新登录). */
+export const useSessionNotice = create<{ expired: boolean; setExpired(expired: boolean): void }>((set) => ({
+  expired: false,
+  setExpired: (expired) => set({ expired }),
+}));
+
+/** Mark the session as gone: RequireAdmin then sends the admin to login.
+ * ADMIN_KEY is set to null (its observers are notified, so RequireAdmin redirects) and every
+ * other cached query is dropped. `clear()` would remove ADMIN_KEY without notifying anyone. */
 export function useForgetAdmin() {
   const queryClient = useQueryClient();
   return useCallback(() => {
-    queryClient.clear();
     queryClient.setQueryData(ADMIN_KEY, null);
+    queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== ADMIN_KEY[0] });
   }, [queryClient]);
 }
 

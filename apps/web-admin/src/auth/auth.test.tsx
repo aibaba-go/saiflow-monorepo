@@ -74,6 +74,37 @@ describe("login and session (FR-SYS-060)", () => {
     await waitFor(() => expect(screen.getByRole("heading", { name: zh("nav.organizations") })).toBeInTheDocument());
   });
 
+  it("a session that expires mid-use goes to login with a notice and comes back (final review I-1, I-2)", async () => {
+    let signedIn = true;
+    mockApi({
+      "GET /api/v1/admin/me": () => (signedIn ? json(200, ME) : json(401, { code: "unauthenticated" })),
+      "POST /api/v1/admin/auth/login": () => {
+        signedIn = true;
+        return json(200, ME);
+      },
+      "GET /api/v1/admin/organizations": () =>
+        signedIn ? json(200, []) : json(401, { code: "unauthenticated" }),
+      "GET /api/v1/admin/users": () => {
+        signedIn = false;
+        return json(401, { code: "unauthenticated" });
+      },
+    });
+    renderWithProviders(<AppRoutes />, { route: "/users" });
+    await userEvent.type(await screen.findByPlaceholderText(zh("users.placeholder")), "somchai{Enter}");
+    expect(await screen.findByRole("button", { name: zh("login.submit") })).toBeInTheDocument();
+    expect(screen.getByText(zh("err.unauthenticated"))).toBeInTheDocument();
+    await logIn();
+    expect(await screen.findByRole("heading", { name: zh("nav.users") })).toBeInTheDocument();
+    expect(screen.queryByText(zh("err.unauthenticated"))).not.toBeInTheDocument();
+  });
+
+  it("a first visit without a session shows no expiry notice", async () => {
+    mockApi({ "GET /api/v1/admin/me": () => json(401, { code: "unauthenticated" }) });
+    renderWithProviders(<AppRoutes />, { route: "/organizations" });
+    expect(await screen.findByRole("button", { name: zh("login.submit") })).toBeInTheDocument();
+    expect(screen.queryByText(zh("err.unauthenticated"))).not.toBeInTheDocument();
+  });
+
   it("never follows an outside next", () => {
     expect(safeNext("/organizations?status=x")).toBe("/organizations?status=x");
     for (const bad of [null, "", "//evil.com", "https://evil.com", "evil", "/\\evil.com"]) {

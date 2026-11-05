@@ -231,4 +231,7 @@ export const en: Record<MessageKey, string> = {
   "password.mismatch": "The two new passwords differ",
   "field.current_password": "The current password is wrong",
   "field.new_password": "The new password needs at least 12 characters and must differ from the current one",
+
+  "billing.confirmSave": "This takes effect at once and replaces the tenant's current subscription. Save?",
+  "settings.confirmSave": "Save this setting?",
 };

@@ -1,15 +1,15 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { App, Button, Card, DatePicker, Form, Result, Select, Space, Table, Typography } from "antd";
+import { App, Card, DatePicker, Form, Result, Select, Space, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { Dayjs } from "dayjs";
 import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
+import { ConfirmButton } from "../components/ConfirmButton";
 import { ErrorText } from "../components/ErrorText";
 import { fieldErrorText, formLevel, requireFields } from "../components/FieldError";
 import { Page } from "../components/Page";
 import { formatTime, PLAN_NAMES, toBangkokIso } from "../format";
-import { useSubmit } from "../hooks/useSubmit";
 import { useT } from "../i18n";
 import {
   idParam,
@@ -58,7 +58,10 @@ function SubscriptionForm({ id }: { id: number }) {
   const [endsAt, setEndsAt] = useState<Dayjs | null>(null);
   const [error, setError] = useState<unknown>(null);
 
-  const { run, pending } = useSubmit(async () => {
+  /** Runs after the confirmation (FR-SYS-073); ConfirmButton keeps it to one at a time. */
+  async function save() {
+    const missing = requireFields({ plan_code: plan ?? "" });
+    if (missing) return setError(missing);
     setError(null);
     const body: SubscriptionBody = { plan_code: plan!, period };
     if (startsAt) body.starts_at = toBangkokIso(startsAt);
@@ -71,12 +74,6 @@ function SubscriptionForm({ id }: { id: number }) {
     } finally {
       await queryClient.invalidateQueries({ queryKey: orgKeys.subscriptions(id) });
     }
-  });
-
-  function save() {
-    const missing = requireFields({ plan_code: plan ?? "" });
-    if (missing) setError(missing);
-    else void run();
   }
 
   const item = (field: string) => {
@@ -86,7 +83,7 @@ function SubscriptionForm({ id }: { id: number }) {
 
   return (
     <Card title={t("billing.set")}>
-      <Form layout="vertical" onFinish={save} style={{ maxWidth: 480 }}>
+      <Form layout="vertical" style={{ maxWidth: 480 }}>
         <Form.Item label={t("billing.plan")} htmlFor="sub-plan" {...item("plan_code")}>
           <Select
             id="sub-plan"
@@ -114,9 +111,7 @@ function SubscriptionForm({ id }: { id: number }) {
         </Form.Item>
         <Space direction="vertical" style={{ width: "100%" }}>
           <ErrorText error={formLevel(error)} />
-          <Button type="primary" htmlType="submit" loading={pending}>
-            {t("billing.save")}
-          </Button>
+          <ConfirmButton type="primary" label={t("billing.save")} title={t("billing.confirmSave")} onConfirm={save} />
         </Space>
       </Form>
     </Card>

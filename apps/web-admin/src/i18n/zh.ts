@@ -230,6 +230,9 @@ export const zh = {
   "password.mismatch": "两次输入的新口令不一致",
   "field.current_password": "当前口令错误",
   "field.new_password": "新口令至少 12 个字符，且不能与当前口令相同",
+
+  "billing.confirmSave": "设定后立即生效，替换该租户当前的订阅。确定保存？",
+  "settings.confirmSave": "确定保存此参数？",
 } as const;
 
 export type MessageKey = keyof typeof zh;

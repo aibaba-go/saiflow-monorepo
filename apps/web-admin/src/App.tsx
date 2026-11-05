@@ -6,7 +6,7 @@ import { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { RequireAdmin } from "./auth/RequireAdmin";
-import { useForgetAdmin } from "./auth/session";
+import { useForgetAdmin, useSessionNotice } from "./auth/session";
 import { useT } from "./i18n";
 import { AdminLayout } from "./layout/AdminLayout";
 import {
@@ -32,10 +32,14 @@ import { useLanguage } from "./stores/language";
 /** Any 401 outside login: drop the session; RequireAdmin then goes to /login?next= (060-03). */
 function SessionWatcher() {
   const forget = useForgetAdmin();
+  const setExpired = useSessionNotice((s) => s.setExpired);
   useEffect(() => {
-    setUnauthenticatedHandler(() => forget());
+    setUnauthenticatedHandler(() => {
+      setExpired(true);
+      forget();
+    });
     return () => setUnauthenticatedHandler(() => {});
-  }, [forget]);
+  }, [forget, setExpired]);
   return null;
 }
 

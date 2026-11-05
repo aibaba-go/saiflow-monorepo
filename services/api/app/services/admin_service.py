@@ -146,6 +146,9 @@ async def change_own_password(
         )
     ).scalar_one()
     now = utcnow()
+    if row.locked_until is not None and row.locked_until > now:
+        # locked: no verification at all, so the lock stops guessing here as at login
+        raise _field("current_password")
     if not current or not await _verify(row.password_hash, current):
         await _count_failure(db, row, now)
         await db.commit()
