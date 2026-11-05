@@ -3,8 +3,8 @@ doc_id: OPS-001
 title: "SaiFlow — 部署与运维说明（dev 环境）"
 type: guide
 status: active
-version: 1.2.0
-updated: 2026-11-04
+version: 1.2.1
+updated: 2026-11-05
 owner: Product Engineering
 related: [ADR-008, FR-PLAT-005, FR-PLAT-006]
 doc_source: manual
@@ -137,6 +137,7 @@ cd /opt/saiflow && echo "DB_MIGRATE_PASSWORD=$(openssl rand -hex 24)" >> .env
 
 - **推荐：** 用 `git revert` 提交一个撤销问题改动的新提交，等 CI 通过后再运行 `Deploy`（工作流总是部署所选分支的最新提交）。
 - **紧急：** 在 VPS 上以 `deploy` 把 `/opt/saiflow/.env` 中的 `IMAGE_TAG` 改回上一个 sha，然后 `cd /opt/saiflow && docker compose up -d`。数据库迁移不会自动回退；含迁移的版本回滚前先确认迁移可逆。
+- **0004、0005 的回退：** 已有组织（0004）或订阅、预占记录（0005）时，回退会因约束而失败并整体撤销，不会留下半回退的数据库；需要回到旧版本时同样只回滚镜像。
 - **不要把数据库回退到 0003 之前：** `alembic downgrade` 到 0003 以下会收回应用账号的全部数据权限，而表仍属迁移账号，后端将无法读写，只能再用 `db-roles.sql` 与手工授权补救。需要回到旧版本时，只回滚镜像（上一条），数据库保持在当前版本；0003 之后的迁移只增加表与权限，旧镜像照常可用。
 
 ## 5. 备份与恢复
@@ -177,6 +178,7 @@ docker compose exec -T saiflow-be-api python -m app.cli audit-verify   # 操作�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.2.1 | 2026-11-05 | Product Engineering | §4 补充 0004、0005 回退的说明 |
 | 1.2.0 | 2026-11-04 | Product Engineering | harden-identity：§3.1 数据库账号（迁移账号与应用账号分离，新增 `DB_MIGRATE_PASSWORD`） |
 | 1.1.1 | 2026-11-04 | Product Engineering | §2.6 发信失败原因说明；改 `.env` 后须重建后端容器 |
 | 1.1.0 | 2026-11-03 | Product Engineering | B-2a：§2.6 LINE 登录与发信配置、§2.7 平台 admin 账号命令；§6 加操作日志检查 |

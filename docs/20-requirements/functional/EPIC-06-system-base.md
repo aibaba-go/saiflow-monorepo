@@ -3,8 +3,8 @@ doc_id: EPIC-06
 title: "EPIC-06 — 基础系统（账户、权限、配置、i18n）"
 type: epic
 status: active
-version: 1.7.2
-updated: 2026-11-04
+version: 1.7.3
+updated: 2026-11-05
 owner: Product Engineering
 priority: P0
 source: "PRD-001 §4.6"
@@ -25,22 +25,22 @@ related: [DM-User, DM-Role, DM-OperationLog, API-8]
 
 | ID | 陈述（系统必须……） | 优先级 | 来源 | 依赖项 | 验证方式 |
 |----|--------------------|--------|------|--------|----------|
-| FR-SYS-001 | 支持用户注册和登录：线上仅通过真实 LINE 联合认证，本地开发仅在明确启用时允许独立的 Developer sign-in（dev 身份） | P0 | §4.6；用户认证边界调整 2026-10-27；初始化恢复修复 2026-10-28 | — | AC-FR-SYS-001-01/02/03/04/05/06/07 |
+| FR-SYS-001 | **已迁移至 `openspec/specs/identity/spec.md`（deprecated）** 支持用户注册和登录：线上仅通过真实 LINE 联合认证，本地开发仅在明确启用时允许独立的 Developer sign-in（dev 身份） | P0 | §4.6；用户认证边界调整 2026-10-27；初始化恢复修复 2026-10-28 | — | AC-FR-SYS-001-01/02/03/04/05/06/07 |
 | FR-SYS-002 | **已迁移至 `openspec/specs/tenancy/spec.md`（deprecated）** 强制实施基于角色的访问权限 | P0 | §4.6 | FR-SYS-001 | AC-FR-SYS-002-01 |
-| FR-SYS-003 | 为每个改变状态的操作记录操作日志 | P0 | §4.6,§5.3 | FR-SYS-001 | AC-FR-SYS-003-01 |
+| FR-SYS-003 | **已迁移至 `openspec/specs/identity/spec.md`（deprecated）** 为每个改变状态的操作记录操作日志 | P0 | §4.6,§5.3 | FR-SYS-001 | AC-FR-SYS-003-01 |
 | FR-SYS-004 | 允许在泰语 / 英语 / 中文之间切换 UI 语言 | P0 | §4.6 | — | AC-FR-SYS-004-01 |
 | FR-SYS-005 | 提供基础参数配置（路径、阈值、模板） | P0 | §4.6 | FR-SYS-002 | AC-FR-SYS-005-01 |
 | FR-SYS-006 | 提供归档与存储设置（GCS 对象前缀、命名规则） | P0 | §4.6 | FR-SYS-002 | AC-FR-SYS-006-01 |
 | FR-SYS-009 | **已迁移至 `openspec/specs/tenancy/spec.md`（deprecated）** 允许管理员为角色授予复核与报表查看权限 | P0 | PRD §1.2, §4.6 | FR-SYS-002 | AC-FR-SYS-009-01 |
 | FR-SYS-007 | 重复登录失败后锁定账户 | P1 | §5.3 | FR-SYS-001 | AC-FR-SYS-007-01 |
 | FR-SYS-008 | 保留每位用户的偏好（语言、默认导出路径） | P1 | §4.6 | FR-SYS-001 | AC-FR-SYS-008-01 |
-| FR-SYS-010 | 启动以有效应用 Cookie 或游客会话进入主壳，不以残留 LIFF token 自动登录；游客可上传、识别、编辑核验草稿，显式登录后归集其数据 | P0 | 用户流程调整 2026-10-17/27 | FR-SYS-001 | AC-FR-SYS-010-01/02 |
+| FR-SYS-010 | **已迁移至 `openspec/specs/identity/spec.md`（deprecated）** 启动以有效应用 Cookie 或游客会话进入主壳，不以残留 LIFF token 自动登录；游客可上传、识别、编辑核验草稿，显式登录后归集其数据 | P0 | 用户流程调整 2026-10-17/27 | FR-SYS-001 | AC-FR-SYS-010-01/02 |
 | FR-SYS-011 | 仅结果核验页 Continue 在确认前要求游客或未注册用户进入 auth 登录/注册；有 dirty 变更先保存 confirm:false，不跳订阅页；成功仅恢复 result（原已 COMPLETED 可 final），取消保留任务权限且不自动续接或确认；服务端 confirm:true 强制已注册 | P0 | 用户流程调整 2026-10-27 | FR-SYS-001, FR-SYS-010 | AC-FR-SYS-011-01/02 |
-| FR-SYS-012 | 每个租户（个人、游客、已认证企业）自动开通且只开通一个月 Kinder：个人自 `tenants.created_at` 起算，企业自 `enterprises.verified_at` 起算，未认证企业无订阅行为 `NONE`；到期即硬停，新建识别任务返回 `402 PLAN_EXPIRED`，历史任务与结果仍可查看；续费/升级由线下审批写入有效期后惰性生效 | P0 | 用户流程调整 2026-10-27；套餐到期调整 2026-10-28 | FR-SYS-011 | AC-FR-SYS-012-01/02/03/04/05 |
-| FR-SYS-013 | 唯一计量单位为 `OCR_PAGE` 每月页数：按泰国自然月实时统计该租户非 FAILED/CANCELLED 任务的页数，各档 KINDER 1,000 / STARTER 5,000 / INTERMEDIATE 10,000 / ADVANCE 100,000；没有 FREE 档位、没有赠送任务额度、没有额度流水表；订阅有效但页数用尽返回 `402 QUOTA_EXCEEDED`；游客首页不显示套餐横幅 | P0 | 用户流程调整 2026-10-27；套餐到期调整 2026-10-28 | FR-SYS-012 | AC-FR-SYS-013-01/02/03/04 |
-| FR-SYS-014 | 通过 LINE 注册：仅 route=auth 且 needsRegistration 时显示注册框，首页/上传/开始 OCR 不弹；手机号默认取 LINE 返回值，可编辑保存或手填且可选；邮箱默认取服务端验证的 LINE token（email scope/用户授权），可编辑且必填，须凭 TLS SMTP 实发验证码确认；昵称、头像取 LINE 且可改，校验后完成注册 | P0 | 用户流程调整 2026-10-17/18/27 | FR-SYS-001 | AC-FR-SYS-014-01/02/03/04/05 |
-| FR-SYS-015 | 个人中心（My）可修改用户昵称、头像与手机号（手机号可清空，按格式校验，游客不可修改） | P0 | 用户流程调整 2026-10-17；资料调整 2026-10-28 | FR-SYS-014 | AC-FR-SYS-015-01/02 |
-| FR-SYS-016 | 个人中心（My）可更换邮箱：输入新邮箱，系统向新邮箱发送验证码，凭验证码确认更换 | P0 | 用户流程调整 2026-10-17 | FR-SYS-014 | AC-FR-SYS-016-01/02 |
+| FR-SYS-012 | **已迁移至 `openspec/specs/billing/spec.md`（deprecated）** 每个租户（个人、游客、已认证企业）自动开通且只开通一个月 Kinder：个人自 `tenants.created_at` 起算，企业自 `enterprises.verified_at` 起算，未认证企业无订阅行为 `NONE`；到期即硬停，新建识别任务返回 `402 PLAN_EXPIRED`，历史任务与结果仍可查看；续费/升级由线下审批写入有效期后惰性生效 | P0 | 用户流程调整 2026-10-27；套餐到期调整 2026-10-28 | FR-SYS-011 | AC-FR-SYS-012-01/02/03/04/05 |
+| FR-SYS-013 | **已迁移至 `openspec/specs/billing/spec.md`（deprecated）** 唯一计量单位为 `OCR_PAGE` 每月页数：按泰国自然月实时统计该租户非 FAILED/CANCELLED 任务的页数，各档 KINDER 1,000 / STARTER 5,000 / INTERMEDIATE 10,000 / ADVANCE 100,000；没有 FREE 档位、没有赠送任务额度、没有额度流水表；订阅有效但页数用尽返回 `402 QUOTA_EXCEEDED`；游客首页不显示套餐横幅 | P0 | 用户流程调整 2026-10-27；套餐到期调整 2026-10-28 | FR-SYS-012 | AC-FR-SYS-013-01/02/03/04 |
+| FR-SYS-014 | **已迁移至 `openspec/specs/identity/spec.md`（deprecated）** 通过 LINE 注册：仅 route=auth 且 needsRegistration 时显示注册框，首页/上传/开始 OCR 不弹；手机号默认取 LINE 返回值，可编辑保存或手填且可选；邮箱默认取服务端验证的 LINE token（email scope/用户授权），可编辑且必填，须凭 TLS SMTP 实发验证码确认；昵称、头像取 LINE 且可改，校验后完成注册 | P0 | 用户流程调整 2026-10-17/18/27 | FR-SYS-001 | AC-FR-SYS-014-01/02/03/04/05 |
+| FR-SYS-015 | **已迁移至 `openspec/specs/identity/spec.md`（deprecated）** 个人中心（My）可修改用户昵称、头像与手机号（手机号可清空，按格式校验，游客不可修改） | P0 | 用户流程调整 2026-10-17；资料调整 2026-10-28 | FR-SYS-014 | AC-FR-SYS-015-01/02 |
+| FR-SYS-016 | **已迁移至 `openspec/specs/identity/spec.md`（deprecated）** 个人中心（My）可更换邮箱：输入新邮箱，系统向新邮箱发送验证码，凭验证码确认更换 | P0 | 用户流程调整 2026-10-17 | FR-SYS-014 | AC-FR-SYS-016-01/02 |
 | FR-SYS-017 | **已迁移至 `openspec/specs/tenancy/spec.md`（deprecated）** 租户（个人 / 已认证企业）可切换且刷新后保持；各租户的任务数据、订阅与月页计量相互隔离，企业租户的数据、订阅与月页由该企业全体有效成员共享 | P0 | 用户流程调整 2026-10-18；归属调整 2026-10-28 | FR-SYS-002, FR-SYS-012 | AC-FR-SYS-017-01/02/03 |
 | FR-SYS-018 | 在到期前 7/3/1 天、到期当天与到期后各发一次站内通知（并在有邮箱的已注册用户上附带邮件），同一租户同一周期同一节点不重复、错过的节点不回补，游客不提醒；通知中心可查询未读数并将通知标记已读 | P0 | 套餐到期调整 2026-10-28 | FR-SYS-012 | AC-FR-SYS-018-01/02/03 |
 
@@ -524,6 +524,7 @@ Feature: EPIC-06 基础系统
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.7.3 | 2026-11-05 | Product Engineering | FR-SYS-001、003、010、014、015、016 已迁移至 `openspec/specs/identity/spec.md`；FR-SYS-012、013 已迁移至 `openspec/specs/billing/spec.md`；本处保留为历史参考 |
 | 1.7.2 | 2026-11-04 | Product Engineering | FR-SYS-002、009、017 已迁移至 `openspec/specs/tenancy/spec.md`（rebuild-tenant-rbac）；本处保留为历史参考 |
 | 1.7.1 | 2026-10-28 | Product Engineering | FR-SYS-001/011：LIFF 20 秒超时、安全失败分类、显式按钮一次官方入口重开（同一 sessionStorage 上下文）、保留意图/任务、不转发凭据与不回退 dev；取消 SDK 等待失效与迟到结果保护；新增 AC-001-07，真实手机 WebView/授权另验 |
 | 1.7.0 | 2026-10-28 | Product Engineering | 归属改为单一 `tenant_id`（`tenants` / `enterprises.tenant_id` / `applications.target_tenant_id`，保留 `error.invalid_workspace`、`error.enterprise_access_revoked` 等旧 message_key）；重写 FR-SYS-012（每租户只开通一个月 Kinder：个人自 `tenants.created_at`、企业自 `enterprises.verified_at`，未认证为 NONE，到期硬停 402 `plan.expired`、历史仍可读，线下审批写有效期并惰性顺延、同档续费允许、降档 409）与 FR-SYS-013（唯一计量 `OCR_PAGE`，按泰国自然月实时统计 `ocr_jobs.page_count`，FAILED/CANCELLED 不计，页数用尽 402 `quota.exceeded`；删除 FREE 档、赠送额度、额度流水与 `free_tasks`/`paid_pages`）；FR-SYS-015 手机号改为个人中心可改可清空（原「只读」表述全部作废）；FR-SYS-017 改为按租户隔离；新增 FR-SYS-018 到期提醒（D7/D3/D1/D0/EXPIRED，`uq_plan_reminder_stage` 幂等、不回补、游客不提醒、worker 内低频扫描、`PLAN_REMINDERS_ENABLED`）与通知中心标记已读；新增 AC-FR-SYS-012-04/05、015-02、018-01/02/03 并改写 012/013/014-01/014-03/017 相关 AC。本次为文档与 OpenAPI 契约对齐，未运行任何测试 |

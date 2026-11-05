@@ -192,6 +192,127 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/plan-applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Plan Applications */
+        get: operations["adminListPlanApplications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/plan-applications/{application_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Plan Application */
+        post: operations["adminApprovePlanApplication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/plan-applications/{application_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject Plan Application */
+        post: operations["adminRejectPlanApplication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Plans */
+        get: operations["adminListPlans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/plans/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Plan */
+        patch: operations["adminUpdatePlan"];
+        trace?: never;
+    };
+    "/api/v1/admin/settings/free-quota-organization": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Setting */
+        get: operations["adminGetFreeQuotaOrganization"];
+        /** Set Setting */
+        put: operations["adminSetFreeQuotaOrganization"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/settings/free-quota-personal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Setting */
+        get: operations["adminGetFreeQuotaPersonal"];
+        /** Set Setting */
+        put: operations["adminSetFreeQuotaPersonal"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/settings/org-member-limit-unpaid": {
         parameters: {
             query?: never;
@@ -203,6 +324,57 @@ export interface paths {
         get: operations["adminGetOrgMemberLimit"];
         /** Set Member Limit */
         put: operations["adminSetOrgMemberLimit"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/tenants/{tenant_id}/reservations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Reservations */
+        get: operations["adminListReservations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/tenants/{tenant_id}/subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Subscription */
+        put: operations["adminSetSubscription"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/tenants/{tenant_id}/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Subscriptions */
+        get: operations["adminListSubscriptions"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -309,6 +481,44 @@ export interface paths {
          * @description Always 204 and clears the cookie, even when the session is already gone (AC-001-10).
          */
         post: operations["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Applications */
+        get: operations["listPlanApplications"];
+        put?: never;
+        /** Apply For Plan */
+        post: operations["applyForPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Usage
+         * @description Plan, validity, this month's scans and the free quota (FR-SYS-033).
+         */
+        get: operations["getUsage"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -773,6 +983,13 @@ export interface components {
             /** Tenant Id */
             tenant_id: number | null;
         };
+        /** ApproveIn */
+        ApproveIn: {
+            /** Ends At */
+            ends_at?: string | null;
+            /** Starts At */
+            starts_at?: string | null;
+        };
         /** AssignRoleIn */
         AssignRoleIn: {
             /** Role Id */
@@ -813,7 +1030,7 @@ export interface components {
         /** IntSettingIn */
         IntSettingIn: {
             /** Value */
-            value: number;
+            value?: number | null;
         };
         /** IntSettingOut */
         IntSettingOut: {
@@ -941,6 +1158,81 @@ export interface components {
             /** Name */
             name?: string | null;
         };
+        /** OwnerTransferredOut */
+        OwnerTransferredOut: {
+            /** Owner User Id */
+            owner_user_id: number;
+        };
+        /** PlanApplicationIn */
+        PlanApplicationIn: {
+            /** Note */
+            note?: string | null;
+            /** Period */
+            period?: string | null;
+            /** Plan Code */
+            plan_code?: string | null;
+        };
+        /** PlanApplicationOut */
+        PlanApplicationOut: {
+            /** Applicant User Id */
+            applicant_user_id: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Decided At */
+            decided_at: string | null;
+            /** Id */
+            id: number;
+            /** Note */
+            note: string | null;
+            /**
+             * Period
+             * @enum {string}
+             */
+            period: "month" | "year";
+            /**
+             * Plan Code
+             * @enum {string}
+             */
+            plan_code: "kinder" | "starter" | "intermediate" | "advance";
+            /** Reject Reason */
+            reject_reason: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "approved" | "rejected";
+            /** Subscription Id */
+            subscription_id: number | null;
+            /** Tenant Id */
+            tenant_id: number;
+        };
+        /** PlanOut */
+        PlanOut: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "kinder" | "starter" | "intermediate" | "advance";
+            /** Member Limit */
+            member_limit: number | null;
+            /** Monthly Quota */
+            monthly_quota: number;
+            /**
+             * Tenant Kind
+             * @enum {string}
+             */
+            tenant_kind: "personal" | "organization";
+        };
+        /** PlanUpdateIn */
+        PlanUpdateIn: {
+            /** Member Limit */
+            member_limit?: number | null;
+            /** Monthly Quota */
+            monthly_quota?: number | null;
+        };
         /**
          * ProfileUpdate
          * @description Only the fields present are changed; an empty phone clears it.
@@ -966,6 +1258,38 @@ export interface components {
         RejectIn: {
             /** Reason */
             reason?: string | null;
+        };
+        /** ReservationOut */
+        ReservationOut: {
+            /** From Free */
+            from_free: number;
+            /** From Monthly */
+            from_monthly: number;
+            /** Id */
+            id: number;
+            /**
+             * Month
+             * Format: date
+             */
+            month: string;
+            /** Pages */
+            pages: number;
+            /** Reference */
+            reference: string;
+            /** Released At */
+            released_at: string | null;
+            /**
+             * Reserved At
+             * Format: date-time
+             */
+            reserved_at: string;
+        };
+        /** RoleAssignedOut */
+        RoleAssignedOut: {
+            /** Role Id */
+            role_id: number;
+            /** User Id */
+            user_id: number;
         };
         /** RoleCreateIn */
         RoleCreateIn: {
@@ -995,7 +1319,55 @@ export interface components {
         /** SetVerifiedIn */
         SetVerifiedIn: {
             /** Verified */
-            verified: boolean;
+            verified?: boolean | null;
+        };
+        /** StatusOut */
+        StatusOut: {
+            /** Status */
+            status: string;
+        };
+        /** SubscriptionIn */
+        SubscriptionIn: {
+            /** Ends At */
+            ends_at?: string | null;
+            /** Period */
+            period?: string | null;
+            /** Plan Code */
+            plan_code?: string | null;
+            /** Starts At */
+            starts_at?: string | null;
+        };
+        /** SubscriptionOut */
+        SubscriptionOut: {
+            /** Application Id */
+            application_id: number | null;
+            /**
+             * Ends At
+             * Format: date-time
+             */
+            ends_at: string;
+            /** Id */
+            id: number;
+            /**
+             * Period
+             * @enum {string}
+             */
+            period: "month" | "year";
+            /**
+             * Plan Code
+             * @enum {string}
+             */
+            plan_code: "kinder" | "starter" | "intermediate" | "advance";
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "auto" | "admin" | "application";
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
         };
         /** TransferIn */
         TransferIn: {
@@ -1018,6 +1390,60 @@ export interface components {
             role: components["schemas"]["RoleRef"] | null;
             /** Tenant Id */
             tenant_id: number;
+        };
+        /** UsageFree */
+        UsageFree: {
+            /** Expires At */
+            expires_at: string | null;
+            /** Paused */
+            paused: boolean;
+            /** Remaining */
+            remaining: number;
+        };
+        /** UsageMonth */
+        UsageMonth: {
+            /**
+             * Month
+             * Format: date
+             */
+            month: string;
+            /** Quota */
+            quota: number;
+            /** Remaining */
+            remaining: number;
+            /** Used */
+            used: number;
+        };
+        /** UsageOut */
+        UsageOut: {
+            /** Active */
+            active: boolean;
+            free: components["schemas"]["UsageFree"];
+            month: components["schemas"]["UsageMonth"];
+            plan: components["schemas"]["UsagePlan"] | null;
+        };
+        /** UsagePlan */
+        UsagePlan: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "kinder" | "starter" | "intermediate" | "advance";
+            /**
+             * Ends At
+             * Format: date-time
+             */
+            ends_at: string;
+            /**
+             * Period
+             * @enum {string}
+             */
+            period: "month" | "year";
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -1056,6 +1482,11 @@ export interface components {
             status: "none" | "pending" | "verified" | "rejected";
             /** Tax Id */
             tax_id: string | null;
+        };
+        /** VerifiedOut */
+        VerifiedOut: {
+            /** Verified */
+            verified: boolean;
         };
     };
     responses: never;
@@ -1220,9 +1651,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["StatusOut"];
                 };
             };
             /** @description Validation Error */
@@ -1339,9 +1768,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["StatusOut"];
                 };
             };
             /** @description Validation Error */
@@ -1372,9 +1799,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["StatusOut"];
                 };
             };
             /** @description Validation Error */
@@ -1409,9 +1834,269 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["VerifiedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminListPlanApplications: {
+        parameters: {
+            query?: {
+                status?: ("pending" | "approved" | "rejected") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanApplicationOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminApprovePlanApplication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ApproveIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminRejectPlanApplication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RejectIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanApplicationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminListPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanOut"][];
+                };
+            };
+        };
+    };
+    adminUpdatePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminGetFreeQuotaOrganization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntSettingOut"];
+                };
+            };
+        };
+    };
+    adminSetFreeQuotaOrganization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntSettingIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntSettingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminGetFreeQuotaPersonal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntSettingOut"];
+                };
+            };
+        };
+    };
+    adminSetFreeQuotaPersonal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntSettingIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntSettingOut"];
                 };
             };
             /** @description Validation Error */
@@ -1478,6 +2163,103 @@ export interface operations {
             };
         };
     };
+    adminListReservations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservationOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminSetSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubscriptionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminListSubscriptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     adminListVerificationApplications: {
         parameters: {
             query?: {
@@ -1526,9 +2308,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["StatusOut"];
                 };
             };
             /** @description Validation Error */
@@ -1563,9 +2343,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["StatusOut"];
                 };
             };
             /** @description Validation Error */
@@ -1647,6 +2425,106 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    listPlanApplications: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanApplicationOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    applyForPlan: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanApplicationIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanApplicationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getUsage: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -2205,9 +3083,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["RoleAssignedOut"];
                 };
             };
             /** @description Validation Error */
@@ -2242,9 +3118,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["OwnerTransferredOut"];
                 };
             };
             /** @description Validation Error */

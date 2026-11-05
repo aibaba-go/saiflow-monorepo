@@ -319,6 +319,34 @@
         "title": "ApplicationOut",
         "type": "object"
       },
+      "ApproveIn": {
+        "properties": {
+          "ends_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          }
+        },
+        "title": "ApproveIn",
+        "type": "object"
+      },
       "AssignRoleIn": {
         "properties": {
           "role_id": {
@@ -428,13 +456,17 @@
       "IntSettingIn": {
         "properties": {
           "value": {
-            "title": "Value",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
           }
         },
-        "required": [
-          "value"
-        ],
         "title": "IntSettingIn",
         "type": "object"
       },
@@ -792,6 +824,239 @@
         "title": "OrganizationProfileIn",
         "type": "object"
       },
+      "OwnerTransferredOut": {
+        "properties": {
+          "owner_user_id": {
+            "title": "Owner User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "owner_user_id"
+        ],
+        "title": "OwnerTransferredOut",
+        "type": "object"
+      },
+      "PlanApplicationIn": {
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period"
+          },
+          "plan_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Code"
+          }
+        },
+        "title": "PlanApplicationIn",
+        "type": "object"
+      },
+      "PlanApplicationOut": {
+        "properties": {
+          "applicant_user_id": {
+            "title": "Applicant User Id",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "period": {
+            "enum": [
+              "month",
+              "year"
+            ],
+            "title": "Period",
+            "type": "string"
+          },
+          "plan_code": {
+            "enum": [
+              "kinder",
+              "starter",
+              "intermediate",
+              "advance"
+            ],
+            "title": "Plan Code",
+            "type": "string"
+          },
+          "reject_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reject Reason"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "rejected"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "subscription_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subscription Id"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "applicant_user_id",
+          "plan_code",
+          "period",
+          "note",
+          "status",
+          "reject_reason",
+          "subscription_id",
+          "created_at",
+          "decided_at"
+        ],
+        "title": "PlanApplicationOut",
+        "type": "object"
+      },
+      "PlanOut": {
+        "properties": {
+          "code": {
+            "enum": [
+              "kinder",
+              "starter",
+              "intermediate",
+              "advance"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "member_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Limit"
+          },
+          "monthly_quota": {
+            "title": "Monthly Quota",
+            "type": "integer"
+          },
+          "tenant_kind": {
+            "enum": [
+              "personal",
+              "organization"
+            ],
+            "title": "Tenant Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "monthly_quota",
+          "member_limit",
+          "tenant_kind"
+        ],
+        "title": "PlanOut",
+        "type": "object"
+      },
+      "PlanUpdateIn": {
+        "properties": {
+          "member_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Limit"
+          },
+          "monthly_quota": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Quota"
+          }
+        },
+        "title": "PlanUpdateIn",
+        "type": "object"
+      },
       "ProfileUpdate": {
         "description": "Only the fields present are changed; an empty phone clears it.",
         "properties": {
@@ -888,6 +1153,82 @@
         "title": "RejectIn",
         "type": "object"
       },
+      "ReservationOut": {
+        "properties": {
+          "from_free": {
+            "title": "From Free",
+            "type": "integer"
+          },
+          "from_monthly": {
+            "title": "From Monthly",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "month": {
+            "format": "date",
+            "title": "Month",
+            "type": "string"
+          },
+          "pages": {
+            "title": "Pages",
+            "type": "integer"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "released_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Released At"
+          },
+          "reserved_at": {
+            "format": "date-time",
+            "title": "Reserved At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "reference",
+          "pages",
+          "from_free",
+          "from_monthly",
+          "month",
+          "reserved_at",
+          "released_at"
+        ],
+        "title": "ReservationOut",
+        "type": "object"
+      },
+      "RoleAssignedOut": {
+        "properties": {
+          "role_id": {
+            "title": "Role Id",
+            "type": "integer"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "role_id"
+        ],
+        "title": "RoleAssignedOut",
+        "type": "object"
+      },
       "RoleCreateIn": {
         "properties": {
           "name": {
@@ -971,14 +1312,148 @@
       "SetVerifiedIn": {
         "properties": {
           "verified": {
-            "title": "Verified",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified"
+          }
+        },
+        "title": "SetVerifiedIn",
+        "type": "object"
+      },
+      "StatusOut": {
+        "properties": {
+          "status": {
+            "title": "Status",
+            "type": "string"
           }
         },
         "required": [
-          "verified"
+          "status"
         ],
-        "title": "SetVerifiedIn",
+        "title": "StatusOut",
+        "type": "object"
+      },
+      "SubscriptionIn": {
+        "properties": {
+          "ends_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period"
+          },
+          "plan_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Code"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          }
+        },
+        "title": "SubscriptionIn",
+        "type": "object"
+      },
+      "SubscriptionOut": {
+        "properties": {
+          "application_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Application Id"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "period": {
+            "enum": [
+              "month",
+              "year"
+            ],
+            "title": "Period",
+            "type": "string"
+          },
+          "plan_code": {
+            "enum": [
+              "kinder",
+              "starter",
+              "intermediate",
+              "advance"
+            ],
+            "title": "Plan Code",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "auto",
+              "admin",
+              "application"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "plan_code",
+          "period",
+          "starts_at",
+          "ends_at",
+          "source",
+          "application_id"
+        ],
+        "title": "SubscriptionOut",
         "type": "object"
       },
       "TransferIn": {
@@ -1054,6 +1529,138 @@
           "permissions"
         ],
         "title": "UsableTenantOut",
+        "type": "object"
+      },
+      "UsageFree": {
+        "properties": {
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "paused": {
+            "title": "Paused",
+            "type": "boolean"
+          },
+          "remaining": {
+            "title": "Remaining",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "remaining",
+          "expires_at",
+          "paused"
+        ],
+        "title": "UsageFree",
+        "type": "object"
+      },
+      "UsageMonth": {
+        "properties": {
+          "month": {
+            "format": "date",
+            "title": "Month",
+            "type": "string"
+          },
+          "quota": {
+            "title": "Quota",
+            "type": "integer"
+          },
+          "remaining": {
+            "title": "Remaining",
+            "type": "integer"
+          },
+          "used": {
+            "title": "Used",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "month",
+          "quota",
+          "used",
+          "remaining"
+        ],
+        "title": "UsageMonth",
+        "type": "object"
+      },
+      "UsageOut": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "free": {
+            "$ref": "#/components/schemas/UsageFree"
+          },
+          "month": {
+            "$ref": "#/components/schemas/UsageMonth"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UsagePlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "plan",
+          "active",
+          "month",
+          "free"
+        ],
+        "title": "UsageOut",
+        "type": "object"
+      },
+      "UsagePlan": {
+        "properties": {
+          "code": {
+            "enum": [
+              "kinder",
+              "starter",
+              "intermediate",
+              "advance"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "period": {
+            "enum": [
+              "month",
+              "year"
+            ],
+            "title": "Period",
+            "type": "string"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "period",
+          "starts_at",
+          "ends_at"
+        ],
+        "title": "UsagePlan",
         "type": "object"
       },
       "ValidationError": {
@@ -1200,6 +1807,19 @@
           "reject_reason"
         ],
         "title": "VerificationOut",
+        "type": "object"
+      },
+      "VerifiedOut": {
+        "properties": {
+          "verified": {
+            "title": "Verified",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "verified"
+        ],
+        "title": "VerifiedOut",
         "type": "object"
       }
     }
@@ -1353,6 +1973,8 @@
             "name": "application_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Application Id",
               "type": "integer"
             }
@@ -1395,6 +2017,8 @@
             "name": "application_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Application Id",
               "type": "integer"
             }
@@ -1422,9 +2046,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Adminrejectorganization",
-                  "type": "object"
+                  "$ref": "#/components/schemas/StatusOut"
                 }
               }
             },
@@ -1481,6 +2103,8 @@
             "name": "tenant_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Tenant Id",
               "type": "integer"
             }
@@ -1521,6 +2145,8 @@
             "name": "tenant_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Tenant Id",
               "type": "integer"
             }
@@ -1573,6 +2199,8 @@
             "name": "tenant_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Tenant Id",
               "type": "integer"
             }
@@ -1583,9 +2211,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Admindisableorganization",
-                  "type": "object"
+                  "$ref": "#/components/schemas/StatusOut"
                 }
               }
             },
@@ -1617,6 +2243,8 @@
             "name": "tenant_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Tenant Id",
               "type": "integer"
             }
@@ -1627,9 +2255,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Adminenableorganization",
-                  "type": "object"
+                  "$ref": "#/components/schemas/StatusOut"
                 }
               }
             },
@@ -1661,6 +2287,8 @@
             "name": "tenant_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Tenant Id",
               "type": "integer"
             }
@@ -1681,9 +2309,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Adminsetverification",
-                  "type": "object"
+                  "$ref": "#/components/schemas/VerifiedOut"
                 }
               }
             },
@@ -1701,6 +2327,383 @@
           }
         },
         "summary": "Set Verification",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/plan-applications": {
+      "get": {
+        "operationId": "adminListPlanApplications",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "pending",
+                    "approved",
+                    "rejected"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PlanApplicationOut"
+                  },
+                  "title": "Response Adminlistplanapplications",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Plan Applications",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/plan-applications/{application_id}/approve": {
+      "post": {
+        "operationId": "adminApprovePlanApplication",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
+              "title": "Application Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ApproveIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Req"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approve Plan Application",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/plan-applications/{application_id}/reject": {
+      "post": {
+        "operationId": "adminRejectPlanApplication",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
+              "title": "Application Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RejectIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Req"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanApplicationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reject Plan Application",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/plans": {
+      "get": {
+        "operationId": "adminListPlans",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PlanOut"
+                  },
+                  "title": "Response Adminlistplans",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Plans",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/plans/{code}": {
+      "patch": {
+        "operationId": "adminUpdatePlan",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Plan",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/settings/free-quota-organization": {
+      "get": {
+        "operationId": "adminGetFreeQuotaOrganization",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntSettingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Setting",
+        "tags": [
+          "admin"
+        ]
+      },
+      "put": {
+        "operationId": "adminSetFreeQuotaOrganization",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntSettingIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntSettingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Setting",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/settings/free-quota-personal": {
+      "get": {
+        "operationId": "adminGetFreeQuotaPersonal",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntSettingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Setting",
+        "tags": [
+          "admin"
+        ]
+      },
+      "put": {
+        "operationId": "adminSetFreeQuotaPersonal",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntSettingIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntSettingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Setting",
         "tags": [
           "admin"
         ]
@@ -1761,6 +2764,156 @@
           }
         },
         "summary": "Set Member Limit",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/tenants/{tenant_id}/reservations": {
+      "get": {
+        "operationId": "adminListReservations",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
+              "title": "Tenant Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReservationOut"
+                  },
+                  "title": "Response Adminlistreservations",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Reservations",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/tenants/{tenant_id}/subscription": {
+      "put": {
+        "operationId": "adminSetSubscription",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
+              "title": "Tenant Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Subscription",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/tenants/{tenant_id}/subscriptions": {
+      "get": {
+        "operationId": "adminListSubscriptions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
+              "title": "Tenant Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SubscriptionOut"
+                  },
+                  "title": "Response Adminlistsubscriptions",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Subscriptions",
         "tags": [
           "admin"
         ]
@@ -1833,6 +2986,8 @@
             "name": "application_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Application Id",
               "type": "integer"
             }
@@ -1843,9 +2998,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Adminapproveverification",
-                  "type": "object"
+                  "$ref": "#/components/schemas/StatusOut"
                 }
               }
             },
@@ -1877,6 +3030,8 @@
             "name": "application_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Application Id",
               "type": "integer"
             }
@@ -1904,9 +3059,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Adminrejectverification",
-                  "type": "object"
+                  "$ref": "#/components/schemas/StatusOut"
                 }
               }
             },
@@ -2003,6 +3156,172 @@
         "summary": "Logout",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/billing/applications": {
+      "get": {
+        "operationId": "listPlanApplications",
+        "parameters": [
+          {
+            "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PlanApplicationOut"
+                  },
+                  "title": "Response Listplanapplications",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Applications",
+        "tags": [
+          "billing"
+        ]
+      },
+      "post": {
+        "operationId": "applyForPlan",
+        "parameters": [
+          {
+            "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanApplicationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanApplicationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apply For Plan",
+        "tags": [
+          "billing"
+        ]
+      }
+    },
+    "/api/v1/billing/usage": {
+      "get": {
+        "description": "Plan, validity, this month's scans and the free quota (FR-SYS-033).",
+        "operationId": "getUsage",
+        "parameters": [
+          {
+            "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Usage",
+        "tags": [
+          "billing"
         ]
       }
     },
@@ -2355,6 +3674,8 @@
             "name": "tenant_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Tenant Id",
               "type": "integer"
             }
@@ -2395,6 +3716,8 @@
             "name": "tenant_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Tenant Id",
               "type": "integer"
             }
@@ -2447,6 +3770,8 @@
             "name": "tenant_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Tenant Id",
               "type": "integer"
             }
@@ -2491,6 +3816,8 @@
             "name": "tenant_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Tenant Id",
               "type": "integer"
             }
@@ -2533,6 +3860,8 @@
             "name": "invitation_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Invitation Id",
               "type": "integer"
             }
@@ -2542,6 +3871,8 @@
             "name": "tenant_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Tenant Id",
               "type": "integer"
             }
@@ -2577,6 +3908,8 @@
             "name": "tenant_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Tenant Id",
               "type": "integer"
             }
@@ -2612,6 +3945,8 @@
             "name": "tenant_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Tenant Id",
               "type": "integer"
             }
@@ -2658,6 +3993,8 @@
             "name": "user_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "User Id",
               "type": "integer"
             }
@@ -2667,6 +4004,8 @@
             "name": "tenant_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Tenant Id",
               "type": "integer"
             }
@@ -2702,6 +4041,8 @@
             "name": "user_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "User Id",
               "type": "integer"
             }
@@ -2711,6 +4052,8 @@
             "name": "tenant_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Tenant Id",
               "type": "integer"
             }
@@ -2731,9 +4074,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Assignrole",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RoleAssignedOut"
                 }
               }
             },
@@ -2765,6 +4106,8 @@
             "name": "tenant_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Tenant Id",
               "type": "integer"
             }
@@ -2785,9 +4128,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Transferowner",
-                  "type": "object"
+                  "$ref": "#/components/schemas/OwnerTransferredOut"
                 }
               }
             },
@@ -2819,6 +4160,8 @@
             "name": "tenant_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Tenant Id",
               "type": "integer"
             }
@@ -2863,6 +4206,8 @@
             "name": "tenant_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Tenant Id",
               "type": "integer"
             }
@@ -2915,6 +4260,8 @@
             "name": "role_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Role Id",
               "type": "integer"
             }
@@ -2924,6 +4271,8 @@
             "name": "tenant_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Tenant Id",
               "type": "integer"
             }
@@ -2957,6 +4306,8 @@
             "name": "role_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Role Id",
               "type": "integer"
             }
@@ -2966,6 +4317,8 @@
             "name": "tenant_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Tenant Id",
               "type": "integer"
             }
@@ -3018,6 +4371,8 @@
             "name": "tenant_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Tenant Id",
               "type": "integer"
             }
@@ -3058,6 +4413,8 @@
             "name": "tenant_id",
             "required": true,
             "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
               "title": "Tenant Id",
               "type": "integer"
             }
