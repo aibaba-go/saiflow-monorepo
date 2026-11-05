@@ -39,7 +39,8 @@ async def _lock(db: AsyncSession, tenant_id: int) -> None:
     await xact_lock(db, METER_LOCK, tenant_id)
 
 
-async def _used(db: AsyncSession, tenant_id: int, month) -> int:
+async def used_in_month(db: AsyncSession, tenant_id: int, month) -> int:
+    """Unreleased monthly-quota scans for the Bangkok month (reminders read this too)."""
     return (
         await db.execute(
             select(func.coalesce(func.sum(QuotaReservation.from_monthly), 0)).where(
@@ -82,7 +83,9 @@ async def reserve(db: AsyncSession, tenant_id: int, pages: int, reference: str) 
     kind, sub, plan, free_row = await _state(db, tenant_id, now)
     free = free_quota_service.usable(free_row, kind, sub is not None, now)
     month = month_key(now)
-    monthly_left = max(plan.monthly_quota - await _used(db, tenant_id, month), 0) if plan else 0
+    monthly_left = (
+        max(plan.monthly_quota - await used_in_month(db, tenant_id, month), 0) if plan else 0
+    )
     if sub is None and free == 0:
         raise AppError(402, "plan_expired", "billing.plan_expired")
     if free + monthly_left < pages:
@@ -134,7 +137,7 @@ async def usage(db: AsyncSession, ctx: TenantContext) -> dict:
     else:
         latest = sub
     month = month_key(now)
-    used = await _used(db, ctx.tenant_id, month)
+    used = await used_in_month(db, ctx.tenant_id, month)
     quota = plan.monthly_quota if plan else 0
     if kind == "organization":
         free_left = free_quota_service.usable(free_row, kind, True, now)
