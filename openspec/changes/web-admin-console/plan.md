@@ -58,7 +58,7 @@
 
 ## Review Focus
 
-1. **LIKE wildcards in filters and search:** an operation-type prefix `org%`, or a user search `%`/`_`, must be matched literally, never as wildcards. Tasks 2 and 2b test this.
+1. **LIKE wildcards in filters and search:** an operation-type prefix `org%`, or a user search `%`/`_`, must be matched literally, never as wildcards. Task 2 tests both.
 2. **Five wrong current passwords on the change-password form** lock the account like failed logins (FR-SYS-019). Login with the right password is then refused for 15 minutes. Task 1 tests this.
 3. **A session that expires while a form is open:** the next action goes to `/login?next=...`. After login the admin lands back there. An external `next` (`//evil.com`, `https://…`) is ignored. Task 4 tests this.
 4. **Two admins on the same application:** the second gets `already_decided`. The UI shows the message and refreshes. Task 5 tests this.
