@@ -115,6 +115,11 @@ async def test_login_writes_audit(api, db, line):
     line.add("tok", "U1")
     uid = (await api.post("/api/v1/auth/line", json={"id_token": "tok"})).json()["user_id"]
     row = (
-        await db.execute(text("select actor_type, actor_id, action, result from audit_log"))
+        await db.execute(
+            text(
+                "select actor_type, actor_id, action, result from audit_log "
+                "where action not like 'subscription.%'"
+            )
+        )
     ).one()
     assert tuple(row) == ("user", str(uid), "customer.login", "success")

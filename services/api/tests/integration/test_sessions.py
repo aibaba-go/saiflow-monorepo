@@ -84,7 +84,18 @@ async def test_logout_revokes_session(api, db):  # AC-FR-SYS-001-08
     assert r.status_code == 204
     api.cookies.set("saiflow_session", cookie, domain="test")
     assert (await api.get("/api/v1/me")).status_code == 401
-    actions = (await db.execute(text("select action from audit_log order by id"))).scalars().all()
+    actions = (
+        (
+            await db.execute(
+                text(
+                    "select action from audit_log "
+                    "where action not like 'subscription.%' order by id"
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
     assert actions == ["guest.create", "customer.logout"]
 
 

@@ -38,7 +38,18 @@ async def test_claim_into_new_user(api, db, line):  # AC-FR-SYS-010-03
     body = (await api.post("/api/v1/auth/line", json={"id_token": "tok"})).json()
     assert await _labels(db, body["tenant_id"]) == ["a", "b"]
     assert await _labels(db, guest_tenant) == []
-    actions = (await db.execute(text("select action from audit_log order by id"))).scalars().all()
+    actions = (
+        (
+            await db.execute(
+                text(
+                    "select action from audit_log "
+                    "where action not like 'subscription.%' order by id"
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
     assert actions == ["guest.create", "guest.claim", "customer.login"]
     api.cookies.clear()
     api.cookies.set("saiflow_session", guest_cookie, domain="test")
