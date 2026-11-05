@@ -55,4 +55,12 @@ export const zh: Record<MessageKey, string> = {
   "err.quota_exceeded": "本月剩余扫描次数不足。",
   "err.reservation_conflict": "该请求与之前的请求冲突。",
   "err.admin_login_failed": "登录失败。",
+  "auth.loginRegister": "登录 / 注册",
+  "my.title": "我的",
+  "my.guest": "游客",
+  "my.guestHint": "用 LINE 登录后可保存数据并使用组织功能。",
+  "my.logout": "退出登录",
+  "my.logoutTitle": "确定退出登录？",
+  "my.logoutBody": "退出后将以游客身份继续使用。",
+  "err.logout_failed": "退出失败，请重试。",
 };

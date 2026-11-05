@@ -55,4 +55,12 @@ export const th: Record<MessageKey, string> = {
   "err.quota_exceeded": "จำนวนสแกนเดือนนี้ไม่เพียงพอ",
   "err.reservation_conflict": "คำขอนี้ขัดแย้งกับคำขอก่อนหน้า",
   "err.admin_login_failed": "เข้าสู่ระบบไม่สำเร็จ",
+  "auth.loginRegister": "เข้าสู่ระบบ / ลงทะเบียน",
+  "my.title": "ของฉัน",
+  "my.guest": "ผู้เยี่ยมชม",
+  "my.guestHint": "เข้าสู่ระบบด้วย LINE เพื่อเก็บข้อมูลและใช้งานองค์กร",
+  "my.logout": "ออกจากระบบ",
+  "my.logoutTitle": "ออกจากระบบหรือไม่",
+  "my.logoutBody": "คุณจะใช้งานต่อในฐานะผู้เยี่ยมชม",
+  "err.logout_failed": "ออกจากระบบไม่สำเร็จ โปรดลองอีกครั้ง",
 };

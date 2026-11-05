@@ -1,0 +1,21 @@
+body {
+  margin: 0;
+  background: #f5f6f8;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Thai", "Noto Sans SC", sans-serif;
+}
+.page {
+  padding: 16px 16px 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.page--center {
+  min-height: 70vh;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.page__title {
+  font-size: 20px;
+  margin: 0 0 4px;
+}

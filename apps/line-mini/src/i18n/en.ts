@@ -53,6 +53,14 @@ export const en = {
   "err.quota_exceeded": "Not enough scans left this month.",
   "err.reservation_conflict": "This request conflicts with an earlier one.",
   "err.admin_login_failed": "Login failed.",
+  "auth.loginRegister": "Log in / Register",
+  "my.title": "My",
+  "my.guest": "Guest",
+  "my.guestHint": "Log in with LINE to keep your data and use organizations.",
+  "my.logout": "Log out",
+  "my.logoutTitle": "Log out?",
+  "my.logoutBody": "You will continue as a guest.",
+  "err.logout_failed": "Logout failed. Please try again.",
 } as const;
 
 export type MessageKey = keyof typeof en;
