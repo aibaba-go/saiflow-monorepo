@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App as AntApp, ConfigProvider, Result } from "antd";
 import enUS from "antd/locale/en_US";
 import zhCN from "antd/locale/zh_CN";
-import { useEffect } from "react";
+import { useEffect, type ReactElement } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { RequireAdmin } from "./auth/RequireAdmin";
@@ -10,8 +10,22 @@ import { useForgetAdmin } from "./auth/session";
 import { Page } from "./components/Page";
 import { useT } from "./i18n";
 import { AdminLayout, MENU } from "./layout/AdminLayout";
+import {
+  OrgApplicationsPage,
+  PlanApplicationsPage,
+  VerificationApplicationsPage,
+} from "./pages/ApplicationPages";
 import { HealthPage } from "./pages/HealthPage";
+import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
+
+/** Pages that have landed; the rest of the menu shows a placeholder. */
+const PAGES: Record<string, ReactElement> = {
+  "/": <HomePage />,
+  "/organization-applications": <OrgApplicationsPage />,
+  "/verification-applications": <VerificationApplicationsPage />,
+  "/plan-applications": <PlanApplicationsPage />,
+};
 import { setUnauthenticatedHandler } from "./services/api";
 import { useLanguage } from "./stores/language";
 
@@ -53,7 +67,7 @@ export function AppRoutes() {
             }
           >
             {MENU.map((m) => (
-              <Route key={m.path} path={m.path} element={<Pending title={m.label} />} />
+              <Route key={m.path} path={m.path} element={PAGES[m.path] ?? <Pending title={m.label} />} />
             ))}
             <Route path="/password" element={<Pending title="nav.changePassword" />} />
             <Route path="*" element={<NotFound />} />
