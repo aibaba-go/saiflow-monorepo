@@ -6,10 +6,10 @@ import { ApiError } from "../../services/errors";
 import { initWithTimeout } from "../../services/liff";
 import type { Liff } from "../../services/liffTypes";
 import { useSession, type Me } from "../../stores/session";
+import { reconcileTenantChoice, useTenantChoice } from "../tenants/useCurrentTenant";
 
 export const LOGOUT_FLAG = "saiflow.logout-pending";
 export const INTENT_KEY = "saiflow.auth-intent";
-export const TENANT_KEY = "saiflow.tenant";
 const INTENT_MAX_AGE_MS = 5 * 60_000;
 
 export interface AuthDeps {
@@ -53,6 +53,7 @@ export async function loadIdentity(): Promise<Me> {
   }
   const tenants = me.kind === "user" ? await call(api.GET("/api/v1/me/tenants"), { own401: true }) : [];
   store().set({ me, tenants });
+  reconcileTenantChoice(me, tenants);
   return me;
 }
 
@@ -135,7 +136,7 @@ async function finishLogout(): Promise<void> {
     clearTimeout(timer);
   }
   safe(() => localStorage.removeItem(LOGOUT_FLAG));
-  safe(() => localStorage.removeItem(TENANT_KEY));
+  useTenantChoice.getState().choose(null);
   safe(() => sessionStorage.removeItem(INTENT_KEY));
   safe(() => deps.liff.logout());
   deps.onIdentityChange();

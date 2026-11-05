@@ -35,3 +35,45 @@ body {
   font-size: 13px;
   color: #666;
 }
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.form__title {
+  font-size: 17px;
+  margin: 0;
+}
+.field__label {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 4px;
+}
+.field__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  border-bottom: 1px solid #e5e6eb;
+  padding: 4px 0;
+}
+.field-error {
+  color: #d4380d;
+  font-size: 12px;
+  margin-top: 4px;
+}
+.choice-list {
+  display: flex;
+  flex-direction: column;
+}
+.choice-list__item {
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid #f0f0f0;
+  background: none;
+  padding: 14px 4px;
+  font-size: 15px;
+}
+.choice-list__item[aria-selected="true"] {
+  color: #1f5fbf;
+  font-weight: 600;
+}

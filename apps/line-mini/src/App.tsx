@@ -12,6 +12,8 @@ import { useT } from "./i18n";
 import { HealthPage } from "./pages/HealthPage";
 import { HistoryPage, HomePage, ReportPage } from "./pages/HomePage";
 import { MyPage } from "./pages/MyPage";
+import { RegisterDialog } from "./features/auth/RegisterDialog";
+import { ProfilePage } from "./features/profile/ProfilePage";
 import { TabBar } from "./components/TabBar";
 import { useUsage } from "./features/billing/useUsage";
 import { showReportTab } from "./features/tenants/reportTab";
@@ -118,10 +120,12 @@ function MainShell() {
         <Route path="/history" element={<HistoryPage />} />
         <Route path="/report" element={report ? <ReportPage /> : <HomePage />} />
         <Route path="/my" element={<MyPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
         <Route path="/health" element={<HealthPage />} />
         <Route path="*" element={<HomePage />} />
       </Routes>
       {TAB_PATHS.has(pathname) && <TabBar showReport={report} />}
+      <RegisterDialog />
     </>
   );
 }

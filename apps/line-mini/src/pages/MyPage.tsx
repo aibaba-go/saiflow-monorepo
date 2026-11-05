@@ -1,8 +1,10 @@
 import { Button, Dialog, List } from "antd-mobile";
+import { useNavigate } from "react-router-dom";
 
 import { ErrorText } from "../components/ErrorText";
 import { logout, startLogin } from "../features/auth/session";
 import { LanguagePicker } from "../features/profile/LanguagePicker";
+import { TenantSwitcher } from "../features/tenants/TenantSwitcher";
 import { useSubmit } from "../hooks/useSubmit";
 import { useT } from "../i18n";
 import { isUser, useSession } from "../stores/session";
@@ -11,6 +13,7 @@ import { isUser, useSession } from "../stores/session";
  * entries to organizations, plans and notifications are added by later tasks. */
 export function MyPage() {
   const t = useT();
+  const navigate = useNavigate();
   const me = useSession((s) => s.me);
   const loginError = useSession((s) => s.loginError);
   const login = useSubmit(() => startLogin("/my"));
@@ -32,8 +35,14 @@ export function MyPage() {
       {isUser(me) ? (
         <>
           <List>
-            <List.Item description={me?.email ?? t("common.notSet")}>{me?.display_name}</List.Item>
+            <List.Item
+              description={me?.email ?? t("common.notSet")}
+              onClick={() => navigate("/profile")}
+            >
+              {me?.display_name}
+            </List.Item>
           </List>
+          <TenantSwitcher />
           <Button block color="danger" fill="outline" loading={out.pending} onClick={confirmLogout}>
             {t("my.logout")}
           </Button>
