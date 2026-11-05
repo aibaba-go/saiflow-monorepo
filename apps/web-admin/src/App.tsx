@@ -21,6 +21,9 @@ import { OrganizationDetailPage } from "./pages/OrganizationDetailPage";
 import { OrganizationsPage } from "./pages/OrganizationsPage";
 import { TenantBillingPage } from "./pages/TenantBillingPage";
 import { LoginPage } from "./pages/LoginPage";
+import { OcrSettingsPage } from "./pages/OcrSettingsPage";
+import { PlansPage } from "./pages/PlansPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import { setUnauthenticatedHandler } from "./services/api";
 import { useLanguage } from "./stores/language";
 
@@ -31,6 +34,9 @@ const PAGES: Record<string, ReactElement> = {
   "/verification-applications": <VerificationApplicationsPage />,
   "/plan-applications": <PlanApplicationsPage />,
   "/organizations": <OrganizationsPage />,
+  "/plans": <PlansPage />,
+  "/settings": <SettingsPage />,
+  "/ocr": <OcrSettingsPage />,
 };
 
 /** Any 401 outside login: drop the session; RequireAdmin then goes to /login?next= (060-03). */
