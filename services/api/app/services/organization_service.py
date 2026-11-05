@@ -118,7 +118,10 @@ async def _pending_for_update(db: AsyncSession, application_id: int) -> Organiza
 
 
 async def on_organization_created(db: AsyncSession, tenant_id: int) -> None:
-    """Hook for B-2c: grant the organization's one-time free quota here (D5)."""
+    """The organization's one-time free quota, valid one month (FR-SYS-031)."""
+    from app.services import free_quota_service  # here: it imports this module
+
+    await free_quota_service.grant_organization(db, tenant_id, utcnow())
 
 
 async def approve(db: AsyncSession, admin_id: int, application_id: int) -> int:

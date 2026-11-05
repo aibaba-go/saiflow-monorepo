@@ -19,6 +19,7 @@ from app.routers import (
     admin_billing,
     admin_organizations,
     auth,
+    billing,
     health,
     me,
     organizations,
@@ -76,6 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(organizations.router)
     app.include_router(admin_organizations.router)
     app.include_router(admin_billing.router)
+    app.include_router(billing.router)
     return app
 
 

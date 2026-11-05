@@ -91,6 +91,11 @@ async def register(
     await email_code_service.consume_code(db, user_id, clean_email, code)
     user.email, user.display_name, user.phone = clean_email, clean_name, clean_phone
     user.registered_at = utcnow()
+    from app.repositories import tenant_repo
+    from app.services import free_quota_service  # here: it imports peers of this module
+
+    personal = await tenant_repo.personal_of(db, user_id)
+    await free_quota_service.grant_personal(db, personal.id, user.registered_at)  # type: ignore[union-attr]
     await record(
         db, AuditEvent("user", str(user_id), "user.register", "user", str(user_id), "success")
     )

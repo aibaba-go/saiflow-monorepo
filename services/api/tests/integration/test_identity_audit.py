@@ -15,7 +15,8 @@ async def test_identity_audit_trail(api, db, line, mail):  # AC-FR-SYS-003-01
             text(
                 "select actor_type, actor_id, action, target_type, result, occurred_at "
                 "from audit_log where action <> 'user.email_code' "
-                "and action not like 'subscription.%' order by id"
+                "and action not like 'subscription.%' "
+                "and action not like 'free_quota.%' order by id"
             )
         )
     ).all()
