@@ -10,6 +10,8 @@ import { reconcileTenantChoice, useTenantChoice } from "../tenants/useCurrentTen
 
 export const LOGOUT_FLAG = "saiflow.logout-pending";
 export const INTENT_KEY = "saiflow.auth-intent";
+/** An invitation token from ?invite=, kept for this visit only (FR-SYS-052). */
+export const INVITE_KEY = "saiflow.invite";
 const INTENT_MAX_AGE_MS = 5 * 60_000;
 
 export interface AuthDeps {
@@ -90,9 +92,15 @@ export async function boot(): Promise<void> {
     await initWithTimeout(deps.liff, deps.liffTimeoutMs);
     const intent = takeIntent();
     store().set({ status: "ready" });
+    const params = new URLSearchParams(deps.search);
+    const invite = params.get("invite");
+    if (invite && invite.length <= 128) {
+      safe(() => sessionStorage.setItem(INVITE_KEY, invite));
+      deps.navigate("/invite");
+    }
     if (intent && deps.liff.isLoggedIn()) {
       await completeLogin(intent.returnTo);
-    } else if (new URLSearchParams(deps.search).get("entry") === "register" && me.kind !== "user") {
+    } else if (params.get("entry") === "register" && me.kind !== "user") {
       await startLogin("/my");
     }
   } catch (error) {

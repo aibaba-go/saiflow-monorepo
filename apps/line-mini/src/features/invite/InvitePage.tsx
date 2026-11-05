@@ -1,0 +1,117 @@
+import { useQuery } from "@tanstack/react-query";
+import { Button, ErrorBlock } from "antd-mobile";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+import { BrandLoading } from "../../components/BrandLoading";
+import { useSubmit } from "../../hooks/useSubmit";
+import { useT } from "../../i18n";
+import { api, call } from "../../services/api";
+import { ApiError, errorMessage } from "../../services/errors";
+import { useSession } from "../../stores/session";
+import { formatBangkokDate } from "../../utils/format";
+import { INVITE_KEY, loadIdentity, startLogin } from "../auth/session";
+import { useCurrentTenant } from "../tenants/useCurrentTenant";
+
+export { INVITE_KEY } from "../auth/session";
+/** Set when the user tapped Join, so the join continues after login and registration. */
+const JOIN_KEY = "saiflow.invite-join";
+
+function session(key: string): string | null {
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function setSession(key: string, value: string | null): void {
+  try {
+    if (value === null) sessionStorage.removeItem(key);
+    else sessionStorage.setItem(key, value);
+  } catch {
+    // blocked storage: the join simply does not survive a redirect
+  }
+}
+
+function Gone({ error }: { error: unknown }) {
+  const t = useT();
+  const navigate = useNavigate();
+  return (
+    <div className="page page--center">
+      <ErrorBlock
+        status="default"
+        title={errorMessage(error ?? new ApiError(410, "invitation_gone", []), t)}
+        description=""
+      />
+      <Button color="primary" onClick={() => navigate("/")}>
+        {t("common.home")}
+      </Button>
+    </div>
+  );
+}
+
+/** Accept an invitation (FR-SYS-052): see the organization first; a guest logs in and
+ * registers on the way and the join then finishes by itself. The token lives in
+ * sessionStorage only (this visit). */
+export function InvitePage() {
+  const t = useT();
+  const navigate = useNavigate();
+  const me = useSession((s) => s.me);
+  const { setTenant } = useCurrentTenant();
+  const [token] = useState(() => session(INVITE_KEY));
+  const [error, setError] = useState<unknown>(null);
+  const registered = me?.kind === "user" && me.registered;
+
+  const preview = useQuery({
+    queryKey: ["invitation", token],
+    queryFn: () => call(api.GET("/api/v1/invitations/preview", { params: { query: { token: token ?? "" } } })),
+    enabled: token !== null,
+    retry: false,
+  });
+
+  const accept = useSubmit(async () => {
+    setError(null);
+    try {
+      const { tenant_id } = await call(api.POST("/api/v1/invitations/accept", { body: { token: token ?? "" } }));
+      setSession(INVITE_KEY, null);
+      setSession(JOIN_KEY, null);
+      await loadIdentity();
+      setTenant(tenant_id);
+      navigate("/");
+    } catch (err) {
+      setSession(JOIN_KEY, null);
+      setError(err);
+    }
+  });
+
+  const join = async () => {
+    if (registered) {
+      await accept.run();
+      return;
+    }
+    setSession(JOIN_KEY, "1");
+    if (me?.kind === "user") useSession.getState().set({ registerOpen: true });
+    else await startLogin("/invite");
+  };
+
+  // Back from login and registration with Join pending: finish it.
+  useEffect(() => {
+    if (registered && session(JOIN_KEY) && !accept.pending && !error) void accept.run();
+  }, [registered, accept, error]);
+
+  if (token === null) return <Gone error={null} />;
+  if (preview.isPending) return <BrandLoading label={t("common.loading")} />;
+  if (preview.isError) return <Gone error={preview.error} />;
+  if (error) return <Gone error={error} />;
+  return (
+    <div className="page page--center">
+      <h1 className="page__title">{t("invite.title", { name: preview.data.organization_name })}</h1>
+      <div className="card-row__meta">
+        {t("invite.validUntil", { date: formatBangkokDate(preview.data.expires_at) })}
+      </div>
+      <Button color="primary" loading={accept.pending} onClick={() => void join()}>
+        {t("invite.join")}
+      </Button>
+    </div>
+  );
+}

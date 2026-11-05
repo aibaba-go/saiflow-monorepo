@@ -18,6 +18,7 @@ import { ApplyOrgPage } from "./features/orgs/ApplyOrgPage";
 import { OrgPage } from "./features/orgs/OrgPage";
 import { RolesPage } from "./features/orgs/RolesPage";
 import { VerificationPage } from "./features/orgs/VerificationPage";
+import { InvitePage } from "./features/invite/InvitePage";
 import { TabBar } from "./components/TabBar";
 import { useUsage } from "./features/billing/useUsage";
 import { showReportTab } from "./features/tenants/reportTab";
@@ -129,6 +130,7 @@ function MainShell() {
         <Route path="/org" element={<OrgPage />} />
         <Route path="/org/roles" element={<RolesPage />} />
         <Route path="/org/verification" element={<VerificationPage />} />
+        <Route path="/invite" element={<InvitePage />} />
         <Route path="/health" element={<HealthPage />} />
         <Route path="*" element={<HomePage />} />
       </Routes>

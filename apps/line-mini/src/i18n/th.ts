@@ -168,4 +168,7 @@ export const th: Record<MessageKey, string> = {
   "perm.verification_apply": "ขอยืนยันนิติบุคคล",
   "perm.template_manage": "จัดการเทมเพลต",
   "perm.report_view": "ดูรายงาน",
+  "invite.title": "คุณได้รับเชิญให้เข้าร่วม {name}",
+  "invite.validUntil": "คำเชิญนี้ใช้ได้ถึง {date}",
+  "invite.join": "เข้าร่วม",
 };

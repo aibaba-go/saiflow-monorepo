@@ -166,6 +166,9 @@ export const en = {
   "perm.verification_apply": "Apply for verification",
   "perm.template_manage": "Manage templates",
   "perm.report_view": "View reports",
+  "invite.title": "You are invited to join {name}",
+  "invite.validUntil": "This invitation is valid until {date}.",
+  "invite.join": "Join",
 } as const;
 
 export type MessageKey = keyof typeof en;
