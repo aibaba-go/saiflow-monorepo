@@ -46,6 +46,6 @@ check "reminders service publishes no ports" bash -c "! grep -v '^ *#' <<<\"\$1\
 for var in SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD SMTP_FROM SMTP_SECURITY; do
   check "reminders service receives $var" grep -q "$var: \${$var:-" <<<"$reminders"
 done
-check "reminders service receives REMINDERS_ENABLED" grep -qF 'REMINDERS_ENABLED: ${REMINDERS_ENABLED:-true}' <<<"$reminders"
+check "reminders service receives REMINDERS_ENABLED" grep -qF "REMINDERS_ENABLED: \${REMINDERS_ENABLED:-true}" <<<"$reminders"
 check "env.example lists REMINDERS_ENABLED" grep -q '^REMINDERS_ENABLED=' "$deploy/env.example"
 finish
