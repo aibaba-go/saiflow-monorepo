@@ -611,6 +611,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Notifications */
+        get: operations["listNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/notifications/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Read */
+        post: operations["markNotificationsRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/organization-applications": {
         parameters: {
             query?: never;
@@ -1082,6 +1116,21 @@ export interface components {
             /** Redirect Uri */
             redirect_uri?: string | null;
         };
+        /**
+         * MarkReadIn
+         * @description `ids` absent or null: every unread notification; [] marks nothing.
+         */
+        MarkReadIn: {
+            /** Ids */
+            ids?: number[] | null;
+        };
+        /** MarkReadOut */
+        MarkReadOut: {
+            /** Unread Count */
+            unread_count: number;
+            /** Updated */
+            updated: number;
+        };
         /** MeResponse */
         MeResponse: {
             /** Avatar Url */
@@ -1120,6 +1169,35 @@ export interface components {
             role: components["schemas"]["RoleRef"] | null;
             /** User Id */
             user_id: number;
+        };
+        /** NotificationListOut */
+        NotificationListOut: {
+            /** Items */
+            items: components["schemas"]["NotificationOut"][];
+            /** Next Before */
+            next_before: number | null;
+            /** Unread Count */
+            unread_count: number;
+        };
+        /** NotificationOut */
+        NotificationOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
+            /** Id */
+            id: number;
+            /** Read */
+            read: boolean;
+            /** Tenant Id */
+            tenant_id: number;
+            /** Type */
+            type: string;
         };
         /** OrganizationOut */
         OrganizationOut: {
@@ -2695,6 +2773,73 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listNotifications: {
+        parameters: {
+            query?: {
+                /** @description 1-100, default 20 */
+                limit?: string | null;
+                /** @description next_before from the previous page */
+                before?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    markNotificationsRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MarkReadIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkReadOut"];
+                };
             };
             /** @description Validation Error */
             422: {
