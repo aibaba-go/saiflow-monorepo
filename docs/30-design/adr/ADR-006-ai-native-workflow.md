@@ -3,8 +3,8 @@ doc_id: ADR-006
 title: "ADR-006 — AI Native 开发模式：OpenSpec 管需求、SuperPowers 管实现，并重建代码"
 type: adr
 status: accepted
-version: 1.2.6
-updated: 2026-11-05
+version: 1.2.7
+updated: 2026-11-06
 owner: Product Engineering
 related: [WF-001, AGENTS, STD-004, STD-005, STD-006, PRD-001, ADR-008]
 doc_source: manual
@@ -144,7 +144,7 @@ accepted（2026-10-30 负责人确认）
 | B-3 | `ocr-pipeline-v3` | L | 上传（原件存私有 GCS）、OCR 引擎抽象、大模型模板匹配与结构化转换、识别结果存 PostgreSQL jsonb（EPIC-01/02 迁入；ADR-008） | B-2 |
 | B-4 | `verify-and-export` | L | 人工确认与修正、复核、导出 Excel（EPIC-03/04 迁入） | B-3 |
 | B-5a | `line-mini-account` | L | LINE 小程序：账户、租户、组织、套餐（含价格）与通知页面；后端套餐价格与查看邀请（负责人 2026-11-05：B-5 按应用拆分） | B-2 |
-| B-5b | `web-admin-console`（暂定） | M | admin 后台 | B-2 |
+| B-5b | `web-admin-console` | M | admin 后台（中文/英文）：审批、组织、订阅与预占、套餐价格、系统参数、查询用户、操作日志、修改本人口令；后端补上 admin 改口令、日志与用户查询、OCR 与大模型配置（B-3 读取）（负责人 2026-11-06） | B-2 |
 | B-5c | `web-pc-account`（暂定） | M | web-pc 企业版的登录与管理操作 | B-2 |
 | B-5d 起 | （暂定） | L | 上传、识别、核验、历史等页面（各端） | B-3、B-4 |
 
@@ -212,6 +212,7 @@ B-2 到 B-5 的具体范围、优先级以各自 proposal 经负责人确认的�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.2.7 | 2026-11-06 | Product Engineering | §7 B-5b 行定名 `web-admin-console` 并写明范围（负责人 2026-11-06） |
 | 1.2.6 | 2026-11-05 | Product Engineering | §7 B-5 按应用拆分为 B-5a～B-5d（负责人 2026-11-05） |
 | 1.2.5 | 2026-11-05 | Product Engineering | §7 B-2d 范围补上组织免费额度的到期提醒与独立的提醒进程（负责人 2026-11-05） |
 | 1.2.4 | 2026-11-05 | Product Engineering | §7 B-2c 收窄范围，新增 B-2d `rebuild-notifications`（负责人 2026-11-05） |

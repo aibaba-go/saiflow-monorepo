@@ -3,8 +3,8 @@ doc_id: EPIC-06
 title: "EPIC-06 — 基础系统（账户、权限、配置、i18n）"
 type: epic
 status: active
-version: 1.7.4
-updated: 2026-11-05
+version: 1.7.5
+updated: 2026-11-06
 owner: Product Engineering
 priority: P0
 source: "PRD-001 §4.6"
@@ -29,7 +29,7 @@ related: [DM-User, DM-Role, DM-OperationLog, API-8]
 | FR-SYS-002 | **已迁移至 `openspec/specs/tenancy/spec.md`（deprecated）** 强制实施基于角色的访问权限 | P0 | §4.6 | FR-SYS-001 | AC-FR-SYS-002-01 |
 | FR-SYS-003 | **已迁移至 `openspec/specs/identity/spec.md`（deprecated）** 为每个改变状态的操作记录操作日志 | P0 | §4.6,§5.3 | FR-SYS-001 | AC-FR-SYS-003-01 |
 | FR-SYS-004 | **已迁移至 `openspec/specs/line-mini/spec.md`（deprecated）** 允许在泰语 / 英语 / 中文之间切换 UI 语言 | P0 | §4.6 | — | AC-FR-SYS-004-01 |
-| FR-SYS-005 | 提供基础参数配置（路径、阈值、模板） | P0 | §4.6 | FR-SYS-002 | AC-FR-SYS-005-01 |
+| FR-SYS-005 | **已迁移至 `openspec/specs/ocr-settings/spec.md`（deprecated）** 提供基础参数配置（路径、阈值、模板） | P0 | §4.6 | FR-SYS-002 | AC-FR-SYS-005-01 |
 | FR-SYS-006 | 提供归档与存储设置（GCS 对象前缀、命名规则） | P0 | §4.6 | FR-SYS-002 | AC-FR-SYS-006-01 |
 | FR-SYS-009 | **已迁移至 `openspec/specs/tenancy/spec.md`（deprecated）** 允许管理员为角色授予复核与报表查看权限 | P0 | PRD §1.2, §4.6 | FR-SYS-002 | AC-FR-SYS-009-01 |
 | FR-SYS-007 | 重复登录失败后锁定账户 | P1 | §5.3 | FR-SYS-001 | AC-FR-SYS-007-01 |
@@ -524,6 +524,7 @@ Feature: EPIC-06 基础系统
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.7.5 | 2026-11-06 | Product Engineering | FR-SYS-005 的 OCR 引擎与大模型配置部分已迁移至 `openspec/specs/ocr-settings/spec.md`（web-admin-console）；路径与模板参数随 B-3、B-4 |
 | 1.7.4 | 2026-11-05 | Product Engineering | FR-SYS-004 已迁移至 `openspec/specs/line-mini/spec.md`（默认语言改为英语）；FR-SYS-018 已迁移至 `openspec/specs/notifications/spec.md` |
 | 1.7.3 | 2026-11-05 | Product Engineering | FR-SYS-001、003、010、014、015、016 已迁移至 `openspec/specs/identity/spec.md`；FR-SYS-012、013 已迁移至 `openspec/specs/billing/spec.md`；本处保留为历史参考 |
 | 1.7.2 | 2026-11-04 | Product Engineering | FR-SYS-002、009、017 已迁移至 `openspec/specs/tenancy/spec.md`（rebuild-tenant-rbac）；本处保留为历史参考 |

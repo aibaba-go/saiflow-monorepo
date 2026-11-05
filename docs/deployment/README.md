@@ -3,8 +3,8 @@ doc_id: OPS-001
 title: "SaiFlow — 部署与运维说明（dev 环境）"
 type: guide
 status: active
-version: 1.4.0
-updated: 2026-11-05
+version: 1.5.0
+updated: 2026-11-06
 owner: Product Engineering
 related: [ADR-008, FR-PLAT-005, FR-PLAT-006]
 doc_source: manual
@@ -109,7 +109,21 @@ docker compose exec -T saiflow-be-api python -m app.cli admin-disable <用户名
 
 连续 5 次输错口令锁定 15 分钟；后台 30 分钟无操作需重新登录。
 
-### 2.8 提醒（B-2d 起）
+admin 也可以登录后台，在右上角“修改密码”中修改本人口令（B-5b 起，FR-SYS-061）：须输入当前口令，新口令至少 12 个字符；修改后该账号在其他设备上的会话全部退出，当前会话保持登录；当前口令连续输错同样计入锁定。忘记口令时仍用上面的 `admin-reset-password`。
+
+### 2.8 OCR 引擎与大模型的密钥（B-5b 起）
+
+密钥只放在 `/opt/saiflow/.env`，不入库，后台只显示“已配置 / 未配置”（FR-SYS-005、072）。引擎、重试次数、切换阈值、试探间隔、大模型地址与模型名称在后台“OCR 与 LLM”页修改。
+
+| `.env` 变量 | 用途 |
+|------|------|
+| `TEXTIN_APP_ID`、`TEXTIN_SECRET_CODE` | TextIn（两项都填才算已配置） |
+| `GOOGLE_VISION_API_KEY` | Google Cloud Vision API |
+| `LLM_API_KEY` | 大模型（地址与模型名称在后台配置） |
+
+改 `.env` 后执行 `docker compose up -d --force-recreate saiflow-be-api` 才会生效。识别流程（B-3）上线前，这些密钥只用于后台显示配置状态。
+
+### 2.9 提醒（B-2d 起）
 
 服务 `saiflow-be-reminders` 每 15 分钟检查一次到期提醒、用量提醒与组织免费额度的到期提醒（FR-SYS-018、035、038、037），发站内通知，并用 §2.6 的发信配置发邮件。它随部署自动启动，不对外开放端口。
 
@@ -151,6 +165,7 @@ cd /opt/saiflow && echo "DB_MIGRATE_PASSWORD=$(openssl rand -hex 24)" >> .env
 
 - **推荐：** 用 `git revert` 提交一个撤销问题改动的新提交，等 CI 通过后再运行 `Deploy`（工作流总是部署所选分支的最新提交）。
 - **紧急：** 在 VPS 上以 `deploy` 把 `/opt/saiflow/.env` 中的 `IMAGE_TAG` 改回上一个 sha，然后 `cd /opt/saiflow && docker compose up -d`。数据库迁移不会自动回退；含迁移的版本回滚前先确认迁移可逆。
+- **0008 的回退：** 删除 OCR 与大模型配置七项（已修改的值随之丢失，重新升级后恢复为默认值）。需要回到旧版本时一般只回滚镜像，不必回退数据库。
 - **0006 的回退：** 有任何通知或提醒记录时主动拒绝执行，不会删除通知。需要回到旧版本时只回滚镜像。
 - **0004、0005 的回退：** 已有组织时，0004 的回退会因约束失败并整体撤销；0005 的回退在有任何订阅、免费额度、预占或申请记录时主动拒绝执行（上线时已为现有租户补开通订阅，所以 dev 与生产环境都会拒绝），不会删除计费数据。需要回到旧版本时只回滚镜像。
 - **不要把数据库回退到 0003 之前：** `alembic downgrade` 到 0003 以下会收回应用账号的全部数据权限，而表仍属迁移账号，后端将无法读写，只能再用 `db-roles.sql` 与手工授权补救。需要回到旧版本时，只回滚镜像（上一条），数据库保持在当前版本；0003 之后的迁移只增加表与权限，旧镜像照常可用。
@@ -194,6 +209,7 @@ docker compose exec -T saiflow-be-api python -m app.cli audit-verify   # 操作�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.5.0 | 2026-11-06 | Product Engineering | B-5b：§2.7 在后台修改本人口令；新增 §2.8 OCR 引擎与大模型的四个密钥变量（原 §2.8 提醒改为 §2.9）；§4 0008 的回退 |
 | 1.4.0 | 2026-11-05 | Product Engineering | B-5a：§2.6 GitHub 变量 `LIFF_ID`、LINE OA 的 `register` 菜单链接与邀请链接格式 |
 | 1.3.0 | 2026-11-05 | Product Engineering | B-2d：§2.8 提醒服务 `saiflow-be-reminders`（查看、立即检查、停用）；§4 0006 的回退；§5 恢复时一并停止提醒服务 |
 | 1.2.1 | 2026-11-05 | Product Engineering | §4 补充 0004、0005 回退的说明 |

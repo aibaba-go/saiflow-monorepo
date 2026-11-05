@@ -3,8 +3,8 @@ doc_id: DES-001
 title: "SaiFlow — 系统架构"
 type: design
 status: active
-version: 3.4.0
-updated: 2026-11-04
+version: 3.5.0
+updated: 2026-11-06
 owner: Product Engineering
 source: "PRD-001 v3.3 §3.1, §3.2, §4, §4.9, §5; ADR-008"
 related: [DM-FormDocument, DM-ExtractionPayload, DM-OcrJob, OCR-Pipeline, API-Spec, NFR-SEC, ADR-006, ADR-008]
@@ -83,7 +83,7 @@ graph TB
 |------|------|---------------|
 | LINE 小程序 | 游客试用、上传、核验、确认、管理操作（成员与角色、复核） | §3.1、§4.1、§4.3、§4.9 |
 | web-pc 企业版 | 管理层浏览本租户结构化数据；管理操作 | §4.9 使用入口 |
-| web-pc admin 后台 | 平台运营：组织申请审批与停用、企业认证审核、套餐档位与有效期、免费额度与成员人数上限、OCR 引擎与大模型配置、首批模板预置 | §4.6、§4.9 |
+| web-pc admin 后台 | 平台运营：组织申请审批与停用、企业认证审核、续费与开通申请审批、套餐档位、价格与有效期、免费额度与成员人数上限、OCR 引擎与大模型配置、查询用户、查看操作日志、修改本人口令、首批模板预置；界面中文（默认）/英文，history 路由，Cookie 会话，会话失效时回登录页并在登录后回到原页面 | §4.6、§4.9 |
 | 后端 API | 认证与会话、租户隔离与权限点校验、上传编排、OCR 调用与切换、大模型模板匹配与结构化转换、表单状态流转、导出、计量与到期判断、用量提醒与到期提醒（站内通知、LINE OA 消息、邮件；Intermediate / Advance 另加短信）、操作日志 | §3–§4 |
 | OCR 引擎（首选/备用） | 对单据图像执行 OCR，返回原始 JSON | §3.2、§4.2、§4.6 |
 | 大模型 | 模板匹配；按模板结构化转换并给出字段置信度 | §3.2、§4.2 |
@@ -163,6 +163,7 @@ v2 中列为 proposed 的 ADR-002（可插拔 OCR 引擎）已由 PRD §4.6 的�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 3.5.0 | 2026-11-06 | Product Engineering | B-5b：admin 后台的职责与前端要点（中文/英文、history 路由、会话失效回原页面）；OCR 与大模型密钥只在服务器环境变量文件中，后台只显示是否已配置 |
 | 3.4.0 | 2026-11-05 | Product Engineering | B-5a：LINE 小程序的前端要点（hash 路由、Cookie 会话、LIFF 的用途、本机保存的偏好） |
 | 3.3.0 | 2026-11-04 | Product Engineering | 按 PRD v3.4：团队租户改称组织，取消原地升级，组织由申请与审批建立 |
 | 3.2.2 | 2026-11-03 | Product Engineering | §5 LINE 小程序子域名改为 `saiflow-line2.aibaba.asia`（负责人 2026-11-03） |

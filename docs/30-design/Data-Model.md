@@ -3,8 +3,8 @@ doc_id: DES-002
 title: "SaiFlow — 数据模型"
 type: data-model
 status: active
-version: 2.8.0
-updated: 2026-11-05
+version: 2.9.0
+updated: 2026-11-06
 owner: Product Engineering
 source: "PRD-001 v3.3 §3, §4, §4.9; ADR-008"
 related: [ADR-008, DM-FormDocument, DM-ExtractionPayload, DM-OcrJob, DM-DocumentTemplate, DM-Tenant, DM-Subscription]
@@ -75,6 +75,7 @@ erDiagram
 | `DM-StoredObject` | 对象：原始单据、导入文件、导出文件、头像 | 私有 GCS | 租户 | 1:1 文件元数据 | 原件不可变；按保留策略删除 |
 
 - 登录会话、邮箱验证码等短期技术数据不作为实体登记，设计见 B-2a 的 `openspec/changes/archive/2026-11-03-rebuild-identity/plan.md`。
+- **B-5b 已实现（`web-admin-console`）：** `DM-SystemSetting` 增加 OCR 与大模型配置七项（首选引擎、备用引擎、单据重试次数、全局切换阈值、首选引擎试探间隔、大模型地址、模型名称），由迁移写入默认值，B-3 读取；修改时每项写一条操作日志；四项密钥（TextIn 两项、Google Cloud Vision、大模型）不入库，只在服务器环境变量文件中。
 - **B-2d 已实现（`rebuild-notifications`）：** `DM-Notification` 与 `DM-PlanReminder`；提醒由独立的提醒进程定时产生，不写操作日志；两者都不随游客数据归集（游客不收提醒）。
 - **B-2c 已实现（`rebuild-plans-metering`）：** `DM-Plan`、`DM-Subscription`（保留历史）、`DM-FreeQuota`、续费与开通申请；扫描次数的预占记录（所属租户、关联识别、次数、来自免费额度与月配额的拆分、预占与退还时间）按记录逐笔计算用量，不另记操作日志；这些记录都不随游客数据归集。`DM-PlanReminder` 随 B-2d（见上）。
 - **B-2b 已实现（`rebuild-tenant-rbac`）：** `DM-Tenant` 增加组织；组织资料与企业认证存在组织上，建组织申请与企业认证申请各自留有申请记录；`DM-Membership` 每个成员一个角色，owner 不持有角色、拥有全部权限点，每个组织恰好一名 owner（可转让）；`DM-Role` 每个组织一个默认角色；`DM-Invitation` 只存凭据摘要；`DM-SystemSetting` 先有“组织开通套餐前的成员人数上限”一项。这些记录都不随游客数据归集。
@@ -135,6 +136,7 @@ erDiagram
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.9.0 | 2026-11-06 | Product Engineering | 按 B-5b：`DM-SystemSetting` 的 OCR 与大模型配置七项；密钥只在服务器环境变量文件中 |
 | 2.8.0 | 2026-11-05 | Product Engineering | 按 B-5a：`DM-Plan` 增加按月价与按年价 |
 | 2.7.0 | 2026-11-05 | Product Engineering | 按 B-2d：`DM-PlanReminder` 覆盖三类提醒并改为归属租户；`DM-Notification` 不删除；记录 B-2d 已实现的范围 |
 | 2.6.0 | 2026-11-05 | Product Engineering | 按 B-2c：套餐、订阅（含历史）、免费额度（个人与组织）、申请与预占记录；记录 B-2c 已实现的范围 |
