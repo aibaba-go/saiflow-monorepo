@@ -3,6 +3,7 @@
 data, so guest claiming never moves them (A8)."""
 
 from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
@@ -13,6 +14,7 @@ from sqlalchemy import (
     Identity,
     Index,
     Integer,
+    Numeric,
     Text,
     func,
     text,
@@ -31,6 +33,12 @@ class Plan(Base):
         CheckConstraint("member_limit is null or member_limit > 0", name="plans_limit_positive"),
         CheckConstraint("tenant_kind in ('personal', 'organization')", name="plans_tenant_kind"),
         CheckConstraint("code <> 'kinder' or member_limit = 1", name="plans_kinder_one_member"),
+        CheckConstraint(
+            "monthly_price is null or monthly_price >= 0", name="plans_monthly_price_nonnegative"
+        ),
+        CheckConstraint(
+            "yearly_price is null or yearly_price >= 0", name="plans_yearly_price_nonnegative"
+        ),
     )
 
     code: Mapped[str] = mapped_column(Text, primary_key=True)
@@ -38,6 +46,9 @@ class Plan(Base):
     member_limit: Mapped[int | None] = mapped_column(Integer)
     tenant_kind: Mapped[str] = mapped_column(Text)
     sort_order: Mapped[int] = mapped_column(Integer)
+    # THB, None = contact sales; display only, payment is offline (FR-SYS-030)
+    monthly_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    yearly_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     updated_at: Mapped[datetime] = mapped_column(_TS, server_default=func.now())
 
 

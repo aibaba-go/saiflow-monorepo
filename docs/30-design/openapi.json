@@ -1119,6 +1119,17 @@
             ],
             "title": "Member Limit"
           },
+          "monthly_price": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Price"
+          },
           "monthly_quota": {
             "title": "Monthly Quota",
             "type": "integer"
@@ -1130,13 +1141,26 @@
             ],
             "title": "Tenant Kind",
             "type": "string"
+          },
+          "yearly_price": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yearly Price"
           }
         },
         "required": [
           "code",
           "monthly_quota",
           "member_limit",
-          "tenant_kind"
+          "tenant_kind",
+          "monthly_price",
+          "yearly_price"
         ],
         "title": "PlanOut",
         "type": "object"
@@ -1154,6 +1178,23 @@
             ],
             "title": "Member Limit"
           },
+          "monthly_price": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Price"
+          },
           "monthly_quota": {
             "anyOf": [
               {
@@ -1164,6 +1205,23 @@
               }
             ],
             "title": "Monthly Quota"
+          },
+          "yearly_price": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yearly Price"
           }
         },
         "title": "PlanUpdateIn",
@@ -3380,6 +3438,32 @@
           }
         },
         "summary": "Apply For Plan",
+        "tags": [
+          "billing"
+        ]
+      }
+    },
+    "/api/v1/billing/plans": {
+      "get": {
+        "description": "The plan catalog with prices, for any customer session, guests included (FR-SYS-030).",
+        "operationId": "listPlans",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PlanOut"
+                  },
+                  "title": "Response Listplans",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Plans",
         "tags": [
           "billing"
         ]

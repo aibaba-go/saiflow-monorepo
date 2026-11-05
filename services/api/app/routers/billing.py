@@ -5,10 +5,16 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_db, get_tenant_context, require_csrf_header, require_user
-from app.schemas.billing import PlanApplicationIn, PlanApplicationOut, UsageOut
+from app.dependencies import (
+    get_db,
+    get_principal,
+    get_tenant_context,
+    require_csrf_header,
+    require_user,
+)
+from app.schemas.billing import PlanApplicationIn, PlanApplicationOut, PlanOut, UsageOut
 from app.schemas.loose import ensure_text
-from app.services import metering_service, plan_application_service
+from app.services import metering_service, plan_application_service, plan_service
 from app.services.session_service import Principal
 from app.services.tenant_access import TenantContext
 
@@ -18,6 +24,16 @@ router = APIRouter(
 
 Db = Annotated[AsyncSession, Depends(get_db)]
 Tenant = Annotated[TenantContext, Depends(get_tenant_context)]
+
+
+@router.get("/plans", operation_id="listPlans", response_model=list[PlanOut])
+async def list_plans(
+    db: Db, principal: Annotated[Principal, Depends(get_principal)]
+) -> list[PlanOut]:
+    """The plan catalog with prices, for any customer session, guests included (FR-SYS-030)."""
+    return [
+        PlanOut.model_validate(p, from_attributes=True) for p in await plan_service.list_plans(db)
+    ]
 
 
 @router.get("/usage", operation_id="getUsage", response_model=UsageOut)

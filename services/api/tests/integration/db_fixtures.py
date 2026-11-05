@@ -98,10 +98,11 @@ async def _truncate_all(engine) -> None:
         await conn.execute(
             text(
                 f'INSERT INTO "{SCHEMA}".plans (code, monthly_quota, member_limit, tenant_kind, '
-                "sort_order) VALUES ('kinder', 1000, 1, 'personal', 1), "
-                "('starter', 5000, 2, 'organization', 2), "
-                "('intermediate', 10000, 5, 'organization', 3), "
-                "('advance', 100000, NULL, 'organization', 4)"
+                "sort_order, monthly_price, yearly_price) VALUES "
+                "('kinder', 1000, 1, 'personal', 1, NULL, 888), "
+                "('starter', 5000, 2, 'organization', 2, 599, 5990), "
+                "('intermediate', 10000, 5, 'organization', 3, NULL, NULL), "
+                "('advance', 100000, NULL, 'organization', 4, NULL, NULL)"
             )
         )
         await conn.execute(

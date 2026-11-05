@@ -20,6 +20,8 @@ def _accepts(annotation: Any, value: Any) -> bool:
             return True
         if kind is int and isinstance(value, int) and not isinstance(value, bool):
             return -(2**63) <= value < 2**63  # fits bigint (N1)
+        if kind is float and isinstance(value, float):
+            return True
         if origin is list and isinstance(value, list):
             (item,) = typing.get_args(kind) or (str,)
             return all(_accepts(item, v) for v in value)

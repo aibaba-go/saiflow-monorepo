@@ -505,6 +505,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Plans
+         * @description The plan catalog with prices, for any customer session, guests included (FR-SYS-030).
+         */
+        get: operations["listPlans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/billing/usage": {
         parameters: {
             query?: never;
@@ -1296,6 +1316,8 @@ export interface components {
             code: "kinder" | "starter" | "intermediate" | "advance";
             /** Member Limit */
             member_limit: number | null;
+            /** Monthly Price */
+            monthly_price: string | null;
             /** Monthly Quota */
             monthly_quota: number;
             /**
@@ -1303,13 +1325,19 @@ export interface components {
              * @enum {string}
              */
             tenant_kind: "personal" | "organization";
+            /** Yearly Price */
+            yearly_price: string | null;
         };
         /** PlanUpdateIn */
         PlanUpdateIn: {
             /** Member Limit */
             member_limit?: number | null;
+            /** Monthly Price */
+            monthly_price?: string | number | null;
             /** Monthly Quota */
             monthly_quota?: number | null;
+            /** Yearly Price */
+            yearly_price?: string | number | null;
         };
         /**
          * ProfileUpdate
@@ -2570,6 +2598,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanOut"][];
                 };
             };
         };

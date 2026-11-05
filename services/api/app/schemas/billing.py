@@ -2,9 +2,10 @@
 (rebuild-plans-metering)."""
 
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.schemas.loose import LooseRequest
 
@@ -17,11 +18,20 @@ class PlanOut(BaseModel):
     monthly_quota: int
     member_limit: int | None  # None = unlimited
     tenant_kind: Literal["personal", "organization"]
+    monthly_price: str | None  # THB as a decimal string ("599.00"); None = contact sales
+    yearly_price: str | None
+
+    @field_validator("monthly_price", "yearly_price", mode="before")
+    @classmethod
+    def _decimal_text(cls, v: object) -> str | None:
+        return None if v is None else f"{Decimal(str(v)):.2f}"
 
 
 class PlanUpdateIn(LooseRequest):
     monthly_quota: int | None = None
     member_limit: int | None = None  # JSON null = unlimited; absent = unchanged
+    monthly_price: str | int | float | None = None  # null = contact sales
+    yearly_price: str | int | float | None = None
 
 
 class SubscriptionOut(BaseModel):
