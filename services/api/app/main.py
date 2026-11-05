@@ -14,7 +14,15 @@ from app.integrations.line import LineClient
 from app.logging_setup import configure_logging
 from app.rate_limit import GUEST_LIMIT, GUEST_WINDOW, SlidingWindowLimiter
 from app.request_context import RequestIdMiddleware
-from app.routers import admin_auth, admin_organizations, auth, health, me, organizations
+from app.routers import (
+    admin_auth,
+    admin_billing,
+    admin_organizations,
+    auth,
+    health,
+    me,
+    organizations,
+)
 
 
 @asynccontextmanager
@@ -67,6 +75,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(admin_auth.router)
     app.include_router(organizations.router)
     app.include_router(admin_organizations.router)
+    app.include_router(admin_billing.router)
     return app
 
 
