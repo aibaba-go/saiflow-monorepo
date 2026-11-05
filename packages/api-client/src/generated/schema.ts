@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/api/v1/admin/audit-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Audit Log
+         * @description The operation log, newest first, read-only (FR-SYS-003).
+         */
+        get: operations["adminListAuditLog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/auth/login": {
         parameters: {
             query?: never;
@@ -394,6 +414,26 @@ export interface paths {
         };
         /** List Subscriptions */
         get: operations["adminListSubscriptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Users
+         * @description Customer users by email, nickname or user id (FR-SYS-080).
+         */
+        get: operations["adminSearchUsers"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1025,6 +1065,28 @@ export interface components {
             /** Username */
             username: string;
         };
+        /** AdminUserOut */
+        AdminUserOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Display Name */
+            display_name: string | null;
+            /** Email */
+            email: string | null;
+            /** Personal Tenant Id */
+            personal_tenant_id: number | null;
+            /** Phone */
+            phone: string | null;
+            /** Registered */
+            registered: boolean;
+            /** Registered At */
+            registered_at: string | null;
+            /** User Id */
+            user_id: number;
+        };
         /** AdminVerificationOut */
         AdminVerificationOut: {
             /**
@@ -1088,6 +1150,35 @@ export interface components {
         AssignRoleIn: {
             /** Role Id */
             role_id?: number | null;
+        };
+        /** AuditEntryOut */
+        AuditEntryOut: {
+            /** Action */
+            action: string;
+            /** Actor Id */
+            actor_id: string | null;
+            /** Actor Type */
+            actor_type: string;
+            /** Id */
+            id: number;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Result */
+            result: string;
+            /** Target Id */
+            target_id: string | null;
+            /** Target Type */
+            target_type: string;
+        };
+        /** AuditPageOut */
+        AuditPageOut: {
+            /** Items */
+            items: components["schemas"]["AuditEntryOut"][];
+            /** Next Before */
+            next_before: number | null;
         };
         /** ChangePasswordIn */
         ChangePasswordIn: {
@@ -1644,6 +1735,13 @@ export interface components {
              */
             starts_at: string;
         };
+        /** UserPageOut */
+        UserPageOut: {
+            /** Has More */
+            has_more: boolean;
+            /** Items */
+            items: components["schemas"]["AdminUserOut"][];
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -1696,6 +1794,44 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    adminListAuditLog: {
+        parameters: {
+            query?: {
+                limit?: string | null;
+                before?: string | null;
+                since?: string | null;
+                until?: string | null;
+                actor_type?: string | null;
+                action_prefix?: string | null;
+                target_type?: string | null;
+                target_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     adminLogin: {
         parameters: {
             query?: never;
@@ -2477,6 +2613,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SubscriptionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminSearchUsers: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                page?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPageOut"];
                 };
             };
             /** @description Validation Error */
