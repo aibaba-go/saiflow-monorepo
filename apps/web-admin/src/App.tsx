@@ -17,7 +17,12 @@ import {
 } from "./pages/ApplicationPages";
 import { HealthPage } from "./pages/HealthPage";
 import { HomePage } from "./pages/HomePage";
+import { OrganizationDetailPage } from "./pages/OrganizationDetailPage";
+import { OrganizationsPage } from "./pages/OrganizationsPage";
+import { TenantBillingPage } from "./pages/TenantBillingPage";
 import { LoginPage } from "./pages/LoginPage";
+import { setUnauthenticatedHandler } from "./services/api";
+import { useLanguage } from "./stores/language";
 
 /** Pages that have landed; the rest of the menu shows a placeholder. */
 const PAGES: Record<string, ReactElement> = {
@@ -25,9 +30,8 @@ const PAGES: Record<string, ReactElement> = {
   "/organization-applications": <OrgApplicationsPage />,
   "/verification-applications": <VerificationApplicationsPage />,
   "/plan-applications": <PlanApplicationsPage />,
+  "/organizations": <OrganizationsPage />,
 };
-import { setUnauthenticatedHandler } from "./services/api";
-import { useLanguage } from "./stores/language";
 
 /** Any 401 outside login: drop the session; RequireAdmin then goes to /login?next= (060-03). */
 function SessionWatcher() {
@@ -69,6 +73,8 @@ export function AppRoutes() {
             {MENU.map((m) => (
               <Route key={m.path} path={m.path} element={PAGES[m.path] ?? <Pending title={m.label} />} />
             ))}
+            <Route path="/organizations/:id" element={<OrganizationDetailPage />} />
+            <Route path="/tenants/:id/billing" element={<TenantBillingPage />} />
             <Route path="/password" element={<Pending title="nav.changePassword" />} />
             <Route path="*" element={<NotFound />} />
           </Route>
