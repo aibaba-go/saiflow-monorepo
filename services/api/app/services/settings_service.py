@@ -17,7 +17,7 @@ async def get_int(db: AsyncSession, key: str, default: int) -> int:
 
 
 async def set_int(db: AsyncSession, key: str, value: int, admin_id: int) -> None:
-    if isinstance(value, bool) or value < 1:
+    if isinstance(value, bool) or not 1 <= value <= 2**31 - 1:  # stored values feed int4 columns
         raise AppError(400, "validation_error", "error.validation", ["value"])
     row = await db.get(SystemSetting, key, with_for_update=True)
     if row is None:

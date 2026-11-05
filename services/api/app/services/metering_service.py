@@ -6,20 +6,27 @@
         # in the transaction that marks the job FAILED or CANCELLED; never on SUCCEEDED
 
 Neither function commits. `reserve` with a reference it has seen before returns the
-earlier reservation, so a retried job creation never charges twice. Errors (AppError):
-402 `quota_exceeded` with details {"available": n}, 402 `plan_expired`, 400 `pages`.
+earlier reservation, so a retried job creation never charges twice; the same reference
+with a different page count, or after it was released, is 409 `reservation_conflict`
+(use a new reference for a rerun). Errors (AppError): 402 `quota_exceeded` with details
+{"available": n}, 402 `plan_expired`, 400 `pages`, 404 for an unknown tenant.
+
+Lock order: call `reserve` and `release` BEFORE writing any audit row in the same
+transaction. `audit_service.record` takes a global lock held until commit; taking the
+tenant meter lock after it can deadlock against a concurrent reserve.
 
 Monthly usage is the sum of unreleased `from_monthly` of the tenant's reservations in the
 Bangkok month; a release keeps the row in its own month, so a release after month end
 gives the scans back to the old month (A4). Every reserve and release of one tenant is
 serialised by a transaction-scoped advisory lock."""
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing_time import month_key
 from app.clock import utcnow
 from app.errors import AppError
+from app.locks import xact_lock
 from app.models import FreeQuota, Plan, QuotaReservation, Tenant
 from app.services import free_quota_service, subscription_service
 from app.services.organization_service import fields_error
@@ -29,9 +36,7 @@ METER_LOCK = 4207003
 
 
 async def _lock(db: AsyncSession, tenant_id: int) -> None:
-    await db.execute(
-        text("SELECT pg_advisory_xact_lock(:ns, :t)"), {"ns": METER_LOCK, "t": tenant_id}
-    )
+    await xact_lock(db, METER_LOCK, tenant_id)
 
 
 async def _used(db: AsyncSession, tenant_id: int, month) -> int:
@@ -70,6 +75,8 @@ async def reserve(db: AsyncSession, tenant_id: int, pages: int, reference: str) 
         )
     ).scalar_one_or_none()
     if existing is not None:
+        if existing.pages != pages or existing.released_at is not None:
+            raise AppError(409, "reservation_conflict", "billing.reservation_conflict")
         return existing
     now = utcnow()
     kind, sub, plan, free_row = await _state(db, tenant_id, now)

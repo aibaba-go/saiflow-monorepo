@@ -54,6 +54,7 @@ async def resolve_tenant(
                 Tenant.kind == "organization",
                 Organization.status == "active",
             )
+            .execution_options(populate_existing=True)  # see ownership changes (N2)
         )
     ).one_or_none()
     if row is None:

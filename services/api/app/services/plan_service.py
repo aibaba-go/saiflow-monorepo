@@ -11,6 +11,7 @@ from app.services.audit_service import record
 from app.services.organization_service import Actor, fields_error
 
 KINDER = "kinder"
+INT4_MAX = 2**31 - 1
 
 
 async def list_plans(db: AsyncSession) -> list[Plan]:
@@ -33,11 +34,11 @@ async def update_plan(
     bad = []
     if "monthly_quota" in changes:
         quota = changes["monthly_quota"]
-        if quota is None or quota < 1:
+        if quota is None or not 1 <= quota <= INT4_MAX:
             bad.append("monthly_quota")
     if "member_limit" in changes:
         limit = changes["member_limit"]
-        if code == KINDER or (limit is not None and limit < 1):
+        if code == KINDER or (limit is not None and not 1 <= limit <= INT4_MAX):
             bad.append("member_limit")  # Kinder stays at 1 (FR-SYS-030)
     if bad:
         raise fields_error(bad)

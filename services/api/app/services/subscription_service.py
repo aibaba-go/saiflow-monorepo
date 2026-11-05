@@ -4,12 +4,13 @@ start with none and are set by the admin or by an approved plan application."""
 
 from datetime import datetime
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing_time import PERIOD_MONTHS, add_months
 from app.clock import utcnow
 from app.errors import AppError
+from app.locks import xact_lock
 from app.models import Plan, Subscription, Tenant
 from app.services import plan_service
 from app.services.audit_service import AuditEvent, record
@@ -121,14 +122,23 @@ async def set_subscription(
     if period not in PERIOD_MONTHS:
         bad = ["period"] if plan_code else ["plan_code", "period"]
         raise fields_error(bad)
-    await db.execute(
-        text("SELECT pg_advisory_xact_lock(:ns, :t)"), {"ns": TENANT_LOCK, "t": tenant_id}
-    )
+    await xact_lock(db, TENANT_LOCK, tenant_id)
     now = utcnow()
     _, plan, sub = await check_plan_rules(db, tenant_id, plan_code, now)
     if starts_at is None:
         same_and_active = is_active(sub, now) and sub.plan_code == plan.code  # type: ignore[union-attr]
-        starts_at = sub.ends_at if same_and_active else now  # type: ignore[union-attr]
+        if same_and_active:  # chain after the last period of this plan, queued ones included
+            starts_at = (
+                await db.execute(
+                    select(func.max(Subscription.ends_at)).where(
+                        Subscription.tenant_id == tenant_id,
+                        Subscription.plan_code == plan.code,
+                        Subscription.ends_at > now,
+                    )
+                )
+            ).scalar_one()
+        else:
+            starts_at = now
     if ends_at is None:
         ends_at = add_months(starts_at, PERIOD_MONTHS[period])
     if ends_at <= starts_at:

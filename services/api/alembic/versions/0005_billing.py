@@ -196,6 +196,15 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Dropping these tables would silently erase subscriptions, free quotas, reservations
+    # and applications. Refuse while any exist; roll back the image instead.
+    bind = op.get_bind()
+    for table in ["subscriptions", "free_quotas", "quota_reservations", "plan_applications"]:
+        if bind.execute(sa.text(f"SELECT EXISTS (SELECT 1 FROM {S}.{table})")).scalar():
+            raise RuntimeError(
+                f"refusing to downgrade 0005: billing data present in {S}.{table}; "
+                "roll back the image instead (docs/deployment/README.md §4)"
+            )
     op.execute(
         f"DELETE FROM {S}.system_settings "
         "WHERE key IN ('free_quota_personal', 'free_quota_organization')"

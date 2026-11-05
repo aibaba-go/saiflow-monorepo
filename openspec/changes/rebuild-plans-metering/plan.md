@@ -366,7 +366,7 @@ Test: `tests/integration/test_tenancy_minors.py`.
 - `docs/30-design/adr/ADR-006-ai-native-workflow.md` §7: the B-2c row narrowed; a new B-2d `rebuild-notifications` row.
 - `docs/20-requirements/functional/EPIC-06-system-base.md`: FR-SYS-012 and 013 marked migrated to billing. **D10:** mark FR-SYS-001, 003, 010, 014, 015, 016, 019 and 020 migrated to `openspec/specs/identity/spec.md`.
 - `docs/20-requirements/Requirements-Index.md`: the same rows, plus FR-SYS-030…034.
-- `docs/deployment/README.md` §4 (**N7**): a 0004 or 0005 downgrade with organizations or subscriptions present fails safely; use image rollback only.
+- `docs/deployment/README.md` §4 (**N7**): a 0004 downgrade with organizations present fails on its constraint; the 0005 downgrade refuses while any billing rows exist (final review); use image rollback only.
 - Contract: regenerate `openapi.json` and the api-client.
 
 - [ ] **Step 1:** Apply the edits, from script files and never Python heredocs. Each doc gets a version bump and a history row.
