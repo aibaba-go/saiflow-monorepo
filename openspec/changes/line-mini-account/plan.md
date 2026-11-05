@@ -5,7 +5,11 @@
 **Goal:** Turn `apps/line-mini` from a health-check shell into the LINE mini app for accounts, tenants, organizations, plans (with prices), usage and notifications. Add plan prices and a customer plan catalog to the backend. Sync the docs.
 
 **Architecture:**
-- **Backend:** one small slice: `plans` gains `monthly_price` / `yearly_price`, plus `GET /api/v1/billing/plans` for any customer session. Everything else the app calls already exists.
+- **Backend:** two small slices:
+  - `plans` gains `monthly_price` / `yearly_price`, plus `GET /api/v1/billing/plans` for any customer session (Task 1);
+  - `GET /api/v1/invitations/preview` (Task 7).
+
+  Everything else the app calls already exists.
 - **Frontend:** React 18 + Ant Design Mobile.
   - `react-router-dom` hash routes (LIFF keeps the query string for its own use).
   - zustand stores for session, current tenant, language and the logout lock.
@@ -20,7 +24,8 @@
 **Spec:**
 - `openspec/changes/line-mini-account/specs/line-mini/spec.md` (FR-SYS-040–044, FR-SYS-004, FR-SYS-046–056).
 - `specs/billing/spec.md` (modified FR-SYS-030).
-- `proposal.md` (decisions D1–D8, assumptions A1–A12).
+- `specs/tenancy/spec.md` (modified FR-SYS-024: invitation preview).
+- `proposal.md` (decisions D1–D10, assumptions A1–A12).
 
 ## Global Constraints
 
@@ -289,22 +294,41 @@
 - [ ] **Step 2: Run.** Expected: FAIL. **Step 3: Implement.** **Step 4: Run.** Expected: pass.
 - [ ] **Step 5: Commit** `[line-mini-account] organizations: application, profile, members, invitations, roles, transfer, leave, verification`
 
-### Task 7: Accept invitation (FR-SYS-052)
+### Task 7: Invitation preview (FR-SYS-024 modified) and accept (FR-SYS-052)
 
-**Files:** create `src/features/invite/InvitePage`; modify `boot.ts` (a URL `invite=` param → `sessionStorage["saiflow.invite"]`, then navigate to `/invite`).
+**Files:**
+- Backend:
+  - `app/services/membership_service.py`: `preview(db, token) -> dict`;
+  - `app/routers/organizations.py`: `GET /api/v1/invitations/preview?token=`, `operation_id="previewInvitation"`, `get_principal`, so a guest is allowed;
+  - `app/schemas/organization.py`: `InvitationPreviewOut {organization_name: str, expires_at: datetime}`;
+  - test `tests/integration/test_invitation_preview.py`;
+  - regenerate the contract.
+- Frontend: create `src/features/invite/InvitePage`; modify `boot.ts` so that a URL `invite=` param is stored in `sessionStorage["saiflow.invite"]` and the app navigates to `/invite`.
 
 **Interfaces:**
-- The invitation preview: the spec shows the organization name before joining. If the backend accepts only `POST /invitations/accept` (no preview endpoint), the page shows a generic "You are invited to an organization" and the name appears after joining. Record this as a ruling and add an open question for a preview endpoint.
+- `preview` hashes the token the same way `accept` does. A valid invite returns the name and expiry; anything else raises 410 `invitation_gone`.
+  - The token is a query parameter. A missing or empty token, or one longer than 128 characters, also gives 410.
+  - No lock, no audit, no state change.
+- The page:
+  - calls the preview on load;
+  - shows `t("invite.title", {name})`;
+  - on 410 shows `t("err.invitation_gone")` plus Home.
 - After a successful accept: `setTenant(new id)`, clear `saiflow.invite`, navigate to `/`.
 
 - [ ] **Step 1: Write the failing tests.**
-  - `registered user taps Join → accept called, current tenant = org` (052-01).
-  - `guest taps Join → login → registration → back on /invite → accept` (052-02; uses `fakeLiff` and mockApi).
-  - `invitation_gone / limit → message + Home button` (052-03).
-  - `token never in localStorage`.
-  - `double tap Join → one accept`.
-- [ ] **Step 2: Run.** Expected: FAIL. **Step 3: Implement.** **Step 4: Run.** Expected: pass.
-- [ ] **Step 5: Commit** `[line-mini-account] accept invitation`
+  - Backend:
+    - `test_preview_valid_for_guest` (024-08): name and expiry; no new audit or membership rows; the invite is still accepted afterwards;
+    - `test_preview_gone` (024-09): accepted, revoked, expired, unknown and empty tokens → 410 with no name in the body;
+    - `test_preview_requires_session`: no cookie → 401.
+  - Frontend:
+    - `shows org name from preview` (052-01 first half);
+    - `registered user taps Join → accept called, current tenant = org` (052-01);
+    - `guest taps Join → login → registration → back on /invite → accept` (052-02);
+    - `preview 410 or accept invitation_gone or limit → message + Home` (052-03);
+    - `token never in localStorage`;
+    - `double tap Join → one accept`.
+- [ ] **Step 2: Run.** Expected: FAIL. **Step 3: Implement.** **Step 4: Run** the backend suite, the contract regeneration and the frontend tests. Expected: pass.
+- [ ] **Step 5: Commit** `[line-mini-account] invitation preview and accept`
 
 ### Task 8: Plans, prices, applications (FR-SYS-053)
 
