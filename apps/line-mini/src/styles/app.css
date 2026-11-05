@@ -126,3 +126,20 @@ body {
   font-weight: 600;
   color: #1f5fbf;
 }
+.page__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.notif {
+  border: 0;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+}
+.notif--unread {
+  border-left: 3px solid #1f5fbf;
+}
+.notif--read {
+  opacity: 0.75;
+}

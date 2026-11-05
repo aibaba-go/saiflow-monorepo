@@ -72,6 +72,9 @@ export function MyPage() {
       )}
       <List>
         <List.Item onClick={() => navigate("/plans")}>{t("my.plans")}</List.Item>
+        {isUser(me) && (
+          <List.Item onClick={() => navigate("/notifications")}>{t("notif.title")}</List.Item>
+        )}
       </List>
       <LanguagePicker />
     </div>

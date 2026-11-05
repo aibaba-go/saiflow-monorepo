@@ -20,6 +20,7 @@ import { RolesPage } from "./features/orgs/RolesPage";
 import { VerificationPage } from "./features/orgs/VerificationPage";
 import { InvitePage } from "./features/invite/InvitePage";
 import { PlansPage } from "./features/billing/PlansPage";
+import { NotificationsPage } from "./features/notifications/NotificationsPage";
 import { TabBar } from "./components/TabBar";
 import { useUsage } from "./features/billing/useUsage";
 import { showReportTab } from "./features/tenants/reportTab";
@@ -133,6 +134,7 @@ function MainShell() {
         <Route path="/org/verification" element={<VerificationPage />} />
         <Route path="/invite" element={<InvitePage />} />
         <Route path="/plans" element={<PlansPage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/health" element={<HealthPage />} />
         <Route path="*" element={<HomePage />} />
       </Routes>
