@@ -538,6 +538,25 @@
         "title": "InvitationOut",
         "type": "object"
       },
+      "InvitationPreviewOut": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "organization_name": {
+            "title": "Organization Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "organization_name",
+          "expires_at"
+        ],
+        "title": "InvitationPreviewOut",
+        "type": "object"
+      },
       "LineLoginRequest": {
         "description": "Either an ID token (LIFF) or an authorization code with its redirect URI (web-pc).\nEvery field is optional here; the service decides what is acceptable.",
         "properties": {
@@ -3672,6 +3691,56 @@
           }
         },
         "summary": "Accept Invitation",
+        "tags": [
+          "organizations"
+        ]
+      }
+    },
+    "/api/v1/invitations/preview": {
+      "get": {
+        "description": "The organization an invitation leads to, before joining; guests may look (FR-SYS-024).",
+        "operationId": "previewInvitation",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationPreviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Invitation",
         "tags": [
           "organizations"
         ]

@@ -3,7 +3,7 @@ the organization ID in the path and resolve it through the tenant access rule.""
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clock import utcnow
@@ -23,6 +23,7 @@ from app.schemas.organization import (
     AssignRoleIn,
     InvitationCreatedOut,
     InvitationOut,
+    InvitationPreviewOut,
     MemberOut,
     OrganizationDetailOut,
     OrganizationProfileIn,
@@ -241,6 +242,18 @@ async def list_invitations(ctx: Org, db: Db) -> list[InvitationOut]:
 async def revoke_invitation(invitation_id: PathId, ctx: Org, db: Db) -> Response:
     await membership_service.revoke_invitation(db, ctx, invitation_id)
     return Response(status_code=204)
+
+
+@router.get(
+    "/invitations/preview", operation_id="previewInvitation", response_model=InvitationPreviewOut
+)
+async def preview_invitation(
+    db: Db,
+    principal: Annotated[Principal, Depends(get_principal)],
+    token: Annotated[str | None, Query()] = None,
+) -> InvitationPreviewOut:
+    """The organization an invitation leads to, before joining; guests may look (FR-SYS-024)."""
+    return InvitationPreviewOut(**await membership_service.preview(db, token))
 
 
 @router.post("/invitations/accept", operation_id="acceptInvitation", response_model=AcceptedOut)

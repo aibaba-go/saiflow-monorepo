@@ -154,6 +154,35 @@ async def revoke_invitation(db: AsyncSession, ctx: TenantContext, invitation_id:
     await db.commit()
 
 
+TOKEN_MAX = 128
+
+
+async def preview(db: AsyncSession, token: str | None) -> dict:
+    """The organization an open invitation leads to (FR-SYS-024): name and expiry, for any
+    session. Accepted, revoked, expired, unknown or malformed tokens are 410 and reveal
+    nothing. Read-only: no lock, no audit."""
+    if not token or len(token) > TOKEN_MAX:
+        raise _gone()
+    row = (
+        await db.execute(
+            select(Invitation, Organization)
+            .join(Organization, Organization.tenant_id == Invitation.tenant_id)
+            .where(Invitation.token_hash == hash_token(token))
+        )
+    ).one_or_none()
+    if row is None:
+        raise _gone()
+    invitation, org = row
+    if (
+        org.status != "active"
+        or invitation.accepted_at is not None
+        or invitation.revoked_at is not None
+        or invitation.expires_at <= utcnow()
+    ):
+        raise _gone()
+    return {"organization_name": org.name, "expires_at": invitation.expires_at}
+
+
 async def accept(db: AsyncSession, user_id: int, token: str | None) -> int:
     if not token:
         raise fields_error(["token"])

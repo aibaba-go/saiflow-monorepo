@@ -59,6 +59,11 @@ class OrganizationOut(BaseModel):
     created_at: datetime
 
 
+class InvitationPreviewOut(BaseModel):
+    organization_name: str
+    expires_at: datetime
+
+
 class OrganizationDetailOut(OrganizationOut):
     """What members see: also the member limit (None = unlimited) and the seats in use,
     open invitations included (FR-SYS-025, FR-SYS-048)."""
