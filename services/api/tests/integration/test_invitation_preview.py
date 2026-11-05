@@ -1,7 +1,5 @@
 """line-mini-account Task 7: look at an invitation before accepting it (FR-SYS-024 modified)."""
 
-from datetime import timedelta
-
 import pytest
 from sqlalchemy import text
 
@@ -60,10 +58,9 @@ async def test_preview_gone(api, db, line, mail):  # AC-FR-SYS-024-09
     expired = await _invite(owner, org)
     await db.execute(
         text(
-            "update invitations set expires_at = now() - :d where revoked_at is null "
+            "update invitations set expires_at = now() - interval '1 day' where revoked_at is null "
             "and accepted_at is null"
         ),
-        {"d": timedelta(days=1)},
     )
     await db.commit()
     for token in [accepted, revoked, expired, "no-such-token", "", "x" * 129]:
