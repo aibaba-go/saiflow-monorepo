@@ -3,7 +3,7 @@ doc_id: REQ-INDEX
 title: "SaiFlow — 需求索引与可追溯性矩阵"
 type: index
 status: active
-version: 1.6.0
+version: 1.7.0
 updated: 2026-11-05
 owner: Product Engineering
 ---
@@ -106,22 +106,26 @@ owner: Product Engineering
 | FR-MGMT-008 | 关键词搜索 | P2 | §4.5 | OCR-002 | AC-FR-MGMT-008-01 | API-7 | planned |
 | FR-MGMT-009 | 重复检测 | P1 | §4.5 | OCR-002 | AC-FR-MGMT-009-01 | DM-Document | planned |
 | FR-MGMT-010 | 去重 | P2 | §4.5 | MGMT-009 | AC-FR-MGMT-010-01 | DM-Document | planned |
-| FR-SYS-001 | LINE 登录与会话 | P0 | PRD §4.9 v3.5 | — | `openspec/specs/identity/spec.md` | `openspec/specs/identity/spec.md` | active |
+| FR-SYS-001 | LINE 登录与会话 | P0 | EPIC-06 v1.7.3（已迁移） | — | `openspec/specs/identity/spec.md` | `openspec/specs/identity/spec.md` | active |
 | FR-SYS-002 | 角色与权限点（含原 FR-SYS-009） | P0 | PRD §4.9 v3.4 | SYS-001 | `openspec/specs/tenancy/spec.md` | `openspec/specs/tenancy/spec.md` | active |
-| FR-SYS-003 | 操作日志 | P0 | PRD §4.9 v3.5 | — | `openspec/specs/identity/spec.md` | `openspec/specs/identity/spec.md` | active |
+| FR-SYS-003 | 操作日志 | P0 | EPIC-06 v1.7.3（已迁移） | — | `openspec/specs/identity/spec.md` | `openspec/specs/identity/spec.md` | active |
 | FR-SYS-004 | 语言切换 | P0 | §4.6 | — | AC-FR-SYS-004-01 | NFR-I18N-003 | active |
 | FR-SYS-005 | 参数配置 | P0 | §4.6 | SYS-002 | AC-FR-SYS-005-01 | DM-Settings | active |
 | FR-SYS-006 | 归档与 GCS 存储设置 | P0 | §4.6 | SYS-002 | AC-FR-SYS-006-01 | DM-Settings | active |
 | FR-SYS-007 | 账户锁定 | P1 | §5.3 | SYS-001 | AC-FR-SYS-007-01 | DM-User | planned |
 | FR-SYS-008 | 用户偏好 | P1 | §4.6 | SYS-001 | AC-FR-SYS-008-01 | DM-Settings | planned |
 | FR-SYS-009 | 并入 FR-SYS-002 | P0 | PRD §4.9 v3.4 | SYS-001 | `openspec/specs/tenancy/spec.md` | `openspec/specs/tenancy/spec.md` | active |
-| FR-SYS-010 | 游客会话与数据归集 | P0 | PRD §4.9 v3.5 | — | `openspec/specs/identity/spec.md` | `openspec/specs/identity/spec.md` | active |
+| FR-SYS-010 | 游客会话与数据归集 | P0 | EPIC-06 v1.7.3（已迁移） | — | `openspec/specs/identity/spec.md` | `openspec/specs/identity/spec.md` | active |
 | FR-SYS-011 | LINE 确认前登录/注册；认证后按任务工作空间订阅恢复，不自动确认 | P0 | 用户流程调整 2026-10-17/18 | SYS-001/SYS-010 | AC-FR-SYS-011-01 | API-8 | active |
 | FR-SYS-012 | 订阅与到期即停 | P0 | PRD §4.9 v3.5 | — | `openspec/specs/billing/spec.md` | `openspec/specs/billing/spec.md` | active |
 | FR-SYS-013 | 扫描次数的预占与退还 | P0 | PRD §4.9 v3.5 | — | `openspec/specs/billing/spec.md` | `openspec/specs/billing/spec.md` | active |
-| FR-SYS-015 | 修改个人资料 | P0 | PRD §4.9 v3.5 | — | `openspec/specs/identity/spec.md` | `openspec/specs/identity/spec.md` | active |
+| FR-SYS-014 | 注册 | P0 | EPIC-06 v1.7.3（已迁移） | — | `openspec/specs/identity/spec.md` | `openspec/specs/identity/spec.md` | active |
+| FR-SYS-015 | 修改个人资料 | P0 | EPIC-06 v1.7.3（已迁移） | — | `openspec/specs/identity/spec.md` | `openspec/specs/identity/spec.md` | active |
+| FR-SYS-016 | 更换邮箱 | P0 | EPIC-06 v1.7.3（已迁移） | — | `openspec/specs/identity/spec.md` | `openspec/specs/identity/spec.md` | active |
 | FR-SYS-017 | 租户访问规则 | P0 | PRD §4.9 v3.4 | SYS-001 | `openspec/specs/tenancy/spec.md` | `openspec/specs/tenancy/spec.md` | active |
-| FR-SYS-018 | 套餐到期提醒（D7/D3/D1/D0/EXPIRED，按 (tenant_id, period_end, stage) 幂等、不回补、游客不提醒）与通知中心未读数/标记已读 | P0 | 套餐到期调整 2026-10-28 | SYS-012 | AC-FR-SYS-018-01/02/03 | API-8 | active |
+| FR-SYS-018 | 到期提醒 | P0 | PRD §4.9 v3.6 | SYS-012 | `openspec/specs/notifications/spec.md` | `openspec/specs/notifications/spec.md` | active |
+| FR-SYS-019 | 平台管理员后台账号 | P0 | EPIC-06 v1.7.3（已迁移） | — | `openspec/specs/identity/spec.md` | `openspec/specs/identity/spec.md` | active |
+| FR-SYS-020 | 邮箱验证码 | P0 | EPIC-06 v1.7.3（已迁移） | — | `openspec/specs/identity/spec.md` | `openspec/specs/identity/spec.md` | active |
 | FR-SYS-021 | 组织的申请与审批 | P0 | PRD §4.9 v3.4 | SYS-017 | `openspec/specs/tenancy/spec.md` | `openspec/specs/tenancy/spec.md` | active |
 | FR-SYS-022 | 平台 admin 管理组织 | P0 | PRD §4.9 v3.4 | SYS-017 | `openspec/specs/tenancy/spec.md` | `openspec/specs/tenancy/spec.md` | active |
 | FR-SYS-023 | 组织资料修改 | P0 | PRD §4.9 v3.4 | SYS-017 | `openspec/specs/tenancy/spec.md` | `openspec/specs/tenancy/spec.md` | active |
@@ -131,15 +135,15 @@ owner: Product Engineering
 | FR-SYS-027 | 企业认证 | P0 | PRD §4.9 v3.4 | SYS-017 | `openspec/specs/tenancy/spec.md` | `openspec/specs/tenancy/spec.md` | active |
 | FR-SYS-028 | 组织操作写入操作日志 | P0 | PRD §4.9 v3.4 | SYS-017 | `openspec/specs/tenancy/spec.md` | `openspec/specs/tenancy/spec.md` | active |
 | FR-SYS-029 | owner 转让 | P0 | PRD §4.9 v3.4 | SYS-017 | `openspec/specs/tenancy/spec.md` | `openspec/specs/tenancy/spec.md` | active |
-| FR-SYS-014 | 注册 | P0 | PRD §4.9 v3.5 | — | `openspec/specs/identity/spec.md` | `openspec/specs/identity/spec.md` | active |
-| FR-SYS-016 | 更换邮箱 | P0 | PRD §4.9 v3.5 | — | `openspec/specs/identity/spec.md` | `openspec/specs/identity/spec.md` | active |
-| FR-SYS-019 | 平台管理员后台账号 | P0 | PRD §4.9 v3.5 | — | `openspec/specs/identity/spec.md` | `openspec/specs/identity/spec.md` | active |
-| FR-SYS-020 | 邮箱验证码 | P0 | PRD §4.9 v3.5 | — | `openspec/specs/identity/spec.md` | `openspec/specs/identity/spec.md` | active |
 | FR-SYS-030 | 套餐目录 | P0 | PRD §4.9 v3.5 | — | `openspec/specs/billing/spec.md` | `openspec/specs/billing/spec.md` | active |
 | FR-SYS-031 | 免费额度 | P0 | PRD §4.9 v3.5 | — | `openspec/specs/billing/spec.md` | `openspec/specs/billing/spec.md` | active |
 | FR-SYS-032 | 续费与开通申请 | P0 | PRD §4.9 v3.5 | — | `openspec/specs/billing/spec.md` | `openspec/specs/billing/spec.md` | active |
 | FR-SYS-033 | 用量查询 | P0 | PRD §4.9 v3.5 | — | `openspec/specs/billing/spec.md` | `openspec/specs/billing/spec.md` | active |
 | FR-SYS-034 | 计费操作写入操作日志 | P0 | PRD §4.9 v3.5 | — | `openspec/specs/billing/spec.md` | `openspec/specs/billing/spec.md` | active |
+| FR-SYS-035 | 用量提醒 | P0 | PRD §4.9 v3.6 | SYS-012 | `openspec/specs/notifications/spec.md` | `openspec/specs/notifications/spec.md` | active |
+| FR-SYS-036 | 通知中心 | P0 | PRD §4.9 v3.6 | SYS-012 | `openspec/specs/notifications/spec.md` | `openspec/specs/notifications/spec.md` | active |
+| FR-SYS-037 | 提醒的收件人与投递 | P0 | PRD §4.9 v3.6 | SYS-012 | `openspec/specs/notifications/spec.md` | `openspec/specs/notifications/spec.md` | active |
+| FR-SYS-038 | 组织免费额度的到期提醒 | P0 | PRD §4.9 v3.6 | SYS-012 | `openspec/specs/notifications/spec.md` | `openspec/specs/notifications/spec.md` | active |
 | FR-REPORT-001 | 管理层访问运营报表 | P1 | §3.1/§4.7 | SYS-002 | AC-FR-REPORT-001-01 | API-9（待设计） | in-review |
 | FR-REPORT-002 | 展示已配置运营指标 | P1 | §1.2/§4.7 | REPORT-001/OQ-5 | AC-FR-REPORT-002-01 | DM-ReportDefinition（待设计） | in-review |
 | FR-REPORT-003 | 报表授权范围限制 | P1 | §4.7 | SYS-002 | AC-FR-REPORT-003-01 | API-9（待设计） | in-review |
@@ -190,6 +194,7 @@ owner: Product Engineering
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.7.0 | 2026-11-05 | Product Engineering | FR-SYS-018 指向 `openspec/specs/notifications/spec.md`；新增 FR-SYS-035…038；身份类需求的来源改为 EPIC-06，FR-SYS 行按编号排序（rebuild-notifications M7） |
 | 1.6.0 | 2026-11-05 | Product Engineering | 身份类需求指向 `openspec/specs/identity/spec.md`；FR-SYS-012、013 与新增 FR-SYS-030…034 指向 `openspec/specs/billing/spec.md` |
 | 1.5.0 | 2026-11-04 | Product Engineering | 新增 FR-SYS-021…029（组织、成员、角色、企业认证）；FR-SYS-002、009、017 指向 `openspec/specs/tenancy/spec.md` |
 | 1.4.0 | 2026-10-28 | Product Engineering | 新增 FR-SYS-018（套餐到期提醒与通知中心标记已读）；补录并改写 FR-SYS-012（每租户一个月 Kinder、到期硬停）、FR-SYS-013（唯一 OCR_PAGE 月页计量，无 FREE 与赠送）、FR-SYS-015（个人中心可改手机号）与 FR-SYS-017（按租户隔离）索引行，与 EPIC-06 v1.7.0 对齐 |

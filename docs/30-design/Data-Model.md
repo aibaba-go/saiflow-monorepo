@@ -3,7 +3,7 @@ doc_id: DES-002
 title: "SaiFlow — 数据模型"
 type: data-model
 status: active
-version: 2.6.0
+version: 2.7.0
 updated: 2026-11-05
 owner: Product Engineering
 source: "PRD-001 v3.3 §3, §4, §4.9; ADR-008"
@@ -31,7 +31,7 @@ erDiagram
     DM-Plan ||--o{ DM-Subscription : "档位"
     DM-Tenant ||--o| DM-Subscription : "订阅"
     DM-Tenant ||--o{ DM-Application : "申请"
-    DM-Subscription ||--o{ DM-PlanReminder : "提醒"
+    DM-Tenant ||--o{ DM-PlanReminder : "提醒"
     DM-Tenant ||--o| DM-FreeQuota : "免费额度"
     DM-User ||--o{ DM-Notification : "接收"
     DM-Tenant ||--o{ DM-File : "拥有"
@@ -61,9 +61,9 @@ erDiagram
 | `DM-Plan` | 套餐目录：四档、每月扫描配额与成员人数上限（Kinder 固定 1）、适用的租户类型 | PostgreSQL | 全局 | 1:N 订阅 | 四档固定；数值由平台 admin 修改，立即对已有订阅生效 |
 | `DM-Subscription` | 订阅：档位、开通周期（按月 / 按年）、开始与结束时间、来源（自动开通 / admin 设定 / 批准申请）；每次变化留一段记录，当前订阅为正在生效或最近的一段 | PostgreSQL | 租户 | N:1 套餐；0..1 申请 | 个人与游客：建立时自动开通一个月 Kinder；组织：admin 开通；到期即停 |
 | `DM-Application` | 续费与开通申请、建组织申请、企业认证申请（各有自己的记录） | PostgreSQL | 租户或用户 | N:1 目标租户 | 待审批 → 已批准 / 已驳回（同一对象同时最多一条待审批） |
-| `DM-PlanReminder` | 用量提醒与到期提醒的发送记录（同一周期同一节点只一次） | PostgreSQL | 租户 | N:1 订阅 | 仅追加 |
+| `DM-PlanReminder` | 提醒的发送记录：到期提醒、用量提醒、组织免费额度到期提醒；记录租户、类型与节点、对应的到期时间或自然月、收件人、时间与邮件结果（同一租户、类型、周期、节点只一次） | PostgreSQL | 租户 | N:1 租户、收件用户；1:1 站内通知 | 发送时写入；只回写邮件结果 |
 | `DM-FreeQuota` | 一次性免费额度及其余量（OCR 扫描次数） | PostgreSQL | 租户（每个租户至多一份，个人租户在用户注册时发放；数量取系统参数；识别时先于月扫描配额扣减，PRD OQ-28） | 1:1 租户 | 个人：注册时发放，不过期，订阅到期期间暂停；组织：成立时发放，1 个月后作废 |
-| `DM-Notification` | 站内通知 | PostgreSQL | 用户 | N:1 用户 | 未读 → 已读 |
+| `DM-Notification` | 站内通知：收件用户、所属租户、类型、相关数据、生成时间、已读时间 | PostgreSQL | 用户 | N:1 用户、N:1 租户 | 未读 → 已读；不删除 |
 | `DM-File` | 文件元数据：原件、导入、导出、头像 | PostgreSQL | 租户 | 1:1 GCS 对象；1:N 识别任务 | 上传 → 删除（按保留策略） |
 | `DM-OcrJob` | 识别任务：状态、页数、所用引擎；月扫描配额计量与调用观测的依据 | PostgreSQL | 租户 | N:1 文件；1:N 原始载荷；0..1 表单文档 | 排队 → 识别中 → 完成 / 失败 / 取消 |
 | `DM-DocumentTemplate` | 文档格式模板及其版本 | PostgreSQL | 全局（V1.0 由实施人员预置） | 1:N 表单文档 | 草稿 → 已发布 → 停用；发布后版本不可变 |
@@ -75,7 +75,8 @@ erDiagram
 | `DM-StoredObject` | 对象：原始单据、导入文件、导出文件、头像 | 私有 GCS | 租户 | 1:1 文件元数据 | 原件不可变；按保留策略删除 |
 
 - 登录会话、邮箱验证码等短期技术数据不作为实体登记，设计见 B-2a 的 `openspec/changes/archive/2026-11-03-rebuild-identity/plan.md`。
-- **B-2c 已实现（`rebuild-plans-metering`）：** `DM-Plan`、`DM-Subscription`（保留历史）、`DM-FreeQuota`、续费与开通申请；扫描次数的预占记录（所属租户、关联识别、次数、来自免费额度与月配额的拆分、预占与退还时间）按记录逐笔计算用量，不另记操作日志；这些记录都不随游客数据归集。`DM-PlanReminder` 随 B-2d。
+- **B-2d 已实现（`rebuild-notifications`）：** `DM-Notification` 与 `DM-PlanReminder`；提醒由独立的提醒进程定时产生，不写操作日志；两者都不随游客数据归集（游客不收提醒）。
+- **B-2c 已实现（`rebuild-plans-metering`）：** `DM-Plan`、`DM-Subscription`（保留历史）、`DM-FreeQuota`、续费与开通申请；扫描次数的预占记录（所属租户、关联识别、次数、来自免费额度与月配额的拆分、预占与退还时间）按记录逐笔计算用量，不另记操作日志；这些记录都不随游客数据归集。`DM-PlanReminder` 随 B-2d（见上）。
 - **B-2b 已实现（`rebuild-tenant-rbac`）：** `DM-Tenant` 增加组织；组织资料与企业认证存在组织上，建组织申请与企业认证申请各自留有申请记录；`DM-Membership` 每个成员一个角色，owner 不持有角色、拥有全部权限点，每个组织恰好一名 owner（可转让）；`DM-Role` 每个组织一个默认角色；`DM-Invitation` 只存凭据摘要；`DM-SystemSetting` 先有“组织开通套餐前的成员人数上限”一项。这些记录都不随游客数据归集。
 - **B-2a 已实现（`rebuild-identity`）：** `DM-User`（LINE 身份 ID 与邮箱作为唯一的关联身份直接存在用户上，邮箱统一小写；手机号不要求唯一）；`DM-Tenant` 只有个人租户与游客临时租户两类（组织随 B-2b）；`DM-OperationLog` 仅可追加（数据库触发器禁止修改与删除），每条记录带前一条的校验值，服务器命令 `audit-verify` 检查是否被改动；`DM-AdminAccount` 口令为 argon2id 哈希，连续 5 次错误锁定 15 分钟。`DM-UserIdentity` 在接入第三种身份（如 Google）时再拆成独立的表。
 - 报表数据（方式 B，PostgreSQL 内的报表汇总表）为后续能力（OQ-8），实现时再登记实体。
@@ -134,6 +135,7 @@ erDiagram
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.7.0 | 2026-11-05 | Product Engineering | 按 B-2d：`DM-PlanReminder` 覆盖三类提醒并改为归属租户；`DM-Notification` 不删除；记录 B-2d 已实现的范围 |
 | 2.6.0 | 2026-11-05 | Product Engineering | 按 B-2c：套餐、订阅（含历史）、免费额度（个人与组织）、申请与预占记录；记录 B-2c 已实现的范围 |
 | 2.5.0 | 2026-11-04 | Product Engineering | 按 PRD v3.4：团队租户改称组织，取消原地升级；`DM-Enterprise` 改为组织资料与企业认证；每个成员一个角色；记录 B-2b 已实现的实体范围 |
 | 2.4.0 | 2026-11-04 | Product Engineering | 新增 §5 数据库账号与权限：结构归迁移账号，应用账号最小权限 |
