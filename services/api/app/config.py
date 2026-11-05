@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     smtp_password: SecretStr | None = None
     smtp_from: str | None = None
     smtp_security: Literal["starttls", "ssl"] = "starttls"
+    # OCR engine and LLM keys (FR-SYS-005): only their presence is ever reported
+    textin_app_id: str | None = None
+    textin_secret_code: SecretStr | None = None
+    google_vision_api_key: SecretStr | None = None
+    llm_api_key: SecretStr | None = None
     # Reminder process (rebuild-notifications, FR-SYS-037): a pass at least every 30 minutes
     reminders_enabled: bool = True
     reminder_interval_seconds: int = Field(default=900, ge=60, le=1800)

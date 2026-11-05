@@ -55,6 +55,11 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
       SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+      # OCR engine and LLM keys (FR-SYS-005); the admin console shows only configured or not
+      TEXTIN_APP_ID: ${TEXTIN_APP_ID:-}
+      TEXTIN_SECRET_CODE: ${TEXTIN_SECRET_CODE:-}
+      GOOGLE_VISION_API_KEY: ${GOOGLE_VISION_API_KEY:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy

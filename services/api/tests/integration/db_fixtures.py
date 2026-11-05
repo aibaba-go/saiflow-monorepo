@@ -2,6 +2,7 @@
 a session per test, an HTTPS test client, and a full cleanup after every test."""
 
 import asyncio
+import json
 import os
 import subprocess
 import sys
@@ -112,6 +113,17 @@ async def _truncate_all(engine) -> None:
                 "('free_quota_organization', '100')"
             )
         )
+        # seed rows written by 0008 (OCR and LLM settings)
+        from app.services.ocr_settings_service import DEFAULTS as OCR_DEFAULTS
+
+        for key, value in OCR_DEFAULTS.items():
+            await conn.execute(
+                text(
+                    f'INSERT INTO "{SCHEMA}".system_settings (key, value) '
+                    "VALUES (:k, CAST(:v AS jsonb))"
+                ),
+                {"k": key, "v": json.dumps(value)},
+            )
 
 
 @pytest.fixture

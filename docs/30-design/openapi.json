@@ -761,6 +761,29 @@
         "title": "InvitationPreviewOut",
         "type": "object"
       },
+      "KeyStatusOut": {
+        "properties": {
+          "google_vision": {
+            "title": "Google Vision",
+            "type": "boolean"
+          },
+          "llm": {
+            "title": "Llm",
+            "type": "boolean"
+          },
+          "textin": {
+            "title": "Textin",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "textin",
+          "google_vision",
+          "llm"
+        ],
+        "title": "KeyStatusOut",
+        "type": "object"
+      },
       "LineLoginRequest": {
         "description": "Either an ID token (LIFF) or an authorization code with its redirect URI (web-pc).\nEvery field is optional here; the service decides what is acceptable.",
         "properties": {
@@ -1052,6 +1075,137 @@
           "read"
         ],
         "title": "NotificationOut",
+        "type": "object"
+      },
+      "OcrSettingsIn": {
+        "description": "Only the fields present change.",
+        "properties": {
+          "backup_engine": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backup Engine"
+          },
+          "llm_base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Base Url"
+          },
+          "llm_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Model"
+          },
+          "primary_engine": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Engine"
+          },
+          "probe_interval_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Interval Seconds"
+          },
+          "retry_per_document": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry Per Document"
+          },
+          "switch_threshold": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Switch Threshold"
+          }
+        },
+        "title": "OcrSettingsIn",
+        "type": "object"
+      },
+      "OcrSettingsOut": {
+        "properties": {
+          "backup_engine": {
+            "title": "Backup Engine",
+            "type": "string"
+          },
+          "keys": {
+            "$ref": "#/components/schemas/KeyStatusOut"
+          },
+          "llm_base_url": {
+            "title": "Llm Base Url",
+            "type": "string"
+          },
+          "llm_model": {
+            "title": "Llm Model",
+            "type": "string"
+          },
+          "primary_engine": {
+            "title": "Primary Engine",
+            "type": "string"
+          },
+          "probe_interval_seconds": {
+            "title": "Probe Interval Seconds",
+            "type": "integer"
+          },
+          "retry_per_document": {
+            "title": "Retry Per Document",
+            "type": "integer"
+          },
+          "switch_threshold": {
+            "title": "Switch Threshold",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "primary_engine",
+          "backup_engine",
+          "retry_per_document",
+          "switch_threshold",
+          "probe_interval_seconds",
+          "llm_base_url",
+          "llm_model",
+          "keys"
+        ],
+        "title": "OcrSettingsOut",
         "type": "object"
       },
       "OrganizationDetailOut": {
@@ -2596,6 +2750,66 @@
           }
         },
         "summary": "Change Password",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/ocr-settings": {
+      "get": {
+        "operationId": "adminGetOcrSettings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OcrSettingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Ocr Settings",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "operationId": "adminUpdateOcrSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OcrSettingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OcrSettingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Ocr Settings",
         "tags": [
           "admin"
         ]

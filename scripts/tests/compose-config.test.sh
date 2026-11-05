@@ -48,4 +48,9 @@ for var in SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD SMTP_FROM SMTP_SECURI
 done
 check "reminders service receives REMINDERS_ENABLED" grep -qF "REMINDERS_ENABLED: \${REMINDERS_ENABLED:-true}" <<<"$reminders"
 check "env.example lists REMINDERS_ENABLED" grep -q '^REMINDERS_ENABLED=' "$deploy/env.example"
+# web-admin-console: OCR and LLM keys reach the backend from .env (FR-SYS-005; empty = not configured)
+for var in TEXTIN_APP_ID TEXTIN_SECRET_CODE GOOGLE_VISION_API_KEY LLM_API_KEY; do
+  check "backend receives $var" grep -q "$var: \${$var:-" <<<"$backend"
+  check "env.example lists $var" grep -q "^$var=" "$deploy/env.example"
+done
 finish

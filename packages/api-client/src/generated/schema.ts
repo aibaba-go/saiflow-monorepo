@@ -95,6 +95,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/ocr-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Ocr Settings */
+        get: operations["adminGetOcrSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Ocr Settings */
+        patch: operations["adminUpdateOcrSettings"];
+        trace?: never;
+    };
     "/api/v1/admin/organization-applications": {
         parameters: {
             query?: never;
@@ -1271,6 +1289,15 @@ export interface components {
             /** Organization Name */
             organization_name: string;
         };
+        /** KeyStatusOut */
+        KeyStatusOut: {
+            /** Google Vision */
+            google_vision: boolean;
+            /** Llm */
+            llm: boolean;
+            /** Textin */
+            textin: boolean;
+        };
         /**
          * LineLoginRequest
          * @description Either an ID token (LIFF) or an authorization code with its redirect URI (web-pc).
@@ -1366,6 +1393,44 @@ export interface components {
             tenant_id: number;
             /** Type */
             type: string;
+        };
+        /**
+         * OcrSettingsIn
+         * @description Only the fields present change.
+         */
+        OcrSettingsIn: {
+            /** Backup Engine */
+            backup_engine?: string | null;
+            /** Llm Base Url */
+            llm_base_url?: string | null;
+            /** Llm Model */
+            llm_model?: string | null;
+            /** Primary Engine */
+            primary_engine?: string | null;
+            /** Probe Interval Seconds */
+            probe_interval_seconds?: number | null;
+            /** Retry Per Document */
+            retry_per_document?: number | null;
+            /** Switch Threshold */
+            switch_threshold?: number | null;
+        };
+        /** OcrSettingsOut */
+        OcrSettingsOut: {
+            /** Backup Engine */
+            backup_engine: string;
+            keys: components["schemas"]["KeyStatusOut"];
+            /** Llm Base Url */
+            llm_base_url: string;
+            /** Llm Model */
+            llm_model: string;
+            /** Primary Engine */
+            primary_engine: string;
+            /** Probe Interval Seconds */
+            probe_interval_seconds: number;
+            /** Retry Per Document */
+            retry_per_document: number;
+            /** Switch Threshold */
+            switch_threshold: number;
         };
         /**
          * OrganizationDetailOut
@@ -1922,6 +1987,59 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminGetOcrSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OcrSettingsOut"];
+                };
+            };
+        };
+    };
+    adminUpdateOcrSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OcrSettingsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OcrSettingsOut"];
+                };
             };
             /** @description Validation Error */
             422: {
