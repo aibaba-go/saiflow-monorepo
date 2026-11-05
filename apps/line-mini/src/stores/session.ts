@@ -38,4 +38,7 @@ export const useSession = create<SessionState>((set) => ({
   reset: () => set(initial),
 }));
 
+/** A tenant the app can act on: a usable tenant, or the guest's own temporary tenant. */
+export type CurrentTenant = Omit<UsableTenant, "kind"> & { kind: UsableTenant["kind"] | "guest" };
+
 export const isUser = (me: Me | null): boolean => me?.kind === "user";

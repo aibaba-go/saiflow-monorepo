@@ -1,19 +1,19 @@
 import { describe, expect, it } from "vitest";
 
-import { showReportTab } from "./reportTab";
+import { showReportTab, type Usage } from "./reportTab";
 
 const org = (over = {}) => ({
   tenant_id: 5,
-  kind: "organization",
+  kind: "organization" as "organization" | "personal" | "guest",
   name: "Siam Tools",
   is_owner: false,
   role: { id: 1, name: "Member" },
   permissions: [] as string[],
   ...over,
 });
-const usage = (code: string | null, active = true) => ({
+const usage = (code: string | null, active = true): Usage => ({
   active,
-  plan: code ? { code, period: "month", starts_at: "2026-01-01T00:00:00Z", ends_at: "2026-02-01T00:00:00Z" } : null,
+  plan: code ? { code: code as NonNullable<Usage["plan"]>["code"], period: "month", starts_at: "2026-01-01T00:00:00Z", ends_at: "2026-02-01T00:00:00Z" } : null,
   month: { month: "2026-01-01", quota: 5000, used: 0, remaining: 5000 },
   free: { remaining: 0, expires_at: null, paused: false },
 });
