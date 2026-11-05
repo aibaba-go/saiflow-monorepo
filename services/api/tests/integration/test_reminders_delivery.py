@@ -157,3 +157,53 @@ async def test_one_failing_tenant_does_not_stop_pass(api, db, db_engine, line, m
     monkeypatch.setattr(reminder_service, "_due", broken)
     assert await run(db_engine, mail, D7) == 1
     assert await notes(db, first) == [] and len(await notes(db, second)) == 1
+
+
+async def test_claims_every_tenant_before_any_email(api, db, db_engine, line, mail):  # final I-1
+    first, _ = await personal_tenant(api, line, mail, "A")
+    second, _ = await personal_tenant(api, line, mail, "B")
+    await expiring(db, first, END, "kinder")
+    await expiring(db, second, END, "kinder")
+    seen: list[int] = []
+
+    class Recording:
+        async def send(self, to, subject, body):
+            async with create_sessionmaker(db_engine)() as s:
+                seen.append((await s.execute(text("select count(*) from reminders"))).scalar_one())
+
+    assert await run(db_engine, Recording(), D7) == 2
+    assert seen == [2, 2]
+
+
+async def test_email_budget_marks_rest_failed(api, db, db_engine, line, mail):  # final I-1
+    import time
+
+    tenants = [(await personal_tenant(api, line, mail, s))[0] for s in ("A", "B", "C")]
+    for t in tenants:
+        await expiring(db, t, END, "kinder")
+
+    class Slow:
+        async def send(self, to, subject, body):
+            await asyncio.sleep(5)
+
+    started = time.monotonic()
+    created = await reminder_service.run_once(
+        create_sessionmaker(db_engine), Slow(), D7, email_budget_seconds=0.2
+    )
+    assert created == 3 and time.monotonic() - started < 3
+    rows = (await db.execute(text("select email_status, email_error from reminders"))).all()
+    assert [tuple(r) for r in rows] == [("failed", "DeadlineExceeded")] * 3
+    assert len(await notes(db)) == 3
+
+
+async def test_render_error_is_failed_not_pending(api, db, db_engine, line, mail, monkeypatch):
+    tid, _ = await personal_tenant(api, line, mail, "P")  # final M-1 (same rewrite)
+    await expiring(db, tid, END, "kinder")
+
+    def broken(*args):
+        raise KeyError("ends_at")
+
+    monkeypatch.setattr(reminder_service, "render", broken)
+    assert await run(db_engine, mail, D7) == 1
+    row = (await db.execute(text("select email_status, email_error from reminders"))).one()
+    assert tuple(row) == ("failed", "KeyError")

@@ -81,9 +81,11 @@ class SmtpSender:
         security: Literal["starttls", "ssl"],
         send: Callable[..., Awaitable[object]] = aiosmtplib.send,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        retries: int = 3,
     ) -> None:
         self.host, self.port, self.username, self.password = host, port, username, password
         self.sender, self.security, self._send, self.sleep = sender, security, send, sleep
+        self.retries = retries  # 0 for reminders: each is attempted once (rebuild-notifications A6)
 
     async def send(self, to: str, subject: str, body: str) -> None:
         message = EmailMessage()
@@ -103,14 +105,16 @@ class SmtpSender:
             )
 
         try:
-            await with_retries(call, is_transient=_is_transient, sleep=self.sleep)
+            await with_retries(
+                call, is_transient=_is_transient, retries=self.retries, sleep=self.sleep
+            )
         except Exception as exc:
             if _is_recipient_rejection(exc):
                 raise EmailRejected(_reason(exc)) from None
             raise EmailUnavailable(_reason(exc)) from None
 
 
-def smtp_sender_from(settings) -> SmtpSender | None:
+def smtp_sender_from(settings, retries: int = 3) -> SmtpSender | None:
     """The sender configured by SMTP_* variables, or None when SMTP is not configured."""
     if not (settings.smtp_host and settings.smtp_from):
         return None
@@ -121,4 +125,5 @@ def smtp_sender_from(settings) -> SmtpSender | None:
         settings.smtp_password.get_secret_value() if settings.smtp_password else None,
         settings.smtp_from,
         settings.smtp_security,
+        retries=retries,
     )

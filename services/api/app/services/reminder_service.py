@@ -3,11 +3,14 @@
 For every active personal tenant and organization, compute the reminders due today (Bangkok
 date) and send each at most once. The once-only key is reminders (tenant, kind, cycle,
 stage): the notification and its reminder row are inserted and committed together, and a
-concurrent pass that loses the insert rolls its notification back. The one email attempt
-happens after that commit; a crash in between leaves email_status 'pending', never retried
-(A6). Nothing here writes audit_log (A8)."""
+concurrent pass that loses the insert rolls its notification back. Emails are sent after
+every tenant is claimed, once each, without retries, within a time budget; a crash in
+between leaves email_status 'pending', never retried (A6). Nothing here writes audit_log (A8)."""
 
+import asyncio
 import logging
+import time
+from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import select
@@ -156,25 +159,51 @@ async def _claim(
         return reminder_id
 
 
-async def _email(
-    sessionmaker: async_sessionmaker, sender, reminder_id: int, to: str, due: Due, label: str
-) -> None:
-    kind, _, stage, data = due
-    subject, body = render(kind, stage, data, label)
+EMAIL_CONCURRENCY = 5
+EMAIL_BUDGET_SECONDS = 600.0  # the sending phase of one pass; the loop then runs again
+
+
+@dataclass(frozen=True)
+class Outgoing:
+    reminder_id: int
+    to: str
+    due: Due
+    label: str
+
+
+async def _email(sessionmaker: async_sessionmaker, sender, item: Outgoing, deadline: float) -> None:
+    """The one attempt for a claimed reminder (A6). Whatever goes wrong (rendering, the
+    server, the pass's time budget) is recorded as failed; the notification stays."""
+    kind, _, stage, data = item.due
     status, error = "sent", None
     try:
-        await sender.send(to, subject, body)
+        subject, body = render(kind, stage, data, item.label)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise DeadlineExceeded()
+        try:
+            await asyncio.wait_for(sender.send(item.to, subject, body), remaining)
+        except TimeoutError:
+            raise DeadlineExceeded() from None
     except Exception as exc:  # any failure: the notification already exists (FR-SYS-037)
         status, error = "failed", type(exc).__name__
-        logger.warning("reminder %s email failed: %s", reminder_id, error)
+        logger.warning("reminder %s email failed: %s", item.reminder_id, error)
     async with sessionmaker() as db:
-        row = await db.get(Reminder, reminder_id)
+        row = await db.get(Reminder, item.reminder_id)
         row.email_status, row.email_error = status, error  # type: ignore[union-attr]
         row.email_at = utcnow()  # type: ignore[union-attr]
         await db.commit()
 
 
-async def _tenant_pass(sessionmaker, sender, tenant_id: int, now: datetime) -> int:
+class DeadlineExceeded(Exception):
+    """The pass's email budget ran out before this reminder's email was sent."""
+
+
+async def _tenant_pass(
+    sessionmaker, sender, tenant_id: int, now: datetime, outbox: list[Outgoing]
+) -> int:
+    """Claim this tenant's due reminders; emails are queued in outbox, sent after every
+    tenant has been claimed, so a slow mail server never delays the in-app notifications."""
     async with sessionmaker() as db:
         tenant = await db.get(Tenant, tenant_id)
         if tenant is None:
@@ -194,14 +223,36 @@ async def _tenant_pass(sessionmaker, sender, tenant_id: int, now: datetime) -> i
             continue
         created += 1
         if can_email:
-            await _email(sessionmaker, sender, reminder_id, email, item, label)  # type: ignore[arg-type]
+            outbox.append(Outgoing(reminder_id, email, item, label))  # type: ignore[arg-type]
     return created
 
 
+async def _send_all(
+    sessionmaker: async_sessionmaker, sender, outbox: list[Outgoing], budget: float
+) -> None:
+    deadline = time.monotonic() + budget
+    gate = asyncio.Semaphore(EMAIL_CONCURRENCY)
+
+    async def one(item: Outgoing) -> None:
+        async with gate:
+            try:
+                await _email(sessionmaker, sender, item, deadline)
+            except Exception:
+                logger.exception("reminder %s: recording the email result failed", item.reminder_id)
+
+    await asyncio.gather(*(one(item) for item in outbox))
+
+
 async def run_once(
-    sessionmaker: async_sessionmaker, sender, now: datetime, enabled: bool = True
+    sessionmaker: async_sessionmaker,
+    sender,
+    now: datetime,
+    enabled: bool = True,
+    email_budget_seconds: float = EMAIL_BUDGET_SECONDS,
 ) -> int:
-    """One pass over every tenant; returns how many reminders it created."""
+    """One pass: claim every tenant's due reminders (in-app notifications), then send the
+    emails with bounded concurrency within email_budget_seconds. Returns how many reminders
+    it created. Pass a sender without retries: each email is attempted once (A6)."""
     if not enabled:
         return 0
     async with sessionmaker() as db:
@@ -214,10 +265,12 @@ async def run_once(
                 )
             ).scalars()
         )
-    created = 0
+    created, outbox = 0, []
     for tenant_id in tenant_ids:
         try:
-            created += await _tenant_pass(sessionmaker, sender, tenant_id, now)
+            created += await _tenant_pass(sessionmaker, sender, tenant_id, now, outbox)
         except Exception:
             logger.exception("reminders: tenant %s failed", tenant_id)
+    if outbox:
+        await _send_all(sessionmaker, sender, outbox, email_budget_seconds)
     return created

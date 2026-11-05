@@ -79,7 +79,8 @@ async def _reminders_pass(settings, sessionmaker) -> str:
 
     if not settings.reminders_enabled:
         return "reminders disabled"
-    created = await reminder_service.run_once(sessionmaker, smtp_sender_from(settings), utcnow())
+    sender = smtp_sender_from(settings, retries=0)  # one attempt per reminder (A6)
+    created = await reminder_service.run_once(sessionmaker, sender, utcnow())
     return f"reminders OK ({created} created)"
 
 

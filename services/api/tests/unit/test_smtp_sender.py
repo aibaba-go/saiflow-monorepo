@@ -136,3 +136,35 @@ async def test_rcpt_4xx_retried():  # M3
     with pytest.raises(EmailUnavailable):
         await sender.send("a@example.com", "s", "b")
     assert len(calls) == 4 and sleep.delays == [0.5, 1.0, 2.0]
+
+
+async def test_reminder_sender_does_not_retry():  # rebuild-notifications final I-1 (A6)
+    calls = []
+
+    async def send(message, **kwargs):
+        calls.append(1)
+        raise aiosmtplib.SMTPServerDisconnected("gone")
+
+    sender = SmtpSender(
+        "smtp.example.com", 587, "u", "p", "f@example.com", "starttls", send=send, retries=0
+    )
+    with pytest.raises(EmailUnavailable):
+        await sender.send("a@example.com", "s", "b")
+    assert calls == [1]
+
+
+def test_smtp_sender_from_passes_retries():
+    from types import SimpleNamespace
+
+    from app.integrations.email import smtp_sender_from
+
+    settings = SimpleNamespace(
+        smtp_host="h",
+        smtp_port=587,
+        smtp_username=None,
+        smtp_password=None,
+        smtp_from="f@example.com",
+        smtp_security="starttls",
+    )
+    assert smtp_sender_from(settings, retries=0).retries == 0
+    assert smtp_sender_from(settings).retries == 3
