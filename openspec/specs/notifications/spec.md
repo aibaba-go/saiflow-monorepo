@@ -1,7 +1,7 @@
 # notifications Specification
 
 ## Purpose
-TBD - created by archiving change rebuild-notifications. Update Purpose after archive.
+提醒与通知：订阅到期提醒、用量提醒、组织免费额度的到期提醒、提醒的收件人与投递（站内通知与邮件，定时检查，同一提醒只发一次），以及通知中心（查看、未读数、标记已读，不删除）。LINE OA 消息与短信不在本能力内。
 
 ## Requirements
 
