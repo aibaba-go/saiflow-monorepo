@@ -70,6 +70,9 @@ export function MyPage() {
           <ErrorText error={loginError} />
         </>
       )}
+      <List>
+        <List.Item onClick={() => navigate("/plans")}>{t("my.plans")}</List.Item>
+      </List>
       <LanguagePicker />
     </div>
   );
