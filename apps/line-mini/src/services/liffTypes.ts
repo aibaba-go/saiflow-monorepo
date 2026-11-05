@@ -1,0 +1,12 @@
+/** The part of the LIFF SDK the app uses. Only services/liff.ts talks to @line/liff;
+ * everything else receives this interface, so tests can pass a fake. */
+export interface Liff {
+  init(): Promise<void>;
+  isLoggedIn(): boolean;
+  isInClient(): boolean;
+  login(redirectUri: string): void;
+  logout(): void;
+  getIDToken(): string | null;
+  isApiAvailable(api: string): boolean;
+  shareTargetPicker(messages: { type: "text"; text: string }[]): Promise<unknown>;
+}
