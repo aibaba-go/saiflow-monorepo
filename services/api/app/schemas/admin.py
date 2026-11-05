@@ -8,6 +8,11 @@ class AdminLoginRequest(LooseRequest):
     password: str | None = None
 
 
+class ChangePasswordIn(LooseRequest):
+    current_password: str | None = None
+    new_password: str | None = None
+
+
 class AdminMeResponse(BaseModel):
     admin_id: int
     username: str

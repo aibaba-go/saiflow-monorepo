@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cookies import clear_session_cookie, set_session_cookie
 from app.dependencies import AdminContext, get_admin, get_db, require_csrf_header
-from app.schemas.admin import AdminLoginRequest, AdminMeResponse
+from app.schemas.admin import AdminLoginRequest, AdminMeResponse, ChangePasswordIn
 from app.schemas.loose import ensure_text
 from app.services import admin_service
 from app.services.admin_service import ADMIN_COOKIE, ADMIN_IDLE
@@ -34,6 +34,16 @@ async def admin_logout(db: Db, admin: Admin) -> Response:
     response = Response(status_code=204)
     clear_session_cookie(response, ADMIN_COOKIE)
     return response
+
+
+@router.post("/me/password", operation_id="adminChangePassword", status_code=204)
+async def change_password(req: ChangePasswordIn, db: Db, admin: Admin) -> Response:
+    """Change the signed-in admin's own password (FR-SYS-019); other sessions end."""
+    ensure_text(req)
+    await admin_service.change_own_password(
+        db, admin.account, admin.session, req.current_password, req.new_password
+    )
+    return Response(status_code=204)
 
 
 @router.get("/me", operation_id="getAdminMe", response_model=AdminMeResponse)

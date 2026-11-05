@@ -111,6 +111,67 @@ async def reset_password(db: AsyncSession, username: str, password: str) -> None
     await _system(db, "admin.reset_password", username)
 
 
+def _field(name: str) -> AppError:
+    return AppError(400, "validation_error", "error.validation", [name])
+
+
+async def _count_failure(db: AsyncSession, account: AdminAccount, now) -> None:
+    """One more wrong password; the 5th locks the account (same rule as login)."""
+    account.failed_attempts += 1
+    if account.failed_attempts >= MAX_FAILED:
+        account.failed_attempts, account.locked_until = 0, now + LOCK_FOR
+        await record(
+            db,
+            AuditEvent(
+                "admin", str(account.id), "admin.lock", "admin_account", account.username, "success"
+            ),
+        )
+
+
+async def change_own_password(
+    db: AsyncSession,
+    account: AdminAccount,
+    session: AdminSession,
+    current: str | None,
+    new: str | None,
+) -> None:
+    """FR-SYS-019: the signed-in admin changes their own password. Wrong current passwords
+    count towards the lock; on success every other session of the account ends."""
+    row = (
+        await db.execute(
+            select(AdminAccount)
+            .where(AdminAccount.id == account.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one()
+    now = utcnow()
+    if not current or not await _verify(row.password_hash, current):
+        await _count_failure(db, row, now)
+        await db.commit()
+        raise _field("current_password")
+    if not new or len(new) < MIN_PASSWORD or new == current:
+        raise _field("new_password")
+    row.password_hash = _hasher.hash(new)
+    row.failed_attempts, row.locked_until = 0, None
+    await db.execute(
+        update(AdminSession)
+        .where(
+            AdminSession.admin_id == row.id,
+            AdminSession.id != session.id,
+            AdminSession.revoked_at.is_(None),
+        )
+        .values(revoked_at=now)
+    )
+    await record(
+        db,
+        AuditEvent(
+            "admin", str(row.id), "admin.change_password", "admin_account", row.username, "success"
+        ),
+    )
+    await db.commit()
+
+
 def _failed() -> AppError:
     return AppError(401, "admin_login_failed", "admin.login_failed")
 
