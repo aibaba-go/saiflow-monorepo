@@ -1,13 +1,15 @@
 """Platform admin endpoints for plans, subscriptions, reservations, plan applications and
 free-quota settings (rebuild-plans-metering); admin session only."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import AdminContext, get_admin, get_db, require_csrf_header
 from app.schemas.billing import (
+    ApproveIn,
+    PlanApplicationOut,
     PlanOut,
     PlanUpdateIn,
     ReservationOut,
@@ -15,10 +17,11 @@ from app.schemas.billing import (
     SubscriptionOut,
 )
 from app.schemas.loose import ensure_text
-from app.schemas.organization import IntSettingIn, IntSettingOut
+from app.schemas.organization import IntSettingIn, IntSettingOut, RejectIn
 from app.services import (
     free_quota_service,
     metering_service,
+    plan_application_service,
     plan_service,
     settings_service,
     subscription_service,
@@ -108,3 +111,52 @@ _free_quota_setting(
 _free_quota_setting(
     "free-quota-organization", free_quota_service.FREE_QUOTA_ORGANIZATION, "FreeQuotaOrganization"
 )
+
+
+@router.get(
+    "/plan-applications",
+    operation_id="adminListPlanApplications",
+    response_model=list[PlanApplicationOut],
+)
+async def list_plan_applications(
+    db: Db, admin: Admin, status: Literal["pending", "approved", "rejected"] | None = None
+) -> list[PlanApplicationOut]:
+    found = await plan_application_service.list_all(db, status)
+    return [PlanApplicationOut.model_validate(a, from_attributes=True) for a in found]
+
+
+@router.post(
+    "/plan-applications/{application_id}/approve",
+    operation_id="adminApprovePlanApplication",
+    response_model=SubscriptionOut,
+)
+async def approve_plan_application(
+    application_id: int, db: Db, admin: Admin, req: ApproveIn | None = None
+) -> SubscriptionOut:
+    req = req or ApproveIn()
+    ensure_text(req)
+    sub = await plan_application_service.approve(
+        db,
+        admin.account.id,
+        application_id,
+        subscription_service.parse_time(req.starts_at, "starts_at"),
+        subscription_service.parse_time(req.ends_at, "ends_at"),
+    )
+    return SubscriptionOut.model_validate(sub, from_attributes=True)
+
+
+@router.post(
+    "/plan-applications/{application_id}/reject",
+    operation_id="adminRejectPlanApplication",
+    response_model=PlanApplicationOut,
+)
+async def reject_plan_application(
+    application_id: int, db: Db, admin: Admin, req: RejectIn | None = None
+) -> PlanApplicationOut:
+    req = req or RejectIn()
+    ensure_text(req)
+    await plan_application_service.reject(db, admin.account.id, application_id, req.reason)
+    found = await plan_application_service.list_all(db, None)
+    return PlanApplicationOut.model_validate(
+        next(a for a in found if a.id == application_id), from_attributes=True
+    )
