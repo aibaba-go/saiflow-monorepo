@@ -26,3 +26,10 @@ afterEach(() => {
   Toast.clear();
   cleanup();
 });
+
+// antd-mobile popups capture the pointer for swipe gestures; jsdom has no pointer capture.
+if (!Element.prototype.setPointerCapture) {
+  Element.prototype.setPointerCapture = () => {};
+  Element.prototype.releasePointerCapture = () => {};
+  Element.prototype.hasPointerCapture = () => false;
+}
