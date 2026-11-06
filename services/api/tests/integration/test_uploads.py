@@ -233,3 +233,15 @@ async def test_pdf_work_runs_off_the_event_loop(api, line, store, monkeypatch):
     assert r.status_code == 200, r.text
     assert (await api.get(f"/api/v1/files/{r.json()['id']}/pages/1/preview")).status_code == 200
     assert "page_count" in seen and "render_page_png" in seen
+
+
+async def test_get_file(api, line, store):
+    """One file's details for main's confirm page; another user's file is 404."""
+    await login(api, line)
+    fid = (await upload(api, "a.pdf", pdf(2))).json()["id"]
+    r = await api.get(f"/api/v1/files/{fid}")
+    assert r.status_code == 200, r.text
+    assert (r.json()["original_name"], r.json()["page_count"]) == ("a.pdf", 2)
+    other = client_like(api)
+    await login(other, line, "OTHER")
+    assert (await other.get(f"/api/v1/files/{fid}")).status_code == 404

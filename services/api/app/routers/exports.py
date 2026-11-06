@@ -39,6 +39,12 @@ class ExportOut(BaseModel):
     expires_at: str
 
 
+class ExportStateOut(BaseModel):
+    id: str
+    status: str
+    expires_at: str
+
+
 class TicketOut(BaseModel):
     url: str
 
@@ -78,6 +84,14 @@ async def create(
     if not created:
         response.status_code = 200
     return ExportOut(id=export.id, expires_at=export.expires_at.isoformat())
+
+
+@router.get("/exports/{export_id}", operation_id="getExport", response_model=ExportStateOut)
+async def get_export(export_id: str, ctx: Tenant, db: Db) -> ExportStateOut:
+    export = await export_service.status(db, ctx, export_id)
+    return ExportStateOut(
+        id=export.id, status=export.status, expires_at=export.expires_at.isoformat()
+    )
 
 
 @router.get("/exports/{export_id}/download", operation_id="downloadExport", response_class=Response)

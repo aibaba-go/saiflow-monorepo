@@ -220,3 +220,21 @@ async def test_download_needs_export_and_ticket_is_own(api, line, mail, store, d
     assert (await other.post(f"/api/v1/exports/{xid}/ticket", headers=h)).status_code == 404
     assert (await other.get(f"/api/v1/exports/{xid}/download", headers=h)).status_code == 200
     assert (await owner.post(f"/api/v1/exports/{xid}/ticket", headers=h)).status_code == 200
+
+
+async def test_get_export(api, line, mail, store, sm, ai_settings, llm, db):
+    """An export's state for main's final page; expired or someone else's is 404."""
+    job = await confirmed_job(api, line, mail, store, sm, ai_settings, llm, db)
+    export_id = (await api.post(f"{JOBS}/{job['id']}/exports")).json()["id"]
+    r = await api.get(f"/api/v1/exports/{export_id}")
+    assert r.status_code == 200, r.text
+    assert r.json()["id"] == export_id and r.json()["status"] == "READY"
+    other = client_like(api)
+    await login(other, line, "V1")
+    assert (await other.get(f"/api/v1/exports/{export_id}")).status_code == 404
+    await db.execute(
+        text("update exports set expires_at = :t where id = :i"),
+        {"t": utcnow() - timedelta(seconds=1), "i": export_id},
+    )
+    await db.commit()
+    assert (await api.get(f"/api/v1/exports/{export_id}")).status_code == 404

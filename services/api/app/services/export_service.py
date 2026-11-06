@@ -122,6 +122,11 @@ async def _visible_export(db: AsyncSession, ctx: TenantContext, export_id: str) 
     return export
 
 
+async def status(db: AsyncSession, ctx: TenantContext, export_id: str) -> Export:
+    """A live export the caller may download (main's final page polls it)."""
+    return await _visible_export(db, ctx, export_id)
+
+
 async def content(
     db: AsyncSession, store: ObjectStore, ctx: TenantContext, export_id: str
 ) -> tuple[bytes, str]:

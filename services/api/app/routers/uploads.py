@@ -86,6 +86,12 @@ async def pending(ctx: Tenant, db: Db) -> list[FileOut]:
     return [_out(r) for r in await upload_service.pending(db, ctx)]
 
 
+@router.get("/files/{file_id}", operation_id="getFile", response_model=FileOut)
+async def get_file(file_id: str, ctx: Tenant, db: Db) -> FileOut:
+    """One original's details (main's confirm page): one the caller may read, else 404."""
+    return _out(await upload_service.file_access(db, ctx, file_id))
+
+
 @router.delete("/files/{file_id}", operation_id="deletePendingFile", status_code=204)
 async def delete_pending(
     file_id: str, ctx: Tenant, principal: Caller, db: Db, store: Store
