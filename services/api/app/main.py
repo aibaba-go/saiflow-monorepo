@@ -106,6 +106,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(uploads.router)
     app.include_router(ocr_jobs.router)
     app.include_router(templates.router)
+    app.include_router(templates.versions_router)
     app.include_router(results.router)
     app.include_router(exports.router)
     return app

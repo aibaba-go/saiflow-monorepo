@@ -27,6 +27,16 @@ class TemplateOption(BaseModel):
     template_version_id: int
     code: str
     name: str
+    score: float | None = None
+    recommended: bool = False
+
+
+class TemplateVersionOut(BaseModel):
+    template_version_id: int
+    template_id: int
+    code: str
+    name: str
+    groups: list[dict]
 
 
 class TemplateOptionsOut(BaseModel):
@@ -89,3 +99,27 @@ async def use_generic(job_id: str, ctx: Tenant, principal: Caller, db: Db) -> Ma
     await job_service.audit(db, principal, "template.generic", job.id)
     await db.commit()
     return MappingOut(result="switched", mapping_id=None)
+
+
+versions_router = APIRouter(
+    prefix="/api/v1/templates", tags=["ocr"], dependencies=[Depends(require_csrf_header)]
+)
+
+
+@versions_router.get(
+    "/versions/{version_id}",
+    operation_id="getTemplateVersion",
+    response_model=TemplateVersionOut,
+)
+async def template_version(version_id: int, ctx: Tenant, db: Db) -> TemplateVersionOut:
+    """A published template version's fields, for preview before applying (FR-OCR-024)."""
+    for tpl, ver in await mapping_service.available_versions(db, ctx.tenant_id):
+        if ver.id == version_id:
+            return TemplateVersionOut(
+                template_version_id=ver.id,
+                template_id=tpl.id,
+                code=tpl.code,
+                name=ver.name,
+                groups=ver.groups,
+            )
+    raise AppError(404, "not_found", "error.not_found")

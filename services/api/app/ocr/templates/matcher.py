@@ -177,9 +177,7 @@ def parse_ranking(content: str, whitelist: dict[int, Candidate]) -> list[dict]:
 def match(client: LlmClient, raw: Any, candidates: list[Candidate]) -> MatchResult:
     if not candidates:
         raise MappingError(MATCH_FAILED, "no template candidate")
-    if len(candidates) == 1:
-        only = candidates[0]
-        return MatchResult(only.template_id, only.template_version_id, None, "single_candidate", [])
+    # One candidate is scored too: below the threshold it must not be applied (FR-OCR-019).
     raw_text = compact_raw(raw)
     if len(candidates) > MAX_CATALOG:
         logger.warning("template catalog truncated %d -> %d", len(candidates), MAX_CATALOG)

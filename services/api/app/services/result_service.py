@@ -37,7 +37,8 @@ async def _template(db: AsyncSession, version: ResultVersion) -> DocumentTemplat
 
 
 async def _mapping_state(db: AsyncSession, job: OcrJob) -> dict | None:
-    """The conversion the person waits for, or else the latest failed one."""
+    """The conversion the person waits for, or else the latest failed one; a failed
+    automatic mapping is quiet (free-form stays, FR-OCR-019)."""
     if job.pending_mapping_id:
         m = await db.get(TemplateMapping, job.pending_mapping_id)
         if m is not None:
@@ -50,9 +51,24 @@ async def _mapping_state(db: AsyncSession, job: OcrJob) -> dict | None:
             .limit(1)
         )
     ).scalar_one_or_none()
-    if latest is not None and latest.status == states.FAILED:
+    if latest is not None and latest.status == states.FAILED and not mapping_service.quiet(latest):
         return {"status": latest.status, "error": latest.error_code}
     return None
+
+
+async def _match(db: AsyncSession, job: OcrJob) -> dict | None:
+    """The current template's score from the automatic match (FR-OCR-024)."""
+    if not job.current_mapping_id:
+        return None
+    mapping = await db.get(TemplateMapping, job.current_mapping_id)
+    if mapping is None or mapping.template_version_id is None:
+        return None
+    score = (await mapping_service.auto_scores(db, job.id)).get(mapping.template_version_id)
+    return {
+        "template_version_id": mapping.template_version_id,
+        "score": score,
+        "low_score": score is not None and score < mapping_service.MATCH_THRESHOLD,
+    }
 
 
 async def payload(db: AsyncSession, job: OcrJob, version: ResultVersion) -> dict:
@@ -68,6 +84,7 @@ async def payload(db: AsyncSession, job: OcrJob, version: ResultVersion) -> dict
         if groups
         else [],
         "mapping": await _mapping_state(db, job),
+        "match": await _match(db, job),
         "confirmed": job.review_status == "CONFIRMED",
     }
 

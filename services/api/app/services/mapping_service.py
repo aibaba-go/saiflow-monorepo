@@ -35,6 +35,32 @@ from app.services.tenant_access import not_found
 
 MAX_MAPPINGS = 5  # A7
 AUTO, MANUAL = "AUTO", "MANUAL"
+MATCH_THRESHOLD = 0.70  # auto match converts at or above; below, free-form (FR-OCR-019)
+NO_TEMPLATE_FIT = "NO_TEMPLATE_FIT"
+
+
+def quiet(mapping: TemplateMapping) -> bool:
+    """A failed automatic mapping is not an error to the person: free-form stays."""
+    return mapping.source == AUTO and mapping.status == states.FAILED
+
+
+async def auto_scores(db: AsyncSession, job_id: str) -> dict[int, float]:
+    """Scores per template version from the latest automatic match (FR-OCR-024)."""
+    ranking = (
+        await db.execute(
+            select(TemplateMapping.candidates)
+            .where(TemplateMapping.job_id == job_id, TemplateMapping.source == AUTO)
+            .order_by(TemplateMapping.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    scores: dict[int, float] = {}
+    for entry in ranking or []:
+        if isinstance(entry, dict) and isinstance(entry.get("template_version_id"), int):
+            score = entry.get("score")
+            if isinstance(score, (int, float)):
+                scores[entry["template_version_id"]] = float(score)
+    return scores
 
 
 def llm_config(ocr: OcrSettings, settings: Settings) -> dict:
@@ -231,19 +257,30 @@ def _conflict(code: str) -> AppError:
 
 
 async def template_options(db: AsyncSession, job: OcrJob) -> dict:
+    scores = await auto_scores(db, job.id)
     templates = [
         {
             "template_id": t.id,
             "template_version_id": v.id,
             "code": t.code,
             "name": v.name,
+            "score": scores.get(v.id),
+            "recommended": False,
         }
         for t, v in await available_versions(db, job.tenant_id)
     ]
+    # By score, unscored last; the best scored one is "recommended" (FR-OCR-024).
+    templates.sort(key=lambda o: (o["score"] is None, -(o["score"] or 0.0)))
+    if templates and templates[0]["score"] is not None:
+        templates[0]["recommended"] = True
     last = (
         await db.execute(
             select(TemplateMapping.error_code)
-            .where(TemplateMapping.job_id == job.id, TemplateMapping.status == states.FAILED)
+            .where(
+                TemplateMapping.job_id == job.id,
+                TemplateMapping.status == states.FAILED,
+                TemplateMapping.source != AUTO,  # automatic failures are quiet
+            )
             .order_by(TemplateMapping.created_at.desc())
             .limit(1)
         )

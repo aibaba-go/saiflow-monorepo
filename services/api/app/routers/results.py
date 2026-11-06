@@ -31,12 +31,19 @@ class MappingStateOut(BaseModel):
     error: str | None
 
 
+class MatchOut(BaseModel):
+    template_version_id: int
+    score: float | None
+    low_score: bool
+
+
 class ResultOut(BaseModel):
     version: int
     structured: dict[str, Any] | list[Any] | None
     template: TemplateOut | None
     missing_required: list[str]
     mapping: MappingStateOut | None
+    match: MatchOut | None = None
     confirmed: bool
 
 

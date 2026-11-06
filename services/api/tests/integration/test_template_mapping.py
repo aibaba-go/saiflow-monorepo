@@ -156,27 +156,148 @@ async def test_auto_match_and_convert(api, line, store, sm, ai_settings, llm, db
     assert (await api.get(f"{JOBS}/{job['id']}")).json()["template_name"].startswith("Tax Invoice")
 
 
-async def test_no_fit_offers_options(
+async def test_low_score_stays_free_form(
     api, line, store, sm, ai_settings, llm, db
 ):  # AC-FR-OCR-019-02
     await login(api, line)
     versions = await _versions(db)
     job = await recognised(api, store, sm, ai_settings, llm)
     llm.replies["match"] = [
-        {"ranking": [{"template_version_id": versions["billing_note"], "score": 0.2}]}
+        {
+            "ranking": [
+                {"template_version_id": versions["billing_note"], "score": 0.55},
+                {"template_version_id": versions["tax_invoice"], "score": 0.30},
+            ]
+        }
     ]
-    llm.replies["convert"] = [NO_PRIMARY]
     await mapping_pass(sm, ai_settings, llm)
+    assert "convert" not in llm.calls  # below 70%: no conversion
     status, code = (
         await db.execute(text("select status, error_code from template_mappings"))
     ).one()
-    assert (status, code) == ("FAILED", "PRIMARY_MISSING")
-    version, structured, mapping_id, _, pending = await _current(db, job["id"])
-    assert (version, mapping_id, pending) == (1, None, None)  # still the generic result
+    assert (status, code) == ("FAILED", "NO_TEMPLATE_FIT")
     assert await _stage(api, job["id"]) == "VERIFYING"
+    result = (await api.get(f"{JOBS}/{job['id']}/result")).json()
+    assert result["template"] is None and result["mapping"] is None  # free-form, no error
     body = (await api.get(f"{JOBS}/{job['id']}/template-options")).json()
-    assert len(body["templates"]) == 2 and body["generic"] is True
-    assert body["last_failure"] == "PRIMARY_MISSING"
+    assert [o["code"] for o in body["templates"]] == ["billing_note", "tax_invoice"]
+    assert [o["score"] for o in body["templates"]] == [0.55, 0.3]
+    assert [o["recommended"] for o in body["templates"]] == [True, False]
+    assert body["generic"] is True and body["last_failure"] is None
+
+
+async def test_auto_primary_missing_is_quiet(api, line, store, sm, ai_settings, llm, db):
+    # AC-FR-OCR-019-03
+    await login(api, line)
+    versions = await _versions(db)
+    job = await recognised(api, store, sm, ai_settings, llm)
+    llm.replies["match"] = [
+        {"ranking": [{"template_version_id": versions["tax_invoice"], "score": 0.85}]}
+    ]
+    llm.replies["convert"] = [{k: v for k, v in TAX_OUTPUT.items() if k != "summary"}]
+    await mapping_pass(sm, ai_settings, llm)
+    result = (await api.get(f"{JOBS}/{job['id']}/result")).json()
+    assert result["template"] is None and result["mapping"] is None
+    assert await _stage(api, job["id"]) == "VERIFYING"
+
+
+async def test_no_templates_no_llm_call(api, line, store, sm, ai_settings, llm, db):
+    # AC-FR-OCR-019-04
+    await login(api, line)
+    await db.execute(text("update document_templates set status = 'DISABLED'"))
+    await db.commit()
+    job = await recognised(api, store, sm, ai_settings, llm)
+    await mapping_pass(sm, ai_settings, llm)
+    assert "match" not in llm.calls
+    assert (await db.execute(text("select count(*) from template_mappings"))).scalar() == 0
+    result = (await api.get(f"{JOBS}/{job['id']}/result")).json()
+    assert result["template"] is None and result["mapping"] is None
+
+
+async def test_single_candidate_still_scored(api, line, store, sm, ai_settings, llm, db):
+    await login(api, line)
+    versions = await _versions(db)
+    await db.execute(
+        text("update document_templates set status = 'DISABLED' where code = 'billing_note'")
+    )
+    await db.commit()
+    job = await recognised(api, store, sm, ai_settings, llm)
+    llm.replies["match"] = [
+        {"ranking": [{"template_version_id": versions["tax_invoice"], "score": 0.40}]}
+    ]
+    await mapping_pass(sm, ai_settings, llm)
+    assert llm.calls.count("match") == 1 and "convert" not in llm.calls
+    result = (await api.get(f"{JOBS}/{job['id']}/result")).json()
+    assert result["template"] is None and result["mapping"] is None
+
+
+async def test_manual_failure_shows_after_quiet_auto(api, line, store, sm, ai_settings, llm, db):
+    """Review Focus 2: auto low score is quiet; a manual failure shows; a later manual
+    success clears it."""
+    await login(api, line)
+    versions = await _versions(db)
+    job = await recognised(api, store, sm, ai_settings, llm)
+    llm.replies["match"] = [
+        {"ranking": [{"template_version_id": versions["billing_note"], "score": 0.45}]}
+    ]
+    await mapping_pass(sm, ai_settings, llm)
+    assert (await api.get(f"{JOBS}/{job['id']}/result")).json()["mapping"] is None
+    r = await api.post(
+        f"{JOBS}/{job['id']}/template", json={"template_version_id": versions["billing_note"]}
+    )
+    assert r.status_code == 202, r.text
+    llm.replies["convert"] = [NO_PRIMARY]
+    await mapping_pass(sm, ai_settings, llm)
+    mapping = (await api.get(f"{JOBS}/{job['id']}/result")).json()["mapping"]
+    assert mapping == {"status": "FAILED", "error": "PRIMARY_MISSING"}
+    r = await api.post(
+        f"{JOBS}/{job['id']}/template", json={"template_version_id": versions["tax_invoice"]}
+    )
+    assert r.status_code == 202, r.text
+    llm.replies["convert"] = [TAX_OUTPUT]
+    await mapping_pass(sm, ai_settings, llm)
+    result = (await api.get(f"{JOBS}/{job['id']}/result")).json()
+    assert result["mapping"] is None and result["template"]["name"].startswith("Tax Invoice")
+
+
+async def test_manual_low_score_hint(api, line, store, sm, ai_settings, llm, db):  # AC-024-02
+    await login(api, line)
+    versions = await _versions(db)
+    job = await recognised(api, store, sm, ai_settings, llm)
+    llm.replies["match"] = [
+        {"ranking": [{"template_version_id": versions["billing_note"], "score": 0.45}]}
+    ]
+    await mapping_pass(sm, ai_settings, llm)
+    await api.post(
+        f"{JOBS}/{job['id']}/template", json={"template_version_id": versions["billing_note"]}
+    )
+    llm.replies["convert"] = [
+        {"document": {"billing_date": "22.02.2024"}, "summary": {"total_amount": "1"}}
+    ]
+    await mapping_pass(sm, ai_settings, llm)
+    result = (await api.get(f"{JOBS}/{job['id']}/result")).json()
+    assert result["match"] == {
+        "template_version_id": versions["billing_note"],
+        "score": 0.45,
+        "low_score": True,
+    }
+
+
+async def test_template_version_details(api, line, db):  # AC-FR-OCR-024-03
+    await login(api, line)
+    versions = await _versions(db)
+    r = await api.get(f"/api/v1/templates/versions/{versions['tax_invoice']}")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["code"] == "tax_invoice" and body["groups"][0]["key"] == "document"
+    assert body["groups"][0]["items"][0]["names"]["zh"]  # field names per language
+    assert (await api.get("/api/v1/templates/versions/999999")).status_code == 404
+    await db.execute(
+        text("update document_templates set status = 'DISABLED' where code = 'tax_invoice'")
+    )
+    await db.commit()
+    r = await api.get(f"/api/v1/templates/versions/{versions['tax_invoice']}")
+    assert r.status_code == 404
 
 
 async def test_wrong_template_primary_missing(api, line, store, sm, ai_settings, llm, db):

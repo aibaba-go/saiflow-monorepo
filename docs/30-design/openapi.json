@@ -1221,6 +1221,36 @@
         "title": "MarkReadOut",
         "type": "object"
       },
+      "MatchOut": {
+        "properties": {
+          "low_score": {
+            "title": "Low Score",
+            "type": "boolean"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "template_version_id": {
+            "title": "Template Version Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "template_version_id",
+          "score",
+          "low_score"
+        ],
+        "title": "MatchOut",
+        "type": "object"
+      },
       "MeResponse": {
         "properties": {
           "avatar_url": {
@@ -2233,6 +2263,16 @@
               }
             ]
           },
+          "match": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MatchOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "missing_required": {
             "items": {
               "type": "string"
@@ -2537,6 +2577,22 @@
             "title": "Name",
             "type": "string"
           },
+          "recommended": {
+            "default": false,
+            "title": "Recommended",
+            "type": "boolean"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
           "template_id": {
             "title": "Template Id",
             "type": "integer"
@@ -2635,6 +2691,43 @@
           "groups"
         ],
         "title": "TemplateOut",
+        "type": "object"
+      },
+      "TemplateVersionOut": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "groups": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "template_id": {
+            "title": "Template Id",
+            "type": "integer"
+          },
+          "template_version_id": {
+            "title": "Template Version Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "template_version_id",
+          "template_id",
+          "code",
+          "name",
+          "groups"
+        ],
+        "title": "TemplateVersionOut",
         "type": "object"
       },
       "TicketOut": {
@@ -7386,6 +7479,67 @@
         "summary": "Submit Verification",
         "tags": [
           "organizations"
+        ]
+      }
+    },
+    "/api/v1/templates/versions/{version_id}": {
+      "get": {
+        "description": "A published template version's fields, for preview before applying (FR-OCR-024).",
+        "operationId": "getTemplateVersion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "title": "Version Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateVersionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Template Version",
+        "tags": [
+          "ocr"
         ]
       }
     },

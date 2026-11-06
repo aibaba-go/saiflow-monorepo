@@ -1317,6 +1317,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/templates/versions/{version_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Template Version
+         * @description A published template version's fields, for preview before applying (FR-OCR-024).
+         */
+        get: operations["getTemplateVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/uploads": {
         parameters: {
             query?: never;
@@ -1775,6 +1795,15 @@ export interface components {
             /** Updated */
             updated: number;
         };
+        /** MatchOut */
+        MatchOut: {
+            /** Low Score */
+            low_score: boolean;
+            /** Score */
+            score: number | null;
+            /** Template Version Id */
+            template_version_id: number;
+        };
         /** MeResponse */
         MeResponse: {
             /** Avatar Url */
@@ -2108,6 +2137,7 @@ export interface components {
             /** Confirmed */
             confirmed: boolean;
             mapping: components["schemas"]["MappingStateOut"] | null;
+            match?: components["schemas"]["MatchOut"] | null;
             /** Missing Required */
             missing_required: string[];
             /** Structured */
@@ -2209,6 +2239,13 @@ export interface components {
             code: string;
             /** Name */
             name: string;
+            /**
+             * Recommended
+             * @default false
+             */
+            recommended: boolean;
+            /** Score */
+            score?: number | null;
             /** Template Id */
             template_id: number;
             /** Template Version Id */
@@ -2237,6 +2274,21 @@ export interface components {
             }[];
             /** Name */
             name: string;
+            /** Template Version Id */
+            template_version_id: number;
+        };
+        /** TemplateVersionOut */
+        TemplateVersionOut: {
+            /** Code */
+            code: string;
+            /** Groups */
+            groups: {
+                [key: string]: unknown;
+            }[];
+            /** Name */
+            name: string;
+            /** Template Id */
+            template_id: number;
             /** Template Version Id */
             template_version_id: number;
         };
@@ -5133,6 +5185,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VerificationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getTemplateVersion: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                version_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateVersionOut"];
                 };
             };
             /** @description Validation Error */

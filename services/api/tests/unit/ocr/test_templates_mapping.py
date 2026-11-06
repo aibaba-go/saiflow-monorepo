@@ -390,14 +390,12 @@ def test_match_zero_candidates_fails(llm, sleeps):
     assert exc.value.code == MATCH_FAILED
 
 
-def test_match_single_candidate_skips_llm(llm, sleeps):
+def test_match_single_candidate_is_scored(llm, sleeps):
+    """One template still gets a score: below 70% it must not be applied (FR-OCR-019)."""
+    llm.replies["match"] = [_ranking((200, 0.4, "weak"))]
     result = matcher.match(_client(llm, sleeps), RAW_TAX_INVOICE, _cands(1))
-    assert (result.template_version_id, result.score, result.reason) == (
-        200,
-        None,
-        "single_candidate",
-    )
-    assert llm.requests == []
+    assert (result.template_version_id, result.score) == (200, 0.4)
+    assert len(llm.requests) == 1
 
 
 def test_match_picks_top_whitelisted_candidate(llm, sleeps):

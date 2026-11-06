@@ -35,6 +35,10 @@ PRIMARY_MISSING = "PRIMARY_MISSING"
 STALE_AFTER = timedelta(minutes=15)
 
 
+def _no_fit(result) -> bool:
+    return result.score is None or result.score < mapping_service.MATCH_THRESHOLD
+
+
 async def _claim(sm: async_sessionmaker[AsyncSession]) -> tuple[str, str] | None:
     async with sm() as db:
         row = (
@@ -135,11 +139,15 @@ async def run_once(
                         match_score=result.score,
                         match_reason=(result.reason or None) and result.reason[:255],
                         candidates=result.ranking,
-                        status=states.CONVERTING,
+                        status=states.MATCHING if _no_fit(result) else states.CONVERTING,
                         updated_at=utcnow(),
                     )
                 )
                 await db.commit()
+            if _no_fit(result):  # below 70%: free-form stays, quietly (FR-OCR-019)
+                raise MappingError(
+                    mapping_service.NO_TEMPLATE_FIT, f"best score {result.score} below threshold"
+                )
         async with sm() as db:
             mapping = await db.get(TemplateMapping, mapping_id, populate_existing=True)
             version = await db.get(DocumentTemplateVersion, mapping.template_version_id)
