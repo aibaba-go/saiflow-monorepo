@@ -2147,6 +2147,11 @@ export interface components {
             template: components["schemas"]["TemplateOut"] | null;
             /** Version */
             version: number;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: components["schemas"]["WarningOut"][];
         };
         /** RoleAssignedOut */
         RoleAssignedOut: {
@@ -2427,6 +2432,13 @@ export interface components {
         VerifiedOut: {
             /** Verified */
             verified: boolean;
+        };
+        /** WarningOut */
+        WarningOut: {
+            /** Code */
+            code: string;
+            /** Path */
+            path: string;
         };
     };
     responses: never;

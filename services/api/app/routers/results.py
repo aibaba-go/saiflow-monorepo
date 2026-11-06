@@ -37,6 +37,11 @@ class MatchOut(BaseModel):
     low_score: bool
 
 
+class WarningOut(BaseModel):
+    path: str
+    code: str
+
+
 class ResultOut(BaseModel):
     version: int
     structured: dict[str, Any] | list[Any] | None
@@ -44,6 +49,7 @@ class ResultOut(BaseModel):
     missing_required: list[str]
     mapping: MappingStateOut | None
     match: MatchOut | None = None
+    warnings: list[WarningOut] = []
     confirmed: bool
 
 

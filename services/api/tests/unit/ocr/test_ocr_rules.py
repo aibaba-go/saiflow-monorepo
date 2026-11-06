@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import httpx
+import pytest
 
 from app.ocr.templates import converter, normalize
 from app.ocr.templates.llm import parse_json
@@ -120,3 +121,21 @@ def test_billing_note_without_its_own_number_fits():
     doc = {"document": {"billing_date": "22.02.2024"}, "summary": {"total_amount": "6666.31"}}
     assert normalize.primary_missing(groups, normalize.fill_structure(groups, doc)) == []
     assert normalize.primary_missing(groups, {"document": {"billing_no": "B1"}}) != []
+
+
+@pytest.mark.parametrize("text", ["01.10.2569", "01-10-2569", "01/10/2026", "2026-10-01"])
+def test_dates_all_forms(text):  # FR-OCR-016
+    assert normalize.normalize_value("date", text) == ("2026-10-01", None)
+
+
+@pytest.mark.parametrize("text", ["฿ 16,050.4", "16,050.40 บาท", "THB 16050.4"])
+def test_amount_currency_and_padding(text):  # AC-FR-OCR-016-01
+    assert normalize.normalize_value("amount", text) == ("16050.40", None)
+
+
+def test_text_trimmed():
+    assert normalize.normalize_value("string", "  ACME  ") == ("ACME", None)
+
+
+def test_unparseable_amount_kept_with_warning():  # AC-FR-OCR-016-02
+    assert normalize.normalize_value("amount", "约一万") == ("约一万", normalize.TYPE_MISMATCH)

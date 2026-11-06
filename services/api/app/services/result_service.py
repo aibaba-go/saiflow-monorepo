@@ -85,6 +85,8 @@ async def payload(db: AsyncSession, job: OcrJob, version: ResultVersion) -> dict
         else [],
         "mapping": await _mapping_state(db, job),
         "match": await _match(db, job),
+        # Values that do not fit the field type, on the current content (FR-OCR-016).
+        "warnings": normalize.type_warnings(groups, version.structured) if groups else [],
         "confirmed": job.review_status == "CONFIRMED",
     }
 

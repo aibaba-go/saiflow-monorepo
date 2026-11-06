@@ -2309,6 +2309,14 @@
           "version": {
             "title": "Version",
             "type": "integer"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/WarningOut"
+            },
+            "title": "Warnings",
+            "type": "array"
           }
         },
         "required": [
@@ -3145,6 +3153,24 @@
           "verified"
         ],
         "title": "VerifiedOut",
+        "type": "object"
+      },
+      "WarningOut": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "code"
+        ],
+        "title": "WarningOut",
         "type": "object"
       }
     }

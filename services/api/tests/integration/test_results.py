@@ -345,3 +345,19 @@ async def test_may_confirm_follows_scanning(line, mail, db, case, expected):
         )
     await db.commit()
     assert await metering_service.may_confirm(db, tid, utcnow()) is expected
+
+
+async def test_type_warning_on_result_clears_after_fix(api, line, store, sm, ai_settings, llm, db):
+    """AC-FR-OCR-016-02: an unparseable amount is kept and flagged; fixing it clears it."""
+    await login(api, line)
+    job = await tax_job(api, store, sm, ai_settings, llm, db)
+    body = await result(api, job["id"])
+    body["structured"]["summary"]["net_total"] = "约一万"
+    saved = await save(api, job["id"], body["version"], body["structured"])
+    assert saved.status_code == 200, saved.text
+    out = saved.json()
+    assert out["structured"]["summary"]["net_total"] == "约一万"
+    assert {"path": "summary.net_total", "code": "type_mismatch"} in out["warnings"]
+    out["structured"]["summary"]["net_total"] = "10000.00"
+    fixed = await save(api, job["id"], out["version"], out["structured"])
+    assert all(w["path"] != "summary.net_total" for w in fixed.json()["warnings"])
