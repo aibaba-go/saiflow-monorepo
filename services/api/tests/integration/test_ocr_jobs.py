@@ -224,3 +224,34 @@ async def test_guest_job_claimed_on_registration(api, line, mail, store, db):  #
     ).scalar()
     assert file_owner == me["user_id"]
     assert (await api.get(f"{JOBS}/{job['id']}")).status_code == 200
+
+
+async def test_browsing_member_cannot_change_others_jobs(api, line, store, db):
+    """data_browse shows a colleague's job; changing it needs verify_others (final review 3)."""
+    owner = client_like(api)
+    me = await login(owner, line, "OWNER")
+    org, _ = await make_org(db, me["user_id"])
+    await db.execute(
+        text(
+            "insert into subscriptions (tenant_id, plan_code, period, starts_at, ends_at, source) "
+            "values (:t, 'starter', 'month', now() - interval '1 day', now() + interval '20 days', "
+            "'admin')"
+        ),
+        {"t": org},
+    )
+    await db.commit()
+    viewer_role = await make_role(db, org, "Viewer", ["data_browse", "upload_ocr"])
+    member = await login(api, line, "M1")
+    await add_member(db, org, member["user_id"], viewer_role)
+    job = (await new_job(owner, headers=tenant(org))).json()
+    h = tenant(org)
+    assert (await api.post(f"{JOBS}/{job['id']}/cancel", headers=h)).status_code == 403
+    await db.execute(text("update ocr_jobs set status='SUCCEEDED' where id=:j"), {"j": job["id"]})
+    await db.commit()
+    assert (await api.post(f"{JOBS}/{job['id']}/generic", headers=h)).status_code == 403
+    r = await api.post(f"{JOBS}/{job['id']}/template", json={"template_version_id": 1}, headers=h)
+    assert r.status_code == 403
+    assert (await api.delete(f"{JOBS}/{job['id']}/results", headers=h)).status_code == 403
+    assert (await api.post(f"{JOBS}/{job['id']}/rerun", headers=h)).status_code == 403
+    # the owner of the job still can
+    assert (await owner.post(f"{JOBS}/{job['id']}/generic", headers=h)).status_code != 403

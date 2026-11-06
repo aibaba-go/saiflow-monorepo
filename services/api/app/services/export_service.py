@@ -110,6 +110,9 @@ async def create(
 
 
 async def _visible_export(db: AsyncSession, ctx: TenantContext, export_id: str) -> Export:
+    """A live export of a job the caller can see; downloading needs the export permission
+    (FR-SYS-107, final review 8)."""
+    require(ctx, Permission.EXPORT)
     export = await db.get(Export, export_id)
     if export is None:
         raise not_found()
@@ -157,6 +160,8 @@ async def ticket(
 ) -> str:
     key = _key(settings)
     export = await _visible_export(db, ctx, export_id)
+    if export.created_by_user_id != ctx.user_id:  # a ticket only for one's own export
+        raise not_found()
     expires = int((utcnow() + TICKET_TTL).timestamp())
     payload = f"{export.id}.{principal.user_id or 0}.{principal.session_id}.{expires}"
     sig = hmac.new(key, payload.encode("ascii"), hashlib.sha256).digest()

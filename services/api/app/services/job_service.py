@@ -281,8 +281,16 @@ def _int(raw: str | None, field: str, low: int, high: int) -> int | None:
     return int(raw)
 
 
+def require_edit(ctx: TenantContext, job: OcrJob, own: Permission = Permission.VERIFY_OWN) -> None:
+    """Changing a job: `own` for the submitter's own job, verify_others for anyone else's.
+    Seeing a colleague's job (data_browse) is not enough (final review 3)."""
+    mine = job.created_by_user_id == ctx.user_id
+    require(ctx, own if mine else Permission.VERIFY_OTHERS)
+
+
 async def cancel(db: AsyncSession, ctx: TenantContext, principal: Principal, job_id: str) -> OcrJob:
     job = await job_access(db, ctx, job_id, for_update=True)
+    require_edit(ctx, job, Permission.UPLOAD_OCR)
     if job.status in states.TERMINAL:
         raise AppError(409, "job_terminal", "error.job_terminal")
     if job.status == states.CANCEL_REQUESTED:
@@ -301,6 +309,7 @@ async def cancel(db: AsyncSession, ctx: TenantContext, principal: Principal, job
 async def rerun(db: AsyncSession, ctx: TenantContext, principal: Principal, job_id: str) -> OcrJob:
     require(ctx, Permission.UPLOAD_OCR)
     old = await job_access(db, ctx, job_id, for_update=True)
+    require_edit(ctx, old, Permission.UPLOAD_OCR)
     if old.status not in states.TERMINAL:
         raise AppError(409, "job_not_terminal", "error.job_not_terminal")
     file = await db.get(File, old.file_id)
@@ -316,6 +325,7 @@ async def delete_results(
 ) -> None:
     """Versions, template mappings and exports go; the raw result stays (T7)."""
     job = await job_access(db, ctx, job_id, for_update=True)
+    require_edit(ctx, job)
     if job.status not in states.TERMINAL:
         raise AppError(409, "job_not_terminal", "error.job_not_terminal")
     job.current_mapping_id = job.pending_mapping_id = job.confirmed_version_id = None

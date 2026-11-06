@@ -166,3 +166,57 @@ async def test_language_gets_its_own_file(api, line, mail, store, sm, ai_setting
     assert f"exports/{th.json()['id']}.th.xlsx" in store.objects
     bad = await api.post(f"{JOBS}/{job['id']}/exports", json={"language": "fr"})
     assert bad.status_code == 400
+
+
+async def test_download_needs_export_and_ticket_is_own(api, line, mail, store, db, ticket_secret):
+    """A colleague who can browse the job but lacks export cannot download; nobody gets a
+    ticket for someone else's export (final review 8)."""
+    import uuid
+
+    from tests.integration.tenancy_helpers import add_member, make_org, make_role, tenant
+    from tests.integration.test_ocr_jobs import new_job
+
+    owner = client_like(api)
+    me = await login(owner, line, "OWNER")
+    org, _ = await make_org(db, me["user_id"])
+    await db.execute(
+        text(
+            "insert into subscriptions (tenant_id, plan_code, period, starts_at, ends_at, source) "
+            "values (:t, 'starter', 'month', now() - interval '1 day', now() + interval '20 days', "
+            "'admin')"
+        ),
+        {"t": org},
+    )
+    await db.commit()
+    viewer = await make_role(db, org, "Viewer", ["data_browse"])
+    exporter = await make_role(db, org, "Exporter", ["data_browse", "export"])
+    v = await login(api, line, "V1")
+    await add_member(db, org, v["user_id"], viewer)
+    other = client_like(api)
+    e = await login(other, line, "E1")
+    await add_member(db, org, e["user_id"], exporter)
+    job = (await new_job(owner, headers=tenant(org))).json()
+    vid, xid = str(uuid.uuid4()), str(uuid.uuid4())
+    await db.execute(
+        text(
+            "insert into result_versions (id, job_id, version, structured) "
+            "values (:v, :j, 1, '{}'::jsonb)"
+        ),
+        {"v": vid, "j": job["id"]},
+    )
+    await db.execute(
+        text(
+            "insert into exports (id, job_id, result_version_id, format, status, storage_path, "
+            "expires_at, created_by_user_id) values (:x, :j, :v, 'XLSX', 'READY', :p, "
+            "now() + interval '1 hour', :u)"
+        ),
+        {"x": xid, "j": job["id"], "v": vid, "p": f"exports/{xid}.en.xlsx", "u": me["user_id"]},
+    )
+    await db.commit()
+    await store.put(f"exports/{xid}.en.xlsx", b"x", "application/octet-stream")
+    h = tenant(org)
+    assert (await api.get(f"/api/v1/exports/{xid}/download", headers=h)).status_code == 403
+    assert (await api.post(f"/api/v1/exports/{xid}/ticket", headers=h)).status_code == 403
+    assert (await other.post(f"/api/v1/exports/{xid}/ticket", headers=h)).status_code == 404
+    assert (await other.get(f"/api/v1/exports/{xid}/download", headers=h)).status_code == 200
+    assert (await owner.post(f"/api/v1/exports/{xid}/ticket", headers=h)).status_code == 200

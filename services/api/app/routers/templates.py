@@ -70,6 +70,7 @@ async def apply_template(
     if not isinstance(req.template_version_id, int) or isinstance(req.template_version_id, bool):
         raise AppError(400, "validation_error", "error.validation", ["template_version_id"])
     job = await job_service.job_access(db, ctx, job_id, for_update=True)
+    job_service.require_edit(ctx, job)
     result, mapping = await mapping_service.apply_template(
         db, job, req.template_version_id, ctx.user_id
     )
@@ -83,6 +84,7 @@ async def apply_template(
 @router.post("/{job_id}/generic", operation_id="useGenericResult", response_model=MappingOut)
 async def use_generic(job_id: str, ctx: Tenant, principal: Caller, db: Db) -> MappingOut:
     job = await job_service.job_access(db, ctx, job_id, for_update=True)
+    job_service.require_edit(ctx, job)
     await mapping_service.use_generic(db, job)
     await job_service.audit(db, principal, "template.generic", job.id)
     await db.commit()

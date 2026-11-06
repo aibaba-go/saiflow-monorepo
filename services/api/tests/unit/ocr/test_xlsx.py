@@ -15,7 +15,7 @@ GROUPS = canonical_groups(
 )
 STRUCTURED = {
     "document": {"invoice_no": "007123", "invoice_date": "2026-10-01"},
-    "seller": {"name": '=HYPERLINK("x")', "tax_id": "0105500000001"},
+    "seller": {"name": '=HYPERLINK("x")', "tax_id": "0105500000001", "phone": "+66 81 234 5678"},
     "goods": {
         "line_items": [{"seq": 1, "description": "A", "quantity": "3", "amount": "15000.00"}]
     },
@@ -39,7 +39,9 @@ def test_template_layout_strings_and_hidden_ref():
     assert "007123" in flat  # leading zeros kept
     number_cells = [c for row in main.iter_rows() for c in row if c.value == "007123"]
     assert number_cells[0].data_type == "s"
-    assert '\'=HYPERLINK("x")' in flat  # a formula never runs
+    # a formula never runs, and no visible apostrophe is added (final review 7)
+    formula = [c for row in main.iter_rows() for c in row if c.value == '=HYPERLINK("x")']
+    assert formula and formula[0].data_type == "s" and formula[0].quotePrefix
     # header groups before the line table
     label_row = next(i for i, r in enumerate(rows) if "เลขที่ใบกำกับภาษี" in r)
     table_row = next(i for i, r in enumerate(rows) if "15000.00" in r)
@@ -62,3 +64,9 @@ def test_generic_keeps_saved_order():
     flat = [v for r in rows for v in r if v is not None]
     assert flat.index("buyer") < flat.index("name") < flat.index("phone") < flat.index("items")
     assert hidden["_saiflow"]["A1"].value == "generic"
+
+
+def test_text_kept_as_written():
+    rows, _, _ = _cells(build_xlsx(STRUCTURED, ("Tax Invoice", GROUPS), "en", (12, 3)))
+    flat = [v for r in rows for v in r if v is not None]
+    assert "+66 81 234 5678" in flat  # not "'+66 ..."

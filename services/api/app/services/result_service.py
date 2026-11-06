@@ -16,10 +16,9 @@ from app.errors import AppError
 from app.models import DocumentTemplateVersion, OcrJob, ResultVersion, TemplateMapping, User
 from app.ocr import states
 from app.ocr.templates import normalize
-from app.permissions import Permission
-from app.services import mapping_service, subscription_service
+from app.services import job_service, mapping_service, subscription_service
 from app.services.session_service import Principal
-from app.services.tenant_access import TenantContext, require
+from app.services.tenant_access import TenantContext
 
 MAX_STRUCTURE_BYTES = 2_000_000
 
@@ -87,8 +86,7 @@ async def read(db: AsyncSession, job: OcrJob) -> dict:
 
 
 def _may_edit(ctx: TenantContext, job: OcrJob) -> None:
-    own = job.created_by_user_id == ctx.user_id
-    require(ctx, Permission.VERIFY_OWN if own else Permission.VERIFY_OTHERS)
+    job_service.require_edit(ctx, job)
 
 
 async def _gate(

@@ -1,7 +1,9 @@
 """A confirmed result as XLSX (FR-ENTRY-015, PRD §4.4): grouped header fields as
 label | value rows, then each line table with its column headers. Every cell is text
-(leading zeros and the amount text kept); text that Excel would run as a formula gets a
-leading apostrophe (main `_safe_cell`). A hidden sheet `_saiflow` carries the template
+(leading zeros and the amount text kept, exactly as written). Text that Excel would run
+as a formula is marked with the quote-prefix style, so it stays text even when edited,
+without a visible apostrophe (main `_safe_cell` added one). A hidden sheet `_saiflow`
+carries the template
 reference in A1: `template:<id>:v<version>` or `generic`."""
 
 import io
@@ -18,10 +20,11 @@ TITLE = Font(bold=True, size=14)
 
 
 def safe_cell(value: Any) -> str:
-    text = "" if value is None else value if isinstance(value, str) else str(value)
-    if _PLAIN_NUMBER.match(text):
-        return text
-    return "'" + text if text[:1] in ("=", "+", "-", "@") else text
+    return "" if value is None else value if isinstance(value, str) else str(value)
+
+
+def _formula_like(text: str) -> bool:
+    return text[:1] in ("=", "+", "-", "@") and not _PLAIN_NUMBER.match(text)
 
 
 def label(item: dict, language: str) -> str:
@@ -31,8 +34,11 @@ def label(item: dict, language: str) -> str:
 
 def _put(ws, row: int, col: int, value: Any, *, bold: bool = False, fill: bool = False):
     cell = ws.cell(row=row, column=col)
-    cell.value = safe_cell(value)
+    text = safe_cell(value)
+    cell.value = text
     cell.data_type = "s"
+    if _formula_like(text):
+        cell.quotePrefix = True
     if bold:
         cell.font = BOLD
     if fill:
