@@ -691,6 +691,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/file-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import File */
+        post: operations["importFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/files/pending": {
         parameters: {
             query?: never;
@@ -1681,6 +1698,11 @@ export interface components {
             status: "ok" | "degraded";
             /** Version */
             version: string;
+        };
+        /** ImportIn */
+        ImportIn: {
+            /** Url */
+            url?: string | null;
         };
         /** IntSettingIn */
         IntSettingIn: {
@@ -3814,6 +3836,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TicketOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    importFile: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileOut"];
                 };
             };
             /** @description Validation Error */

@@ -852,6 +852,23 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "ImportIn": {
+        "properties": {
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "title": "ImportIn",
+        "type": "object"
+      },
       "IntSettingIn": {
         "properties": {
           "value": {
@@ -5284,6 +5301,67 @@
         "summary": "Ticket",
         "tags": [
           "exports"
+        ]
+      }
+    },
+    "/api/v1/file-imports": {
+      "post": {
+        "operationId": "importFile",
+        "parameters": [
+          {
+            "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import File",
+        "tags": [
+          "uploads"
         ]
       }
     },

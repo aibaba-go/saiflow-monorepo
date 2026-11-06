@@ -7,8 +7,10 @@ Every lookup is inside the current tenant; anything the caller may not see is 40
 
 import asyncio
 import hashlib
+import re
 import uuid
 from datetime import timedelta
+from urllib.parse import unquote, urlsplit
 
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -155,6 +157,36 @@ async def complete(
     await db.flush()
     await _audit(db, principal, "file.upload", row.id)
     return row
+
+
+_UNSAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def import_name(url: str, kind: str) -> str:
+    """The file name of an import: the URL's last path segment, unsafe characters made
+    `_`, the extension that matches the content; `import.<kind>` when nothing is left."""
+    segment = unquote(urlsplit(url).path.rsplit("/", 1)[-1])
+    name = _UNSAFE_NAME.sub("_", segment).strip("._")[:200]
+    stem = name.rsplit(".", 1)[0] if "." in name else name
+    return f"{stem or 'import'}.{kind}"[:NAME_MAX]
+
+
+async def import_bytes(
+    db: AsyncSession,
+    store: ObjectStore,
+    ctx: TenantContext,
+    principal: Principal,
+    url: str,
+    data: bytes,
+) -> File:
+    """An imported file goes through the same three steps as an upload, so the same rules
+    apply (FR-UPLOAD-003, FR-UPLOAD-014); it lands in Pending, never started."""
+    kind = inspect.sniff(data)
+    if kind is None:
+        raise rejected("unsupported_format")
+    row = await create_upload(db, ctx, principal, import_name(url, kind))
+    await put_content(db, store, ctx, row.id, data)
+    return await complete(db, store, ctx, principal, row.id)
 
 
 async def purge_expired(db: AsyncSession, store: ObjectStore) -> int:
