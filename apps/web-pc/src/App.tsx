@@ -10,7 +10,11 @@ import { RequireUser } from "./auth/RequireUser";
 import { forgetSession, useSessionNotice } from "./auth/session";
 import { useT, type MessageKey } from "./i18n";
 import { AppLayout } from "./layout/AppLayout";
+import { DataBrowsePage } from "./pages/DataBrowsePage";
 import { HealthPage } from "./pages/HealthPage";
+import { HomePage } from "./pages/HomePage";
+import { OrgGate } from "./pages/OrgGate";
+import { ProfilePage } from "./pages/ProfilePage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterGuidePage } from "./pages/RegisterGuidePage";
 import { setUnauthenticatedHandler } from "./services/api";
@@ -59,13 +63,13 @@ export function AppRoutes() {
           <Route path="/health" element={<HealthPage />} />
           <Route element={<RequireUser />}>
             <Route element={<AppLayout />}>
-              <Route path="/" element={<Placeholder name="home" title="nav.home" />} />
-              <Route path="/org" element={<Placeholder name="org" title="nav.org" />} />
-              <Route path="/roles" element={<Placeholder name="roles" title="nav.roles" />} />
+              <Route path="/" element={<HomePage />} />
+              <Route path="/org" element={<OrgGate><Placeholder name="org" title="nav.org" /></OrgGate>} />
+              <Route path="/roles" element={<OrgGate><Placeholder name="roles" title="nav.roles" /></OrgGate>} />
               <Route path="/plans" element={<Placeholder name="plans" title="nav.plans" />} />
               <Route path="/notifications" element={<Placeholder name="notifications" title="nav.notifications" />} />
-              <Route path="/profile" element={<Placeholder name="profile" title="nav.profile" />} />
-              <Route path="/data" element={<Placeholder name="data" title="nav.data" />} />
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/data" element={<DataBrowsePage />} />
               <Route path="*" element={<NotFound />} />
             </Route>
           </Route>

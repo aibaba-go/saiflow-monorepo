@@ -238,4 +238,9 @@ export const zh: Record<MessageKey, string> = {
   "nav.data": "数据浏览",
   "app.title": "SaiFlow",
   "common.notFound": "页面不存在。",
+  "profile.phone": "手机号",
+  "profile.line": "LINE",
+  "profile.lineLinked": "已关联",
+  "profile.edit": "修改资料",
+  "profile.saved": "已保存。",
 };

@@ -238,4 +238,9 @@ export const th: Record<MessageKey, string> = {
   "nav.data": "เรียกดูข้อมูล",
   "app.title": "SaiFlow",
   "common.notFound": "ไม่พบหน้านี้",
+  "profile.phone": "โทรศัพท์",
+  "profile.line": "LINE",
+  "profile.lineLinked": "เชื่อมต่อแล้ว",
+  "profile.edit": "แก้ไขโปรไฟล์",
+  "profile.saved": "บันทึกแล้ว",
 };

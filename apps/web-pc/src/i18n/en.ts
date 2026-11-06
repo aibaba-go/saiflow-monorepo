@@ -236,6 +236,11 @@ export const en = {
   "nav.data": "Data browse",
   "app.title": "SaiFlow",
   "common.notFound": "Page not found.",
+  "profile.phone": "Phone",
+  "profile.line": "LINE",
+  "profile.lineLinked": "Linked",
+  "profile.edit": "Edit profile",
+  "profile.saved": "Saved.",
 } as const;
 
 export type MessageKey = keyof typeof en;

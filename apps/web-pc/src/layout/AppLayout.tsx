@@ -1,8 +1,15 @@
-import { Layout, Menu, Space, Typography } from "antd";
+import { App, Layout, Menu, Space, Spin, Typography } from "antd";
+import { useEffect } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 
-import { useMe } from "../auth/session";
+import { useMe, useMyTenants } from "../auth/session";
+import { ErrorText } from "../components/ErrorText";
 import { useT, type MessageKey } from "../i18n";
+import { BellBadge } from "../notifications/BellBadge";
+import { can } from "../tenants/permissions";
+import { TenantSwitcher } from "../tenants/TenantSwitcher";
+import { useTenantChoice } from "../tenants/useCurrentTenant";
+import { useTenant } from "../tenants/useTenant";
 import { LanguageSwitch } from "./LanguageSwitch";
 import { LogoutButton } from "./LogoutButton";
 
@@ -28,10 +35,34 @@ function selected(pathname: string): string {
   return match[0]?.key ?? "home";
 }
 
-export function AppLayout({ hidden = [] }: { hidden?: string[] }) {
+/** Keep the tenant list in the tenant store and show its one-off notice (AC-096-03). */
+function useTenantsLoader() {
+  const tenants = useMyTenants();
+  const setTenants = useTenantChoice((s) => s.setTenants);
+  const notice = useTenantChoice((s) => s.notice);
+  const clearNotice = useTenantChoice((s) => s.clearNotice);
+  const { message } = App.useApp();
+  const t = useT();
+  useEffect(() => {
+    if (tenants.data) setTenants(tenants.data);
+  }, [tenants.data, setTenants]);
+  useEffect(() => {
+    if (!notice) return;
+    void message.warning(t(notice));
+    clearNotice();
+  }, [notice, clearNotice, message, t]);
+  return tenants;
+}
+
+export function AppLayout() {
   const t = useT();
   const location = useLocation();
   const me = useMe();
+  const tenants = useTenantsLoader();
+  const loaded = useTenantChoice((s) => s.tenants) !== null;
+  const { tenant } = useTenant();
+  // Roles only in an organization, for those holding role management (FR-SYS-094).
+  const hidden = tenant?.kind === "organization" && can(tenant, "role_manage") ? [] : ["roles"];
   return (
     <Layout style={{ minHeight: "100vh", minWidth: 1280 }}>
       <Layout.Sider width={220}>
@@ -51,13 +82,15 @@ export function AppLayout({ hidden = [] }: { hidden?: string[] }) {
           style={{ background: "#fff", display: "flex", justifyContent: "flex-end", alignItems: "center", paddingInline: 16 }}
         >
           <Space size="middle">
+            <TenantSwitcher />
+            <BellBadge />
             <LanguageSwitch />
             <Typography.Text strong>{me.data?.display_name}</Typography.Text>
             <LogoutButton />
           </Space>
         </Layout.Header>
         <Layout.Content style={{ padding: 24 }}>
-          <Outlet />
+          {tenants.isError && !loaded ? <ErrorText error={tenants.error} /> : loaded ? <Outlet /> : <Spin />}
         </Layout.Content>
       </Layout>
     </Layout>
