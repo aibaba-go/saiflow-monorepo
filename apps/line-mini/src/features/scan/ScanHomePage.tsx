@@ -16,6 +16,7 @@ import { useCurrentTenant } from "../tenants/useCurrentTenant";
 import { deleteFile, importUrl, listJobs, type FileOut } from "./api";
 import { JobListItem } from "./components/JobListItem";
 import { usePending } from "./jobs";
+import { ReviewEntry } from "../reviews/ReviewEntry";
 import s from "./ScanHomePage.module.css";
 import theme from "./theme.module.css";
 import { formatSize, useUploadQueue, type UploadItem } from "./uploadQueue";
@@ -313,6 +314,8 @@ function ScanHome() {
             </button>
           </div>
         )}
+
+        <ReviewEntry />
 
         {mayUpload && (
           <>

@@ -1,0 +1,247 @@
+/* Review pages (FR-SYS-119-121), in the scan pages' theme tokens. */
+.page {
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  padding-bottom: 96px;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  border: none;
+  border-radius: 16px;
+  background: var(--card);
+  color: var(--text);
+  text-align: left;
+  box-shadow: 0 1px 3px rgba(17, 24, 39, 0.06);
+}
+
+.entry-title {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.badge {
+  min-width: 24px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.tab {
+  flex: 1;
+  padding: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tab.active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--text);
+  text-align: left;
+}
+
+.item-name {
+  font-size: 14px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.blocked {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--warning, #b45309);
+}
+
+.status-line {
+  padding: 24px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.error {
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--card);
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.record {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.record:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.approve {
+  color: var(--success, #15803d);
+  font-weight: 700;
+}
+
+.return {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.action-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: var(--card);
+  box-shadow: 0 -1px 6px rgba(17, 24, 39, 0.08);
+}
+
+.action-bar button {
+  flex: 1;
+  height: 44px;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.secondary {
+  background: var(--border);
+  color: var(--text);
+}
+
+.textarea {
+  width: 100%;
+  min-height: 84px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.row:first-of-type {
+  border-top: none;
+}
+
+.select {
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.foot {
+  padding: 12px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.foot button {
+  border: none;
+  background: none;
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.85);
+  color: #fff;
+  font-size: 13px;
+  z-index: 60;
+}

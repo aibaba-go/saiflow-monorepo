@@ -19,6 +19,9 @@ import { ApplyOrgPage } from "./features/orgs/ApplyOrgPage";
 import { OrgPage } from "./features/orgs/OrgPage";
 import { RolesPage } from "./features/orgs/RolesPage";
 import { VerificationPage } from "./features/orgs/VerificationPage";
+import { ReviewDetailPage } from "./features/reviews/ReviewDetailPage";
+import { ReviewQueuePage } from "./features/reviews/ReviewQueuePage";
+import { ReviewSettingsPage } from "./features/reviews/ReviewSettingsPage";
 import { InvitePage } from "./features/invite/InvitePage";
 import { PlansPage } from "./features/billing/PlansPage";
 import { NotificationsPage } from "./features/notifications/NotificationsPage";
@@ -137,6 +140,9 @@ function MainShell() {
         <Route path="/org" element={<OrgPage />} />
         <Route path="/org/roles" element={<RolesPage />} />
         <Route path="/org/verification" element={<VerificationPage />} />
+        <Route path="/org/review-settings" element={<ReviewSettingsPage />} />
+        <Route path="/reviews" element={<ReviewQueuePage />} />
+        <Route path="/reviews/:id" element={<ReviewDetailPage />} />
         <Route path="/invite" element={<InvitePage />} />
         <Route path="/plans" element={<PlansPage />} />
         <Route path="/scan/confirm" element={<ConfirmPage />} />

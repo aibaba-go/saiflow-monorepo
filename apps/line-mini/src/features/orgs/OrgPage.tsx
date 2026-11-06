@@ -402,6 +402,9 @@ function OrgContent({ tenant }: { tenant: CurrentTenant }) {
       ))}
       <div className="card-row__actions">
         {can(tenant, "role_manage") && <Button onClick={() => navigate("/org/roles")}>{t("roles.title")}</Button>}
+        {tenant.is_owner && (
+          <Button onClick={() => navigate("/org/review-settings")}>{t("review.settings")}</Button>
+        )}
         {can(tenant, "verification_apply") && (
           <Button onClick={() => navigate("/org/verification")}>{t("org.verification")}</Button>
         )}
