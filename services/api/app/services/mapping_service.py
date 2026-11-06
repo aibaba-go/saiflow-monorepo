@@ -195,6 +195,7 @@ async def switch_to(
     target.is_current = True
     job.current_mapping_id = mapping_id
     job.pending_mapping_id = None
+    job.mapping_switched_at = utcnow()  # failures from before this are settled
     job.table_count, job.field_count = (
         _count_structure(target.structured) if target.structured is not None else (0, 0)
     )
@@ -280,6 +281,11 @@ async def template_options(db: AsyncSession, job: OcrJob) -> dict:
                 TemplateMapping.job_id == job.id,
                 TemplateMapping.status == states.FAILED,
                 TemplateMapping.source != AUTO,  # automatic failures are quiet
+                *(
+                    [TemplateMapping.finished_at > job.mapping_switched_at]
+                    if job.mapping_switched_at
+                    else []
+                ),
             )
             .order_by(TemplateMapping.created_at.desc())
             .limit(1)

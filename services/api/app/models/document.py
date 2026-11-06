@@ -112,6 +112,8 @@ class OcrJob(Base):
         ForeignKey("template_mappings.id", deferrable=True, initially="DEFERRED", use_alter=True),
         index=True,
     )
+    # When the current result last switched template or to generic (final review 3).
+    mapping_switched_at: Mapped[datetime | None] = mapped_column(_TS)
     confirmed_at: Mapped[datetime | None] = mapped_column(_TS)
     confirmed_by_user_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("users.id"), index=True

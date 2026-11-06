@@ -51,7 +51,18 @@ async def _mapping_state(db: AsyncSession, job: OcrJob) -> dict | None:
             .limit(1)
         )
     ).scalar_one_or_none()
-    if latest is not None and latest.status == states.FAILED and not mapping_service.quiet(latest):
+    settled = (
+        job.mapping_switched_at is not None
+        and latest is not None
+        and latest.finished_at is not None
+        and latest.finished_at <= job.mapping_switched_at
+    )
+    if (
+        latest is not None
+        and latest.status == states.FAILED
+        and not mapping_service.quiet(latest)
+        and not settled
+    ):
         return {"status": latest.status, "error": latest.error_code}
     return None
 

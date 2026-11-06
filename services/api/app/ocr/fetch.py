@@ -6,8 +6,8 @@ services:
 - the host is resolved first and every address must be global (IPv4-mapped IPv6 unwrapped;
   numeric hosts such as `2130706433` or `0x7f000001` are read as addresses);
 - redirects are followed by hand, at most `max_redirects`, each new URL checked again;
-- after connecting, the peer address is checked once more (a DNS answer that changed
-  between the check and the connection fails too);
+- the connection goes to the checked address (the name only in Host and TLS), so a DNS
+  answer that changes after the check cannot redirect it; the peer is checked again;
 - at most `max_bytes`, and `timeout` seconds in all.
 """
 
@@ -89,12 +89,13 @@ def parse_url(url: str) -> httpx.URL:
     return parsed
 
 
-async def _check_host(parsed: httpx.URL, resolver: Resolver) -> None:
+async def _check_host(parsed: httpx.URL, resolver: Resolver) -> str:
+    """The address to connect to: every resolved address must be global."""
     literal = _literal(parsed.host)
     if literal is not None:
         if not allowed(literal):
             raise AddressNotAllowed(parsed.host)
-        return
+        return str(literal)
     try:
         addresses = await resolver(
             parsed.host, parsed.port or (443 if parsed.scheme == "https" else 80)
@@ -105,6 +106,7 @@ async def _check_host(parsed: httpx.URL, resolver: Resolver) -> None:
         raise FetchFailed(f"cannot resolve {parsed.host}")
     if not all(allowed(a) for a in addresses):
         raise AddressNotAllowed(parsed.host)
+    return addresses[0]
 
 
 def _check_peer(response: httpx.Response) -> None:
@@ -122,9 +124,20 @@ async def _fetch(url, max_bytes, max_redirects, resolver, transport, timeout) ->
         transport=transport, follow_redirects=False, timeout=timeout, trust_env=False
     ) as client:
         for _hop in range(max_redirects + 1):
-            await _check_host(current, resolver)
+            address = await _check_host(current, resolver)
+            # Connect to the checked address itself: httpx must not resolve the name again
+            # (a DNS answer that changes in between would reach an internal host). The
+            # name stays in Host and in TLS (SNI and the certificate check).
+            pinned = current.copy_with(host=address)
             async with client.stream(
-                "GET", current, headers={"User-Agent": "saiflow-import/1.0"}
+                "GET",
+                pinned,
+                headers={
+                    "User-Agent": "saiflow-import/1.0",
+                    "Host": current.netloc.decode("ascii"),
+                    "Accept-Encoding": "identity",
+                },
+                extensions={"sni_hostname": current.host},
             ) as response:
                 _check_peer(response)
                 if response.status_code in _REDIRECTS:

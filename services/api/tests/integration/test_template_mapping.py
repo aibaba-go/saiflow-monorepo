@@ -496,3 +496,32 @@ async def test_blank_required_field_still_fits(api, line, store, sm, ai_settings
     body = (await api.get(f"{JOBS}/{job['id']}/result")).json()
     assert body["template"] is not None and body["mapping"] is None
     assert "buyer.name" in body["missing_required"]
+
+
+async def test_failure_card_clears_after_recovering(api, line, store, sm, ai_settings, llm, db):
+    """Final review 3: "Use generic" (or switching to a ready template) after a manual
+    failure hides the old failure; a newer manual failure shows again."""
+    await login(api, line)
+    versions = await _versions(db)
+    job = await recognised(api, store, sm, ai_settings, llm)
+    llm.replies["match"] = [
+        {"ranking": [{"template_version_id": versions["billing_note"], "score": 0.45}]}
+    ]
+    await mapping_pass(sm, ai_settings, llm)
+    await api.post(
+        f"{JOBS}/{job['id']}/template", json={"template_version_id": versions["billing_note"]}
+    )
+    llm.replies["convert"] = [NO_PRIMARY]
+    await mapping_pass(sm, ai_settings, llm)
+    assert (await api.get(f"{JOBS}/{job['id']}/result")).json()["mapping"]["status"] == "FAILED"
+    assert (await api.post(f"{JOBS}/{job['id']}/generic")).status_code == 200
+    result = (await api.get(f"{JOBS}/{job['id']}/result")).json()
+    assert result["mapping"] is None and result["template"] is None
+    options = (await api.get(f"{JOBS}/{job['id']}/template-options")).json()
+    assert options["last_failure"] is None
+    await api.post(
+        f"{JOBS}/{job['id']}/template", json={"template_version_id": versions["tax_invoice"]}
+    )
+    llm.replies["convert"] = [{"document": {"invoice_no": "X"}}]  # no net_total: fails
+    await mapping_pass(sm, ai_settings, llm)
+    assert (await api.get(f"{JOBS}/{job['id']}/result")).json()["mapping"]["status"] == "FAILED"

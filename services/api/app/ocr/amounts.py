@@ -95,21 +95,38 @@ def check(groups: list[dict], structured: Any) -> list[dict]:
     def value(role: str) -> Decimal | None:
         return header[role][2] if role in header else None
 
+    def _optional(role: str) -> tuple[Decimal, bool]:
+        """(value, usable): blank or absent → (0, True); written but not a number → (0, False)."""
+        if role not in header or _blank(header[role][1]):
+            return Decimal(0), True
+        parsed = header[role][2]
+        return (parsed, True) if parsed is not None else (Decimal(0), False)
+
     summed = sum(line_totals, Decimal(0)) if line_totals else None
     lines_total = value("lines_total")
     if lines_total is not None and summed is not None and _off(summed, lines_total):
         path, raw, _ = header["lines_total"]
         issues.append(_issue(path, summed, raw))
     left = lines_total if lines_total is not None else summed
-    discount = value("discount") or Decimal(0)
+    # A missing discount or tax counts as 0; one that is written but is not a number
+    # ("10%", "VAT 7%") stops the checks that need it. A discount printed negative is
+    # still a discount (final review 2).
+    discount, discount_ok = _optional("discount")
+    tax, tax_ok = _optional("tax")
+    discount = abs(discount)
     base = value("base")
-    if base is not None and left is not None and _off(left - discount, base):
+    if base is not None and left is not None and discount_ok and _off(left - discount, base):
         path, raw, _ = header["base"]
         issues.append(_issue(path, left - discount, raw))
     grand = value("grand_total")
-    before_tax = base if base is not None else (left - discount if left is not None else None)
-    if grand is not None and before_tax is not None:
-        expected = before_tax + (value("tax") or Decimal(0))
+    if base is not None:
+        before_tax = base
+    elif left is not None and discount_ok:
+        before_tax = left - discount
+    else:
+        before_tax = None
+    if grand is not None and before_tax is not None and tax_ok:
+        expected = before_tax + tax
         if _off(expected, grand):
             path, raw, _ = header["grand_total"]
             issues.append(_issue(path, expected, raw))

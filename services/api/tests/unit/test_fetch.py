@@ -54,7 +54,7 @@ async def test_redirect_rechecked():
     tr, seen = transport(handler)
     with pytest.raises(AddressNotAllowed):
         await fetch_public("https://files.example.com/a.pdf", resolver=resolver({}), transport=tr)
-    assert seen == ["https://files.example.com/a.pdf"]
+    assert seen == [f"https://{PUBLIC}/a.pdf"]  # the checked address, not the name
 
 
 async def test_too_many_redirects():
@@ -110,3 +110,41 @@ async def test_unresolvable_host_fails():
 
     with pytest.raises(FetchFailed):
         await fetch_public("https://nowhere.example/a.pdf", resolver=none)
+
+
+async def test_connects_to_the_checked_address():
+    """Final review 1: the request goes to the address that was checked (no second DNS
+    lookup by httpx), with the original Host and TLS name."""
+    seen: list[httpx.Request] = []
+
+    def handler(request):
+        seen.append(request)
+        return httpx.Response(200, content=b"%PDF-1.7")
+
+    await fetch_public(
+        "https://files.example.com:8443/a.pdf",
+        resolver=resolver({"files.example.com": [PUBLIC]}),
+        transport=httpx.MockTransport(handler),
+    )
+    req = seen[0]
+    assert req.url.host == PUBLIC and req.url.port == 8443
+    assert req.headers["host"] == "files.example.com:8443"
+    assert req.extensions.get("sni_hostname") == "files.example.com"
+
+
+async def test_redirect_to_a_rebinding_host_is_pinned_too():
+    seen: list[str] = []
+
+    def handler(request):
+        seen.append(request.url.host)
+        if request.url.path == "/a.pdf":
+            return httpx.Response(302, headers={"location": "https://cdn.example.net/b.pdf"})
+        return httpx.Response(200, content=b"%PDF-1.7")
+
+    out = await fetch_public(
+        "https://files.example.com/a.pdf",
+        resolver=resolver({"cdn.example.net": ["93.184.216.35"]}),
+        transport=httpx.MockTransport(handler),
+    )
+    assert seen == [PUBLIC, "93.184.216.35"]
+    assert out.final_url == "https://cdn.example.net/b.pdf"  # names, not addresses

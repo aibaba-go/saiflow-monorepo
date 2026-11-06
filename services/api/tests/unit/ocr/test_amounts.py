@@ -115,3 +115,27 @@ def test_billing_note_lines_and_total():
 def test_generic_or_garbage_structure():
     assert amounts.check(TAX, None) == []
     assert amounts.check(TAX, {"goods": "x", "summary": []}) == []
+
+
+@pytest.mark.parametrize(
+    ("discount", "vat", "issue"),
+    [
+        ("-100.00", "63.00", False),  # a discount printed negative is still a discount
+        ("10%", "63.00", False),  # not a number: the checks that need it are skipped
+        ("100.00", "VAT 7%", False),
+        ("100.00", "63.00", False),
+        ("100.00", "70.00", True),  # a real mismatch is still found
+    ],
+)
+def test_discount_and_tax_forms(discount, vat, issue):  # final review 2
+    doc = tax(
+        [{"amount": "1000.00"}],
+        {
+            "sub_total": "1000.00",
+            "discount_amount": discount,
+            "total_before_vat": "900.00",
+            "vat_amount": vat,
+            "net_total": "963.00",
+        },
+    )
+    assert bool(amounts.check(TAX, doc)) is issue
