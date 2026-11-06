@@ -214,3 +214,13 @@ async def app_role_db(migrated_db, db_engine):
     async with create_sessionmaker(engine)() as session:
         yield session
     await engine.dispose()
+
+
+@pytest.fixture
+def store(api):
+    """An in-memory object store on the test app (ocr-scan-flow); GCS is never called."""
+    from app.integrations.storage import MemoryStore
+
+    s = MemoryStore()
+    api.app.state.store = s
+    return s

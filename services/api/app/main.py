@@ -26,6 +26,7 @@ from app.routers import (
     me,
     notifications,
     organizations,
+    uploads,
 )
 
 
@@ -84,6 +85,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(admin_query.router)
     app.include_router(billing.router)
     app.include_router(notifications.router)
+    app.include_router(uploads.router)
     return app
 
 

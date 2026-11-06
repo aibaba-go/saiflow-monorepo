@@ -623,6 +623,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/files/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pending */
+        get: operations["listPendingFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{file_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Pending */
+        delete: operations["deletePendingFile"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{file_id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Content */
+        get: operations["getFileContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{file_id}/pages/{page}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview */
+        get: operations["getFilePagePreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -1026,6 +1094,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Upload */
+        post: operations["createUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/uploads/{upload_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete */
+        post: operations["completeUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/uploads/{upload_id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Content */
+        put: operations["putUploadContent"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1216,6 +1335,33 @@ export interface components {
         EmailCodeRequest: {
             /** Email */
             email?: string | null;
+        };
+        /** FileOut */
+        FileOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Expires At */
+            expires_at: string | null;
+            /** Id */
+            id: string;
+            /** Mime Type */
+            mime_type: string | null;
+            /** Original Name */
+            original_name: string;
+            /** Page Count */
+            page_count: number | null;
+            /** Reject Reason */
+            reject_reason: string | null;
+            /** Size Bytes */
+            size_bytes: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "UPLOADING" | "UPLOADED" | "READY" | "REJECTED" | "DELETED";
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1728,6 +1874,11 @@ export interface components {
         TransferIn: {
             /** User Id */
             user_id?: number | null;
+        };
+        /** UploadIn */
+        UploadIn: {
+            /** File Name */
+            file_name?: string | null;
         };
         /** UsableTenantOut */
         UsableTenantOut: {
@@ -3064,6 +3215,135 @@ export interface operations {
             };
         };
     };
+    listPendingFiles: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deletePendingFile: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getFileContent: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getFilePagePreview: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                file_id: string;
+                page: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     getHealth: {
         parameters: {
             query?: never;
@@ -3951,6 +4231,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VerificationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    createUpload: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    completeUpload: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    putUploadContent: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileOut"];
                 };
             };
             /** @description Validation Error */

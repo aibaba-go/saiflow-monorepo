@@ -138,4 +138,5 @@ from tests.integration.db_fixtures import (  # noqa: E402,F401  (shared DB fixtu
     line,
     mail,
     migrated_db,
+    store,
 )
