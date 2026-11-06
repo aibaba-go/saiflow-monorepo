@@ -11,6 +11,7 @@ from app.dependencies import (
     get_db,
     get_guest_limiter,
     get_line_client,
+    get_line_web_client,
     get_optional_principal,
     get_settings,
     require_csrf_header,
@@ -86,10 +87,11 @@ async def login_with_line(
     db: Db,
     current: Annotated[Principal | None, Depends(get_optional_principal)],
     line: Annotated[LineClient, Depends(get_line_client)],
+    web: Annotated[LineClient | None, Depends(get_line_web_client)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> MeResponse:
     ensure_text(req)
     allowed = {u.strip() for u in settings.line_login_redirect_uris.split(",") if u.strip()}
-    token, principal = await auth_service.login_with_line(db, line, current, req, allowed)
+    token, principal = await auth_service.login_with_line(db, line, current, req, allowed, web=web)
     set_customer_cookie(response, token)
     return await me_service.me(db, principal)

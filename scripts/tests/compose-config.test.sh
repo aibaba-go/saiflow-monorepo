@@ -13,7 +13,7 @@ check "restore-check waits over TCP" grep -q 'pg_isready -h 127.0.0.1' "$deploy/
 check "postgres publishes no ports" bash -c "! awk '/^  postgres:/{p=1;next} /^  [a-z]/{p=0} p' '$deploy/compose.yaml' | grep -v '^ *#' | grep -q 'ports:'"
 # B-2a: LINE and SMTP settings reach the backend from /opt/saiflow/.env (empty = feature off).
 backend="$(awk '/^  saiflow-be-api:/{p=1;next} /^  [a-z]/{p=0} p' "$deploy/compose.yaml")"
-for var in LINE_CHANNEL_ID LINE_CHANNEL_SECRET LINE_LOGIN_REDIRECT_URIS SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD SMTP_FROM SMTP_SECURITY; do
+for var in LINE_CHANNEL_ID LINE_CHANNEL_SECRET LINE_LOGIN_REDIRECT_URIS LINE_WEB_CHANNEL_ID LINE_WEB_CHANNEL_SECRET SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD SMTP_FROM SMTP_SECURITY; do
   check "backend receives $var" grep -q "$var: \${$var:-" <<<"$backend"
   check "env.example lists $var" grep -q "^$var=" "$deploy/env.example"
 done

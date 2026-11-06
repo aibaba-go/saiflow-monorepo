@@ -34,24 +34,38 @@ from app.routers import (
 )
 
 
+def _secret(value) -> str | None:
+    return value.get_secret_value() if value else None
+
+
+def build_line_clients(settings: Settings, http) -> tuple[LineClient | None, LineClient | None]:
+    """(mini app client, web-pc login client). The mini app verifies LIFF ID tokens with
+    its LINE MINI App channel; web-pc exchanges authorization codes with its own LINE Login
+    channel when one is configured, else with the same channel (one-channel setups)."""
+    mini = (
+        LineClient(settings.line_channel_id, _secret(settings.line_channel_secret), http)
+        if settings.line_channel_id
+        else None
+    )
+    web = (
+        LineClient(settings.line_web_channel_id, _secret(settings.line_web_channel_secret), http)
+        if settings.line_web_channel_id
+        else mini
+    )
+    return mini, web
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.engine = create_engine(app.state.settings)
     app.state.sessionmaker = create_sessionmaker(app.state.engine)
     settings = app.state.settings
     app.state.http = httpx.AsyncClient(timeout=5)
+    mini, web = build_line_clients(settings, app.state.http)
     if not hasattr(app.state, "line_client"):  # tests may inject a fake first
-        app.state.line_client = (
-            LineClient(
-                settings.line_channel_id,
-                settings.line_channel_secret.get_secret_value()
-                if settings.line_channel_secret
-                else None,
-                app.state.http,
-            )
-            if settings.line_channel_id
-            else None
-        )
+        app.state.line_client = mini
+    if not hasattr(app.state, "line_web_client"):
+        app.state.line_web_client = web if settings.line_web_channel_id else app.state.line_client
     if not hasattr(app.state, "guest_limiter"):  # AC-FR-SYS-010-07: 30 per IP per 60 s
         app.state.guest_limiter = SlidingWindowLimiter(GUEST_LIMIT, GUEST_WINDOW)
     if not hasattr(app.state, "email_sender"):  # tests may inject a fake first

@@ -16,8 +16,13 @@ from app.services.session_service import Principal
 
 
 async def _identity(
-    line: LineClient, req: LineLoginRequest, allowed_redirects: set[str]
+    line: LineClient,
+    req: LineLoginRequest,
+    allowed_redirects: set[str],
+    web: LineClient | None = None,
 ) -> LineIdentity:
+    """A LIFF ID token is checked against the mini app channel; a web-pc authorization code
+    is exchanged and its token checked with web-pc's own channel when one is configured."""
     if req.id_token and not req.code:
         token_source = "id_token"
     elif req.code and req.redirect_uri and not req.id_token:
@@ -28,10 +33,10 @@ async def _identity(
         raise AppError(400, "line_token_required", "auth.line_token_required")
     try:
         if token_source == "code":
-            token = await line.exchange_code(req.code, req.redirect_uri)  # type: ignore[arg-type]
-        else:
-            token = req.id_token  # type: ignore[assignment]
-        return await line.verify_id_token(token)
+            client = web or line
+            token = await client.exchange_code(req.code, req.redirect_uri)  # type: ignore[arg-type]
+            return await client.verify_id_token(token)
+        return await line.verify_id_token(req.id_token)  # type: ignore[arg-type]
     except LineInvalidToken:
         raise AppError(401, "line_token_invalid", "auth.line_token_invalid") from None
     except LineUnavailable:
@@ -69,8 +74,10 @@ async def login_with_line(
     current: Principal | None,
     req: LineLoginRequest,
     allowed_redirects: set[str],
+    *,
+    web: LineClient | None = None,
 ) -> tuple[str, Principal]:
-    identity = await _identity(line, req, allowed_redirects)
+    identity = await _identity(line, req, allowed_redirects, web)
     user, personal_tenant_id = await _ensure_user(db, identity)
     try:
         user.avatar_url = identity.picture  # the avatar always follows LINE

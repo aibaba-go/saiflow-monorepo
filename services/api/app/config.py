@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     line_channel_id: str | None = None
     line_channel_secret: SecretStr | None = None
     line_login_redirect_uris: str = ""  # comma-separated allowlist for web-pc LINE login
+    # web-pc's own LINE Login channel (same provider, so the same LINE user ID); a LINE MINI
+    # App channel has no callback URL. Unset = web login uses line_channel_id as before.
+    line_web_channel_id: str | None = None
+    line_web_channel_secret: SecretStr | None = None
     smtp_host: str | None = None
     smtp_port: int = 587
     smtp_username: str | None = None

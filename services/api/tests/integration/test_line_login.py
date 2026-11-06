@@ -123,3 +123,43 @@ async def test_login_writes_audit(api, db, line):
         )
     ).one()
     assert tuple(row) == ("user", str(uid), "customer.login", "success")
+
+
+async def test_web_login_uses_its_own_channel(api, db, line):
+    """web-pc logs in through a separate LINE Login channel of the same provider (a LINE
+    MINI App channel has no callback URL); the mini app keeps its channel."""
+    from tests.integration.fake_line import FakeLineClient
+
+    web = FakeLineClient()
+    api.app.state.line_web_client = web
+    line.add("mini-tok", "U1")
+    web.add("web-tok", "U1")  # same provider: the same LINE user ID
+    web.codes["c0de"] = "web-tok"
+    a = await api.post("/api/v1/auth/line", json={"id_token": "mini-tok"})
+    assert a.status_code == 200
+    line.codes["c0de"] = "mini-tok"  # must not be used for the web code
+    b = await api.post("/api/v1/auth/line", json={"code": "c0de", "redirect_uri": WEB_REDIRECT})
+    assert b.status_code == 200 and b.json()["user_id"] == a.json()["user_id"]
+    web.codes.clear()
+    c = await api.post("/api/v1/auth/line", json={"code": "c0de", "redirect_uri": WEB_REDIRECT})
+    assert c.status_code == 401  # the mini app channel's codes are not accepted
+
+
+def test_web_client_built_from_settings(app_settings):
+    from pydantic import SecretStr
+
+    from app.main import build_line_clients
+
+    s = app_settings.model_copy(
+        update={
+            "line_channel_id": "2012285576",
+            "line_channel_secret": SecretStr("mini"),
+            "line_web_channel_id": "2012428743",
+            "line_web_channel_secret": SecretStr("web"),
+        }
+    )
+    mini, web = build_line_clients(s, http=None)
+    assert (mini.channel_id, web.channel_id) == ("2012285576", "2012428743")
+    old = s.model_copy(update={"line_web_channel_id": None, "line_web_channel_secret": None})
+    mini, web = build_line_clients(old, http=None)
+    assert web is mini  # no web channel configured: as before, one channel

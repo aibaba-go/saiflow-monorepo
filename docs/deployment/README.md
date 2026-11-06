@@ -3,7 +3,7 @@ doc_id: OPS-001
 title: "SaiFlow — 部署与运维说明（dev 环境）"
 type: guide
 status: active
-version: 1.7.0
+version: 1.8.0
 updated: 2026-11-06
 owner: Product Engineering
 related: [ADR-008, FR-PLAT-005, FR-PLAT-006]
@@ -81,14 +81,15 @@ ssh -p 11022 root@<VPS_IP> 'chown deploy:deploy /opt/saiflow/secrets/gcs-backup.
 1. **LINE Developers**（与 LINE OA、LIFF 同一个 Provider，NFR-COMPAT-008）：
    - LIFF 端点：`https://saiflow-line2.aibaba.asia/`；记下 LIFF ID，在 GitHub 仓库 Settings → Secrets and variables → Actions → **Variables** 中新建 `LIFF_ID`（公开值，不是密钥），部署时写入小程序；
    - LINE OA 底部菜单的 `register` 按钮链接：`https://liff.line.me/<LIFF_ID>?entry=register`；成员邀请链接的格式为 `https://liff.line.me/<LIFF_ID>?invite=<凭据>`，由小程序生成；
-   - LINE 登录回调地址（web-pc，B-5c 起）：在 LIFF 所属的同一个 LINE Login 频道（现为 `2012285576`）的 **LINE Login** 设置中登记 `https://saiflow-app.aibaba.asia/login`；
-   - web-pc 打包时需要两个公开值，都放在 GitHub 仓库 **Variables**：上面的 `LIFF_ID`（web-pc 生成小程序的注册链接与邀请链接），以及 `LINE_CHANNEL_ID`（与 `.env` 的 `LINE_CHANNEL_ID` 相同，web-pc 用它跳转到 LINE 授权页）。改变量后要重新运行 `Deploy`；
-   - 记下 Channel ID 与 Channel secret。
+   - 小程序所在的是 **LINE MINI App 频道**（现为 `2012285576`）：记下它的 Channel ID 与 Channel secret；这种频道没有回调地址设置；
+   - web-pc 的 LINE 登录（B-5c 起）：在 **同一个 Provider** 下另建一个 **LINE Login 频道**（现为 `saiflow-web`，`2012428743`；同一个 Provider 下用户的 LINE 身份 ID 相同，所以是同一个账号），App types 勾选 Web app，不要求两步验证；在它的 **LINE Login** 标签的 Callback URL 中登记 `https://saiflow-app.aibaba.asia/login`；记下它的 Channel ID 与 Channel secret；
+   - web-pc 打包时需要两个公开值，都放在 GitHub 仓库 **Variables**：上面的 `LIFF_ID`（web-pc 生成小程序的注册链接与邀请链接），以及 `LINE_CHANNEL_ID`——**填 web-pc 的 LINE Login 频道 ID**（`2012428743`），web-pc 用它跳转到 LINE 授权页。改变量后要重新运行 `Deploy`。
 2. 以 `deploy` 编辑 `/opt/saiflow/.env`（权限保持 600），填写：
 
    | 变量 | 值 |
    |------|----|
-   | `LINE_CHANNEL_ID` / `LINE_CHANNEL_SECRET` | 上一步记下的值 |
+   | `LINE_CHANNEL_ID` / `LINE_CHANNEL_SECRET` | 小程序的 LINE MINI App 频道 |
+   | `LINE_WEB_CHANNEL_ID` / `LINE_WEB_CHANNEL_SECRET` | web-pc 的 LINE Login 频道；不填时 web-pc 登录沿用上一行的频道 |
    | `LINE_LOGIN_REDIRECT_URIS` | 上面登记的回调地址，多个用逗号分隔；web-pc 为 `https://saiflow-app.aibaba.asia/login`，与 LINE 后台登记的必须完全一致 |
    | `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURITY` | 如 Gmail：`smtp.gmail.com` / `587` / `starttls`（`465` 端口对应 `ssl`） |
    | `SMTP_USERNAME` / `SMTP_PASSWORD` | 发信账号与应用专用密码 |
@@ -257,6 +258,7 @@ docker compose exec -T saiflow-be-api python -m app.cli audit-verify   # 操作�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.8.0 | 2026-11-06 | Product Engineering | §2.6 web-pc 改用同一 Provider 下单独的 LINE Login 频道（LINE MINI App 频道没有回调地址）：新增 `LINE_WEB_CHANNEL_ID`、`LINE_WEB_CHANNEL_SECRET`；GitHub 变量 `LINE_CHANNEL_ID` 填 web-pc 的频道 ID |
 | 1.7.0 | 2026-11-06 | Product Engineering | B-3（`ocr-scan-flow`）：新增 §2.10 原件存储桶、服务账号与密钥位置、`DOWNLOAD_TICKET_SECRET`、识别服务 `saiflow-be-ocr`；§2.8 密钥现由识别服务使用；§4 0009 的回退 |
 | 1.6.0 | 2026-11-06 | Product Engineering | B-5c：§2.6 web-pc 的 LINE 登录回调地址、`LINE_LOGIN_REDIRECT_URIS` 的值，以及打包用的 GitHub 变量 `LINE_CHANNEL_ID` 与 `LIFF_ID` |
 | 1.5.0 | 2026-11-06 | Product Engineering | B-5b：§2.7 在后台修改本人口令；新增 §2.8 OCR 引擎与大模型的四个密钥变量（原 §2.8 提醒改为 §2.9）；§4 0008 的回退 |

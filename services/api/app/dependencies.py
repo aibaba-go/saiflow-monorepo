@@ -140,6 +140,11 @@ def get_line_client(request: Request) -> LineClient:
     return client
 
 
+def get_line_web_client(request: Request) -> LineClient | None:
+    """web-pc's LINE Login channel; None = use the mini app channel."""
+    return getattr(request.app.state, "line_web_client", None)
+
+
 def get_email_sender(request: Request) -> SmtpSender:
     sender = getattr(request.app.state, "email_sender", None)
     if sender is None:
