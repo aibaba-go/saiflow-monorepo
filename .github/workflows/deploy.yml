@@ -41,13 +41,16 @@ jobs:
           GHCR_USER: ${{ github.actor }}
           # LIFF app ID of the LINE mini app: public, set in Settings → Variables
           LIFF_ID: ${{ vars.LIFF_ID }}
+          # LINE Login channel ID for web-pc's LINE login: public, set in Settings → Variables
+          LINE_CHANNEL_ID: ${{ vars.LINE_CHANNEL_ID }}
         run: |
           printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
           docker build -t "$REGISTRY/saiflow-be-api:$SHA" --build-arg APP_VERSION="$SHA" services/api
           docker push "$REGISTRY/saiflow-be-api:$SHA"
           for app in web-pc web-admin line-mini; do
             docker build -f scripts/docker/frontend.Dockerfile --build-arg APP="$app" \
-              --build-arg VITE_LIFF_ID="$LIFF_ID" -t "$REGISTRY/saiflow-fe-$app:$SHA" .
+              --build-arg VITE_LIFF_ID="$LIFF_ID" --build-arg VITE_LINE_CHANNEL_ID="$LINE_CHANNEL_ID" \
+              -t "$REGISTRY/saiflow-fe-$app:$SHA" .
             docker push "$REGISTRY/saiflow-fe-$app:$SHA"
           done
           docker logout ghcr.io

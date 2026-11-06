@@ -2,9 +2,12 @@
 #   docker build -f scripts/docker/frontend.Dockerfile --build-arg APP=web-pc .
 FROM node:24-alpine AS build
 ARG APP
-# Public build-time settings (Vite reads VITE_* from the environment); only line-mini uses it.
+# Public build-time settings (Vite reads VITE_* from the environment): the LIFF app ID
+# (line-mini; web-pc's register and invitation links) and the LINE Login channel ID (web-pc).
 ARG VITE_LIFF_ID
 ENV VITE_LIFF_ID=$VITE_LIFF_ID
+ARG VITE_LINE_CHANNEL_ID
+ENV VITE_LINE_CHANNEL_ID=$VITE_LINE_CHANNEL_ID
 RUN test -n "$APP" && corepack enable
 WORKDIR /repo
 COPY . .

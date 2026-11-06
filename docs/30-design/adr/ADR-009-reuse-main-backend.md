@@ -3,8 +3,8 @@ doc_id: ADR-009
 title: "ADR-009 — 复用 main 分支后端的代码逻辑与数据库设计"
 type: adr
 status: accepted
-version: 1.3.0
-updated: 2026-11-04
+version: 1.4.0
+updated: 2026-11-06
 owner: Product Engineering
 related: [ADR-006, ADR-008, DM-File, DM-OcrJob, DM-ExtractionPayload, DM-FormDocument, DM-DocumentTemplate, NFR-SEC-002, NFR-SEC-010]
 doc_source: manual
@@ -100,6 +100,7 @@ main 的 `02_base_data.sql` 是配置而不是业务数据，作为重建的初�
   - **同事：** 负责后端的主要业务逻辑，从 B-3（上传与 OCR）开始，之后是 B-4（核验、模板与导出），主业务不再分工。
   - **负责人：** 负责前端开发，以及和业务没有直接关系的后端功能。B-2b（团队租户与权限，包括 B-2a 和 harden-identity 遗留的 9 个 Minor）与 B-2c（套餐与计量）作为平台基础，也由负责人完成。
   - **分支：** 同事从 `chore/ai-workflow-v2` 拉出功能分支 `feat/<change>`，完成后通过 PR 合并回来。部署仍然只从 `chore/ai-workflow-v2` 发布。
+  - **2026-11-06 负责人改变分工：** 同事短期内不再参与开发。整个系统的全部功能（各端全部页面与全部后端服务，含 B-3 上传与 OCR、B-4 核验与导出、B-5d 起各端的页面）都由负责人在 `chore/ai-workflow-v2` 上完成，完成后再考虑另一位同事是否加入。B-3 的实现参考 main 分支已跑通的 OCR 前后端逻辑，不必照抄。上面“同事”与“分支”两条暂停执行。
   - **B-3 依赖 B-2b、B-2c 的接口：** 租户访问检查和额度扣减。B-2b、B-2c 写需求时先把这两个接口定下来；在它们完成之前，同事按个人租户开发，额度扣减先用一个假的实现。
 
 ## 后果
@@ -118,6 +119,7 @@ main 的 `02_base_data.sql` 是配置而不是业务数据，作为重建的初�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.4.0 | 2026-11-06 | Product Engineering | §6：负责人 2026-11-06 改变分工，同事暂不参与，B-3、B-4 与各端页面都由负责人完成 |
 | 1.3.0 | 2026-11-04 | Product Engineering | §4：多租户一行按 B-2b 的决定 D1 改写 |
 | 1.2.0 | 2026-11-04 | Product Engineering | §6：测试文件已删除（effd41c）；B-2b、B-2c 由负责人完成，同事从 B-3 开始；功能分支加 PR 的方式 |
 | 1.1.0 | 2026-11-04 | Product Engineering | §6：main 上 TextIn 凭据与测试文件的处理方式、分工 |

@@ -3,7 +3,7 @@ doc_id: OPS-001
 title: "SaiFlow — 部署与运维说明（dev 环境）"
 type: guide
 status: active
-version: 1.5.0
+version: 1.6.0
 updated: 2026-11-06
 owner: Product Engineering
 related: [ADR-008, FR-PLAT-005, FR-PLAT-006]
@@ -81,14 +81,15 @@ ssh -p 11022 root@<VPS_IP> 'chown deploy:deploy /opt/saiflow/secrets/gcs-backup.
 1. **LINE Developers**（与 LINE OA、LIFF 同一个 Provider，NFR-COMPAT-008）：
    - LIFF 端点：`https://saiflow-line2.aibaba.asia/`；记下 LIFF ID，在 GitHub 仓库 Settings → Secrets and variables → Actions → **Variables** 中新建 `LIFF_ID`（公开值，不是密钥），部署时写入小程序；
    - LINE OA 底部菜单的 `register` 按钮链接：`https://liff.line.me/<LIFF_ID>?entry=register`；成员邀请链接的格式为 `https://liff.line.me/<LIFF_ID>?invite=<凭据>`，由小程序生成；
-   - LINE 登录回调地址（web-pc）：`https://saiflow-app.aibaba.asia/login`（B-5 页面上线时按实际地址核对）；
+   - LINE 登录回调地址（web-pc，B-5c 起）：在 LIFF 所属的同一个 LINE Login 频道（现为 `2012285576`）的 **LINE Login** 设置中登记 `https://saiflow-app.aibaba.asia/login`；
+   - web-pc 打包时需要两个公开值，都放在 GitHub 仓库 **Variables**：上面的 `LIFF_ID`（web-pc 生成小程序的注册链接与邀请链接），以及 `LINE_CHANNEL_ID`（与 `.env` 的 `LINE_CHANNEL_ID` 相同，web-pc 用它跳转到 LINE 授权页）。改变量后要重新运行 `Deploy`；
    - 记下 Channel ID 与 Channel secret。
 2. 以 `deploy` 编辑 `/opt/saiflow/.env`（权限保持 600），填写：
 
    | 变量 | 值 |
    |------|----|
    | `LINE_CHANNEL_ID` / `LINE_CHANNEL_SECRET` | 上一步记下的值 |
-   | `LINE_LOGIN_REDIRECT_URIS` | 上面登记的回调地址，多个用逗号分隔 |
+   | `LINE_LOGIN_REDIRECT_URIS` | 上面登记的回调地址，多个用逗号分隔；web-pc 为 `https://saiflow-app.aibaba.asia/login`，与 LINE 后台登记的必须完全一致 |
    | `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURITY` | 如 Gmail：`smtp.gmail.com` / `587` / `starttls`（`465` 端口对应 `ssl`） |
    | `SMTP_USERNAME` / `SMTP_PASSWORD` | 发信账号与应用专用密码 |
    | `SMTP_FROM` | 发件人，如 `SaiFlow <账号地址>` |
@@ -209,6 +210,7 @@ docker compose exec -T saiflow-be-api python -m app.cli audit-verify   # 操作�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.6.0 | 2026-11-06 | Product Engineering | B-5c：§2.6 web-pc 的 LINE 登录回调地址、`LINE_LOGIN_REDIRECT_URIS` 的值，以及打包用的 GitHub 变量 `LINE_CHANNEL_ID` 与 `LIFF_ID` |
 | 1.5.0 | 2026-11-06 | Product Engineering | B-5b：§2.7 在后台修改本人口令；新增 §2.8 OCR 引擎与大模型的四个密钥变量（原 §2.8 提醒改为 §2.9）；§4 0008 的回退 |
 | 1.4.0 | 2026-11-05 | Product Engineering | B-5a：§2.6 GitHub 变量 `LIFF_ID`、LINE OA 的 `register` 菜单链接与邀请链接格式 |
 | 1.3.0 | 2026-11-05 | Product Engineering | B-2d：§2.8 提醒服务 `saiflow-be-reminders`（查看、立即检查、停用）；§4 0006 的回退；§5 恢复时一并停止提醒服务 |
