@@ -30,6 +30,7 @@ from app.routers import (
     ocr_jobs,
     organizations,
     results,
+    review_settings,
     templates,
     uploads,
 )
@@ -111,6 +112,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(results.router)
     app.include_router(exports.router)
     app.include_router(imports.router)
+    app.include_router(review_settings.router)
     return app
 
 
