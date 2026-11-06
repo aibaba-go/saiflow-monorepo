@@ -13,5 +13,7 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: "./src/test/setup.ts",
+    // Node's Request needs an absolute URL; the browser uses same-origin "" (config.ts).
+    env: { VITE_API_BASE_URL: "http://localhost", VITE_LIFF_ID: "test-liff", VITE_LINE_CHANNEL_ID: "1234567890" },
   },
 });
