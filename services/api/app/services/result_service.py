@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.clock import utcnow
 from app.errors import AppError
 from app.models import DocumentTemplateVersion, OcrJob, ResultVersion, TemplateMapping, User
-from app.ocr import states
+from app.ocr import amounts, states
 from app.ocr.templates import normalize
 from app.services import job_service, mapping_service, metering_service
 from app.services.session_service import Principal
@@ -87,6 +87,8 @@ async def payload(db: AsyncSession, job: OcrJob, version: ResultVersion) -> dict
         "match": await _match(db, job),
         # Values that do not fit the field type, on the current content (FR-OCR-016).
         "warnings": normalize.type_warnings(groups, version.structured) if groups else [],
+        # Amounts that do not add up, on the current content; never corrected (FR-OCR-013).
+        "amount_issues": amounts.check(groups, version.structured) if groups else [],
         "confirmed": job.review_status == "CONFIRMED",
     }
 

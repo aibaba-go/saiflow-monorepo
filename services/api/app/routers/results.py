@@ -42,6 +42,12 @@ class WarningOut(BaseModel):
     code: str
 
 
+class AmountIssueOut(BaseModel):
+    path: str
+    computed: str
+    recognised: str
+
+
 class ResultOut(BaseModel):
     version: int
     structured: dict[str, Any] | list[Any] | None
@@ -50,6 +56,7 @@ class ResultOut(BaseModel):
     mapping: MappingStateOut | None
     match: MatchOut | None = None
     warnings: list[WarningOut] = []
+    amount_issues: list[AmountIssueOut] = []
     confirmed: bool
 
 

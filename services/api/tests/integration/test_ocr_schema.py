@@ -213,3 +213,20 @@ async def test_0010_moves_an_old_billing_note_to_the_new_version(db_engine):
     doc = next(g for g in rows[1][1] if g["key"] == "document")
     primary = {i["key"] for i in doc["items"] if i.get("primary")}
     assert primary == {"billing_date"}
+
+
+async def test_0011_reseeds_roles(db_engine):
+    """The current system template versions carry the amount roles (FR-OCR-013)."""
+    async with db_engine.begin() as conn:
+        groups = (
+            await conn.execute(
+                text(
+                    f"select v.groups from {S}.document_template_versions v "
+                    f"join {S}.document_templates t on t.current_version_id = v.id "
+                    "where t.code = 'tax_invoice'"
+                )
+            )
+        ).scalar_one()
+    summary = next(g for g in groups if g["key"] == "summary")
+    roles = {i["key"]: i.get("role") for i in summary["items"]}
+    assert roles["net_total"] == "grand_total" and roles["vat_amount"] == "tax"

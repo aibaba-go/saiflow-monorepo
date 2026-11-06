@@ -338,7 +338,8 @@
                 "en": "Quantity",
                 "th": "จำนวน",
                 "zh": "数量"
-              }
+              },
+              "role": "quantity"
             },
             {
               "key": "unit",
@@ -360,7 +361,8 @@
                 "en": "Unit Price",
                 "th": "ราคาต่อหน่วย",
                 "zh": "单价"
-              }
+              },
+              "role": "unit_price"
             },
             {
               "key": "discount",
@@ -371,7 +373,8 @@
                 "en": "Discount",
                 "th": "ส่วนลด",
                 "zh": "折扣"
-              }
+              },
+              "role": "line_discount"
             },
             {
               "key": "amount",
@@ -383,7 +386,8 @@
                 "en": "Amount",
                 "th": "จำนวนเงิน",
                 "zh": "金额"
-              }
+              },
+              "role": "line_total"
             }
           ],
           "names": {
@@ -414,7 +418,8 @@
             "en": "Sub Total",
             "th": "รวมเงิน",
             "zh": "小计"
-          }
+          },
+          "role": "lines_total"
         },
         {
           "kind": "field",
@@ -438,7 +443,8 @@
             "en": "Discount",
             "th": "ส่วนลด",
             "zh": "折扣"
-          }
+          },
+          "role": "discount"
         },
         {
           "kind": "field",
@@ -450,7 +456,8 @@
             "en": "Total before VAT",
             "th": "รวมค่าสินค้า",
             "zh": "税前合计"
-          }
+          },
+          "role": "base"
         },
         {
           "kind": "field",
@@ -474,7 +481,8 @@
             "en": "VAT",
             "th": "ภาษีมูลค่าเพิ่ม",
             "zh": "增值税"
-          }
+          },
+          "role": "tax"
         },
         {
           "kind": "field",
@@ -488,7 +496,8 @@
             "th": "รวมเงินสุทธิ",
             "zh": "净额合计"
           },
-          "primary": true
+          "primary": true,
+          "role": "grand_total"
         },
         {
           "kind": "field",

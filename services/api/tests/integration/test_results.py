@@ -361,3 +361,26 @@ async def test_type_warning_on_result_clears_after_fix(api, line, store, sm, ai_
     out["structured"]["summary"]["net_total"] = "10000.00"
     fixed = await save(api, job["id"], out["version"], out["structured"])
     assert all(w["path"] != "summary.net_total" for w in fixed.json()["warnings"])
+
+
+async def test_amount_issues_recheck_after_save(api, line, mail, store, sm, ai_settings, llm, db):
+    """AC-FR-OCR-013-03: issues are recomputed on each version; they never block confirm."""
+    await registered(api, line, mail)
+    job = await tax_job(api, store, sm, ai_settings, llm, db)
+    body = await result(api, job["id"])
+    body["structured"]["goods"]["line_items"] = [
+        {"description": "A", "quantity": "3", "unit_price": "100.00", "amount": "310.00"}
+    ]
+    body["structured"]["summary"] = {"vat_amount": "0.00", "net_total": "310.00"}
+    out = (await save(api, job["id"], body["version"], body["structured"])).json()
+    assert out["amount_issues"] == [
+        {"path": "goods.line_items[0].amount", "computed": "300.00", "recognised": "310.00"}
+    ]
+    out["structured"]["goods"]["line_items"][0]["amount"] = "300.00"
+    out["structured"]["summary"]["net_total"] = "300.00"
+    fixed = (await save(api, job["id"], out["version"], out["structured"])).json()
+    assert fixed["amount_issues"] == []
+    fixed["structured"]["summary"]["net_total"] = "999.00"  # an issue does not block confirm
+    done = await save(api, job["id"], fixed["version"], fixed["structured"], confirm=True)
+    assert done.status_code == 200, done.text
+    assert done.json()["confirmed"] is True and done.json()["amount_issues"]

@@ -49,6 +49,12 @@ class Names(_Strict):
     zh: Name | None = None
 
 
+ColumnRole = Literal[
+    "quantity", "unit_price", "line_discount", "line_base", "line_tax", "line_total"
+]
+FieldRole = Literal["lines_total", "discount", "base", "tax", "grand_total"]
+
+
 class Column(_Strict):
     key: Key
     name: Name
@@ -56,6 +62,7 @@ class Column(_Strict):
     description: Description = ""
     type: FieldType = "string"
     required: bool = False
+    role: ColumnRole | None = None  # amount checks (FR-OCR-013)
 
 
 class FieldItem(_Strict):
@@ -69,6 +76,7 @@ class FieldItem(_Strict):
     # 主要字段 (FR-TEMPLATE-006): a result without it does not fit this template at all;
     # separate from `required`, which only the confirm gate checks (final review 2).
     primary: bool = False
+    role: FieldRole | None = None  # amount checks (FR-OCR-013)
 
 
 class TableItem(_Strict):

@@ -1492,6 +1492,15 @@ export interface components {
             /** Tenant Id */
             tenant_id: number;
         };
+        /** AmountIssueOut */
+        AmountIssueOut: {
+            /** Computed */
+            computed: string;
+            /** Path */
+            path: string;
+            /** Recognised */
+            recognised: string;
+        };
         /** ApplicationOut */
         ApplicationOut: {
             /** Address */
@@ -2134,6 +2143,11 @@ export interface components {
         };
         /** ResultOut */
         ResultOut: {
+            /**
+             * Amount Issues
+             * @default []
+             */
+            amount_issues: components["schemas"]["AmountIssueOut"][];
             /** Confirmed */
             confirmed: boolean;
             mapping: components["schemas"]["MappingStateOut"] | null;

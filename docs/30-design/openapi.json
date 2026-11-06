@@ -316,6 +316,29 @@
         "title": "AdminVerificationOut",
         "type": "object"
       },
+      "AmountIssueOut": {
+        "properties": {
+          "computed": {
+            "title": "Computed",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "recognised": {
+            "title": "Recognised",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "computed",
+          "recognised"
+        ],
+        "title": "AmountIssueOut",
+        "type": "object"
+      },
       "ApplicationOut": {
         "properties": {
           "address": {
@@ -2249,6 +2272,14 @@
       },
       "ResultOut": {
         "properties": {
+          "amount_issues": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AmountIssueOut"
+            },
+            "title": "Amount Issues",
+            "type": "array"
+          },
           "confirmed": {
             "title": "Confirmed",
             "type": "boolean"

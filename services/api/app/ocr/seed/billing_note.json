@@ -311,7 +311,8 @@
                 "en": "Amount",
                 "th": "ก่อนภาษีมูลค่าเพิ่ม",
                 "zh": "金额"
-              }
+              },
+              "role": "line_base"
             },
             {
               "key": "vat_amount",
@@ -322,7 +323,8 @@
                 "en": "VAT",
                 "th": "ภาษีมูลค่าเพิ่ม",
                 "zh": "增值税"
-              }
+              },
+              "role": "line_tax"
             },
             {
               "key": "total_amount",
@@ -334,7 +336,8 @@
                 "en": "Total Amount",
                 "th": "จำนวนเงินรวม",
                 "zh": "合计金额"
-              }
+              },
+              "role": "line_total"
             }
           ],
           "names": {
@@ -367,7 +370,8 @@
             "th": "รวมยอดชำระทั้งสิ้น",
             "zh": "应付总额"
           },
-          "primary": true
+          "primary": true,
+          "role": "grand_total"
         },
         {
           "kind": "field",
