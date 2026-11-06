@@ -15,5 +15,7 @@ export default defineConfig({
     setupFiles: "./src/test/setup.ts",
     // Node's Request needs an absolute URL; the browser uses same-origin "" (config.ts).
     env: { VITE_API_BASE_URL: "http://localhost" },
+    // CSS modules keep their source class names in tests, so tests can name a state class.
+    css: { include: [/\.module\.css$/], modules: { classNameStrategy: "non-scoped" } },
   },
 });

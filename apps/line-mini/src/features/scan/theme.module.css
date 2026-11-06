@@ -1,0 +1,41 @@
+/* main App.vue :root tokens and base rules, scoped to the scan pages (FR-SYS-118). */
+.scan {
+  --primary: #4a66f7;
+  --primary-light: #e8edff;
+  --bg: #f5f7fa;
+  --card: #ffffff;
+  --border: #e3e8f0;
+  --text: #171a1c;
+  --text-secondary: #99a1b0;
+  --icon: #596170;
+  --success-bg: #e3f5ed;
+  --success: #1f9e6b;
+  --processing-bg: #fcf2e3;
+  --processing: #d98f1f;
+  --danger: #e6474d;
+  --track: #edf2f7;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Thai", "Sarabun",
+    "Noto Sans SC", sans-serif;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding-bottom: 72px; /* the bottom navigation */
+}
+
+.scan *,
+.scan *::before,
+.scan *::after {
+  box-sizing: border-box;
+}
+
+.scan button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+  color: inherit;
+}
