@@ -64,6 +64,24 @@ describe("tenant switching (FR-SYS-046)", () => {
     expect(can(null, "export")).toBe(false);
   });
 
+  it("opening the switcher reloads the list, so a just-approved org appears (047-04)", async () => {
+    const m = mockApi({ "GET /api/v1/me/tenants": () => json(200, [PERSONAL, ORG]) });
+    signedIn(USER, [PERSONAL]);
+    renderWithProviders(<TenantSwitcher />);
+    await userEvent.click(screen.getByRole("button", { name: /Personal account/ }));
+    expect(await screen.findByRole("option", { name: "Siam Tools" })).toBeInTheDocument();
+    expect(m.count("GET /api/v1/me/tenants")).toBe(1);
+  });
+
+  it("a failed reload keeps the list it had", async () => {
+    mockApi({ "GET /api/v1/me/tenants": () => json(500, { code: "internal_error" }) });
+    signedIn(USER, [PERSONAL, ORG]);
+    renderWithProviders(<TenantSwitcher />);
+    await userEvent.click(screen.getByRole("button", { name: /Personal account/ }));
+    expect(await screen.findByRole("option", { name: "Siam Tools" })).toBeInTheDocument();
+    expect(useSession.getState().tenants).toHaveLength(2);
+  });
+
   it("guests see no switcher", () => {
     useSession.setState({ me: { ...USER, kind: "guest" }, tenants: [], status: "ready" });
     renderWithProviders(<TenantSwitcher />);

@@ -2,6 +2,7 @@ import { Button, Popup } from "antd-mobile";
 import { useState } from "react";
 
 import { useT } from "../../i18n";
+import { refreshTenants } from "../auth/session";
 import { useSession, type CurrentTenant } from "../../stores/session";
 import { useCurrentTenant } from "./useCurrentTenant";
 
@@ -25,7 +26,13 @@ export function TenantSwitcher() {
 
   return (
     <>
-      <Button size="small" onClick={() => setOpen(true)}>
+      <Button
+        size="small"
+        onClick={() => {
+          setOpen(true);
+          void refreshTenants();
+        }}
+      >
         {t("tenant.current", { name: tenantLabel(tenant, t) })}
       </Button>
       <Popup visible={open} onMaskClick={() => setOpen(false)} bodyStyle={{ padding: 12 }}>

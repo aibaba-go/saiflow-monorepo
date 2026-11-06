@@ -68,6 +68,21 @@ export async function loadIdentity(): Promise<Me> {
   return me;
 }
 
+/** Re-read the user's tenants, e.g. an organization approved since the app opened
+ * (AC-FR-SYS-047-04). A failure keeps the list already shown. */
+export async function refreshTenants(): Promise<void> {
+  const me = store().me;
+  if (me?.kind !== "user") return;
+  try {
+    const tenants = await call(api.GET("/api/v1/me/tenants"));
+    if (store().me !== me) return; // the identity changed meanwhile
+    store().set({ tenants });
+    reconcileTenantChoice(me, tenants);
+  } catch {
+    // keep the current list; a 401 is handled by the session-expiry handler
+  }
+}
+
 function takeIntent(): { returnTo: string } | null {
   const raw = safe(() => sessionStorage.getItem(INTENT_KEY));
   safe(() => sessionStorage.removeItem(INTENT_KEY));
