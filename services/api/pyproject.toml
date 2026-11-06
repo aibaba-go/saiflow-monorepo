@@ -30,6 +30,13 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.per-file-ignores]
+# moved from main unchanged (ADR-009 class A): long prompt strings and comments stay as they are
+"app/ocr/textin/*" = ["E501"]
+"app/ocr/templates/*" = ["E501"]
+"app/ocr/deepseek.py" = ["E501"]
+"tests/unit/ocr/test_templates_*.py" = ["E501"]
+
 [tool.ruff.lint.isort]
 # the local alembic/ migration folder shadows the package name
 known-third-party = ["alembic"]

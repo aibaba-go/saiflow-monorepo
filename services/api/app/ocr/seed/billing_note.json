@@ -25,7 +25,7 @@
           "key": "billing_date",
           "name": "Date / วันที่",
           "description": "Billing note date, labeled วันที่ / Date, usually to the right of the customer name. Keep as written (e.g. 22.02.2024); do not convert between Buddhist and Gregorian years",
-          "type": "string",
+          "type": "date",
           "required": true,
           "names": {
             "en": "Date",
@@ -50,7 +50,7 @@
           "key": "payment_due_date",
           "name": "Payment Date / กำหนดชำระ",
           "description": "Agreed payment date, labeled กำหนดชำระ / Payment Date / Due Date, often handwritten; use null if blank or only a dotted line. Keep as written",
-          "type": "string",
+          "type": "date",
           "names": {
             "en": "Payment Date",
             "th": "กำหนดชำระ",
@@ -62,7 +62,7 @@
           "key": "received_date",
           "name": "Received Date / วันที่รับวางบิล",
           "description": "Date the customer received the billing note, labeled วันที่รับวางบิล / Received Date, often handwritten; use null if blank. Keep as written",
-          "type": "string",
+          "type": "date",
           "names": {
             "en": "Received Date",
             "th": "วันที่รับวางบิล",
@@ -260,7 +260,7 @@
               "key": "invoice_date",
               "name": "Invoice Date / วันที่ใบแจ้งหนี้",
               "description": "Date of this invoice, labeled วันที่ใบแจ้งหนี้/ใบกำกับภาษี / Invoice Date; keep as written",
-              "type": "string",
+              "type": "date",
               "names": {
                 "en": "Invoice Date",
                 "th": "วันที่ใบแจ้งหนี้",
@@ -294,7 +294,7 @@
               "key": "delivery_date",
               "name": "Send Date / วันที่ส่งสินค้า",
               "description": "Delivery date, labeled วันที่ส่งสินค้า / Send Date; null if blank",
-              "type": "string",
+              "type": "date",
               "names": {
                 "en": "Send Date",
                 "th": "วันที่ส่งสินค้า",

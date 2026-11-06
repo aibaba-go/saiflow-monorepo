@@ -26,7 +26,7 @@
           "key": "invoice_date",
           "name": "Date / วันที่",
           "description": "Issue date, labeled วันที่ / Date. Keep as written (e.g. 01/10/2026); do not convert between Buddhist and Gregorian years",
-          "type": "string",
+          "type": "date",
           "required": true,
           "names": {
             "en": "Date",
@@ -99,7 +99,7 @@
           "key": "due_date",
           "name": "Due Date / วันครบกำหนด",
           "description": "Payment due date, labeled วันครบกำหนด / Due Date; use null if no explicit date appears, do not derive it from the payment terms",
-          "type": "string",
+          "type": "date",
           "names": {
             "en": "Due Date",
             "th": "วันครบกำหนด",
@@ -529,7 +529,7 @@
           "key": "delivery_date",
           "name": "Delivery Date / วันที่ส่ง",
           "description": "Delivery date, written at วันที่ / Date on the ผู้ส่งของ line; keep as written",
-          "type": "string",
+          "type": "date",
           "names": {
             "en": "Delivery Date",
             "th": "วันที่ส่ง",
@@ -565,7 +565,7 @@
           "key": "received_date",
           "name": "Received Date / วันที่รับ",
           "description": "Receiving date, written at วันที่ / Date on the ผู้รับของ line; keep as written",
-          "type": "string",
+          "type": "date",
           "names": {
             "en": "Received Date",
             "th": "วันที่รับ",
