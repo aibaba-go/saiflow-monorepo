@@ -85,6 +85,16 @@ def migrated_db(db_settings_session):
     return db_settings_session
 
 
+def _seed_templates(conn) -> None:
+    import importlib.util
+
+    path = API_DIR / "alembic" / "versions" / "0009_ocr_scan_flow.py"
+    spec = importlib.util.spec_from_file_location("m0009", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module.seed_templates(conn)
+
+
 async def _truncate_all(engine) -> None:
     import app.models  # noqa: F401  (registers every table on Base.metadata)
 
@@ -113,6 +123,8 @@ async def _truncate_all(engine) -> None:
                 "('free_quota_organization', '100')"
             )
         )
+        # seed rows written by 0009 (the two system templates)
+        await conn.run_sync(_seed_templates)
         # seed rows written by 0008 (OCR and LLM settings)
         from app.services.ocr_settings_service import DEFAULTS as OCR_DEFAULTS
 

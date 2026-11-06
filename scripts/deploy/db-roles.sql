@@ -37,6 +37,10 @@ BEGIN
     IF to_regclass('saiflow_v3.audit_log') IS NOT NULL THEN
       REVOKE UPDATE, DELETE, TRUNCATE ON saiflow_v3.audit_log FROM saiflow_v3_app;
     END IF;
+    -- raw OCR results are written once (ocr-scan-flow, ADR-009 T7, NFR-SEC-010)
+    IF to_regclass('saiflow_v3.ocr_raw_results') IS NOT NULL THEN
+      REVOKE UPDATE, DELETE, TRUNCATE ON saiflow_v3.ocr_raw_results FROM saiflow_v3_app;
+    END IF;
     IF to_regclass('saiflow_v3.alembic_version') IS NOT NULL THEN
       REVOKE INSERT, UPDATE, DELETE ON saiflow_v3.alembic_version FROM saiflow_v3_app;
     END IF;
