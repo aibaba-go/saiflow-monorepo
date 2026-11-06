@@ -27,6 +27,21 @@ api.use({
   },
 });
 
+let onTenantGone: () => void = () => {};
+
+/** Called when a request for the current organization answers 404: the organization is no
+ * longer usable (removed, left, disabled), wherever the user is (Review Focus 4). */
+export function setTenantGoneHandler(handler: () => void): void {
+  onTenantGone = handler;
+}
+
+api.use({
+  onResponse({ request, response }) {
+    if (response.status === 404 && request.headers.has("X-Tenant-Id")) onTenantGone();
+    return response;
+  },
+});
+
 type Unauthenticated = (error: ApiError) => void;
 let onUnauthenticated: Unauthenticated = () => {};
 

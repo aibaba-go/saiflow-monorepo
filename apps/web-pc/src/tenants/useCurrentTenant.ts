@@ -3,15 +3,15 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { create } from "zustand";
 
-import { onForget, TENANT_KEY, TENANTS_KEY, type Me, type UsableTenant } from "../auth/session";
+import { onForget, tenantKey, TENANTS_KEY, type Me, type UsableTenant } from "../auth/session";
 import type { MessageKey } from "../i18n";
 import { api, call, setTenantHeaderSource } from "../services/api";
 
 const ID = /^[1-9]\d{0,17}$/;
 
-export function readStoredTenant(): number | null {
+export function readStoredTenant(userId: number): number | null {
   try {
-    const raw = localStorage.getItem(TENANT_KEY);
+    const raw = localStorage.getItem(tenantKey(userId));
     return raw && ID.test(raw) ? Number(raw) : null;
   } catch {
     return null;
@@ -19,6 +19,8 @@ export function readStoredTenant(): number | null {
 }
 
 interface TenantState {
+  /** Whose choice this is; null until the signed-in user is known. */
+  userId: number | null;
   /** The chosen organization, or null for the personal tenant (FR-SYS-096). */
   id: number | null;
   /** The user's usable tenants; null until first loaded. */
@@ -26,21 +28,25 @@ interface TenantState {
   /** A one-off message (tenant.gone), shown then cleared. */
   notice: MessageKey | null;
   choose(id: number | null): void;
+  /** Load the signed-in user's stored choice (once per user). */
+  bindUser(userId: number): void;
   /** A fresh list: drop a stored choice that is no longer usable (AC-096-03). */
   setTenants(list: UsableTenant[]): void;
   clearNotice(): void;
-  /** Back to the stored choice, nothing loaded (a new user or a test). */
+  /** Nobody bound, nothing loaded (logout, expiry, a new login, a test). */
   reset(): void;
 }
 
 export const useTenantChoice = create<TenantState>((set, get) => ({
-  id: readStoredTenant(),
+  userId: null,
+  id: null,
   tenants: null,
   notice: null,
   choose(id) {
+    const { userId } = get();
     try {
-      if (id === null) localStorage.removeItem(TENANT_KEY);
-      else localStorage.setItem(TENANT_KEY, String(id));
+      if (userId !== null && id === null) localStorage.removeItem(tenantKey(userId));
+      else if (userId !== null) localStorage.setItem(tenantKey(userId), String(id));
     } catch {
       // storage blocked: the choice lasts for this visit only
     }
@@ -54,8 +60,12 @@ export const useTenantChoice = create<TenantState>((set, get) => ({
       set({ notice: "tenant.gone" });
     }
   },
+  bindUser(userId) {
+    if (get().userId === userId) return;
+    set({ userId, id: readStoredTenant(userId), tenants: null, notice: null });
+  },
   clearNotice: () => set({ notice: null }),
-  reset: () => set({ id: readStoredTenant(), tenants: null, notice: null }),
+  reset: () => set({ userId: null, id: null, tenants: null, notice: null }),
 }));
 
 onForget(() => useTenantChoice.getState().reset());

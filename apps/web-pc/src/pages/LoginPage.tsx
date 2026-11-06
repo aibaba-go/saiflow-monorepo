@@ -47,7 +47,7 @@ export function LoginPage() {
         // A new user may be signing in on this browser: nothing of the previous one stays.
         // An earlier GET /me (no session yet) must not land after this and undo it.
         await queryClient.cancelQueries({ queryKey: ME_KEY, exact: true });
-        forgetSession(queryClient);
+        forgetSession(queryClient); // each user's stored tenant stays (AC-090-04)
         queryClient.setQueryData(ME_KEY, signed.kind === "user" ? signed : null);
         setExpired(false);
         navigate(saved.next, { replace: true });

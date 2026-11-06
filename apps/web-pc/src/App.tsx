@@ -22,7 +22,8 @@ import { NotificationsPage } from "./pages/NotificationsPage";
 import { PlansPage } from "./pages/PlansPage";
 import { RegisterGuidePage } from "./pages/RegisterGuidePage";
 import { RolesPage } from "./pages/RolesPage";
-import { setUnauthenticatedHandler } from "./services/api";
+import { setTenantGoneHandler, setUnauthenticatedHandler } from "./services/api";
+import { refreshTenants } from "./tenants/useCurrentTenant";
 import { useLanguage } from "./stores/language";
 
 const LOCALES = { en: enUS, th: thTH, zh: zhCN };
@@ -36,7 +37,11 @@ function SessionWatcher() {
       setExpired(true);
       forgetSession(queryClient);
     });
-    return () => setUnauthenticatedHandler(() => {});
+    setTenantGoneHandler(() => void refreshTenants(queryClient));
+    return () => {
+      setUnauthenticatedHandler(() => {});
+      setTenantGoneHandler(() => {});
+    };
   }, [queryClient, setExpired]);
   return null;
 }

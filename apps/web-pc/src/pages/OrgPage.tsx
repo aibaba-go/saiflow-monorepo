@@ -1,6 +1,4 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { Space, Spin } from "antd";
-import { useEffect } from "react";
 
 import { useMe } from "../auth/session";
 import { ErrorText } from "../components/ErrorText";
@@ -12,22 +10,18 @@ import { OwnerActions, ProfileCard, VerificationCard } from "../orgs/OrgCards";
 import { useMembers, useOrg } from "../orgs/orgData";
 import { ApiError } from "../services/errors";
 import { can } from "../tenants/permissions";
-import { refreshTenants, type CurrentTenant } from "../tenants/useCurrentTenant";
+import type { CurrentTenant } from "../tenants/useCurrentTenant";
 import { useTenant } from "../tenants/useTenant";
 
 function OrgContent({ tenant }: { tenant: CurrentTenant }) {
   const t = useT();
-  const queryClient = useQueryClient();
   const selfId = useMe().data?.user_id ?? null;
   const org = useOrg(tenant.tenant_id);
   const members = useMembers(tenant.tenant_id);
   const gone = org.error instanceof ApiError && org.error.status === 404;
 
-  // The organization is no longer usable (removed, disabled): re-read the tenants, which
-  // falls back to the personal tenant with "you are no longer in it" (Review Focus 4).
-  useEffect(() => {
-    if (gone) void refreshTenants(queryClient);
-  }, [gone, queryClient]);
+  // A 404 for the current organization re-reads the tenants (services/api.ts, Review Focus 4);
+  // the fallback to the personal tenant follows, so nothing raw is shown meanwhile.
 
   if (org.isPending || members.isPending) return <Spin />;
   if (org.isError) return gone ? <Spin /> : <ErrorText error={org.error} />;

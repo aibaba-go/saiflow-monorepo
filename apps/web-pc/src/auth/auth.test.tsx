@@ -1,10 +1,11 @@
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api, call } from "../services/api";
 import { useLanguage } from "../stores/language";
+import { useTenantChoice } from "../tenants/useCurrentTenant";
 import { en, renderAt, signedIn, userEvent } from "../test/app";
-import { OTHER, UNREGISTERED, USER } from "../test/fixtures";
+import { ORG, OTHER, PERSONAL, UNREGISTERED, USER } from "../test/fixtures";
 import { json, mockApi } from "../test/mockApi";
 import { external, LOGIN_STATE_KEY } from "./lineLogin";
 
@@ -14,6 +15,7 @@ beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
   useLanguage.getState().setLang("en");
+  useTenantChoice.getState().reset(); // a fresh page load
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -104,7 +106,7 @@ describe("LINE web login (FR-SYS-090)", () => {
     expect(api.count("POST /api/v1/auth/line")).toBe(1);
   });
 
-  it.each(["//evil.com", "https://evil.com", "/login"])(
+  it.each(["//evil.com", "https://evil.com", "/login", "/\t/evil.com", "/\\evil.com"])(
     "next %s lands on the home page (Review Focus 2)",
     async (next) => {
       saveState("9".repeat(32), next);
@@ -184,39 +186,52 @@ describe("logout (FR-SYS-092)", () => {
   });
 
   it("Confirm logs out to the login page, even when the request fails (092-01)", async () => {
-    localStorage.setItem("saiflow.pc.tenant", "5");
+    localStorage.setItem("saiflow.pc.tenant.7", "5");
     const api = signedIn({ "POST /api/v1/auth/logout": () => json(500, { code: "internal_error" }) });
     renderAt("/");
     await userEvent.click(await openLogout());
     expect(await screen.findByRole("button", { name: en("login.button") })).toBeInTheDocument();
     expect(api.count("POST /api/v1/auth/logout")).toBe(1);
-    expect(localStorage.getItem("saiflow.pc.tenant")).toBeNull();
+    expect(localStorage.getItem("saiflow.pc.tenant.7")).toBeNull();
   });
 
   it("the next user on this browser sees nothing of the previous one (Review Focus 3)", async () => {
-    localStorage.setItem("saiflow.pc.tenant", "5");
-    let me: unknown = USER;
-    const api = signedIn({
-      "POST /api/v1/auth/logout": () => {
-        me = null;
-        return json(204, null);
-      },
-    });
-    api.set("GET /api/v1/me", () => (me ? json(200, me) : json(401, { code: "unauthenticated" })));
-    renderAt("/");
-    await screen.findByText("Somchai");
-    await userEvent.click(await openLogout());
+    // A's session expires on org 5; B, also a member of org 5, then logs in on this browser.
+    localStorage.setItem("saiflow.pc.tenant.7", "5");
+    const backend = signedIn({}, { tenants: [PERSONAL, ORG] });
+    const first = renderAt("/");
+    expect(await screen.findByRole("button", { name: en("tenant.switch") })).toHaveTextContent("Siam Tools");
+    backend.set("GET /api/v1/me", () => json(401, { code: "unauthenticated" }));
+    backend.set("GET /api/v1/billing/usage", () => json(401, { code: "unauthenticated" }));
+    await act(() => call(api.GET("/api/v1/billing/usage")).catch(() => undefined));
     await startLogin();
     const state = JSON.parse(sessionStorage.getItem(LOGIN_STATE_KEY)!).state as string;
-    api.set("POST /api/v1/auth/line", () => {
-      me = OTHER;
-      return json(200, OTHER);
-    });
-    window.history.pushState({}, "", "/");
+    first.unmount();
+    backend.set("GET /api/v1/me", () => json(200, OTHER));
+    backend.set("GET /api/v1/me/tenants", () => json(200, [{ ...PERSONAL, tenant_id: 80 }, ORG]));
+    backend.set("POST /api/v1/auth/line", () => json(200, OTHER));
     // LINE comes back: a fresh page load at the callback.
     renderAt(`/login?code=y&state=${state}`);
     expect(await screen.findByText("Malee")).toBeInTheDocument();
-    expect(localStorage.getItem("saiflow.pc.tenant")).toBeNull();
-    await waitFor(() => expect(screen.queryByText("Somchai")).not.toBeInTheDocument());
+    expect(await screen.findByRole("button", { name: en("tenant.switch") })).toHaveTextContent(en("tenant.personal"));
+    expect(screen.queryByText("Somchai")).not.toBeInTheDocument();
+  });
+
+  it("after an expiry the same user logs in again and is back in their organization (090-04)", async () => {
+    localStorage.setItem("saiflow.pc.tenant.7", "5");
+    const backend = signedIn({}, { tenants: [PERSONAL, ORG] });
+    const first = renderAt("/");
+    expect(await screen.findByRole("button", { name: en("tenant.switch") })).toHaveTextContent("Siam Tools");
+    backend.set("GET /api/v1/me", () => json(401, { code: "unauthenticated" }));
+    backend.set("GET /api/v1/billing/usage", () => json(401, { code: "unauthenticated" }));
+    await act(() => call(api.GET("/api/v1/billing/usage")).catch(() => undefined));
+    await startLogin();
+    const state = JSON.parse(sessionStorage.getItem(LOGIN_STATE_KEY)!).state as string;
+    first.unmount();
+    backend.set("GET /api/v1/me", () => json(200, USER));
+    backend.set("POST /api/v1/auth/line", () => json(200, USER));
+    renderAt(`/login?code=z&state=${state}`);
+    expect(await screen.findByRole("button", { name: en("tenant.switch") })).toHaveTextContent("Siam Tools");
+    expect(localStorage.getItem("saiflow.pc.tenant.7")).toBe("5");
   });
 });

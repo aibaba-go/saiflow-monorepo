@@ -14,7 +14,10 @@ export const external = {
 
 /** Where to go after login: only a page of this site, never /login itself. */
 export function safeNext(next: string | null | undefined): string {
-  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) return "/";
+  if (!next || !next.startsWith("/") || next.startsWith("//")) return "/";
+  // Browsers drop tabs and newlines and read a backslash as "/": "/\t/evil.com" would
+  // become "//evil.com" (review M-1). No control character or backslash anywhere.
+  if ([...next].some((c) => c.charCodeAt(0) < 0x20 || c.charCodeAt(0) === 0x7f || c === "\\")) return "/";
   if (next === "/login" || next.startsWith("/login?") || next.startsWith("/login#")) return "/";
   return next;
 }

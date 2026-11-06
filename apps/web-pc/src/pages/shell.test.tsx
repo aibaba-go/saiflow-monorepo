@@ -35,7 +35,7 @@ async function openSwitcher() {
 
 describe("layout and home (FR-SYS-094)", () => {
   it("home shows the organization's plan, period, scans left and free quota (094-01)", async () => {
-    localStorage.setItem("saiflow.pc.tenant", "5");
+    localStorage.setItem("saiflow.pc.tenant.7", "5");
     useTenantChoice.getState().reset();
     signedIn({ "GET /api/v1/billing/usage": usageFor }, { tenants: [PERSONAL, ORG] });
     renderAt("/");
@@ -82,7 +82,7 @@ describe("tenant switching (FR-SYS-096)", () => {
     await userEvent.click(await screen.findByRole("menuitem", { name: "Siam Tools" }));
     expect(await screen.findByText("4,880 / 5,000")).toBeInTheDocument();
     expect(api.calls.at(-1)!.headers.get("X-Tenant-Id")).toBe("5");
-    expect(localStorage.getItem("saiflow.pc.tenant")).toBe("5");
+    expect(localStorage.getItem("saiflow.pc.tenant.7")).toBe("5");
     first.unmount();
     useTenantChoice.getState().reset();
     renderAt("/");
@@ -104,13 +104,35 @@ describe("tenant switching (FR-SYS-096)", () => {
   });
 
   it("a stored organization the user left falls back to personal with a notice (096-03)", async () => {
-    localStorage.setItem("saiflow.pc.tenant", "5");
+    localStorage.setItem("saiflow.pc.tenant.7", "5");
     useTenantChoice.getState().reset();
     signedIn({ "GET /api/v1/billing/usage": usageFor }, { tenants: [PERSONAL] });
     renderAt("/");
     expect(await screen.findByText(en("tenant.gone"))).toBeInTheDocument();
     expect(await screen.findByText("1,000 / 1,000")).toBeInTheDocument();
-    expect(localStorage.getItem("saiflow.pc.tenant")).toBeNull();
+    expect(localStorage.getItem("saiflow.pc.tenant.7")).toBeNull();
+  });
+});
+
+describe("an organization that disappears mid-session (Review Focus 4)", () => {
+  it("the home page falls back to the personal tenant with a notice, not a raw error", async () => {
+    localStorage.setItem("saiflow.pc.tenant.7", "5");
+    useTenantChoice.getState().reset();
+    let gone = false;
+    const api = signedIn(
+      { "GET /api/v1/billing/usage": (r) => (r.headers.get("X-Tenant-Id") === "5" && gone ? json(404, { code: "not_found" }) : usageFor(r)) },
+      { tenants: [PERSONAL, ORG] },
+    );
+    renderAt("/");
+    expect(await screen.findByText("4,880 / 5,000")).toBeInTheDocument();
+    gone = true;
+    api.set("GET /api/v1/me/tenants", () => json(200, [PERSONAL]));
+    // Leave home and come back: the usage is fetched again and now answers 404.
+    await userEvent.click(screen.getByRole("link", { name: en("nav.data") }));
+    await userEvent.click(await screen.findByRole("link", { name: en("nav.home") }));
+    expect(await screen.findByText(en("tenant.gone"))).toBeInTheDocument();
+    expect(await screen.findByText("1,000 / 1,000")).toBeInTheDocument();
+    expect(screen.queryByText(en("err.not_found"))).not.toBeInTheDocument();
   });
 });
 

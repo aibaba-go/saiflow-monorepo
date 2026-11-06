@@ -26,7 +26,7 @@ const OWNER_ORG: UsableTenant = { ...ORG, is_owner: true, role: null, permission
 beforeEach(() => {
   localStorage.clear();
   useLanguage.getState().setLang("en");
-  localStorage.setItem("saiflow.pc.tenant", "5");
+  localStorage.setItem("saiflow.pc.tenant.7", "5");
   useTenantChoice.getState().reset();
 });
 

@@ -29,7 +29,7 @@ beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
   useLanguage.getState().setLang("en");
-  localStorage.setItem("saiflow.pc.tenant", "5");
+  localStorage.setItem("saiflow.pc.tenant.7", "5");
   useTenantChoice.getState().reset();
 });
 
@@ -231,7 +231,7 @@ describe("organization page (FR-SYS-098)", () => {
     renderAt("/org");
     expect(await screen.findByText(en("tenant.gone"))).toBeInTheDocument();
     expect(await screen.findByText(en("org.none"))).toBeInTheDocument();
-    expect(localStorage.getItem("saiflow.pc.tenant")).toBeNull();
+    expect(localStorage.getItem("saiflow.pc.tenant.7")).toBeNull();
   });
 });
 
@@ -263,7 +263,7 @@ describe("owner transfer and leaving (FR-SYS-100)", () => {
     renderAt("/org");
     await screen.findByRole("button", { name: en("org.leave") });
     await confirmIn(document, en("org.leave"));
-    await waitFor(() => expect(localStorage.getItem("saiflow.pc.tenant")).toBeNull());
+    await waitFor(() => expect(localStorage.getItem("saiflow.pc.tenant.7")).toBeNull());
     await userEvent.click(await screen.findByRole("button", { name: en("tenant.switch") }));
     await waitFor(() => expect(screen.queryByRole("menuitem", { name: "Siam Tools" })).not.toBeInTheDocument());
   });

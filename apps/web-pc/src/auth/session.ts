@@ -10,7 +10,9 @@ export type { Me, UsableTenant } from "../types";
 
 export const ME_KEY = ["me"] as const;
 export const TENANTS_KEY = ["me", "tenants"] as const;
-export const TENANT_KEY = "saiflow.pc.tenant";
+/** The current tenant is kept per user (A8, AC-090-04): an expiry keeps it for the same
+ * user's next login; another user on this browser never sees it. */
+export const tenantKey = (userId: number) => `saiflow.pc.tenant.${userId}`;
 
 export async function fetchMe(): Promise<Me | null> {
   try {
@@ -47,14 +49,19 @@ export function onForget(reset: () => void): () => void {
   return () => resetters.delete(reset);
 }
 
-/** Drop everything of the user who was signed in (A8): page data, the stored tenant. */
-export function forgetSession(queryClient: QueryClient): void {
+/** Drop everything of the user who was signed in (A8): page data and the tenant state.
+ * Logout also drops the user's stored tenant; an expiry or a new login keeps it, since it
+ * is keyed by user (AC-090-04). */
+export function forgetSession(queryClient: QueryClient, { dropTenant = false } = {}): void {
+  const userId = queryClient.getQueryData<Me | null>(ME_KEY)?.user_id;
   queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== ME_KEY[0] || q.queryKey.length > 1 });
   queryClient.setQueryData(ME_KEY, null);
-  try {
-    localStorage.removeItem(TENANT_KEY);
-  } catch {
-    // storage blocked: nothing was stored
+  if (dropTenant && userId) {
+    try {
+      localStorage.removeItem(tenantKey(userId));
+    } catch {
+      // storage blocked: nothing was stored
+    }
   }
   for (const reset of resetters) reset();
 }
@@ -66,5 +73,5 @@ export async function logout(queryClient: QueryClient): Promise<void> {
   } catch {
     // the session is forgotten locally anyway
   }
-  forgetSession(queryClient);
+  forgetSession(queryClient, { dropTenant: true });
 }

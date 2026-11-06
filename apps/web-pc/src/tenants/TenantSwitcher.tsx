@@ -2,7 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button, Dropdown } from "antd";
 
 import { useT } from "../i18n";
-import { refreshTenants, type CurrentTenant } from "./useCurrentTenant";
+import { refreshTenants, useTenantChoice, type CurrentTenant } from "./useCurrentTenant";
 import { useTenant } from "./useTenant";
 
 export function tenantLabel(tenant: CurrentTenant, t: ReturnType<typeof useT>): string {
@@ -14,7 +14,9 @@ export function TenantSwitcher() {
   const t = useT();
   const queryClient = useQueryClient();
   const { tenant, tenants, setTenant } = useTenant();
-  if (!tenant) return null;
+  // Not before the list is loaded: it would flash "Personal account" for an org user.
+  const loaded = useTenantChoice((s) => s.tenants) !== null;
+  if (!tenant || !loaded) return null;
   return (
     <Dropdown
       trigger={["click"]}

@@ -36,16 +36,19 @@ function selected(pathname: string): string {
 }
 
 /** Keep the tenant list in the tenant store and show its one-off notice (AC-096-03). */
-function useTenantsLoader() {
+function useTenantsLoader(userId: number | null | undefined) {
   const tenants = useMyTenants();
+  const bindUser = useTenantChoice((s) => s.bindUser);
   const setTenants = useTenantChoice((s) => s.setTenants);
   const notice = useTenantChoice((s) => s.notice);
   const clearNotice = useTenantChoice((s) => s.clearNotice);
   const { message } = App.useApp();
   const t = useT();
   useEffect(() => {
-    if (tenants.data) setTenants(tenants.data);
-  }, [tenants.data, setTenants]);
+    if (!userId || !tenants.data) return;
+    bindUser(userId);
+    setTenants(tenants.data);
+  }, [userId, tenants.data, bindUser, setTenants]);
   useEffect(() => {
     if (!notice) return;
     void message.warning(t(notice));
@@ -58,7 +61,7 @@ export function AppLayout() {
   const t = useT();
   const location = useLocation();
   const me = useMe();
-  const tenants = useTenantsLoader();
+  const tenants = useTenantsLoader(me.data?.user_id);
   const loaded = useTenantChoice((s) => s.tenants) !== null;
   const { tenant } = useTenant();
   // Roles only in an organization, for those holding role management (FR-SYS-094).
