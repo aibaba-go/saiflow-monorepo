@@ -56,5 +56,10 @@ def usable(row: FreeQuota | None, tenant_kind: str, active: bool, now: datetime)
     return row.remaining if active else 0  # personal: paused while expired
 
 
+def in_period(row: FreeQuota | None, tenant_kind: str, now: datetime) -> bool:
+    """An organization's free scans are still inside their month (even if all are used)."""
+    return tenant_kind == "organization" and row is not None and not is_expired(row, now)
+
+
 def is_expired(row: FreeQuota, now: datetime) -> bool:
     return row.expires_at is not None and row.expires_at <= now

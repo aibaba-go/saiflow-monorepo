@@ -277,3 +277,71 @@ async def test_concurrent_save_confirm_switch(api, line, mail, store, sm, ai_set
             )
         ).scalar()
         assert confirmed is True  # nothing replaced the confirmed version afterwards
+
+
+@pytest.mark.parametrize(
+    ("case", "expected"),
+    [
+        ("org_free_valid", True),  # no plan, free scans still valid: it could scan, so it confirms
+        ("org_free_used_up", True),  # 0 left but still in its month
+        ("org_free_expired", False),
+        ("org_plan_active", True),
+        ("personal_plan_expired", False),  # personal free scans pause while the plan is expired
+    ],
+)
+async def test_may_confirm_follows_scanning(line, mail, db, case, expected):
+    """Option A (owner 2026-11-06): confirming needs what scanning needs, an active plan or
+    free scans still inside their validity; only when both are gone is it plan_expired."""
+    from app.clock import utcnow
+    from app.services import metering_service
+    from tests.integration.tenancy_helpers import make_org
+
+    uid = (
+        await db.execute(text("insert into users (line_user_id) values ('U-mc') returning id"))
+    ).scalar_one()
+    if case.startswith("org"):
+        tid, _ = await make_org(db, uid)
+        left, until = (
+            (0, "now() + interval '5 days'")
+            if case == "org_free_used_up"
+            else (
+                98,
+                "now() - interval '1 day'"
+                if case == "org_free_expired"
+                else "now() + interval '30 days'",
+            )
+        )
+        await db.execute(
+            text(
+                "insert into free_quotas (tenant_id, granted, remaining, expires_at) "
+                f"values (:t, 100, :r, {until})"
+            ),
+            {"t": tid, "r": left},
+        )
+        if case == "org_plan_active":
+            await db.execute(
+                text(
+                    "insert into subscriptions (tenant_id, plan_code, period, starts_at, ends_at, "
+                    "source) values (:t, 'starter', 'month', now() - interval '1 day', "
+                    "now() + interval '20 days', 'admin')"
+                ),
+                {"t": tid},
+            )
+    else:
+        tid = (
+            await db.execute(text("insert into tenants (kind) values ('personal') returning id"))
+        ).scalar_one()
+        await db.execute(
+            text("insert into free_quotas (tenant_id, granted, remaining) values (:t, 50, 50)"),
+            {"t": tid},
+        )
+        await db.execute(
+            text(
+                "insert into subscriptions (tenant_id, plan_code, period, starts_at, ends_at, "
+                "source) values (:t, 'kinder', 'month', now() - interval '40 days', "
+                "now() - interval '10 days', 'auto')"
+            ),
+            {"t": tid},
+        )
+    await db.commit()
+    assert await metering_service.may_confirm(db, tid, utcnow()) is expected

@@ -16,7 +16,7 @@ from app.errors import AppError
 from app.models import DocumentTemplateVersion, OcrJob, ResultVersion, TemplateMapping, User
 from app.ocr import states
 from app.ocr.templates import normalize
-from app.services import job_service, mapping_service, subscription_service
+from app.services import job_service, mapping_service, metering_service
 from app.services.session_service import Principal
 from app.services.tenant_access import TenantContext
 
@@ -98,9 +98,7 @@ async def _gate(
     user = await db.get(User, principal.user_id)
     if user is None or user.registered_at is None:
         raise AppError(403, "registration_required", "auth.registration_required")
-    now = utcnow()
-    sub = await subscription_service.current(db, ctx.tenant_id, now)
-    if not subscription_service.is_active(sub, now):
+    if not await metering_service.may_confirm(db, ctx.tenant_id, utcnow()):
         raise AppError(402, "plan_expired", "billing.plan_expired")
     if groups:
         missing = normalize.required_missing(groups, content)

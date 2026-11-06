@@ -65,6 +65,14 @@ async def _state(db: AsyncSession, tenant_id: int, now):
     return tenant.kind, (sub if active else None), plan, free_row
 
 
+async def may_confirm(db: AsyncSession, tenant_id: int, now) -> bool:
+    """Confirming needs what scanning needs (option A, owner 2026-11-06): an active plan, or
+    an organization's free scans still inside their validity (even when all are used up).
+    A personal tenant's free scans pause while its plan is expired."""
+    kind, sub, _plan, free_row = await _state(db, tenant_id, now)
+    return sub is not None or free_quota_service.in_period(free_row, kind, now)
+
+
 async def reserve(db: AsyncSession, tenant_id: int, pages: int, reference: str) -> QuotaReservation:
     if pages < 1:
         raise fields_error(["pages"])

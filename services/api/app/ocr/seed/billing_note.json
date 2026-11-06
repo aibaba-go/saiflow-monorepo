@@ -18,8 +18,7 @@
             "en": "Billing No.",
             "th": "เลขที่ใบวางบิล",
             "zh": "账单号"
-          },
-          "primary": true
+          }
         },
         {
           "kind": "field",
@@ -32,7 +31,8 @@
             "en": "Date",
             "th": "วันที่",
             "zh": "日期"
-          }
+          },
+          "primary": true
         },
         {
           "kind": "field",

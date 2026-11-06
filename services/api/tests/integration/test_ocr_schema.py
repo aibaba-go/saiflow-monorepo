@@ -178,3 +178,38 @@ def test_downgrade_0009_refuses_with_files_and_round_trips_when_empty(db_setting
     up = _alembic(db_settings_session, "upgrade", "head")
     assert up.returncode == 0, up.stderr
     assert asyncio.run(run(f"select count(*) from {S}.document_template_versions")) == 2
+
+
+async def test_0010_moves_an_old_billing_note_to_the_new_version(db_engine):
+    """A database seeded before the Billing Note fix (the dev VPS) gets a new current
+    version whose primary fields are date and total; the old version stays."""
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[2] / "alembic" / "versions" / "0010_reseed_templates.py"
+    spec = importlib.util.spec_from_file_location("m0010", path)
+    m0010 = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m0010)
+    async with db_engine.begin() as conn:
+        # pretend the stored version predates the fix
+        await conn.execute(
+            text(
+                f"update {S}.document_template_versions v set content_hash = 'old' "
+                f"from {S}.document_templates t "
+                "where t.id = v.template_id and t.code = 'billing_note'"
+            )
+        )
+        await conn.run_sync(lambda c: m0010._seeding().seed_templates(c))
+        rows = (
+            await conn.execute(
+                text(
+                    f"select v.version, v.groups, t.current_version_id = v.id "
+                    f"from {S}.document_template_versions v join {S}.document_templates t "
+                    f"on t.id = v.template_id where t.code = 'billing_note' order by v.version"
+                )
+            )
+        ).all()
+    assert [r[0] for r in rows] == [1, 2] and rows[1][2] is True and rows[0][2] is False
+    doc = next(g for g in rows[1][1] if g["key"] == "document")
+    primary = {i["key"] for i in doc["items"] if i.get("primary")}
+    assert primary == {"billing_date"}

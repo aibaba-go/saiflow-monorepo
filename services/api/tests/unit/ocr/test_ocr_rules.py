@@ -105,3 +105,18 @@ def test_textin_prompt_extraction_parses_llm_json():
     assert seen[0].headers["x-ti-app-id"] == "app"
     body = json.loads(seen[0].content)
     assert set(body) == {"file", "prompt"}
+
+
+def test_billing_note_without_its_own_number_fits():
+    """A billing note often has no number of its own (e.g. Samsap's ใบวางบิล): its date and
+    total are what every billing note carries."""
+    import json
+    from pathlib import Path
+
+    from app.ocr.templates.schema import canonical_groups, parse_template
+
+    seed = Path(__file__).resolve().parents[3] / "app" / "ocr" / "seed" / "billing_note.json"
+    groups = canonical_groups(parse_template(json.loads(seed.read_text(encoding="utf-8"))))
+    doc = {"document": {"billing_date": "22.02.2024"}, "summary": {"total_amount": "6666.31"}}
+    assert normalize.primary_missing(groups, normalize.fill_structure(groups, doc)) == []
+    assert normalize.primary_missing(groups, {"document": {"billing_no": "B1"}}) != []
