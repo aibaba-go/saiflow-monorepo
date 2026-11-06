@@ -3,8 +3,8 @@ doc_id: EPIC-02
 title: "EPIC-02 — 多类型文档 OCR 识别"
 type: epic
 status: active
-version: 1.3.0
-updated: 2026-10-18
+version: 1.4.0
+updated: 2026-11-06
 owner: Product Engineering
 priority: P0
 source: "PRD-001 §4.2"
@@ -44,10 +44,10 @@ related: [DM-Document, DM-LineItem, DM-ExtractedField, DM-ExtractionPayload, DM-
 | FR-OCR-014 | 检测并捕获签字区域是否存在 | P1 | §4.2 | FR-OCR-001 | AC-FR-OCR-014-01 |
 | FR-OCR-015 | 将置信度低于阈值的字段标记为需要人工核验 | P0 | §3.1 | FR-OCR-012 | AC-FR-OCR-015-01 |
 | FR-OCR-016 | 将日期、数字和货币（THB）标准化为规范格式 | P0 | §3.1 | FR-OCR-002 | AC-FR-OCR-016-01 |
-| FR-OCR-017 | 将预处理后的文档提交至 TextIn API，并关联文档与所选模板的服务参数 | P0 | §4.2 | FR-UPLOAD-006、FR-TEMPLATE-006 | AC-FR-OCR-017-01 |
-| FR-OCR-018 | 将 TextIn 返回的完整原始 JSON、请求关联信息和处理状态保存至 Firestore | P0 | §4.2 | FR-OCR-017 | AC-FR-OCR-018-01 |
-| FR-OCR-019 | 在 Firestore 原始 JSON 创建后，通过 Cloud Functions 按已发布模板将其转换并写入 Cloud SQL | P0 | §4.2 | FR-OCR-018、FR-TEMPLATE-006 | AC-FR-OCR-019-01 |
-| FR-OCR-020 | 对转换任务实施幂等写入、失败状态记录和可重试处理，且不重复创建关系数据 | P0 | §4.2 | FR-OCR-019 | AC-FR-OCR-020-01 |
+| FR-OCR-017 | **已迁移至 `openspec/specs/recognition/spec.md`（deprecated，`ocr-scan-flow`）** 将预处理后的文档提交至 TextIn API，并关联文档与所选模板的服务参数 | P0 | §4.2 | FR-UPLOAD-006、FR-TEMPLATE-006 | AC-FR-OCR-017-01 |
+| FR-OCR-018 | **已迁移至 `openspec/specs/recognition/spec.md`（deprecated，`ocr-scan-flow`）** 将 TextIn 返回的完整原始 JSON、请求关联信息和处理状态保存至 Firestore | P0 | §4.2 | FR-OCR-017 | AC-FR-OCR-018-01 |
+| FR-OCR-019 | **已迁移至 `openspec/specs/recognition/spec.md`（deprecated，`ocr-scan-flow`）** 在 Firestore 原始 JSON 创建后，通过 Cloud Functions 按已发布模板将其转换并写入 Cloud SQL | P0 | §4.2 | FR-OCR-018、FR-TEMPLATE-006 | AC-FR-OCR-019-01 |
+| FR-OCR-020 | **已迁移至 `openspec/specs/recognition/spec.md`（deprecated，`ocr-scan-flow`）** 对转换任务实施幂等写入、失败状态记录和可重试处理，且不重复创建关系数据 | P0 | §4.2 | FR-OCR-019 | AC-FR-OCR-020-01 |
 
 ## 3. 按文档类型列出的必需字段
 
@@ -179,6 +179,7 @@ Feature: EPIC-02 OCR 识别
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.4.0 | 2026-11-06 | Product Engineering | FR-OCR-017, FR-OCR-018, FR-OCR-019, FR-OCR-020 迁移至 `openspec/specs/`（变更 `ocr-scan-flow`），本文件中对应条目只作参考 |
 | 1.3.0 | 2026-10-18 | Product Engineering | 取消任务前需确认（AC-FR-OCR-020-03） |
 | 1.2.0 | 2026-10-17 | Product Engineering | 新增失败任务可读原因与重试验收场景（厂商余额不足等失败不再显示 404） |
 | 1.1.0 | 2026-10-07 | Product Engineering | 新增 TextIn 调用、Firestore 原始 JSON、Cloud Functions 转换及幂等重试需求 |

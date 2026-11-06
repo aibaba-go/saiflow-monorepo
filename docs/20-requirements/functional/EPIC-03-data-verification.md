@@ -3,8 +3,8 @@ doc_id: EPIC-03
 title: "EPIC-03 — 数据人工核验与修改"
 type: epic
 status: active
-version: 1.5.8
-updated: 2026-10-20
+version: 1.6.0
+updated: 2026-11-06
 owner: Product Engineering
 priority: P0
 source: "PRD-001 §3.1 场景 3, §4.3"
@@ -31,18 +31,18 @@ related: [DM-Document, DM-ExtractedField, DM-ChangeLog, DM-ReviewRecord, DM-Resu
 | FR-VERIFY-003 | 允许跨多个文档/字段批量更正 | P1 | §4.3 | FR-VERIFY-002 | AC-FR-VERIFY-003-01 |
 | FR-VERIFY-004 | 将校验失败或置信度低的字段标为红色 | P0 | §4.3 | FR-OCR-015 | AC-FR-VERIFY-004-01 |
 | FR-VERIFY-005 | 对缺失的必填字段显示提醒 | P0 | §4.3 | FR-VERIFY-001 | AC-FR-VERIFY-005-01 |
-| FR-VERIFY-006 | 提供可锁定记录的核验确认操作 | P0 | §4.3 | FR-VERIFY-002 | AC-FR-VERIFY-006-01/02 |
+| FR-VERIFY-006 | **已迁移至 `openspec/specs/results/spec.md`（deprecated，`ocr-scan-flow`）** 提供可锁定记录的核验确认操作 | P0 | §4.3 | FR-VERIFY-002 | AC-FR-VERIFY-006-01/02 |
 | FR-VERIFY-007 | 在变更日志中记录每次修改（修改前/后、用户、时间） | P0 | §4.3 | FR-VERIFY-002 | AC-FR-VERIFY-007-01 |
 | FR-VERIFY-008 | 选中字段时高亮显示源边界框 | P1 | §4.3 | FR-VERIFY-001 | AC-FR-VERIFY-008-01 |
-| FR-VERIFY-009 | 任一必填字段缺失或被标记时阻止确认 | P0 | §4.3 | FR-VERIFY-005 | AC-FR-VERIFY-006-02 |
+| FR-VERIFY-009 | **已迁移至 `openspec/specs/results/spec.md`（deprecated，`ocr-scan-flow`）** 任一必填字段缺失或被标记时阻止确认 | P0 | §4.3 | FR-VERIFY-005 | AC-FR-VERIFY-006-02 |
 | FR-VERIFY-010 | 允许按单据处理流程配置无需复核、一级复核或二级复核 | P0 | §3.1 场景 3, §4.3 | FR-SYS-002 | AC-FR-VERIFY-010-01 |
 | FR-VERIFY-011 | 对配置为一级或二级复核的已核验数据创建对应级别的待复核记录 | P0 | §3.1 场景 3 | FR-VERIFY-006, FR-VERIFY-010 | AC-FR-VERIFY-011-01 |
 | FR-VERIFY-012 | 仅在最终所需复核级别通过后允许数据正式进入业务流程 | P0 | §3.1 场景 3, §4.3 | FR-VERIFY-011 | AC-FR-VERIFY-012-01/02 |
 | FR-VERIFY-013 | 记录每次复核决定、复核级别、复核人、时间与意见 | P0 | §3.1 场景 3 | FR-VERIFY-011 | AC-FR-VERIFY-013-01 |
 | FR-VERIFY-014 | 核验结果页仅保留原图预览与结构化数据，原图位于表格上方；上传确认页预览、核验结果页/最终结果页原图与公司证书图片点击后均以全屏查看器打开，支持双指触控捏合缩放 | P0 | 界面调整 2026-10-17/19 | FR-VERIFY-001 | AC-FR-VERIFY-014-01/02 |
-| FR-VERIFY-015 | 允许直接编辑结构化字段与表格单元格，并可新增/删除字段与表格行、通过 Reset 放弃未保存改动，以新结果版本保存；金额数字统一千分位 + 保留 2 位小数显示与导出 | P0 | 界面调整 2026-10-17/20 | FR-VERIFY-002 | AC-FR-VERIFY-015-01/02/03/04/05 |
+| FR-VERIFY-015 | **已迁移至 `openspec/specs/results/spec.md`（deprecated，`ocr-scan-flow`）** 允许直接编辑结构化字段与表格单元格，并可新增/删除字段与表格行、通过 Reset 放弃未保存改动，以新结果版本保存；金额数字统一千分位 + 保留 2 位小数显示与导出 | P0 | 界面调整 2026-10-17/20 | FR-VERIFY-002 | AC-FR-VERIFY-015-01/02/03/04/05 |
 | FR-VERIFY-016 | LINE Mini App 结果页 Continue 在确认前检查认证、注册完成状态与任务所属工作空间的订阅；仅已注册且已开通付费套餐的用户可显式确认、锁定结果后进入最终结果页 | P0 | 界面调整 2026-10-17/18 | FR-VERIFY-006, FR-SYS-011, FR-SYS-012 | AC-FR-VERIFY-016-01/02 |
-| FR-VERIFY-017 | 在任务列表与结果页按流程阶段（OCR 处理中 / OCR 处理失败 / 数据验证中 / 数据已验证 / 最终完成）展示任务状态，并支持按阶段筛选历史任务，历史列表每页 20 条滚动分页加载 | P0 | 界面调整 2026-10-18 | FR-VERIFY-016 | AC-FR-VERIFY-017-01/02/03 |
+| FR-VERIFY-017 | **已迁移至 `openspec/specs/results/spec.md`（deprecated，`ocr-scan-flow`）** 在任务列表与结果页按流程阶段（OCR 处理中 / OCR 处理失败 / 数据验证中 / 数据已验证 / 最终完成）展示任务状态，并支持按阶段筛选历史任务，历史列表每页 20 条滚动分页加载 | P0 | 界面调整 2026-10-18 | FR-VERIFY-016 | AC-FR-VERIFY-017-01/02/03 |
 
 ## 3. 规则
 
@@ -282,6 +282,7 @@ Feature: EPIC-03 核验与修改
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.6.0 | 2026-11-06 | Product Engineering | FR-VERIFY-006, FR-VERIFY-009, FR-VERIFY-015, FR-VERIFY-017 迁移至 `openspec/specs/`（变更 `ocr-scan-flow`），本文件中对应条目只作参考 |
 | 1.5.8 | 2026-10-20 | Product Engineering | FR-VERIFY-015：核验结果页支持新增/删除字段与表格增删行（删除到空时保留空卡片入口，新增金额类值按金额格式保存与显示）；Continue 旁新增 Reset 按钮，确认后放弃未保存改动；新增 AC-FR-VERIFY-015-04/05 |
 | 1.5.7 | 2026-10-19 | Product Engineering | FR-VERIFY-015：金额数字千分位逗号 + 至少保留 2 位小数（不省略 .00），计数/标识字段按原值；页面与 Excel/CSV 导出一致，编辑后保持数字类型；新增 AC-FR-VERIFY-015-03。FR-VERIFY-014：核验结果页/最终结果页原图与公司证书统一使用全屏查看器（双指捏合缩放）；更新 AC-FR-VERIFY-014-01 |
 | 1.5.6 | 2026-10-19 | Product Engineering | FR-VERIFY-014：上传确认页预览图支持全屏缩放与双指触控捏合缩放；新增 AC-FR-VERIFY-014-02 |

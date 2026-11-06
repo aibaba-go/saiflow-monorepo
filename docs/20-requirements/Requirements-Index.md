@@ -3,7 +3,7 @@ doc_id: REQ-INDEX
 title: "SaiFlow — 需求索引与可追溯性矩阵"
 type: index
 status: active
-version: 1.10.0
+version: 1.11.0
 updated: 2026-11-06
 owner: Product Engineering
 ---
@@ -34,16 +34,17 @@ owner: Product Engineering
 |----|------|--------|------|--------|----------|----------|------|
 | FR-UPLOAD-001 | 手机相机上传 | P0 | §4.1 | — | AC-FR-UPLOAD-001-01 | API-1 | active |
 | FR-UPLOAD-002 | 扫描仪/文件导入 | P0 | §4.1 | — | AC-FR-UPLOAD-002-01 | API-1 | active |
-| FR-UPLOAD-003 | 接受 JPG/PNG/PDF | P0 | §4.1 | — | AC-FR-UPLOAD-003-01/02 | API-1 | active |
+| FR-UPLOAD-003 | 支持的格式与上限 | P0 | EPIC-01（已迁移，`ocr-scan-flow`） | — | `openspec/specs/documents/spec.md` | `openspec/specs/documents/spec.md` | active |
 | FR-UPLOAD-004 | 拒绝不支持的格式 | P0 | §4.1 | 003 | AC-FR-UPLOAD-003-02 | API-1 | active |
-| FR-UPLOAD-005 | 批量上传 | P0 | §4.1 | — | AC-FR-UPLOAD-005-01 | API-1 | active |
-| FR-UPLOAD-006 | 自动矫正 | P0 | §4.1 | 001 | AC-FR-UPLOAD-006-01 | OCR-Pipeline | active |
+| FR-UPLOAD-005 | 分步上传与批量上传 | P0 | EPIC-01（已迁移，`ocr-scan-flow`） | — | `openspec/specs/documents/spec.md` | `openspec/specs/documents/spec.md` | active |
+| FR-UPLOAD-006 | 矫正与裁剪 | P0 | EPIC-01（已迁移，`ocr-scan-flow`） | — | `openspec/specs/documents/spec.md` | `openspec/specs/documents/spec.md` | active |
 | FR-UPLOAD-007 | 去除阴影 | P1 | §4.1 | 001 | AC-FR-UPLOAD-007-01 | OCR-Pipeline | active |
 | FR-UPLOAD-008 | 降噪 | P1 | §4.1 | 001 | AC-FR-UPLOAD-008-01 | OCR-Pipeline | active |
 | FR-UPLOAD-009 | 自动裁剪 | P0 | §4.1 | 006 | AC-FR-UPLOAD-009-01 | OCR-Pipeline | active |
-| FR-UPLOAD-010 | 上传状态队列 | P0 | §4.1 | 005 | AC-FR-UPLOAD-010-01 | API-1 | active |
-| FR-UPLOAD-011 | 保留原件 | P0 | §4.1 | — | AC-FR-UPLOAD-011-01 | DM-Document | active |
+| FR-UPLOAD-010 | 上传状态 | P0 | EPIC-01（已迁移，`ocr-scan-flow`） | — | `openspec/specs/documents/spec.md` | `openspec/specs/documents/spec.md` | active |
+| FR-UPLOAD-011 | 原件保留与读取 | P0 | EPIC-01（已迁移，`ocr-scan-flow`） | — | `openspec/specs/documents/spec.md` | `openspec/specs/documents/spec.md` | active |
 | FR-UPLOAD-012 | 低质量警告 | P1 | §5.4 | 006 | AC-FR-UPLOAD-012-01 | OCR-Pipeline | active |
+| FR-UPLOAD-013 | 待处理记录 | P0 | `ocr-scan-flow`（2026-11-06） | — | `openspec/specs/documents/spec.md` | `openspec/specs/documents/spec.md` | active |
 | FR-OCR-001 | 文档类型处理 | P0 | §4.2 | UPLOAD-006 | AC-FR-OCR-001-01 | OCR-Pipeline | active |
 | FR-OCR-002 | PO 字段提取 | P0 | §4.2 | OCR-001 | AC-FR-OCR-002-01 | DM-ExtractedField | active |
 | FR-OCR-003 | Delivery Note 提取 | P0 | §4.2 | OCR-001 | AC-FR-OCR-003-01 | DM-ExtractedField | active |
@@ -60,27 +61,30 @@ owner: Product Engineering
 | FR-OCR-014 | 签字检测 | P1 | §4.2 | OCR-001 | AC-FR-OCR-014-01 | DM-ExtractedField | active |
 | FR-OCR-015 | 低置信度标记 | P0 | §3.1 | OCR-012 | AC-FR-OCR-015-01 | DM-ExtractedField | active |
 | FR-OCR-016 | 标准化日期/数值/THB | P0 | §3.1 | OCR-002 | AC-FR-OCR-016-01 | OCR-Pipeline | active |
-| FR-OCR-017 | 服务端调用 TextIn | P0 | §4.2 | UPLOAD-006/TEMPLATE-006 | AC-FR-OCR-017-01 | OCR-Pipeline | active |
-| FR-OCR-018 | 保存 Firestore 原始 JSON | P0 | §4.2 | OCR-017 | AC-FR-OCR-018-01 | DM-ExtractionPayload | active |
-| FR-OCR-019 | Cloud Functions 模板转换 | P0 | §4.2 | OCR-018/TEMPLATE-006 | AC-FR-OCR-019-01 | DM-ConversionJob | active |
-| FR-OCR-020 | 转换幂等重试 | P0 | §4.2 | OCR-019 | AC-FR-OCR-020-01 | DM-ConversionJob | active |
+| FR-OCR-017 | 识别任务 | P0 | EPIC-02（已迁移，`ocr-scan-flow`） | — | `openspec/specs/recognition/spec.md` | `openspec/specs/recognition/spec.md` | active |
+| FR-OCR-018 | 原始识别结果 | P0 | EPIC-02（已迁移，`ocr-scan-flow`） | — | `openspec/specs/recognition/spec.md` | `openspec/specs/recognition/spec.md` | active |
+| FR-OCR-019 | 大模型匹配模板 | P0 | EPIC-02（已迁移，`ocr-scan-flow`） | — | `openspec/specs/recognition/spec.md` | `openspec/specs/recognition/spec.md` | active |
+| FR-OCR-020 | 按模板转换与重试 | P0 | EPIC-02（已迁移，`ocr-scan-flow`） | — | `openspec/specs/recognition/spec.md` | `openspec/specs/recognition/spec.md` | active |
+| FR-OCR-021 | OCR 引擎与切换 | P0 | `ocr-scan-flow`（2026-11-06） | — | `openspec/specs/recognition/spec.md` | `openspec/specs/recognition/spec.md` | active |
+| FR-OCR-022 | 后台处理与恢复 | P0 | `ocr-scan-flow`（2026-11-06） | — | `openspec/specs/recognition/spec.md` | `openspec/specs/recognition/spec.md` | active |
+| FR-OCR-023 | 通用结果 | P0 | `ocr-scan-flow`（2026-11-06） | — | `openspec/specs/recognition/spec.md` | `openspec/specs/recognition/spec.md` | active |
 | FR-VERIFY-001 | 并排展示结果 | P0 | §4.3 | OCR-012 | AC-FR-VERIFY-001-01 | API-4 | active |
 | FR-VERIFY-002 | 单字段编辑 | P0 | §4.3 | VERIFY-001 | AC-FR-VERIFY-002-01 | DM-ChangeLog | active |
 | FR-VERIFY-003 | 批量更正 | P1 | §4.3 | VERIFY-002 | AC-FR-VERIFY-003-01 | API-4 | active |
 | FR-VERIFY-004 | 错误红色标记 | P0 | §4.3 | OCR-015 | AC-FR-VERIFY-004-01 | API-4 | active |
 | FR-VERIFY-005 | 缺失字段提醒 | P0 | §4.3 | VERIFY-001 | AC-FR-VERIFY-005-01 | API-4 | active |
-| FR-VERIFY-006 | 确认锁定 | P0 | §4.3 | VERIFY-002 | AC-FR-VERIFY-006-01/02 | DM-Document | active |
+| FR-VERIFY-006 | 确认后锁定 | P0 | EPIC-03（已迁移，`ocr-scan-flow`） | — | `openspec/specs/results/spec.md` | `openspec/specs/results/spec.md` | active |
 | FR-VERIFY-007 | 变更日志 | P0 | §4.3 | VERIFY-002 | AC-FR-VERIFY-007-01 | DM-ChangeLog | active |
 | FR-VERIFY-008 | 边界框高亮 | P1 | §4.3 | VERIFY-001 | AC-FR-VERIFY-008-01 | API-4 | active |
-| FR-VERIFY-009 | 确认门控 | P0 | §4.3 | VERIFY-005 | AC-FR-VERIFY-006-02 | API-4 | active |
+| FR-VERIFY-009 | 确认门控 | P0 | EPIC-03（已迁移，`ocr-scan-flow`） | — | `openspec/specs/results/spec.md` | `openspec/specs/results/spec.md` | active |
 | FR-VERIFY-010 | 配置 0/1/2 级复核 | P0 | §3.1/§4.3 | SYS-002 | AC-FR-VERIFY-010-01 | DM-ReviewPolicy | active |
 | FR-VERIFY-011 | 创建待复核记录 | P0 | §3.1 | VERIFY-006/010 | AC-FR-VERIFY-011-01 | DM-ReviewRecord | active |
 | FR-VERIFY-012 | 最终复核门控业务录入 | P0 | §3.1/§4.3 | VERIFY-011 | AC-FR-VERIFY-012-01/02 | DM-Document | active |
 | FR-VERIFY-013 | 复核日志 | P0 | §3.1 | VERIFY-011 | AC-FR-VERIFY-013-01 | DM-ReviewRecord | active |
 | FR-VERIFY-014 | 原图置顶与全屏触控缩放（上传确认页、结果页、最终结果页、公司证书） | P0 | 界面调整 2026-10-17/19 | VERIFY-001 | AC-FR-VERIFY-014-01/02 | OriginalPreview、ImageViewer | active |
-| FR-VERIFY-015 | 结构化结果版本化编辑（含字段/表格行增删、Reset 放弃改动）；金额千分位 + 2 位小数 | P0 | 界面调整 2026-10-17/20 | VERIFY-002 | AC-FR-VERIFY-015-01/02/03/04/05 | DM-ResultVersion | active |
+| FR-VERIFY-015 | 结构化结果的版本化修改 | P0 | EPIC-03（已迁移，`ocr-scan-flow`） | — | `openspec/specs/results/spec.md` | `openspec/specs/results/spec.md` | active |
 | FR-VERIFY-016 | LINE 确认前认证与工作空间订阅检查；已注册付费用户显式确认后进入最终页，恢复未完成任务返回结果页 | P0 | 界面调整 2026-10-17/18 | VERIFY-006/SYS-011/SYS-012 | AC-FR-VERIFY-016-01/02 | DM-ResultVersion | active |
-| FR-VERIFY-017 | 任务流程阶段展示、历史筛选与分页加载 | P0 | 界面调整 2026-10-18 | VERIFY-016 | AC-FR-VERIFY-017-01/02/03 | DM-OcrJob | active |
+| FR-VERIFY-017 | 任务阶段与列表 | P0 | EPIC-03（已迁移，`ocr-scan-flow`） | — | `openspec/specs/results/spec.md` | `openspec/specs/results/spec.md` | active |
 | FR-ENTRY-001 | 生成 Excel 模板 | P0 | §4.4 | VERIFY-006 | AC-FR-ENTRY-001-01 | DM-ExportJob | active |
 | FR-ENTRY-002 | 一键填充 Excel | P0 | §4.4 | ENTRY-001 | AC-FR-ENTRY-002-01 | API-5 | active |
 | FR-ENTRY-003 | 批量导出 | P0 | §4.4 | ENTRY-002 | AC-FR-ENTRY-003-01 | API-5 | active |
@@ -95,7 +99,7 @@ owner: Product Engineering
 | FR-ENTRY-012 | 管理系统字段映射 | P1 | §4.4 | ENTRY-010 | AC-FR-ENTRY-012-01 | API-6 | planned |
 | FR-ENTRY-013 | JSON/CSV/Excel 导出 | P1 | §3.1 | ENTRY-002 | AC-FR-ENTRY-013-01 | API-5 | planned |
 | FR-ENTRY-014 | 云端文件夹归档 | P2 | §4.4 | ENTRY-005 | AC-FR-ENTRY-014-01 | API-6 | planned |
-| FR-ENTRY-015 | 最终结果页查看与 XLSX 导出 | P0 | 界面调整 2026-10-17 | VERIFY-016 | AC-FR-ENTRY-015-01 | DM-ExportJob | active |
+| FR-ENTRY-015 | 已确认结果导出为 XLSX | P0 | EPIC-04（已迁移，`ocr-scan-flow`） | — | `openspec/specs/exports/spec.md` | `openspec/specs/exports/spec.md` | active |
 | FR-MGMT-001 | 分类 | P0 | §4.5 | ENTRY-005 | AC-FR-MGMT-001-01 | DM-ArchiveRecord | active |
 | FR-MGMT-002 | 按编号搜索 | P1 | §4.5 | MGMT-001 | AC-FR-MGMT-002-01 | API-7 | planned |
 | FR-MGMT-003 | 按日期搜索 | P1 | §4.5 | MGMT-001 | AC-FR-MGMT-003-01 | API-7 | planned |
@@ -160,6 +164,9 @@ owner: Product Engineering
 | FR-SYS-054 | 通知中心（小程序） | P0 | PRD §4.9 v3.7 | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
 | FR-SYS-055 | 等待与错误反馈 | P0 | PRD §4.9 v3.7 | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
 | FR-SYS-056 | 底部导航 | P0 | PRD §4.9 v3.7 | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-057 | 扫描与上传 | P0 | `ocr-scan-flow`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-058 | 待处理与开始识别 | P0 | `ocr-scan-flow`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-059 | 识别进度 | P0 | `ocr-scan-flow`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
 | FR-SYS-060 | 登录、会话与首页（admin 后台） | P0 | PRD §4.9 v3.8 | — | `openspec/specs/web-admin/spec.md` | `openspec/specs/web-admin/spec.md` | active |
 | FR-SYS-061 | 修改本人口令（admin 后台） | P0 | PRD §4.9 v3.8 | SYS-019 | `openspec/specs/web-admin/spec.md` | `openspec/specs/web-admin/spec.md` | active |
 | FR-SYS-062 | 界面语言（admin 后台，中文默认） | P0 | PRD §4.6 v3.8 | — | `openspec/specs/web-admin/spec.md` | `openspec/specs/web-admin/spec.md` | active |
@@ -190,6 +197,10 @@ owner: Product Engineering
 | FR-SYS-102 | 套餐、用量与续费申请（web-pc） | P0 | PRD §4.9 v3.9 | — | `openspec/specs/web-pc/spec.md` | `openspec/specs/web-pc/spec.md` | active |
 | FR-SYS-103 | 通知中心（web-pc） | P0 | PRD §4.9 v3.9 | — | `openspec/specs/web-pc/spec.md` | `openspec/specs/web-pc/spec.md` | active |
 | FR-SYS-104 | 等待、确认与错误反馈（web-pc） | P0 | PRD §4.9 v3.9 | — | `openspec/specs/web-pc/spec.md` | `openspec/specs/web-pc/spec.md` | active |
+| FR-SYS-105 | 识别结果 | P0 | `ocr-scan-flow`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-106 | 确认结果 | P0 | `ocr-scan-flow`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-107 | 最终结果与导出 | P0 | `ocr-scan-flow`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-108 | 历史 | P0 | `ocr-scan-flow`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
 | FR-REPORT-001 | 管理层访问运营报表 | P1 | §3.1/§4.7 | SYS-002 | AC-FR-REPORT-001-01 | API-9（待设计） | in-review |
 | FR-REPORT-002 | 展示已配置运营指标 | P1 | §1.2/§4.7 | REPORT-001/OQ-5 | AC-FR-REPORT-002-01 | DM-ReportDefinition（待设计） | in-review |
 | FR-REPORT-003 | 报表授权范围限制 | P1 | §4.7 | SYS-002 | AC-FR-REPORT-003-01 | API-9（待设计） | in-review |
@@ -199,7 +210,7 @@ owner: Product Engineering
 | FR-TEMPLATE-003 | 配置字段 JSON 映射 | P1 | §4.8 | TEMPLATE-002 | AC-FR-TEMPLATE-003-01 | DM-TemplateFieldMapping | in-review |
 | FR-TEMPLATE-004 | 配置行项目映射 | P1 | §4.8 | TEMPLATE-003 | AC-FR-TEMPLATE-004-01 | DM-TemplateFieldMapping | in-review |
 | FR-TEMPLATE-005 | 发布前校验模板 | P1 | §4.8 | TEMPLATE-003/004 | AC-FR-TEMPLATE-005-01 | API-10 | in-review |
-| FR-TEMPLATE-006 | 使用已发布模板版本 | P1 | §4.8 | TEMPLATE-005 | AC-FR-TEMPLATE-006-01 | DM-DocumentTemplate | in-review |
+| FR-TEMPLATE-006 | 已发布的文档格式模板 | P0 | EPIC-08（已迁移，`ocr-scan-flow`） | — | `openspec/specs/recognition/spec.md` | `openspec/specs/recognition/spec.md` | active |
 | FR-TEMPLATE-007 | 模板变更与转换审计 | P1 | §4.8 | SYS-003 | AC-FR-TEMPLATE-007-01 | DM-OperationLog | in-review |
 
 ## 3. PRD 覆盖检查
@@ -240,6 +251,7 @@ owner: Product Engineering
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.11.0 | 2026-11-06 | Product Engineering | B-3（`ocr-scan-flow`）：上传、识别、模板匹配与转换、结果、导出与小程序扫描页面的需求迁入 `openspec/specs/{documents,recognition,results,exports,line-mini}`；新增 FR-UPLOAD-013、FR-OCR-021…023、FR-SYS-057…059、FR-SYS-105…108 |
 | 1.10.0 | 2026-11-06 | Product Engineering | B-5c：新增 FR-SYS-090…104（web-pc 企业版） |
 | 1.9.0 | 2026-11-06 | Product Engineering | B-5b：FR-SYS-005 指向 `openspec/specs/ocr-settings/spec.md`；新增 FR-SYS-060…073（admin 后台）与 FR-SYS-080（后台查询用户）；FR-SYS-003、019 的新增场景在 `openspec/specs/identity/spec.md` |
 | 1.8.0 | 2026-11-05 | Product Engineering | B-5a：FR-SYS-004 指向 `openspec/specs/line-mini/spec.md`；新增 FR-SYS-040…044、046…056（LINE 小程序） |

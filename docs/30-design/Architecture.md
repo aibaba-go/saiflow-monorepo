@@ -3,7 +3,7 @@ doc_id: DES-001
 title: "SaiFlow — 系统架构"
 type: design
 status: active
-version: 3.6.0
+version: 3.7.0
 updated: 2026-11-06
 owner: Product Engineering
 source: "PRD-001 v3.3 §3.1, §3.2, §4, §4.9, §5; ADR-008"
@@ -55,6 +55,7 @@ graph TB
 
     Caddy["Caddy<br/>HTTPS 入口"]
     API["后端 API<br/>容器"]
+    WORKER["识别服务<br/>容器"]
 
     OCR1["OCR 首选引擎"]
     OCR2["OCR 备用引擎"]
@@ -69,11 +70,13 @@ graph TB
     Ent --> Caddy
     Admin --> Caddy
     Caddy --> API
-    API --> OCR1
-    API -. 切换 .-> OCR2
-    API --> LLM
+    WORKER --> OCR1
+    WORKER -. 切换 .-> OCR2
+    WORKER --> LLM
     API --> PG
     API --> GCS
+    WORKER --> PG
+    WORKER --> GCS
     PG -. 每日备份 .-> BAK
 ```
 
@@ -84,7 +87,8 @@ graph TB
 | LINE 小程序 | 游客试用、上传、核验、确认、管理操作（成员与角色、复核） | §3.1、§4.1、§4.3、§4.9 |
 | web-pc 企业版 | 管理层浏览本租户结构化数据；管理操作（个人资料、租户切换、建组织申请、组织资料与成员、邀请链接与二维码、角色、owner 转让与退出、企业认证、套餐与续费申请、通知中心）；界面英语（默认）/泰语/中文；只用 LINE 网页登录（授权码方式，前端校验随机 `state`，回调地址 `/login`），没有游客与注册，未注册用户引导到小程序；history 路由，Cookie 会话，会话失效时回登录页并在登录后回到原页面 | §4.9 |
 | web-pc admin 后台 | 平台运营：组织申请审批与停用、企业认证审核、续费与开通申请审批、套餐档位、价格与有效期、免费额度与成员人数上限、OCR 引擎与大模型配置、查询用户、查看操作日志、修改本人口令、首批模板预置；界面中文（默认）/英文，history 路由，Cookie 会话，会话失效时回登录页并在登录后回到原页面 | §4.6、§4.9 |
-| 后端 API | 认证与会话、租户隔离与权限点校验、上传编排、OCR 调用与切换、大模型模板匹配与结构化转换、表单状态流转、导出、计量与到期判断、用量提醒与到期提醒（站内通知、LINE OA 消息、邮件；Intermediate / Advance 另加短信）、操作日志 | §3–§4 |
+| 后端 API | 认证与会话、租户隔离与权限点校验、上传编排、建立识别任务（预占扫描次数）、表单状态流转、导出（代为读取私有 GCS 中的文件，LINE 内下载用 60 秒下载凭证）、计量与到期判断、用量提醒与到期提醒（站内通知、LINE OA 消息、邮件；Intermediate / Advance 另加短信）、操作日志 | §3–§4 |
+| 识别服务（`saiflow-be-ocr`） | 与后端 API 共用代码与数据库的独立进程：按顺序处理排队的识别任务（读原件、调用 OCR 引擎并按两层规则切换、保存原始识别载荷、结算或退还扫描次数），再做大模型模板匹配与结构化转换；重启时恢复或结束中断的任务；清理过期的上传。不对外开放端口 | §3.2、§4.2 |
 | OCR 引擎（首选/备用） | 对单据图像执行 OCR，返回原始 JSON | §3.2、§4.2、§4.6 |
 | 大模型 | 模板匹配；按模板结构化转换并给出字段置信度 | §3.2、§4.2 |
 | Caddy | HTTPS 入口；按域名或路径转发到前端与后端容器 | ADR-008 |
@@ -112,16 +116,17 @@ graph TB
 
 - 结构化文件导入（P1）跳过 ② 中的 OCR 与大模型，按字段名直接解析；界面直接录入（P2）跳过 ②。
 - 识别任务的状态、页数与所用引擎记录在 PostgreSQL，作为月扫描配额计量（每页一次）与调用观测（NFR-PERF-009）的依据。
-- 浏览器只通过经认证的 API 或 API 签发的短期链接访问内容，不持有 GCS、数据库、OCR 或大模型凭据；对象下载使用后端签发的有时效 V4 签名 URL。
+- 浏览器只通过经认证的 API 访问内容，不持有 GCS、数据库、OCR 或大模型凭据；原件、页面预览与导出文件都由后端读出后返回（B-3 起）。LINE 内置浏览器把下载交给系统浏览器时没有会话，后端签发 60 秒的下载凭证代替（FR-ENTRY-015），凭证在会话注销后失效。
+- ② 由识别服务异步执行；入口轮询识别任务的阶段，结果页在模板匹配完成前显示“匹配中”。
 
 ## 5. 部署模型
 
 | 方面 | 选择 |
 |------|------|
 | 服务器 | 一台 LightNode VPS（曼谷机房），唯一的 dev 环境；公网只开放 80/443 与 SSH（11022） |
-| 后端 | 一个后端 API 容器 |
+| 后端 | 后端 API 容器，以及同一镜像的两个后台进程：提醒服务 `saiflow-be-reminders` 与识别服务 `saiflow-be-ocr` |
 | 前端 | 三个前端容器，各用一个子域名：`saiflow-app.aibaba.asia`（web-pc 企业版）、`saiflow-admin.aibaba.asia`（admin 后台）、`saiflow-line2.aibaba.asia`（LINE 小程序）；每个子域名下的 `/api` 由 Caddy 转给后端，前后端同源 |
-| 服务命名 | `saiflow-<be 或 fe>-<目录名>`：`saiflow-be-api`、`saiflow-fe-web-pc`、`saiflow-fe-web-admin`、`saiflow-fe-line-mini`；镜像与 Compose 服务同名 |
+| 服务命名 | `saiflow-<be 或 fe>-<目录名>`：`saiflow-be-api`（后台进程为 `saiflow-be-reminders`、`saiflow-be-ocr`）、`saiflow-fe-web-pc`、`saiflow-fe-web-admin`、`saiflow-fe-line-mini`；镜像与 Compose 服务同名 |
 | 入口 | Caddy 容器，自动申请 HTTPS 证书 |
 | 数据 | PostgreSQL 容器（数据在 Docker 数据卷，只在内部网络可达）；私有 GCS Bucket |
 | 备份 | 每天导出数据库，本地保留 7 天，并立即复制到 GCS 备份桶（保留 30 天） |
@@ -163,6 +168,7 @@ v2 中列为 proposed 的 ADR-002（可插拔 OCR 引擎）已由 PRD §4.6 的�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 3.7.0 | 2026-11-06 | Product Engineering | B-3（`ocr-scan-flow`）：识别服务 `saiflow-be-ocr` 承担 OCR 调用、引擎切换与大模型匹配转换；原件存私有 GCS 桶，文件由后端代为读取，LINE 内下载用 60 秒下载凭证（取代签名 URL 的设想） |
 | 3.6.0 | 2026-11-06 | Product Engineering | B-5c：web-pc 企业版的职责与前端要点（LINE 网页登录、注册引导、三种语言） |
 | 3.5.0 | 2026-11-06 | Product Engineering | B-5b：admin 后台的职责与前端要点（中文/英文、history 路由、会话失效回原页面）；OCR 与大模型密钥只在服务器环境变量文件中，后台只显示是否已配置 |
 | 3.4.0 | 2026-11-05 | Product Engineering | B-5a：LINE 小程序的前端要点（hash 路由、Cookie 会话、LIFF 的用途、本机保存的偏好） |

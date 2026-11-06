@@ -3,7 +3,7 @@ doc_id: ADR-006
 title: "ADR-006 — AI Native 开发模式：OpenSpec 管需求、SuperPowers 管实现，并重建代码"
 type: adr
 status: accepted
-version: 1.2.8
+version: 1.2.9
 updated: 2026-11-06
 owner: Product Engineering
 related: [WF-001, AGENTS, STD-004, STD-005, STD-006, PRD-001, ADR-008]
@@ -141,12 +141,12 @@ accepted（2026-10-30 负责人确认）
 | B-2b | `rebuild-tenant-rbac` | M | 租户访问规则、组织（申请与 admin 审批）、成员邀请与成员人数上限、角色与权限点、成员移除与 owner 转让、企业认证（只做后端；负责人 2026-11-04 取消原地升级） | B-2a |
 | B-2c | `rebuild-plans-metering` | M | 套餐目录（admin 可改）、订阅与到期即停（保留历史）、免费额度（个人与组织）、扫描次数的预占与退还（B-3 调用）、用量查询、续费与开通申请、按套餐的成员人数上限（只做后端） | B-2b |
 | B-2d | `rebuild-notifications` | M | 用量提醒、到期提醒、组织免费额度的到期提醒、通知中心；渠道为站内通知与邮件，由独立的提醒进程定时发送；LINE OA 消息另行接入（只做后端；负责人 2026-11-05 从 B-2c 拆出） | B-2c |
-| B-3 | `ocr-pipeline-v3` | L | 上传（原件存私有 GCS）、OCR 引擎抽象、大模型模板匹配与结构化转换、识别结果存 PostgreSQL jsonb（EPIC-01/02 迁入；ADR-008） | B-2 |
-| B-4 | `verify-and-export` | L | 人工确认与修正、复核、导出 Excel（EPIC-03/04 迁入） | B-3 |
+| B-3 | `ocr-scan-flow` | L | 迁移 main 已跑通的扫描流程（ADR-009）：上传（原件存私有 GCS）、TextIn 与 Google Vision 的首选/备用切换、大模型模板匹配与结构化转换（含通用结果）、结果版本与确认、XLSX 导出与下载凭证，以及 LINE 小程序的扫描、进度、结果、确认、最终结果与历史页面（EPIC-01/02 与 EPIC-03/04 的相关部分迁入；负责人 2026-11-06） | B-2 |
+| B-4 | `verify-and-export` | M | 复核（无需 / 一级 / 二级）、Confirm all、正式业务数据（EPIC-03/04 其余部分迁入；确认与导出已随 B-3） | B-3 |
 | B-5a | `line-mini-account` | L | LINE 小程序：账户、租户、组织、套餐（含价格）与通知页面；后端套餐价格与查看邀请（负责人 2026-11-05：B-5 按应用拆分） | B-2 |
 | B-5b | `web-admin-console` | M | admin 后台（中文/英文）：审批、组织、订阅与预占、套餐价格、系统参数、查询用户、操作日志、修改本人口令；后端补上 admin 改口令、日志与用户查询、OCR 与大模型配置（B-3 读取）（负责人 2026-11-06） | B-2 |
 | B-5c | `web-pc-account` | M | web-pc 企业版（英语/泰语/中文）：LINE 网页登录、未注册用户引导到小程序注册、个人资料、租户切换、组织与成员、邀请链接与二维码、角色、owner 转让与退出、企业认证、套餐与续费申请、通知中心；只做前端（负责人 2026-11-06） | B-2 |
-| B-5d 起 | （暂定） | L | 上传、识别、核验、历史等页面（各端） | B-3、B-4 |
+| B-5d 起 | （暂定） | L | web-pc 与 admin 后台的识别、核验、复核与历史页面；小程序的复核页面（小程序扫描页面已随 B-3） | B-3、B-4 |
 
 B-2 到 B-5 的具体范围、优先级以各自 proposal 经负责人确认的版本为准。V1.0 仍只实现 P0。
 
@@ -212,6 +212,7 @@ B-2 到 B-5 的具体范围、优先级以各自 proposal 经负责人确认的�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.2.9 | 2026-11-06 | Product Engineering | §7 B-3 定名 `ocr-scan-flow`，范围扩到 main 已跑通的扫描流程与小程序页面（含确认与导出）；B-4 缩小为复核、Confirm all 与正式业务数据；B-5d 范围相应调整（负责人 2026-11-06） |
 | 1.2.8 | 2026-11-06 | Product Engineering | §7 B-5c 行定名 `web-pc-account` 并写明范围（负责人 2026-11-06） |
 | 1.2.7 | 2026-11-06 | Product Engineering | §7 B-5b 行定名 `web-admin-console` 并写明范围（负责人 2026-11-06） |
 | 1.2.6 | 2026-11-05 | Product Engineering | §7 B-5 按应用拆分为 B-5a～B-5d（负责人 2026-11-05） |

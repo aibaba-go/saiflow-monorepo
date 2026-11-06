@@ -3,8 +3,8 @@ doc_id: EPIC-08
 title: "EPIC-08 — 文档格式模板配置"
 type: epic
 status: in-review
-version: 0.2.0
-updated: 2026-10-12
+version: 0.3.0
+updated: 2026-11-06
 owner: Product Engineering
 priority: P1
 source: "PRD-001 §4.8"
@@ -34,7 +34,7 @@ related: [DM-DocumentTemplate, DM-TemplateFieldMapping, API-10, OCR-Pipeline]
 | FR-TEMPLATE-003 | 允许管理员为规范字段配置 JSONPath、目标字段、数据类型、必填规则和标准化规则 | P1 | §4.8 | FR-TEMPLATE-002 | AC-FR-TEMPLATE-003-01 |
 | FR-TEMPLATE-004 | 允许管理员为重复行项目配置数组 JSONPath 及其列映射 | P1 | §4.8 | FR-TEMPLATE-003 | AC-FR-TEMPLATE-004-01 |
 | FR-TEMPLATE-005 | 在发布模板前校验字段映射的 JSONPath、目标字段唯一性和数据类型兼容性 | P1 | §4.8 | FR-TEMPLATE-003/004 | AC-FR-TEMPLATE-005-01 |
-| FR-TEMPLATE-006 | 仅允许转换任务使用已发布且启用的模板版本 | P1 | §4.8 | FR-TEMPLATE-005 | AC-FR-TEMPLATE-006-01 |
+| FR-TEMPLATE-006 | **已迁移至 `openspec/specs/recognition/spec.md`（deprecated，`ocr-scan-flow`）** 仅允许转换任务使用已发布且启用的模板版本 | P1 | §4.8 | FR-TEMPLATE-005 | AC-FR-TEMPLATE-006-01 |
 | FR-TEMPLATE-007 | 为模板创建、修改、发布和停用记录操作日志，并为每次转换保留模板版本 | P1 | §4.8 | FR-SYS-003 | AC-FR-TEMPLATE-007-01 |
 
 ## 3. 规则
@@ -91,5 +91,6 @@ Feature: EPIC-08 文档格式模板配置
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 0.3.0 | 2026-11-06 | Product Engineering | FR-TEMPLATE-006 迁移至 `openspec/specs/`（变更 `ocr-scan-flow`），本文件中对应条目只作参考 |
 | 0.2.0 | 2026-10-12 | Product Engineering | 对齐 PRD §4.8 扩展：在目标中明确订单跟踪、报表统计与 ERP 对接；范围内新增标准化规则 |
 | 0.1.0 | 2026-10-07 | Product Engineering | 初始文档格式模板配置需求；覆盖 JSON 映射、发布、版本与审计 |

@@ -3,8 +3,8 @@ doc_id: EPIC-01
 title: "EPIC-01 — 文档上传与预处理"
 type: epic
 status: active
-version: 1.0.2
-updated: 2026-10-18
+version: 1.1.0
+updated: 2026-11-06
 owner: Product Engineering
 priority: P0
 source: "PRD-001 §4.1"
@@ -28,15 +28,15 @@ related: [DM-Document, API-1]
 |----|--------------------|--------|------|--------|----------|
 | FR-UPLOAD-001 | 接受通过手机相机拍摄的图像上传 | P0 | §4.1 | — | AC-FR-UPLOAD-001-01 |
 | FR-UPLOAD-002 | 接受从扫描仪或本地文件导入的图像/PDF | P0 | §4.1 | — | AC-FR-UPLOAD-002-01 |
-| FR-UPLOAD-003 | 仅接受 JPG、PNG 和 PDF 格式 | P0 | §4.1 | — | AC-FR-UPLOAD-003-01/02 |
+| FR-UPLOAD-003 | **已迁移至 `openspec/specs/documents/spec.md`（deprecated，`ocr-scan-flow`）** 仅接受 JPG、PNG 和 PDF 格式 | P0 | §4.1 | — | AC-FR-UPLOAD-003-01/02 |
 | FR-UPLOAD-004 | 使用清晰的本地化错误消息拒绝不支持的格式 | P0 | §4.1 | FR-UPLOAD-003 | AC-FR-UPLOAD-003-02 |
-| FR-UPLOAD-005 | 支持在一次操作中批量上传多份文档 | P0 | §4.1 | — | AC-FR-UPLOAD-005-01 |
-| FR-UPLOAD-006 | 应用自动矫正（倾斜与透视校正） | P0 | §4.1 | FR-UPLOAD-001 | AC-FR-UPLOAD-006-01 |
+| FR-UPLOAD-005 | **已迁移至 `openspec/specs/documents/spec.md`（deprecated，`ocr-scan-flow`）** 支持在一次操作中批量上传多份文档 | P0 | §4.1 | — | AC-FR-UPLOAD-005-01 |
+| FR-UPLOAD-006 | **已迁移至 `openspec/specs/documents/spec.md`（deprecated，`ocr-scan-flow`）** 应用自动矫正（倾斜与透视校正） | P0 | §4.1 | FR-UPLOAD-001 | AC-FR-UPLOAD-006-01 |
 | FR-UPLOAD-007 | 对上传图像应用去阴影 | P1 | §4.1 | FR-UPLOAD-001 | AC-FR-UPLOAD-007-01 |
 | FR-UPLOAD-008 | 对上传图像应用降噪 | P1 | §4.1 | FR-UPLOAD-001 | AC-FR-UPLOAD-008-01 |
 | FR-UPLOAD-009 | 按文档内容边界自动裁剪 | P0 | §4.1 | FR-UPLOAD-006 | AC-FR-UPLOAD-009-01 |
-| FR-UPLOAD-010 | 在队列中显示每个文件的上传/处理状态；LINE Mini App 显示按文件大小与传输估算的上传百分比及进度条 | P0 | §4.1；用户反馈 2026-10-18 | FR-UPLOAD-005 | AC-FR-UPLOAD-010-01 |
-| FR-UPLOAD-011 | 原样保留原始文件（双重存储输入） | P0 | §4.1,§4.4 | — | AC-FR-UPLOAD-011-01 |
+| FR-UPLOAD-010 | **已迁移至 `openspec/specs/documents/spec.md`（deprecated，`ocr-scan-flow`）** 在队列中显示每个文件的上传/处理状态；LINE Mini App 显示按文件大小与传输估算的上传百分比及进度条 | P0 | §4.1；用户反馈 2026-10-18 | FR-UPLOAD-005 | AC-FR-UPLOAD-010-01 |
+| FR-UPLOAD-011 | **已迁移至 `openspec/specs/documents/spec.md`（deprecated，`ocr-scan-flow`）** 原样保留原始文件（双重存储输入） | P0 | §4.1,§4.4 | — | AC-FR-UPLOAD-011-01 |
 | FR-UPLOAD-012 | 当图像质量低于可读性阈值时发出警告 | P1 | §5.4 | FR-UPLOAD-006 | AC-FR-UPLOAD-012-01 |
 
 ## 3. 详细规格与规则
@@ -105,6 +105,7 @@ Feature: EPIC-01 文档上传
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.1.0 | 2026-11-06 | Product Engineering | FR-UPLOAD-003, FR-UPLOAD-005, FR-UPLOAD-006, FR-UPLOAD-010, FR-UPLOAD-011 迁移至 `openspec/specs/`（变更 `ocr-scan-flow`），本文件中对应条目只作参考 |
 | 1.0.2 | 2026-10-18 | Product Engineering | 明确 FR-UPLOAD-010 与 AC-FR-UPLOAD-010-01：上传百分比和进度条结合文件大小估算与实际传输，成功确认前不显示 100% |
 | 1.0.1 | 2026-10-02 | Product Engineering | 将人类可读内容与验收场景翻译为简体中文 |
 | 1.0.0 | 2026-09-10 | Product Engineering | 根据 PRD 第 4.1 节生成初始上传/预处理需求 |

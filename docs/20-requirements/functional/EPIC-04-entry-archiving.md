@@ -3,8 +3,8 @@ doc_id: EPIC-04
 title: "EPIC-04 — 多渠道录入与归档"
 type: epic
 status: active
-version: 1.2.2
-updated: 2026-10-18
+version: 1.3.0
+updated: 2026-11-06
 owner: Product Engineering
 priority: P0
 source: "PRD-001 §4.4"
@@ -41,7 +41,7 @@ related: [DM-Document, DM-ArchiveRecord, API-5, API-6]
 | FR-ENTRY-012 | 将自定义字段映射到企业管理系统 | P1（V2.0） | §4.4 | FR-ENTRY-010 | AC-FR-ENTRY-012-01 |
 | FR-ENTRY-013 | 将数据导出为 JSON / CSV / Excel 以供下游集成 | P1（V2.0） | §3.1 | FR-ENTRY-002 | AC-FR-ENTRY-013-01 |
 | FR-ENTRY-014 | 归档至云端文件夹（双重存储、自动命名、分类） | P2（V3.0） | §4.4 | FR-ENTRY-005 | AC-FR-ENTRY-014-01 |
-| FR-ENTRY-015 | 在核验确认后的最终结果页提供结果查看与 Excel（XLSX）导出 | P0 | 界面调整 2026-10-17 | FR-VERIFY-016 | AC-FR-ENTRY-015-01 |
+| FR-ENTRY-015 | **已迁移至 `openspec/specs/exports/spec.md`（deprecated，`ocr-scan-flow`）** 在核验确认后的最终结果页提供结果查看与 Excel（XLSX）导出 | P0 | 界面调整 2026-10-17 | FR-VERIFY-016 | AC-FR-ENTRY-015-01 |
 
 ## 3. 规则
 
@@ -113,6 +113,7 @@ Feature: EPIC-04 录入与归档
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.3.0 | 2026-11-06 | Product Engineering | FR-ENTRY-015 迁移至 `openspec/specs/`（变更 `ocr-scan-flow`），本文件中对应条目只作参考 |
 | 1.2.2 | 2026-10-18 | Product Engineering | FR-ENTRY-015：XLSX 样式按产品样例 sample-format.xlsx 细化（标题合并、字体、对齐、列宽、行高） |
 | 1.2.1 | 2026-10-18 | Product Engineering | FR-ENTRY-015：XLSX 导出改为单工作表，版式与解析结果页一致；更新 AC-FR-ENTRY-015-01 |
 | 1.2.0 | 2026-10-17 | Product Engineering | 新增最终结果页结构化查看与 XLSX 导出（含公式注入防护） |
