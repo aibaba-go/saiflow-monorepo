@@ -3,7 +3,7 @@ doc_id: OPS-001
 title: "SaiFlow — 部署与运维说明（dev 环境）"
 type: guide
 status: active
-version: 1.8.1
+version: 1.9.0
 updated: 2026-11-06
 owner: Product Engineering
 related: [ADR-008, FR-PLAT-005, FR-PLAT-006]
@@ -154,18 +154,20 @@ gcloud iam service-accounts keys create gcs-sa.json   --iam-account=saiflow-v3-d
 
 服务账号只在这个桶上有对象管理权限，不能访问其他桶。
 
-**2. 放密钥**：先把 `gcs-sa.json` 从 Cloud Shell 下载到本机（Cloud Shell 菜单 → Download），再传到 VPS 并交给容器用户。后端与识别服务在容器里以用户 `app`（uid `10001`）运行，文件夹与文件必须属于它，否则容器读不到（`Permission denied`）。
+**2. 放密钥**：先把 `gcs-sa.json` 从 Cloud Shell 下载到本机（Cloud Shell 菜单 → Download），再传到 VPS 的 `/opt/saiflow/secrets/`：
 
 ```bash
 # 本机
 scp -P 11022 gcs-sa.json deploy@<VPS>:/tmp/gcs-sa.json && rm gcs-sa.json
-# VPS，以 root
+# VPS，以 root（第一次部署之后，deploy 已不能写这个文件夹）
 mkdir -p /opt/saiflow/secrets && mv /tmp/gcs-sa.json /opt/saiflow/secrets/
-chown -R 10001:10001 /opt/saiflow/secrets
-chmod 700 /opt/saiflow/secrets && chmod 600 /opt/saiflow/secrets/gcs-sa.json
+# 立即整理所有者与权限（不必等下次部署），以 deploy 执行
+su - deploy -c 'bash /opt/saiflow/secrets-perms.sh'
 ```
 
-Compose 把服务器上的 `/opt/saiflow/secrets/` 只读挂到两个容器里的 `/run/secrets/`，所以 `.env` 里写的是容器内的路径 `/run/secrets/gcs-sa.json`。检查：`docker compose exec -T saiflow-be-api ls -l /run/secrets/` 应列出 `gcs-sa.json`。换密钥时以 root 操作（`deploy` 读不到这个文件夹）。
+**所有者与权限由部署自动整理：** 后端与识别服务在容器里以镜像中的用户 `app`（uid 从镜像读取，现为 `10001`）运行，文件夹与它们的密钥必须属于这个用户，否则容器读不到（`Permission denied`）。每次 `Deploy` 拉取镜像后都会运行 `secrets-perms.sh`：用后端镜像起一个临时的 root 容器，把文件夹设为 `app` 所有、700；把 `GCS_CREDENTIALS_FILE` 指的文件设为 `app` 所有、600；其他文件（备份密钥 `gcs-backup.json`）仍归 `deploy`、600，后端读不到它（备份在自己的容器里以 root 读取，不受影响）。换服务器或换密钥后无需手工 `chown`。
+
+Compose 把服务器上的 `/opt/saiflow/secrets/` 只读挂到两个容器里的 `/run/secrets/`，所以 `.env` 里写的是容器内的路径 `/run/secrets/gcs-sa.json`。检查：`docker compose exec -T saiflow-be-api ls -l /run/secrets/` 应列出 `gcs-sa.json`。
 
 **3. `.env`：**
 
@@ -263,6 +265,7 @@ docker compose exec -T saiflow-be-api python -m app.cli audit-verify   # 操作�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.9.0 | 2026-11-06 | Product Engineering | §2.10 每次部署自动整理 `secrets` 文件夹的所有者与权限（`secrets-perms.sh`）；备份密钥保持 `deploy` 所有，后端读不到 |
 | 1.8.1 | 2026-11-06 | Product Engineering | §2.10 密钥文件夹与文件的所有者改为容器用户 uid 10001（原写法 `deploy` 所有导致容器 `Permission denied`，dev 环境首次配置时发现）；补充传文件与检查的命令 |
 | 1.8.0 | 2026-11-06 | Product Engineering | §2.6 web-pc 改用同一 Provider 下单独的 LINE Login 频道（LINE MINI App 频道没有回调地址）：新增 `LINE_WEB_CHANNEL_ID`、`LINE_WEB_CHANNEL_SECRET`；GitHub 变量 `LINE_CHANNEL_ID` 填 web-pc 的频道 ID |
 | 1.7.0 | 2026-11-06 | Product Engineering | B-3（`ocr-scan-flow`）：新增 §2.10 原件存储桶、服务账号与密钥位置、`DOWNLOAD_TICKET_SECRET`、识别服务 `saiflow-be-ocr`；§2.8 密钥现由识别服务使用；§4 0009 的回退 |

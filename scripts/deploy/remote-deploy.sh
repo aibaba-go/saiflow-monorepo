@@ -33,6 +33,8 @@ mv "$tmp" .env
 compose=(docker compose --project-directory "$DEPLOY_DIR" -f "$DEPLOY_DIR/compose.yaml")
 echo "remote-deploy: pulling $tag"
 "${compose[@]}" pull
+# The secrets folder and the backend's GCS key must belong to the image's user (ocr-scan-flow).
+bash "$DEPLOY_DIR/secrets-perms.sh"
 "${compose[@]}" up -d --wait postgres
 bash "$DEPLOY_DIR/db-roles.sh"
 echo "remote-deploy: migrating"

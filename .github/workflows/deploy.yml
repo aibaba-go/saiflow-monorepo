@@ -86,6 +86,7 @@ jobs:
           scp -r scripts/deploy/compose.yaml scripts/deploy/Caddyfile scripts/deploy/postgres-init \
             scripts/deploy/remote-deploy.sh scripts/deploy/backup.sh scripts/deploy/restore-check.sh \
             scripts/deploy/db-roles.sh scripts/deploy/db-roles.sql \
+            scripts/deploy/secrets-perms.sh scripts/deploy/secrets-fix.sh \
             vps:/opt/saiflow/
 
       - name: pull, migrate and restart on the VPS

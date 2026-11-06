@@ -9,7 +9,8 @@ script="$here/../deploy/remote-deploy.sh"
 setup() {
   work="$(mktemp -d)"
   printf 'POSTGRES_USER=u\nIMAGE_TAG=oldsha\nAPP_HOST=a\nDB_MIGRATE_PASSWORD=mig-secret-9\n' >"$work/.env"
-  cp "$here/../deploy/db-roles.sh" "$here/../deploy/db-roles.sql" "$work/" 2>/dev/null || true
+  cp "$here/../deploy/db-roles.sh" "$here/../deploy/db-roles.sql" "$here/../deploy/secrets-perms.sh" \
+    "$here/../deploy/secrets-fix.sh" "$work/" 2>/dev/null || true
   export DEPLOY_DIR="$work" FAKE_LOG="$work/calls.log" PATH="$here/fakes:$PATH"
   unset FAKE_MIGRATE_FAIL FAKE_ROLES_FAIL
   : >"$FAKE_LOG"
@@ -27,6 +28,9 @@ check "order login<pull<postgres<migrate<up<logout" \
   test -n "$o" -a "$l" -lt "$p" -a "$p" -lt "$pg" -a "$pg" -lt "$m" -a "$m" -lt "$u" -a "$u" -lt "$o"
 r=$(order_of 'exec -T caddy caddy reload')
 check "caddy config reloaded after up" test -n "$r" -a "$u" -lt "$r" -a "$r" -lt "$o"
+# ocr-scan-flow: the secrets folder is put right after the pull, before anything starts
+s=$(order_of 'secrets-fix.sh')
+check "order pull<secrets fix<postgres" test -n "$s" -a "$p" -lt "$s" -a "$s" -lt "$pg"
 check "token not in call log" bash -c "! grep -q token-123 '$FAKE_LOG'"
 # harden-identity: roles set up, then migrations run as the migration account
 roles=$(order_of 'exec -T -e DB_MIGRATE_PASSWORD postgres')
@@ -69,7 +73,7 @@ rm -rf "$work"
 setup
 printf 'bot\ntoken-123\n' | FAKE_ROLES_FAIL=1 bash "$script" newsha >/dev/null 2>&1; code=$?
 check "role setup failure exits non-zero" test "$code" -ne 0
-check "role setup failure skips migrate and up" bash -c "! grep -q -e 'saiflow-be-migrate' -e 'up -d --remove-orphans' '$FAKE_LOG'"
+check "role setup failure skips migrate and up" bash -c "! grep -q -e 'saiflow-be-migrate alembic' -e 'up -d --remove-orphans' '$FAKE_LOG'"
 rm -rf "$work"
 
 setup
