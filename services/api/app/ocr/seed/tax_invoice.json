@@ -19,7 +19,8 @@
             "en": "Tax Invoice No.",
             "th": "เลขที่ใบกำกับภาษี",
             "zh": "税务发票号"
-          }
+          },
+          "primary": true
         },
         {
           "kind": "field",
@@ -486,7 +487,8 @@
             "en": "Net Total",
             "th": "รวมเงินสุทธิ",
             "zh": "净额合计"
-          }
+          },
+          "primary": true
         },
         {
           "kind": "field",

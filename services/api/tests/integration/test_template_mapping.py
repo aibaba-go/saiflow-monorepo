@@ -343,3 +343,35 @@ async def test_late_mapping_does_not_overwrite_confirmed(
     assert (r.status_code, r.json()["code"]) == (409, "result_confirmed")
     r = await api.post(f"{JOBS}/{job['id']}/generic")
     assert (r.status_code, r.json()["code"]) == (409, "result_confirmed")
+
+
+async def test_startup_recovery_fails_fresh_conversion(api, line, store, sm, ai_settings, llm, db):
+    """A conversion cut by a restart fails at once, so the person can pick a template again."""
+    await login(api, line)
+    job = await recognised(api, store, sm, ai_settings, llm)
+    await db.execute(
+        text("update template_mappings set status='CONVERTING', updated_at=now() where job_id=:j"),
+        {"j": job["id"]},
+    )
+    await db.commit()
+    await mapping_worker.recover(sm)
+    assert await _stage(api, job["id"]) == "TEMPLATE_MATCHING"  # fresh: periodic check waits
+    await mapping_worker.recover(sm, startup=True)
+    assert await _stage(api, job["id"]) == "VERIFYING"
+
+
+async def test_blank_required_field_still_fits(api, line, store, sm, ai_settings, llm, db):
+    """A tax invoice without a buyer converts with the template; the empty required field
+    is left to the confirm gate (final review 2)."""
+    await login(api, line)
+    versions = await _versions(db)
+    job = await recognised(api, store, sm, ai_settings, llm)
+    llm.replies["match"] = [
+        {"ranking": [{"template_version_id": versions["tax_invoice"], "score": 0.9}]}
+    ]
+    llm.replies["convert"] = [{k: v for k, v in TAX_OUTPUT.items() if k != "buyer"}]
+    await mapping_pass(sm, ai_settings, llm)
+    assert await _stage(api, job["id"]) == "VERIFYING"
+    body = (await api.get(f"{JOBS}/{job['id']}/result")).json()
+    assert body["template"] is not None and body["mapping"] is None
+    assert "buyer.name" in body["missing_required"]

@@ -60,14 +60,30 @@ def test_extra_keys_dropped_with_warning():
 
 
 def test_primary_missing_detected():
+    """Primary fields (FR-TEMPLATE-006 "是否为主要字段") are their own flag, not "required":
+    a tax invoice with no buyer still fits; one without its number or total does not."""
     filled = normalize.fill_structure(
         GROUPS, {"document": {"invoice_no": "IV1"}, "seller": {"name": "A"}}
     )
-    missing = normalize.primary_missing(GROUPS, filled)
-    assert "document.invoice_date" in missing
-    assert "seller.tax_id" in missing
-    assert "document.invoice_no" not in missing
-    assert all("[" not in path for path in missing)  # table cells are not primary fields
+    assert normalize.primary_missing(GROUPS, filled) == ["summary.net_total"]
+    no_buyer = normalize.fill_structure(
+        GROUPS, {"document": {"invoice_no": "IV1"}, "summary": {"net_total": "10.00"}}
+    )
+    assert normalize.primary_missing(GROUPS, no_buyer) == []
+    assert "buyer.name" in normalize.required_missing(GROUPS, no_buyer)  # for the confirm gate
+
+
+def test_primary_falls_back_to_required_without_flags():
+    groups = [
+        {
+            "key": "g",
+            "items": [
+                {"kind": "field", "key": "a", "required": True},
+                {"kind": "field", "key": "b", "required": False},
+            ],
+        }
+    ]
+    assert normalize.primary_missing(groups, {"g": {}}) == ["g.a"]
 
 
 def test_textin_prompt_extraction_parses_llm_json():

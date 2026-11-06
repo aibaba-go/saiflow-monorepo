@@ -66,6 +66,9 @@ class FieldItem(_Strict):
     description: Description = ""
     type: FieldType = "string"
     required: bool = False
+    # 主要字段 (FR-TEMPLATE-006): a result without it does not fit this template at all;
+    # separate from `required`, which only the confirm gate checks (final review 2).
+    primary: bool = False
 
 
 class TableItem(_Strict):

@@ -38,6 +38,7 @@ from app.services.job_service import release_once
 
 log = logging.getLogger("app.ocr.worker")
 STALE_AFTER = timedelta(minutes=10)
+RECOVER_EVERY = 60.0  # seconds between recovery checks while the loop runs
 
 
 def _count(node) -> tuple[int, int]:
@@ -166,28 +167,41 @@ async def run_once(
     now: Callable[[], datetime] = utcnow,
     llm_transport=None,
 ) -> bool:
-    """Process the oldest queued job; False when there was none."""
+    """Process the oldest queued job; False when there was none. An unexpected error (a
+    storage or database hiccup) ends the job as WORKER_ERROR with its scans returned, so
+    it is never left mid-way (final review 1)."""
     started = now()
     job_id = await _claim(sm, started)
     if job_id is None:
         return False
+    try:
+        await _process(sm, store, settings, job_id, started, engines, sleep, now, llm_transport)
+    except Exception:
+        log.exception("ocr job %s failed unexpectedly", job_id)
+        await _finish(sm, job_id, states.FAILED, error_code="WORKER_ERROR")
+    return True
+
+
+async def _process(
+    sm, store, settings, job_id, started, engines, sleep, now, llm_transport
+) -> None:
     async with sm() as db:
         job = await db.get(OcrJob, job_id)
         file = await db.get(File, job.file_id) if job else None
         ocr = await ocr_settings_service.get(db)
     if job is None:
-        return True
+        return
     if file is None or file.status != "READY":
         await _finish(sm, job_id, states.FAILED, error_code="FILE_NOT_READY")
-        return True
+        return
     try:
         content = await store.get(file.storage_path or "")
     except ObjectMissing:
         await _finish(sm, job_id, states.FAILED, error_code="FILE_MISSING")
-        return True
+        return
     if await _cancel_requested(sm, job_id):
         await _finish(sm, job_id, states.CANCELLED)
-        return True
+        return
     await _finish(sm, job_id, states.PROCESSING)
     try:
         result = await recognise(
@@ -204,17 +218,17 @@ async def run_once(
         )
     except JobCancelled:
         await _finish(sm, job_id, states.CANCELLED)
-        return True
+        return
     except EngineUnavailable:
         await _finish(sm, job_id, states.FAILED, error_code="OCR_UNAVAILABLE")
-        return True
+        return
     except EngineFailure as err:
         code = "OCR_UNAVAILABLE" if err.kind == "service" and not err.code else err.code
         await _finish(sm, job_id, states.FAILED, error_code=code, error_message=err.message)
-        return True
+        return
     if await _cancel_requested(sm, job_id):
         await _finish(sm, job_id, states.CANCELLED)
-        return True
+        return
     await _finish(sm, job_id, states.POSTPROCESSING)
     generic = None
     if result.structured is None:  # Vision gives text only: the LLM builds the generic result
@@ -222,14 +236,17 @@ async def run_once(
             result.raw, mapping_service.llm_config(ocr, settings), llm_transport
         )
     await _save(sm, job_id, result, started, generic)
-    return True
 
 
-async def recover(sm: async_sessionmaker[AsyncSession], now: datetime) -> None:
-    """After a restart (main `_recover_stale_jobs`): jobs that never reached the engine go
+async def recover(
+    sm: async_sessionmaker[AsyncSession], now: datetime, *, startup: bool = False
+) -> None:
+    """Jobs left behind (main `_recover_stale_jobs`): jobs that never reached the engine go
     back to the queue; jobs whose engine call may have happened fail, uncertain, and are
-    retried by hand only; requested cancels end. Scans of failed or cancelled jobs return."""
-    stale = now - STALE_AFTER
+    retried by hand only; requested cancels end. Scans of failed or cancelled jobs return.
+    At startup nothing can still be running (one worker), so age does not matter; while
+    the loop runs, only jobs untouched for 10 minutes are taken (final review 1)."""
+    stale = now if startup else now - STALE_AFTER
     async with sm() as db:
         await db.execute(
             update(OcrJob)
@@ -275,9 +292,9 @@ async def loop(
     settings: Settings,
     stop: asyncio.Event,
 ) -> None:
-    await recover(sm, utcnow())
-    await mapping_worker.recover(sm)
-    last_purge = 0.0
+    await recover(sm, utcnow(), startup=True)
+    await mapping_worker.recover(sm, startup=True)
+    last_purge = last_recover = asyncio.get_running_loop().time()
     while not stop.is_set():
         busy = False
         try:
@@ -288,6 +305,11 @@ async def loop(
                 if clock - last_purge > 60:
                     await purge_uploads(sm, store)
                     last_purge = clock
+            clock = asyncio.get_running_loop().time()
+            if clock - last_recover >= RECOVER_EVERY:
+                await recover(sm, utcnow())
+                await mapping_worker.recover(sm)
+                last_recover = clock
         except Exception:
             log.exception("ocr worker pass failed")
         if not busy:

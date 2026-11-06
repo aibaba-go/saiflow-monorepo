@@ -185,9 +185,10 @@ async def run_once(
         return True
 
 
-async def recover(sm: async_sessionmaker[AsyncSession]) -> int:
-    """Mappings stuck in MATCHING or CONVERTING after a restart fail as interrupted."""
-    cutoff = utcnow() - STALE_AFTER
+async def recover(sm: async_sessionmaker[AsyncSession], *, startup: bool = False) -> int:
+    """Mappings stuck in MATCHING or CONVERTING fail as interrupted: all of them at startup
+    (nothing can still be running), else those untouched for 15 minutes."""
+    cutoff = utcnow() if startup else utcnow() - STALE_AFTER
     async with sm() as db:
         ids = list(
             (

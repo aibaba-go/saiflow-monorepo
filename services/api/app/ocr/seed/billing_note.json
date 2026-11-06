@@ -18,7 +18,8 @@
             "en": "Billing No.",
             "th": "เลขที่ใบวางบิล",
             "zh": "账单号"
-          }
+          },
+          "primary": true
         },
         {
           "kind": "field",
@@ -365,7 +366,8 @@
             "en": "Grand Total",
             "th": "รวมยอดชำระทั้งสิ้น",
             "zh": "应付总额"
-          }
+          },
+          "primary": true
         },
         {
           "kind": "field",

@@ -196,3 +196,63 @@ async def test_expired_uploads_are_purged(api, line, store, db, sm, app_settings
     assert store.objects == {}
     status = (await db.execute(text("select status from files where id=:i"), {"i": uid})).scalar()
     assert status == "REJECTED"
+
+
+async def test_startup_recovery_ignores_age(api, line, store, db, sm, app_settings):
+    """A deploy restarts the worker within seconds: a job it was running must not wait for
+    the 10-minute threshold, which only a later restart would ever check (final review 1)."""
+    await login(api, line)
+    before = await scans_left(api)
+    busy = (await new_job(api)).json()
+    early = (await new_job(api, pdf(1), "b.pdf")).json()
+    await db.execute(
+        text("update ocr_jobs set status='PROCESSING', updated_at=now() where id=:j"),
+        {"j": busy["id"]},
+    )
+    await db.execute(
+        text("update ocr_jobs set status='PREPROCESSING', updated_at=now() where id=:j"),
+        {"j": early["id"]},
+    )
+    await db.commit()
+    await worker.recover(sm, utcnow(), startup=True)
+    assert tuple(await _status(db, busy["id"]))[:2] == ("FAILED", "VENDOR_UNCERTAIN")
+    assert tuple(await _status(db, early["id"]))[0] == "QUEUED"
+    assert await scans_left(api) == before - 1  # busy's scan back; early still reserved
+
+
+async def test_unexpected_error_fails_the_job(api, line, store, db, sm, app_settings):
+    """A transient storage or database error must end the job, not leave it mid-way."""
+    await login(api, line)
+    before = await scans_left(api)
+    job = (await new_job(api)).json()
+
+    async def broken(_name):
+        raise RuntimeError("storage hiccup")
+
+    store.get = broken
+    assert await run(sm, store, app_settings, {"textin": FakeEngine()}) is True
+    assert tuple(await _status(db, job["id"]))[:2] == ("FAILED", "WORKER_ERROR")
+    assert await scans_left(api) == before
+
+
+async def test_periodic_recovery_in_the_loop(api, line, store, db, sm, app_settings, monkeypatch):
+    """The loop re-checks stale jobs while it runs, not only when it starts."""
+    calls = []
+
+    async def fake_recover(_sm, _now, *, startup=False):
+        calls.append(startup)
+
+    async def fake_mapping_recover(_sm, *, startup=False):
+        calls.append(("m", startup))
+
+    monkeypatch.setattr(worker, "recover", fake_recover)
+    monkeypatch.setattr(worker.mapping_worker, "recover", fake_mapping_recover)
+    monkeypatch.setattr(worker, "RECOVER_EVERY", 0.0)
+    stop = asyncio.Event()
+    settings = app_settings.model_copy(update={"ocr_poll_seconds": 0.01})
+    task = asyncio.create_task(worker.loop(sm, store, settings, stop))
+    await asyncio.sleep(0.2)
+    stop.set()
+    await task
+    assert calls[:2] == [True, ("m", True)]
+    assert False in calls and ("m", False) in calls

@@ -240,10 +240,24 @@ def fill_structure(groups: list[dict], structured: dict) -> dict:
 
 
 def primary_missing(groups: list[dict], structured: Any) -> list[str]:
-    """Primary fields (FR-OCR-020 主要字段) are the required header fields; a template
-    result missing any of them means the chosen template does not fit the document.
-    Required table columns are checked at confirmation, not here."""
-    return [path for path in required_missing(groups, structured) if "[" not in path]
+    """Empty primary fields (FR-TEMPLATE-006 主要字段, FR-OCR-020): any of them means the
+    chosen template does not fit the document. A template that marks no primary field
+    falls back to its required header fields. Table cells are never primary."""
+    flagged = [
+        (group["key"], item["key"])
+        for group in groups
+        for item in group["items"]
+        if item["kind"] == "field" and item.get("primary")
+    ]
+    if not flagged:
+        return [path for path in required_missing(groups, structured) if "[" not in path]
+    data = structured if isinstance(structured, dict) else {}
+    missing = []
+    for gkey, key in flagged:
+        gval = data.get(gkey) if isinstance(data.get(gkey), dict) else {}
+        if is_empty(gval.get(key)):
+            missing.append(f"{gkey}.{key}")
+    return missing
 
 
 def required_missing(groups: list[dict], structured: Any) -> list[str]:
