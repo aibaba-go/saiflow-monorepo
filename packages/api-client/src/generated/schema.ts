@@ -937,6 +937,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ocr/jobs/{job_id}/generic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Use Generic */
+        post: operations["useGenericResult"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ocr/jobs/{job_id}/rerun": {
         parameters: {
             query?: never;
@@ -966,6 +983,40 @@ export interface paths {
         post?: never;
         /** Delete Results */
         delete: operations["deleteOcrResults"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ocr/jobs/{job_id}/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply Template */
+        post: operations["applyTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ocr/jobs/{job_id}/template-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Options */
+        get: operations["getTemplateOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1362,6 +1413,11 @@ export interface components {
             /** Tenant Id */
             tenant_id: number | null;
         };
+        /** ApplyTemplateIn */
+        ApplyTemplateIn: {
+            /** Template Version Id */
+            template_version_id?: number | null;
+        };
         /** ApproveIn */
         ApproveIn: {
             /** Ends At */
@@ -1591,6 +1647,13 @@ export interface components {
             id_token?: string | null;
             /** Redirect Uri */
             redirect_uri?: string | null;
+        };
+        /** MappingOut */
+        MappingOut: {
+            /** Mapping Id */
+            mapping_id: string | null;
+            /** Result */
+            result: string;
         };
         /**
          * MarkReadIn
@@ -2004,6 +2067,32 @@ export interface components {
              * Format: date-time
              */
             starts_at: string;
+        };
+        /** TemplateOption */
+        TemplateOption: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Template Id */
+            template_id: number;
+            /** Template Version Id */
+            template_version_id: number;
+        };
+        /** TemplateOptionsOut */
+        TemplateOptionsOut: {
+            /** Attempts */
+            attempts: number;
+            /** Current Template Version Id */
+            current_template_version_id: number | null;
+            /** Generic */
+            generic: boolean;
+            /** Last Failure */
+            last_failure: string | null;
+            /** Limit */
+            limit: number;
+            /** Templates */
+            templates: components["schemas"]["TemplateOption"][];
         };
         /** TransferIn */
         TransferIn: {
@@ -3970,6 +4059,40 @@ export interface operations {
             };
         };
     };
+    useGenericResult: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MappingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     rerunOcrJob: {
         parameters: {
             query?: never;
@@ -4024,6 +4147,87 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    applyTemplate: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyTemplateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MappingOut"];
+                };
+            };
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MappingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getTemplateOptions: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateOptionsOut"];
+                };
             };
             /** @description Validation Error */
             422: {

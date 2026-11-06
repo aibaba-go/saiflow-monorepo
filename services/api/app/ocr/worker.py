@@ -23,7 +23,7 @@ from app.clock import utcnow
 from app.config import Settings
 from app.integrations.storage import ObjectMissing, ObjectStore
 from app.models import File, OcrJob, OcrRawResult, ResultVersion
-from app.ocr import states
+from app.ocr import mapping_worker, states
 from app.ocr.engines import (
     Engine,
     EngineFailure,
@@ -33,21 +33,11 @@ from app.ocr.engines import (
     recognise,
 )
 from app.ocr.files import sniff
-from app.services import ocr_settings_service, upload_service
+from app.services import mapping_service, ocr_settings_service, upload_service
 from app.services.job_service import release_once
 
 log = logging.getLogger("app.ocr.worker")
 STALE_AFTER = timedelta(minutes=10)
-
-# Task 8 sets this: start the automatic template mapping in the same transaction.
-AfterRecognition = Callable[[AsyncSession, OcrJob, OcrRawResult, ResultVersion], Awaitable[None]]
-
-
-async def _nothing(db, job, raw, version) -> None:
-    return None
-
-
-after_recognition: AfterRecognition = _nothing
 
 
 def _count(node) -> tuple[int, int]:
@@ -108,7 +98,30 @@ async def _cancel_requested(sm: async_sessionmaker[AsyncSession], job_id: str) -
     return status is None or status == states.CANCEL_REQUESTED or status in states.TERMINAL
 
 
-async def _save(sm, job_id: str, result, started: datetime) -> None:
+def _page_texts(raw) -> dict:
+    """What a generic result is built from when the engine gave no structure (Vision):
+    the text of each page, not the coordinates."""
+    pages = raw.get("pages") if isinstance(raw, dict) else None
+    texts = [((p or {}).get("fullTextAnnotation") or {}).get("text", "") for p in (pages or [])]
+    return {"pages": texts}
+
+
+async def _generic(raw, llm: dict, transport) -> dict | None:
+    """The generic result from the LLM (FR-OCR-023); None when the LLM is unavailable."""
+    from app.ocr import deepseek
+
+    if not deepseek.is_configured(llm):
+        return None
+    try:
+        return await asyncio.to_thread(
+            deepseek.refine_json, _page_texts(raw), llm, transport=transport
+        )
+    except Exception:  # noqa: BLE001  no generic structure: the person still sees the job
+        log.warning("generic result could not be built")
+        return None
+
+
+async def _save(sm, job_id: str, result, started: datetime, structured=None) -> None:
     async with sm() as db:
         job = (
             await db.execute(select(OcrJob).where(OcrJob.id == job_id).with_for_update())
@@ -127,19 +140,19 @@ async def _save(sm, job_id: str, result, started: datetime) -> None:
             job_id=job.id,
             version=1,
             is_current=True,
-            structured=result.structured,
+            structured=result.structured if structured is None else structured,
         )
         db.add_all([raw, version])
         now = utcnow()
         job.engine = result.engine
         job.page_count = result.page_count or job.page_count
-        job.table_count, job.field_count = _count(result.structured)
+        job.table_count, job.field_count = _count(version.structured)
         job.missing_pages = list(result.missing_pages or [])
         job.duration_ms = result.duration_ms or int((now - started).total_seconds() * 1000)
         job.status = states.PARTIAL_SUCCESS if result.missing_pages else states.SUCCEEDED
         job.progress, job.finished_at, job.updated_at = 100, now, now
         await db.flush()
-        await after_recognition(db, job, raw, version)
+        await mapping_service.start_auto_mapping(db, job, raw, version)  # FR-OCR-019
         await db.commit()
 
 
@@ -151,6 +164,7 @@ async def run_once(
     engines: dict[str, Engine] | None = None,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     now: Callable[[], datetime] = utcnow,
+    llm_transport=None,
 ) -> bool:
     """Process the oldest queued job; False when there was none."""
     started = now()
@@ -202,7 +216,12 @@ async def run_once(
         await _finish(sm, job_id, states.CANCELLED)
         return True
     await _finish(sm, job_id, states.POSTPROCESSING)
-    await _save(sm, job_id, result, started)
+    generic = None
+    if result.structured is None:  # Vision gives text only: the LLM builds the generic result
+        generic = await _generic(
+            result.raw, mapping_service.llm_config(ocr, settings), llm_transport
+        )
+    await _save(sm, job_id, result, started, generic)
     return True
 
 
@@ -250,10 +269,6 @@ async def purge_uploads(sm: async_sessionmaker[AsyncSession], store: ObjectStore
         return count
 
 
-# Task 8 sets this: one pass of template mapping work after recognition.
-mapping_pass: Callable[..., Awaitable[bool]] | None = None
-
-
 async def loop(
     sm: async_sessionmaker[AsyncSession],
     store: ObjectStore,
@@ -261,14 +276,14 @@ async def loop(
     stop: asyncio.Event,
 ) -> None:
     await recover(sm, utcnow())
+    await mapping_worker.recover(sm)
     last_purge = 0.0
     while not stop.is_set():
         busy = False
         try:
             if settings.ocr_worker_enabled:
                 busy = await run_once(sm, store, settings)
-                if mapping_pass is not None:
-                    busy = await mapping_pass(sm, settings) or busy
+                busy = await mapping_worker.run_once(sm, settings) or busy
                 clock = asyncio.get_running_loop().time()
                 if clock - last_purge > 60:
                     await purge_uploads(sm, store)

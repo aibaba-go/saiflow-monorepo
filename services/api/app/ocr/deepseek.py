@@ -36,7 +36,8 @@ def _parse_content(content: str) -> Any:
         text = text.split("\n", 1)[1] if "\n" in text else ""
         text = text.rsplit("```", 1)[0]
     try:
-        return json.loads(text)
+        # decimals stay text, never floats (ocr-scan-flow, Review Focus 4)
+        return json.loads(text, parse_float=str)
     except ValueError as e:
         raise DeepSeekError(f"DeepSeek 返回的不是合法 JSON: {e}") from e
 

@@ -73,7 +73,9 @@ async def test_success_writes_raw_and_v1(api, line, store, db, sm, app_settings,
     with pytest.raises(DBAPIError):  # AC-FR-OCR-018-01: written once
         await app_role_db.execute(text("update ocr_raw_results set payload = '{}'"))
     await app_role_db.rollback()
-    assert (await api.get(f"/api/v1/ocr/jobs/{job['id']}")).json()["stage"] == "VERIFYING"
+    # the automatic template mapping starts right after recognition (FR-OCR-019, Task 8)
+    stage = (await api.get(f"/api/v1/ocr/jobs/{job['id']}")).json()["stage"]
+    assert stage == "TEMPLATE_MATCHING"
     assert await run(sm, store, app_settings, {"textin": FakeEngine()}) is False  # nothing left
 
 
