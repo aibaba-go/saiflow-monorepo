@@ -181,14 +181,37 @@ async def start_auto_mapping(
         await create_mapping(db, job, raw.id, source=AUTO, base_version_id=version.id)
 
 
+async def template_name(db: AsyncSession, version: ResultVersion | None) -> str | None:
+    """The template a version was converted to; None for the generic result."""
+    if version is None or version.mapping_id is None:
+        return None
+    mapping = await db.get(TemplateMapping, version.mapping_id)
+    if mapping is None or mapping.template_version_id is None:
+        return None
+    tpl = await db.get(DocumentTemplateVersion, mapping.template_version_id)
+    return tpl.name if tpl else None
+
+
 async def switch_to(
-    db: AsyncSession, job: OcrJob, target: ResultVersion, mapping_id: str | None
+    db: AsyncSession,
+    job: OcrJob,
+    target: ResultVersion,
+    mapping_id: str | None,
+    *,
+    by_person: bool = False,
+    user_id: int | None = None,
 ) -> ResultVersion:
     """Make `target` the current version (no copy). The old current one is cleared first:
-    one current version per job (ADR-009 §3.4)."""
+    one current version per job (ADR-009 §3.4). A switch a person asked for is written to
+    the change log when the template changes (FR-VERIFY-007); automatic ones are not."""
     from app.ocr.textin.adapter import _count_structure
+    from app.services import change_log
 
     current = await current_version(db, job.id)
+    if by_person and (current is None or current.id != target.id):
+        before, after = await template_name(db, current), await template_name(db, target)
+        if before != after:
+            await change_log.record_switch(db, job.id, target.id, before, after, user_id)
     if current is not None and current.id != target.id:
         current.is_current = False
         await db.flush()
@@ -238,7 +261,10 @@ async def finalize_ready(
         and job.review_status != "CONFIRMED"
     )
     if apply:
-        await switch_to(db, job, version, mapping.id)
+        manual = mapping.source == MANUAL
+        await switch_to(
+            db, job, version, mapping.id, by_person=manual, user_id=mapping.created_by_user_id
+        )
     elif job.pending_mapping_id == mapping.id:
         job.pending_mapping_id = None  # kept as "ready, can be switched to"
     return apply
@@ -342,7 +368,7 @@ async def apply_template(
     if ready is not None:
         target = await latest_version_of(db, job.id, ready.id)
         if target is not None:
-            await switch_to(db, job, target, ready.id)
+            await switch_to(db, job, target, ready.id, by_person=True, user_id=user_id)
             return "switched", ready
     running = (
         await db.execute(
@@ -373,9 +399,9 @@ async def apply_template(
     return "started", mapping
 
 
-async def use_generic(db: AsyncSession, job: OcrJob) -> ResultVersion:
+async def use_generic(db: AsyncSession, job: OcrJob, user_id: int | None = None) -> ResultVersion:
     _check_open(job)
     target = await latest_version_of(db, job.id, None)
     if target is None:
         raise not_found()
-    return await switch_to(db, job, target, None)
+    return await switch_to(db, job, target, None, by_person=True, user_id=user_id)

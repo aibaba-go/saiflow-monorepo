@@ -16,7 +16,7 @@ from app.errors import AppError
 from app.models import DocumentTemplateVersion, OcrJob, ResultVersion, TemplateMapping, User
 from app.ocr import amounts, states
 from app.ocr.templates import normalize
-from app.services import job_service, mapping_service, metering_service
+from app.services import change_log, job_service, mapping_service, metering_service
 from app.services.session_service import Principal
 from app.services.tenant_access import TenantContext
 
@@ -203,6 +203,9 @@ async def save(
         await db.flush()  # the old current one first: one current version per job
         db.add(target)
         await db.flush()
+        await change_log.record_save(
+            db, job.id, target.id, current.structured, content, ctx.user_id
+        )
         job.review_status = "EDITED"
         actions.append("result.save")
     if confirm:

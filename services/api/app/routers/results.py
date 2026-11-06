@@ -1,5 +1,6 @@
 """The result of a job: read, save a draft, confirm (FR-VERIFY-015, 009, 006)."""
 
+from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends
@@ -7,7 +8,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_db, get_principal, get_tenant_context, require_csrf_header
-from app.services import job_service, result_service
+from app.services import change_log, job_service, result_service
 from app.services.session_service import Principal
 from app.services.tenant_access import TenantContext
 
@@ -60,6 +61,18 @@ class ResultOut(BaseModel):
     confirmed: bool
 
 
+class ChangeOut(BaseModel):
+    kind: str  # FIELD or TEMPLATE
+    path: str | None
+    before: Any = None
+    after: Any = None
+    from_template: str | None  # None = the generic result
+    to_template: str | None
+    user_name: str | None
+    created_at: datetime
+    version: int | None
+
+
 class ResultIn(BaseModel):
     """Types are checked by the service, which answers 400 naming the field."""
 
@@ -92,3 +105,12 @@ async def save(job_id: str, req: ResultIn, ctx: Tenant, principal: Caller, db: D
         await job_service.audit(db, principal, action, job.id)
     await db.commit()
     return ResultOut(**body)
+
+
+@router.get(
+    "/{job_id}/changes", operation_id="listOcrResultChanges", response_model=list[ChangeOut]
+)
+async def changes(job_id: str, ctx: Tenant, db: Db) -> list[ChangeOut]:
+    """The change log, oldest first (FR-VERIFY-007)."""
+    job = await job_service.job_access(db, ctx, job_id)
+    return [ChangeOut(**c) for c in await change_log.list_changes(db, job.id)]

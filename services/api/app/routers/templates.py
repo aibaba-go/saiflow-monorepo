@@ -95,7 +95,7 @@ async def apply_template(
 async def use_generic(job_id: str, ctx: Tenant, principal: Caller, db: Db) -> MappingOut:
     job = await job_service.job_access(db, ctx, job_id, for_update=True)
     job_service.require_edit(ctx, job)
-    await mapping_service.use_generic(db, job)
+    await mapping_service.use_generic(db, job, ctx.user_id)
     await job_service.audit(db, principal, "template.generic", job.id)
     await db.commit()
     return MappingOut(result="switched", mapping_id=None)
