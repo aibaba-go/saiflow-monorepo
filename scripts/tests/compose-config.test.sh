@@ -55,7 +55,7 @@ for var in TEXTIN_APP_ID TEXTIN_SECRET_CODE GOOGLE_VISION_API_KEY LLM_API_KEY; d
 done
 # ocr-scan-flow: originals in a private GCS bucket for the backend and the OCR worker; the
 # worker is its own service (ADR-009 class C) with the engine and LLM keys.
-for var in GCS_BUCKET GCS_CREDENTIALS_FILE; do
+for var in GCS_BUCKET GCS_CREDENTIALS_FILE DOWNLOAD_TICKET_SECRET; do
   check "backend receives $var" grep -q "$var: \${$var:-" <<<"$backend"
   check "env.example lists $var" grep -q "^$var=" "$deploy/env.example"
 done

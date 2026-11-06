@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     # uploads and downloads answer 503. The credentials file is a mounted service-account key.
     gcs_bucket: str | None = None
     gcs_credentials_file: str | None = None
+    # Signs the 60-second download tickets for exports (FR-ENTRY-015); unset = tickets 503
+    download_ticket_secret: SecretStr | None = None
     # Recognition worker (saiflow-be-ocr): OCR_WORKER_ENABLED=false keeps it idle
     ocr_worker_enabled: bool = True
     ocr_poll_seconds: float = Field(default=2.0, ge=0.1, le=60)

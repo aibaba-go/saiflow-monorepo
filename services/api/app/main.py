@@ -22,6 +22,7 @@ from app.routers import (
     admin_query,
     auth,
     billing,
+    exports,
     health,
     me,
     notifications,
@@ -92,6 +93,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(ocr_jobs.router)
     app.include_router(templates.router)
     app.include_router(results.router)
+    app.include_router(exports.router)
     return app
 
 

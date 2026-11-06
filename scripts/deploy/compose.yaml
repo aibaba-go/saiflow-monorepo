@@ -63,6 +63,8 @@ services:
       # Originals, previews and exports (ocr-scan-flow, ADR-008); empty bucket = uploads 503
       GCS_BUCKET: ${GCS_BUCKET:-}
       GCS_CREDENTIALS_FILE: ${GCS_CREDENTIALS_FILE:-}
+      # Signs 60-second export download tickets (FR-ENTRY-015); empty = tickets 503
+      DOWNLOAD_TICKET_SECRET: ${DOWNLOAD_TICKET_SECRET:-}
     volumes:
       - ./secrets:/run/secrets:ro
     depends_on:
