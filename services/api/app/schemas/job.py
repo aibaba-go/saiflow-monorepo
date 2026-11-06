@@ -7,7 +7,14 @@ from pydantic import BaseModel
 
 from app.schemas.loose import LooseRequest
 
-Stage = Literal["OCR_PROCESSING", "OCR_FAILED", "TEMPLATE_MATCHING", "VERIFYING", "CONFIRMED"]
+Stage = Literal[
+    "OCR_PROCESSING",
+    "OCR_FAILED",
+    "TEMPLATE_MATCHING",
+    "VERIFYING",
+    "PENDING_REVIEW",
+    "CONFIRMED",
+]
 
 
 class JobIn(LooseRequest):
@@ -27,6 +34,7 @@ class JobOut(BaseModel):
     template_name: str | None
     created_at: datetime
     confirmed_at: datetime | None
+    review_level: int | None = None  # 1 or 2 while waiting for review
 
 
 class JobPageOut(BaseModel):

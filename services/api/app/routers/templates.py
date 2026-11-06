@@ -63,7 +63,7 @@ class MappingOut(BaseModel):
     response_model=TemplateOptionsOut,
 )
 async def options(job_id: str, ctx: Tenant, db: Db) -> TemplateOptionsOut:
-    job = await job_service.job_access(db, ctx, job_id)
+    job = await job_service.job_access(db, ctx, job_id, review=True)
     return TemplateOptionsOut(**await mapping_service.template_options(db, job))
 
 

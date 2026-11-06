@@ -16,7 +16,13 @@ from app.errors import AppError
 from app.models import DocumentTemplateVersion, OcrJob, ResultVersion, TemplateMapping, User
 from app.ocr import amounts, states
 from app.ocr.templates import normalize
-from app.services import change_log, job_service, mapping_service, metering_service
+from app.services import (
+    change_log,
+    job_service,
+    mapping_service,
+    metering_service,
+    review_service,
+)
 from app.services.session_service import Principal
 from app.services.tenant_access import TenantContext
 
@@ -100,7 +106,8 @@ async def payload(db: AsyncSession, job: OcrJob, version: ResultVersion) -> dict
         "warnings": normalize.type_warnings(groups, version.structured) if groups else [],
         # Amounts that do not add up, on the current content; never corrected (FR-OCR-013).
         "amount_issues": amounts.check(groups, version.structured) if groups else [],
-        "confirmed": job.review_status == "CONFIRMED",
+        "confirmed": job.review_status in states.LOCKED,
+        "review": await review_service.review_state(db, job),
     }
 
 
@@ -167,7 +174,7 @@ async def save(
     _may_edit(ctx, job)
     if job.status not in states.SUCCESS:
         raise _conflict("job_not_terminal")
-    if job.review_status == "CONFIRMED":
+    if job.review_status in states.LOCKED:
         raise _conflict("result_confirmed")
     if not isinstance(expected_version, int) or isinstance(expected_version, bool):
         raise AppError(400, "validation_error", "error.validation", ["expected_version"])
@@ -210,10 +217,10 @@ async def save(
         actions.append("result.save")
     if confirm:
         now = utcnow()
-        job.review_status = "CONFIRMED"
         job.confirmed_at, job.confirmed_by_user_id = now, ctx.user_id
         job.confirmed_version_id = target.id
         job.pending_mapping_id = None  # a late conversion must not replace what was confirmed
+        await review_service.on_confirm(db, ctx, job, target)  # official, or into review
         actions.append("result.confirm")
     job.updated_at = utcnow()
     await db.flush()

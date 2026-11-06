@@ -8,7 +8,7 @@ transaction before the audit entry (B-2c locking order).
 
 import uuid
 
-from sqlalchemy import and_, delete, func, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,7 +21,10 @@ from app.models import (
     File,
     OcrJob,
     QuotaReservation,
+    ResultChange,
     ResultVersion,
+    ReviewRecord,
+    ReviewRound,
     TemplateMapping,
 )
 from app.ocr import states
@@ -55,8 +58,10 @@ def stage(job: OcrJob) -> str:
         return "OCR_FAILED"
     if job.status not in states.SUCCESS:
         return "OCR_PROCESSING"
-    if job.review_status == "CONFIRMED":
+    if job.review_status == states.CONFIRMED:
         return "CONFIRMED"
+    if job.review_status in states.PENDING_REVIEW:
+        return "PENDING_REVIEW"
     return "TEMPLATE_MATCHING" if job.pending_mapping_id else "VERIFYING"
 
 
@@ -67,8 +72,10 @@ def _stage_condition(value: str):
         return OcrJob.status.notin_(states.TERMINAL)
     succeeded = OcrJob.status.in_(states.SUCCESS)
     if value == "CONFIRMED":
-        return and_(succeeded, OcrJob.review_status == "CONFIRMED")
-    open_ = and_(succeeded, OcrJob.review_status != "CONFIRMED")
+        return and_(succeeded, OcrJob.review_status == states.CONFIRMED)
+    if value == "PENDING_REVIEW":
+        return and_(succeeded, OcrJob.review_status.in_(states.PENDING_REVIEW))
+    open_ = and_(succeeded, OcrJob.review_status.notin_(states.LOCKED))
     if value == "TEMPLATE_MATCHING":
         return and_(open_, OcrJob.pending_mapping_id.isnot(None))
     return and_(open_, OcrJob.pending_mapping_id.is_(None))
@@ -84,9 +91,20 @@ def _visible(ctx: TenantContext):
 
 
 async def job_access(
-    db: AsyncSession, ctx: TenantContext, job_id: str, *, for_update: bool = False
+    db: AsyncSession,
+    ctx: TenantContext,
+    job_id: str,
+    *,
+    for_update: bool = False,
+    review: bool = False,
 ) -> OcrJob:
-    q = select(OcrJob).where(OcrJob.id == job_id, _visible(ctx))
+    """A job the caller can see (FR-OCR-017). With review=True, also a job the caller
+    reviews at its current level (FR-VERIFY-019): for reading and for review decisions
+    only, never for changing the result."""
+    from app.services import review_service
+
+    seen = or_(_visible(ctx), review_service.reviewable(ctx)) if review else _visible(ctx)
+    q = select(OcrJob).where(OcrJob.id == job_id, seen)
     if for_update:
         q = q.with_for_update()
     job = (await db.execute(q)).scalar_one_or_none()
@@ -149,6 +167,7 @@ async def summaries(db: AsyncSession, jobs: list[OcrJob]) -> list[dict]:
                 "template_name": names.get(j.id),
                 "created_at": j.created_at,
                 "confirmed_at": j.confirmed_at,
+                "review_level": {states.PENDING_L1: 1, states.PENDING_L2: 2}.get(j.review_status),
             }
         )
     return out
@@ -329,7 +348,7 @@ async def delete_results(
     if job.status not in states.TERMINAL:
         raise AppError(409, "job_not_terminal", "error.job_not_terminal")
     job.current_mapping_id = job.pending_mapping_id = job.confirmed_version_id = None
-    job.confirmed_at = job.confirmed_by_user_id = None
+    job.confirmed_at = job.confirmed_by_user_id = job.official_at = None
     job.review_status, job.updated_at = "UNREVIEWED", utcnow()
     await db.flush()
     for exp in (await db.execute(select(Export).where(Export.job_id == job.id))).scalars():
@@ -341,6 +360,10 @@ async def delete_results(
         .where(TemplateMapping.job_id == job.id)
         .values(base_version_id=None, result_version_id=None)
     )
+    # the change log and review history go with the results (FR-VERIFY-007, 013)
+    await db.execute(delete(ResultChange).where(ResultChange.job_id == job.id))
+    await db.execute(delete(ReviewRecord).where(ReviewRecord.job_id == job.id))
+    await db.execute(delete(ReviewRound).where(ReviewRound.job_id == job.id))
     await db.execute(delete(ResultVersion).where(ResultVersion.job_id == job.id))
     await db.execute(delete(TemplateMapping).where(TemplateMapping.job_id == job.id))
     await audit(db, principal, "job.delete_results", job.id)

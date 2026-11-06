@@ -49,6 +49,22 @@ class AmountIssueOut(BaseModel):
     recognised: str
 
 
+class ReviewRecordOut(BaseModel):
+    round_no: int
+    level: int
+    decision: str  # APPROVE or RETURN
+    comment: str | None
+    reviewer_name: str | None
+    created_at: datetime
+
+
+class ReviewStateOut(BaseModel):
+    stage: str  # NONE, PENDING_L1, PENDING_L2 or CONFIRMED
+    required_level: int | None
+    records: list[ReviewRecordOut]
+    last_return: ReviewRecordOut | None
+
+
 class ResultOut(BaseModel):
     version: int
     structured: dict[str, Any] | list[Any] | None
@@ -58,7 +74,8 @@ class ResultOut(BaseModel):
     match: MatchOut | None = None
     warnings: list[WarningOut] = []
     amount_issues: list[AmountIssueOut] = []
-    confirmed: bool
+    confirmed: bool  # locked: waiting for review or official
+    review: ReviewStateOut
 
 
 class ChangeOut(BaseModel):
@@ -85,7 +102,7 @@ class ResultIn(BaseModel):
 
 @router.get("/{job_id}/result", operation_id="getOcrResult", response_model=ResultOut)
 async def read(job_id: str, ctx: Tenant, db: Db) -> ResultOut:
-    job = await job_service.job_access(db, ctx, job_id)
+    job = await job_service.job_access(db, ctx, job_id, review=True)
     return ResultOut(**await result_service.read(db, job))
 
 
@@ -112,5 +129,5 @@ async def save(job_id: str, req: ResultIn, ctx: Tenant, principal: Caller, db: D
 )
 async def changes(job_id: str, ctx: Tenant, db: Db) -> list[ChangeOut]:
     """The change log, oldest first (FR-VERIFY-007)."""
-    job = await job_service.job_access(db, ctx, job_id)
+    job = await job_service.job_access(db, ctx, job_id, review=True)
     return [ChangeOut(**c) for c in await change_log.list_changes(db, job.id)]

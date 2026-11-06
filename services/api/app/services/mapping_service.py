@@ -258,7 +258,7 @@ async def finalize_ready(
         job.pending_mapping_id == mapping.id
         and current is not None
         and current.id == mapping.base_version_id
-        and job.review_status != "CONFIRMED"
+        and job.review_status not in states.LOCKED
     )
     if apply:
         manual = mapping.source == MANUAL
@@ -339,7 +339,7 @@ async def template_options(db: AsyncSession, job: OcrJob) -> dict:
 def _check_open(job: OcrJob) -> None:
     if job.status not in states.SUCCESS:
         raise _conflict("job_not_terminal")
-    if job.review_status == "CONFIRMED":
+    if job.review_status in states.LOCKED:
         raise _conflict("result_confirmed")
 
 

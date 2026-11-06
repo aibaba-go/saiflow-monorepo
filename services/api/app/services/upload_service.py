@@ -253,10 +253,15 @@ async def file_access(db: AsyncSession, ctx: TenantContext, file_id: str) -> Fil
         raise not_found()
     mine = row.created_by_user_id == ctx.user_id
     if not mine:
+        from sqlalchemy import or_
+
+        from app.services import review_service
+
         q = select(OcrJob.id).where(OcrJob.file_id == row.id, OcrJob.tenant_id == ctx.tenant_id)
         owner = submitter_scope(ctx)
         if owner is not None:
-            q = q.where(OcrJob.created_by_user_id == owner)
+            # reviewers read the original of a job they review (FR-VERIFY-019)
+            q = q.where(or_(OcrJob.created_by_user_id == owner, review_service.reviewable(ctx)))
         if (await db.execute(q.limit(1))).scalar() is None:
             raise not_found()
     return row

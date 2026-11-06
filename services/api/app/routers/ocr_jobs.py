@@ -63,7 +63,7 @@ async def list_jobs(
 
 @router.get("/{job_id}", operation_id="getOcrJob", response_model=JobOut)
 async def get_job(job_id: str, ctx: Tenant, db: Db) -> JobOut:
-    return await _out(db, await job_service.job_access(db, ctx, job_id))
+    return await _out(db, await job_service.job_access(db, ctx, job_id, review=True))
 
 
 @router.post("/{job_id}/cancel", operation_id="cancelOcrJob", response_model=JobOut)
