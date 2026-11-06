@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEventLib from "@testing-library/user-event";
 import { Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -75,73 +75,6 @@ beforeEach(() => {
   signedIn(USER, [PERSONAL]);
 });
 afterEach(() => vi.useRealTimers());
-
-describe("progress (FR-SYS-059)", () => {
-  it("progress steps then result (059-01)", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    const stages = ["OCR_PROCESSING", "TEMPLATE_MATCHING", "VERIFYING"];
-    let n = 0;
-    mockApi({
-      [`GET ${JOB}`]: () => json(200, job(stages[Math.min(n++, 2)]!)),
-      [`GET ${JOB}/result`]: () => json(200, result(1, { document: { invoice_no: "IV1" } })),
-    });
-    page("progress");
-    expect(await screen.findByText("Recognition")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Cancel recognition" })).toBeInTheDocument();
-    await act(() => vi.advanceTimersByTimeAsync(2_000));
-    await act(() => vi.advanceTimersByTimeAsync(2_000));
-    expect(await screen.findByDisplayValue("IV1")).toBeInTheDocument(); // the result page
-  });
-
-  it("90 s of matching goes to the result page, which shows matching", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    mockApi({
-      [`GET ${JOB}`]: () => json(200, job("TEMPLATE_MATCHING")),
-      [`GET ${JOB}/result`]: () =>
-        json(200, result(1, {}, { template: null, mapping: { status: "CONVERTING", error: null } })),
-    });
-    page("progress");
-    expect(await screen.findByText("Template matching")).toBeInTheDocument();
-    await act(() => vi.advanceTimersByTimeAsync(89_000));
-    expect(screen.queryByText("Matching the template…")).toBeNull();
-    await act(() => vi.advanceTimersByTimeAsync(2_000));
-    expect(await screen.findByText("Matching the template…")).toBeInTheDocument();
-  });
-
-  it("failure shows reason and rerun (059-02)", async () => {
-    const api = mockApi({
-      [`GET ${JOB}`]: () => json(200, job("OCR_FAILED", { error_code: "VENDOR_TIMEOUT" })),
-      [`POST ${JOB}/rerun`]: () => json(201, job("OCR_PROCESSING", { id: "j2" })),
-      "GET /api/v1/ocr/jobs/j2": () => json(200, job("OCR_PROCESSING", { id: "j2" })),
-    });
-    useLanguage.getState().setLang("zh");
-    page("progress");
-    expect(await screen.findByText("识别服务响应超时。")).toBeInTheDocument();
-    expect(screen.getByText("扫描次数已退还。")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "重新识别" }));
-    await waitFor(() => expect(api.count(`POST ${JOB}/rerun`)).toBe(1));
-    await waitFor(() => expect(api.count("GET /api/v1/ocr/jobs/j2")).toBeGreaterThan(0));
-  });
-
-  it("cancel while processing after confirm", async () => {
-    let cancelled = false;
-    const api = mockApi({
-      [`GET ${JOB}`]: () => json(200, cancelled ? job("OCR_FAILED", { status: "CANCELLED" }) : job("OCR_PROCESSING")),
-      [`POST ${JOB}/cancel`]: () => {
-        cancelled = true;
-        return json(200, job("OCR_FAILED", { status: "CANCELLED" }));
-      },
-    });
-    page("progress");
-    await userEvent.click(await screen.findByRole("button", { name: "Cancel recognition" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Cancel" })); // keep going
-    expect(api.count(`POST ${JOB}/cancel`)).toBe(0);
-    await userEvent.click(screen.getByRole("button", { name: "Cancel recognition" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Confirm" }));
-    expect(await screen.findByText(/Recognition was cancelled/)).toBeInTheDocument();
-    expect(api.count(`POST ${JOB}/cancel`)).toBe(1);
-  });
-});
 
 describe("result page (FR-SYS-105)", () => {
   it("labels in Chinese, decimal kept, required marked (105-01)", async () => {

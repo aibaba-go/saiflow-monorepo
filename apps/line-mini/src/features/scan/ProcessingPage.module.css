@@ -1,0 +1,175 @@
+/* main views/ProcessingPage.vue <style scoped>, copied verbatim (FR-SYS-118). */
+.processing {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.content {
+  padding: 12px 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.status-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 26px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.done-mark {
+  width: 32px;
+  height: 32px;
+  border: 3.5px solid var(--success);
+  border-radius: 50%;
+}
+
+.done-mark.failed {
+  border-color: var(--danger);
+}
+
+.status-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin-top: 6px;
+}
+
+.status-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.steps {
+  display: flex;
+  align-items: flex-start;
+  margin-top: 20px;
+  width: 100%;
+  justify-content: center;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  width: 96px;
+}
+
+.step-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--track);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.step-dot.done {
+  background: var(--primary);
+}
+
+.step-dot.active {
+  background: var(--primary-light);
+}
+
+.step-dot.failed {
+  background: var(--danger);
+}
+
+.step-pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--primary);
+  animation: pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    transform: scale(0.7);
+    opacity: 0.6;
+  }
+}
+
+.step-label {
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.step-label.on {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.step-label.failed {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.step-line {
+  position: absolute;
+  top: 13px;
+  left: calc(50% + 15px);
+  width: calc(100% - 30px);
+  height: 2px;
+  background: var(--track);
+  border-radius: 2px;
+}
+
+.step-line.done {
+  background: var(--primary);
+}
+
+.info-box {
+  background: var(--primary-light);
+  border-radius: 12px;
+  padding: 13px 16px;
+  font-size: 11px;
+  color: var(--icon);
+  line-height: 1.6;
+}
+
+.info-box.error {
+  background: #fdeaea;
+  color: var(--danger);
+}
+
+.status-error {
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--danger);
+}
+
+.home-btn {
+  height: 48px;
+  border-radius: 14px;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.cancel-btn {
+  height: 40px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.cancel-btn:disabled {
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .step-pulse { animation: none; }
+}
