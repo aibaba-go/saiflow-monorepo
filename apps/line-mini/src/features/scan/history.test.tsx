@@ -3,11 +3,11 @@ import userEventLib from "@testing-library/user-event";
 import { Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { useTenantChoice } from "../features/tenants/useCurrentTenant";
-import { useLanguage } from "../stores/language";
-import { ORG, PERSONAL, signedIn, USER } from "../test/fixtures";
-import { json, mockApi } from "../test/mockApi";
-import { renderWithProviders } from "../test/render";
+import { useTenantChoice } from "../tenants/useCurrentTenant";
+import { useLanguage } from "../../stores/language";
+import { ORG, PERSONAL, signedIn, USER } from "../../test/fixtures";
+import { json, mockApi } from "../../test/mockApi";
+import { renderWithProviders } from "../../test/render";
 import { HistoryPage } from "./HistoryPage";
 
 const userEvent = userEventLib.setup({ pointerEventsCheck: 0 });
@@ -57,13 +57,13 @@ beforeEach(() => {
   useTenantChoice.getState().choose(null);
 });
 
-describe("history (FR-SYS-108)", () => {
+describe("history copied from main (FR-SYS-108, 117)", () => {
   it("history filter and open (108-01)", async () => {
     const api = jobsApi({ "70": [job(1, "CONFIRMED"), job(2, "VERIFYING"), job(3, "VERIFYING")] });
     signedIn(USER, [PERSONAL]);
     page();
     expect(await screen.findByText("doc-70-1.png")).toBeInTheDocument();
-    await userEvent.click(screen.getAllByText("To verify")[0]!); // the tab comes before the rows
+    await userEvent.click(screen.getByRole("button", { name: "Verifying" })); // main's stage chip
     await waitFor(() => expect(screen.queryByText("doc-70-1.png")).toBeNull());
     expect(screen.getByText("doc-70-2.png")).toBeInTheDocument();
     expect(api.calls.some((c) => new URL(c.url).searchParams.get("stage") === "VERIFYING")).toBe(true);
@@ -84,7 +84,7 @@ describe("history (FR-SYS-108)", () => {
     const pages = api.calls.map((c) => new URL(c.url).searchParams);
     expect(pages.map((p) => p.get("page"))).toEqual(["1", "2", "3"]);
     expect(pages.every((p) => p.get("page_size") === "20")).toBe(true);
-    expect(await screen.findByText("That's all.")).toBeInTheDocument();
+    expect(await screen.findByText("No more records")).toBeInTheDocument();
   });
 
   it("history resets on tenant switch", async () => {
@@ -95,5 +95,36 @@ describe("history (FR-SYS-108)", () => {
     act(() => useTenantChoice.getState().choose(ORG.tenant_id));
     expect(await screen.findByText("doc-5-1.png")).toBeInTheDocument();
     expect(screen.queryByText("doc-70-1.png")).toBeNull();
+  });
+
+  it("search with stage (117-01)", async () => {
+    const api = jobsApi({
+      "70": [
+        { ...job(1, "VERIFYING"), file_name: "inv-001.pdf" },
+        { ...job(2, "CONFIRMED"), file_name: "inv-002.pdf" },
+        { ...job(3, "VERIFYING"), file_name: "bill.pdf" },
+      ],
+    });
+    api.set("GET /api/v1/ocr/jobs", (r) => {
+      const url = new URL(r.url);
+      const stage = url.searchParams.get("stage");
+      const q = url.searchParams.get("q") ?? "";
+      const all = [
+        { ...job(1, "VERIFYING"), file_name: "inv-001.pdf" },
+        { ...job(2, "CONFIRMED"), file_name: "inv-002.pdf" },
+        { ...job(3, "VERIFYING"), file_name: "bill.pdf" },
+      ].filter((j) => (!stage || j.stage === stage) && j.file_name.includes(q));
+      return json(200, { items: all, total: all.length, page: 1, page_size: 20 });
+    });
+    signedIn(USER, [PERSONAL]);
+    page();
+    expect(await screen.findByText("bill.pdf")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Verifying" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Search file name" }), "inv");
+    await waitFor(() => expect(screen.queryByText("bill.pdf")).toBeNull());
+    expect(await screen.findByText("inv-001.pdf")).toBeInTheDocument();
+    expect(screen.queryByText("inv-002.pdf")).toBeNull();
+    const last = new URL(api.calls.at(-1)!.url).searchParams;
+    expect([last.get("q"), last.get("stage")]).toEqual(["inv", "VERIFYING"]);
   });
 });

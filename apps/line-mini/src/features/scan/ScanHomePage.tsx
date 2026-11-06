@@ -8,7 +8,7 @@ import { useT, type MessageKey } from "../../i18n";
 import { errorMessage } from "../../services/errors";
 import { useSession } from "../../stores/session";
 import { formatBangkokDate, formatCount } from "../../utils/format";
-import { jobTarget } from "../../pages/HistoryPage";
+import { jobTarget } from "./HistoryPage";
 import { useUsage } from "../billing/useUsage";
 import { useUnreadCount } from "../notifications/data";
 import { can } from "../tenants/permissions";

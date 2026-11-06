@@ -10,7 +10,7 @@ import { boot, configureAuth, retryLogout } from "./features/auth/session";
 import { useSubmit } from "./hooks/useSubmit";
 import { useT } from "./i18n";
 import { HealthPage } from "./pages/HealthPage";
-import { HistoryPage } from "./pages/HistoryPage";
+import { HistoryPage } from "./features/scan/HistoryPage";
 import { HomePage, ReportPage } from "./pages/HomePage";
 import { MyPage } from "./pages/MyPage";
 import { RegisterDialog } from "./features/auth/RegisterDialog";

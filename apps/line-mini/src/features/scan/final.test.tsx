@@ -94,7 +94,7 @@ describe("confirm (FR-SYS-106)", () => {
     expect(draft!.structured.document.invoice_no).toBe("IV9");
     // back from login and registration: the page confirms by itself
     act(() => signedIn(USER, [PERSONAL]));
-    expect(await screen.findByText("This result is confirmed.")).toBeInTheDocument();
+    expect(await screen.findByText("Final result")).toBeInTheDocument();
     const bodies = (await api.bodies(`PATCH ${JOB}/result`)) as { confirm: boolean; structured: { document: { invoice_no: string } } }[];
     expect(bodies.at(-1)!.confirm).toBe(true);
     expect(bodies.at(-1)!.structured.document.invoice_no).toBe("IV9");
@@ -168,5 +168,24 @@ describe("final result and export (FR-SYS-107)", () => {
     pages("/scan/jobs/j1/final");
     expect(await screen.findByText("IV1")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Export Excel" })).toBeNull();
+  });
+
+  it("export states and new scan (116)", async () => {
+    testAuth(fakeLiff({ loggedIn: true, inClient: false }));
+    const api = finalApi();
+    api.set("GET /api/v1/exports/e1/download", () => new Response(new Blob(["xlsx"]), { status: 200 }));
+    Object.assign(URL, { createObjectURL: () => "blob:x", revokeObjectURL: () => {} });
+    signedIn(USER, [PERSONAL]);
+    renderWithProviders(
+      <Routes>
+        <Route path="/scan/jobs/:id/final" element={<FinalResultPage />} />
+        <Route path="/" element={<div>home page</div>} />
+      </Routes>,
+      { route: "/scan/jobs/j1/final" },
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Export Excel" }));
+    expect(await screen.findByText("Excel export ready")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "New scan" }));
+    expect(await screen.findByText("home page")).toBeInTheDocument();
   });
 });
