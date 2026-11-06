@@ -46,6 +46,8 @@ class Organization(Base):
     tax_id: Mapped[str | None] = mapped_column(Text)
     registered_address: Mapped[str | None] = mapped_column(Text)
     verified_at: Mapped[datetime | None] = mapped_column(_TS)
+    # Email reviewers as well as the in-app notice (FR-SYS-126); set by the owner.
+    review_email_enabled: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(_TS, server_default=func.now())
 
 

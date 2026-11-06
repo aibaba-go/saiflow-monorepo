@@ -123,6 +123,8 @@ class OcrJob(Base):
         ForeignKey("result_versions.id", deferrable=True, initially="DEFERRED", use_alter=True),
         index=True,
     )
+    # When the job became official business data (FR-VERIFY-011, 012; review-flow).
+    official_at: Mapped[datetime | None] = mapped_column(_TS)
     started_at: Mapped[datetime | None] = mapped_column(_TS)
     finished_at: Mapped[datetime | None] = mapped_column(_TS)
     created_at: Mapped[datetime] = mapped_column(_TS, server_default=func.now())

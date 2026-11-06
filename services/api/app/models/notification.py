@@ -29,6 +29,9 @@ STAGES = {
     "free_quota_expiry": ("d7", "d3", "d1", "d0"),
 }
 _KIND_SQL = ", ".join(f"'{k}'" for k in KINDS)
+# Notification types: the reminder kinds plus the review notice (FR-SYS-126).
+TYPES = (*KINDS, "review_pending")
+_TYPE_SQL = ", ".join(f"'{k}'" for k in TYPES)
 STAGE_CHECK = " or ".join(
     f"(kind = '{k}' and stage in ({', '.join(repr(s) for s in v)}))" for k, v in STAGES.items()
 )
@@ -37,7 +40,7 @@ STAGE_CHECK = " or ".join(
 class Notification(Base):
     __tablename__ = "notifications"
     __table_args__ = (
-        CheckConstraint(f"type in ({_KIND_SQL})", name="notifications_type"),
+        CheckConstraint(f"type in ({_TYPE_SQL})", name="notifications_type"),
         Index("ix_notifications_user_id_desc", "user_id", text("id desc")),
         Index("ix_notifications_user_unread", "user_id", postgresql_where=text("read_at is null")),
         Index("ix_notifications_tenant", "tenant_id"),

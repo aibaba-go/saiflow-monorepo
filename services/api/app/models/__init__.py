@@ -15,6 +15,7 @@ from app.models.organization import (
     Role,
     VerificationApplication,
 )
+from app.models.review import ResultChange, ReviewLevel, ReviewNotice, ReviewRecord, ReviewRound
 from app.models.session import CustomerSession
 from app.models.setting import SystemSetting
 from app.models.template import DocumentTemplate, DocumentTemplateVersion, TemplateMapping
@@ -33,6 +34,11 @@ __all__ = [
     "OcrJob",
     "OcrRawResult",
     "ResultVersion",
+    "ResultChange",
+    "ReviewLevel",
+    "ReviewNotice",
+    "ReviewRecord",
+    "ReviewRound",
     "TemplateMapping",
     "CustomerSession",
     "EmailCode",
