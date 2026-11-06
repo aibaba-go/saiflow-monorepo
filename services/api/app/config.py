@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     textin_secret_code: SecretStr | None = None
     google_vision_api_key: SecretStr | None = None
     llm_api_key: SecretStr | None = None
+    # Originals, previews and exports (ocr-scan-flow, ADR-008): a private GCS bucket; unset,
+    # uploads and downloads answer 503. The credentials file is a mounted service-account key.
+    gcs_bucket: str | None = None
+    gcs_credentials_file: str | None = None
+    # Recognition worker (saiflow-be-ocr): OCR_WORKER_ENABLED=false keeps it idle
+    ocr_worker_enabled: bool = True
+    ocr_poll_seconds: float = Field(default=2.0, ge=0.1, le=60)
     # Reminder process (rebuild-notifications, FR-SYS-037): a pass at least every 30 minutes
     reminders_enabled: bool = True
     reminder_interval_seconds: int = Field(default=900, ge=60, le=1800)

@@ -10,6 +10,7 @@ from app.cookies import refresh_later
 from app.errors import AppError
 from app.integrations.email import SmtpSender
 from app.integrations.line import LineClient
+from app.integrations.storage import GcsStore, ObjectStore
 from app.models import AdminAccount, AdminSession
 from app.rate_limit import SlidingWindowLimiter
 from app.repositories import user_repo
@@ -20,6 +21,20 @@ from app.services.tenant_access import TenantContext
 
 def get_settings(request: Request) -> Settings:
     return request.app.state.settings
+
+
+def get_store(request: Request) -> ObjectStore:
+    """The private object store; 503 storage_unavailable until GCS_BUCKET is configured.
+    Tests put a MemoryStore on app.state.store."""
+    store = getattr(request.app.state, "store", None)
+    if store is not None:
+        return store
+    settings: Settings = request.app.state.settings
+    if not settings.gcs_bucket:
+        raise AppError(503, "storage_unavailable", "error.storage_unavailable")
+    store = GcsStore(settings.gcs_bucket, settings.gcs_credentials_file)
+    request.app.state.store = store
+    return store
 
 
 def get_engine(request: Request) -> AsyncEngine | None:
