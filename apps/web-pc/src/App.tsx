@@ -21,6 +21,9 @@ import { LoginPage } from "./pages/LoginPage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { PlansPage } from "./pages/PlansPage";
 import { RegisterGuidePage } from "./pages/RegisterGuidePage";
+import { ReviewDetailPage } from "./pages/ReviewDetailPage";
+import { ReviewSettingsPage } from "./pages/ReviewSettingsPage";
+import { ReviewsPage } from "./pages/ReviewsPage";
 import { RolesPage } from "./pages/RolesPage";
 import { setTenantGoneHandler, setUnauthenticatedHandler } from "./services/api";
 import { refreshTenants } from "./tenants/useCurrentTenant";
@@ -67,6 +70,9 @@ export function AppRoutes() {
               <Route path="/org" element={<OrgGate><OrgPage /></OrgGate>} />
               <Route path="/org/apply" element={<ApplyOrgPage />} />
               <Route path="/roles" element={<OrgGate><RolesPage /></OrgGate>} />
+              <Route path="/reviews" element={<ReviewsPage />} />
+              <Route path="/reviews/:id" element={<ReviewDetailPage />} />
+              <Route path="/review-settings" element={<ReviewSettingsPage />} />
               <Route path="/plans" element={<PlansPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/profile" element={<ProfilePage />} />

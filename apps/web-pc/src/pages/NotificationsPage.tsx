@@ -1,5 +1,6 @@
 import { Badge, Button, List, Space, Spin, Typography } from "antd";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { ErrorText } from "../components/ErrorText";
 import { Page } from "../components/Page";
@@ -30,12 +31,23 @@ export function NotificationsPage() {
     const tenant = tenants.find((x) => x.tenant_id === id);
     return tenant?.kind === "organization" ? (tenant.name ?? "") : t("tenant.personal");
   };
+  const navigate = useNavigate();
+  const choose = useTenantChoice((s) => s.choose);
+  const current = useTenantChoice((s) => s.id);
   const open = async (n: NotificationItem) => {
-    if (n.read) return;
-    try {
-      await markRead([n.id]);
-    } catch (err) {
-      setError(err);
+    if (!n.read) {
+      try {
+        await markRead([n.id]);
+      } catch (err) {
+        setError(err);
+        return;
+      }
+    }
+    // a review notice opens the review detail in its organization (FR-SYS-103)
+    const jobId = (n.data as Record<string, unknown>).job_id;
+    if (n.type === "review_pending" && typeof jobId === "string") {
+      if (current !== n.tenant_id) choose(n.tenant_id);
+      navigate(`/reviews/${jobId}`);
     }
   };
 
@@ -60,8 +72,11 @@ export function NotificationsPage() {
             const { title, body: text } = renderNotification(n, t, tenantName(n.tenant_id));
             return (
               <List.Item
-                style={{ cursor: n.read ? "default" : "pointer", background: n.read ? undefined : "#f0f7ff" }}
-                role={n.read ? undefined : "button"}
+                style={{
+                  cursor: n.read && n.type !== "review_pending" ? "default" : "pointer",
+                  background: n.read ? undefined : "#f0f7ff",
+                }}
+                role={n.read && n.type !== "review_pending" ? undefined : "button"}
                 aria-label={n.read ? undefined : t("notif.unreadItem", { title })}
                 onClick={() => void open(n)}
               >

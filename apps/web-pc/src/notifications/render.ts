@@ -26,6 +26,10 @@ const KEYS: Record<string, Record<string, [string, string]>> = {
     d1: ["notif.free_quota_expiry.d1", "notif.free_quota_expiry.body"],
     d0: ["notif.free_quota_expiry.d0", "notif.free_quota_expiry.body"],
   },
+  review_pending: {
+    l1: ["notif.review_pending.title", "notif.review_pending.body"],
+    l2: ["notif.review_pending.title", "notif.review_pending.body"],
+  },
 };
 const DAYS: Record<string, number> = { d7: 7, d3: 3, d1: 1, d0: 0 };
 
@@ -50,6 +54,10 @@ export function renderNotification(
     date: typeof iso === "string" ? formatBangkokDateTime(iso) : "",
     remaining: formatCount(typeof d.remaining === "number" ? d.remaining : 0),
     quota: formatCount(typeof d.quota === "number" ? d.quota : 0),
+    file: typeof d.file_name === "string" ? d.file_name : "",
+    template: typeof d.template_name === "string" ? d.template_name : t("review.changes.generic"),
+    level: t(d.level === 2 ? "review.level2" : "review.level1"),
+    name: typeof d.confirmer_name === "string" ? d.confirmer_name : "-",
   };
   return { title: t(keys[0] as MessageKey, vars), body: t(keys[1] as MessageKey, vars) };
 }

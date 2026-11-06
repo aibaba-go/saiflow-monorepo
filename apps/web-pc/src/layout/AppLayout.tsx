@@ -24,6 +24,8 @@ export const MENU: MenuItem[] = [
   { key: "home", path: "/", label: "nav.home" },
   { key: "org", path: "/org", label: "nav.org" },
   { key: "roles", path: "/roles", label: "nav.roles" },
+  { key: "reviews", path: "/reviews", label: "nav.reviews" },
+  { key: "reviewSettings", path: "/review-settings", label: "nav.reviewSettings" },
   { key: "plans", path: "/plans", label: "nav.plans" },
   { key: "notifications", path: "/notifications", label: "nav.notifications" },
   { key: "profile", path: "/profile", label: "nav.profile" },
@@ -64,8 +66,14 @@ export function AppLayout() {
   const tenants = useTenantsLoader(me.data?.user_id);
   const loaded = useTenantChoice((s) => s.tenants) !== null;
   const { tenant } = useTenant();
-  // Roles only in an organization, for those holding role management (FR-SYS-094).
-  const hidden = tenant?.kind === "organization" && can(tenant, "role_manage") ? [] : ["roles"];
+  // Roles only in an organization, for those holding role management; Reviews for holders
+  // of a review permission; Review settings for the owner (FR-SYS-094).
+  const org = tenant?.kind === "organization";
+  const hidden = [
+    ...(org && can(tenant, "role_manage") ? [] : ["roles"]),
+    ...(org && (can(tenant, "review_l1") || can(tenant, "review_l2")) ? [] : ["reviews"]),
+    ...(org && tenant.is_owner ? [] : ["reviewSettings"]),
+  ];
   return (
     <Layout style={{ minHeight: "100vh", minWidth: 1280 }}>
       <Layout.Sider width={220}>
