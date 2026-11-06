@@ -2,9 +2,11 @@ import { ComingSoon } from "../components/ComingSoon";
 import { UsageCard } from "../features/billing/UsageCard";
 import { TenantSwitcher } from "../features/tenants/TenantSwitcher";
 import { BellBadge } from "../features/notifications/BellBadge";
+import { PendingList } from "../features/scan/PendingList";
+import { ScanEntry } from "../features/scan/ScanEntry";
 import { useT } from "../i18n";
 
-/** Home: the usage card, and the scan entry once B-3 exists (FR-SYS-056). */
+/** Home: usage, the scan entry and the user's pending originals (FR-SYS-056, 057, 058). */
 export function HomePage() {
   const t = useT();
   return (
@@ -15,7 +17,8 @@ export function HomePage() {
       </div>
       <TenantSwitcher />
       <UsageCard />
-      <ComingSoon />
+      <ScanEntry />
+      <PendingList />
     </div>
   );
 }
