@@ -580,6 +580,91 @@
         "title": "AuditPageOut",
         "type": "object"
       },
+      "ChangeOut": {
+        "properties": {
+          "after": {
+            "title": "After"
+          },
+          "before": {
+            "title": "Before"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "from_template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Template"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "to_template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Template"
+          },
+          "user_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Name"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "kind",
+          "path",
+          "from_template",
+          "to_template",
+          "user_name",
+          "created_at",
+          "version"
+        ],
+        "title": "ChangeOut",
+        "type": "object"
+      },
       "ChangePasswordIn": {
         "properties": {
           "current_password": {
@@ -606,6 +691,22 @@
           }
         },
         "title": "ChangePasswordIn",
+        "type": "object"
+      },
+      "DecisionIn": {
+        "description": "Types are checked by the service, which answers 422 naming the field.",
+        "properties": {
+          "comment": {
+            "title": "Comment"
+          },
+          "decision": {
+            "title": "Decision"
+          },
+          "level": {
+            "title": "Level"
+          }
+        },
+        "title": "DecisionIn",
         "type": "object"
       },
       "EmailChangeRequest": {
@@ -651,6 +752,15 @@
           }
         },
         "title": "EmailCodeRequest",
+        "type": "object"
+      },
+      "EmailIn": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled"
+          }
+        },
+        "title": "EmailIn",
         "type": "object"
       },
       "ExportIn": {
@@ -1058,12 +1168,24 @@
             "title": "Page Count",
             "type": "integer"
           },
+          "review_level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Level"
+          },
           "stage": {
             "enum": [
               "OCR_PROCESSING",
               "OCR_FAILED",
               "TEMPLATE_MATCHING",
               "VERIFYING",
+              "PENDING_REVIEW",
               "CONFIRMED"
             ],
             "title": "Stage",
@@ -1153,6 +1275,19 @@
           "llm"
         ],
         "title": "KeyStatusOut",
+        "type": "object"
+      },
+      "LevelIn": {
+        "description": "Types are checked by the service, which answers 422 naming the field.",
+        "properties": {
+          "level": {
+            "title": "Level"
+          },
+          "template_id": {
+            "title": "Template Id"
+          }
+        },
+        "title": "LevelIn",
         "type": "object"
       },
       "LineLoginRequest": {
@@ -2351,6 +2486,9 @@
             "title": "Missing Required",
             "type": "array"
           },
+          "review": {
+            "$ref": "#/components/schemas/ReviewStateOut"
+          },
           "structured": {
             "anyOf": [
               {
@@ -2396,9 +2534,387 @@
           "template",
           "missing_required",
           "mapping",
-          "confirmed"
+          "confirmed",
+          "review"
         ],
         "title": "ResultOut",
+        "type": "object"
+      },
+      "ReviewDetailOut": {
+        "properties": {
+          "block_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block Reason"
+          },
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "confirmed_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed By Name"
+          },
+          "job": {
+            "$ref": "#/components/schemas/JobOut"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "required_level": {
+            "title": "Required Level",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "job",
+          "level",
+          "required_level",
+          "confirmed_by_name",
+          "confirmed_at",
+          "block_reason"
+        ],
+        "title": "ReviewDetailOut",
+        "type": "object"
+      },
+      "ReviewItemOut": {
+        "properties": {
+          "block_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block Reason"
+          },
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "confirmed_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed By Name"
+          },
+          "file_id": {
+            "title": "File Id",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "level": {
+            "title": "Level",
+            "type": "integer"
+          },
+          "level_entered_at": {
+            "format": "date-time",
+            "title": "Level Entered At",
+            "type": "string"
+          },
+          "page_count": {
+            "title": "Page Count",
+            "type": "integer"
+          },
+          "required_level": {
+            "title": "Required Level",
+            "type": "integer"
+          },
+          "template_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Name"
+          }
+        },
+        "required": [
+          "job_id",
+          "file_id",
+          "file_name",
+          "page_count",
+          "template_name",
+          "confirmed_by_name",
+          "confirmed_at",
+          "level",
+          "required_level",
+          "level_entered_at",
+          "block_reason"
+        ],
+        "title": "ReviewItemOut",
+        "type": "object"
+      },
+      "ReviewLevelItem": {
+        "properties": {
+          "level": {
+            "title": "Level",
+            "type": "integer"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "template_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Id"
+          }
+        },
+        "required": [
+          "template_id",
+          "name",
+          "level"
+        ],
+        "title": "ReviewLevelItem",
+        "type": "object"
+      },
+      "ReviewPageOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "ReviewPageOut",
+        "type": "object"
+      },
+      "ReviewRecordOut": {
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decision": {
+            "title": "Decision",
+            "type": "string"
+          },
+          "level": {
+            "title": "Level",
+            "type": "integer"
+          },
+          "reviewer_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewer Name"
+          },
+          "round_no": {
+            "title": "Round No",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "round_no",
+          "level",
+          "decision",
+          "comment",
+          "reviewer_name",
+          "created_at"
+        ],
+        "title": "ReviewRecordOut",
+        "type": "object"
+      },
+      "ReviewSettingsOut": {
+        "properties": {
+          "email_enabled": {
+            "title": "Email Enabled",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewLevelItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "email_enabled",
+          "items"
+        ],
+        "title": "ReviewSettingsOut",
+        "type": "object"
+      },
+      "ReviewStateOut": {
+        "properties": {
+          "last_return": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewRecordOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewRecordOut"
+            },
+            "title": "Records",
+            "type": "array"
+          },
+          "required_level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Level"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage",
+          "required_level",
+          "records",
+          "last_return"
+        ],
+        "title": "ReviewStateOut",
+        "type": "object"
+      },
+      "ReviewSummaryOut": {
+        "properties": {
+          "l1": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "L1"
+          },
+          "l2": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "L2"
+          }
+        },
+        "required": [
+          "l1",
+          "l2"
+        ],
+        "title": "ReviewSummaryOut",
         "type": "object"
       },
       "RoleAssignedOut": {
@@ -6407,6 +6923,71 @@
         ]
       }
     },
+    "/api/v1/ocr/jobs/{job_id}/changes": {
+      "get": {
+        "description": "The change log, oldest first (FR-VERIFY-007).",
+        "operationId": "listOcrResultChanges",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ChangeOut"
+                  },
+                  "title": "Response Listocrresultchanges",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Changes",
+        "tags": [
+          "ocr"
+        ]
+      }
+    },
     "/api/v1/ocr/jobs/{job_id}/exports": {
       "post": {
         "operationId": "createExport",
@@ -7756,6 +8337,459 @@
         "summary": "Submit Verification",
         "tags": [
           "organizations"
+        ]
+      }
+    },
+    "/api/v1/review-settings": {
+      "get": {
+        "operationId": "getReviewSettings",
+        "parameters": [
+          {
+            "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewSettingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read",
+        "tags": [
+          "reviews"
+        ]
+      }
+    },
+    "/api/v1/review-settings/email": {
+      "put": {
+        "operationId": "setReviewEmail",
+        "parameters": [
+          {
+            "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewSettingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Email",
+        "tags": [
+          "reviews"
+        ]
+      }
+    },
+    "/api/v1/review-settings/levels": {
+      "put": {
+        "operationId": "setReviewLevel",
+        "parameters": [
+          {
+            "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LevelIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewLevelItem"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Level",
+        "tags": [
+          "reviews"
+        ]
+      }
+    },
+    "/api/v1/reviews": {
+      "get": {
+        "operationId": "listReviews",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "level",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Level"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page Size"
+            }
+          },
+          {
+            "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewPageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Reviews",
+        "tags": [
+          "reviews"
+        ]
+      }
+    },
+    "/api/v1/reviews/summary": {
+      "get": {
+        "operationId": "getReviewSummary",
+        "parameters": [
+          {
+            "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewSummaryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Summary",
+        "tags": [
+          "reviews"
+        ]
+      }
+    },
+    "/api/v1/reviews/{job_id}": {
+      "get": {
+        "operationId": "getReview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Detail",
+        "tags": [
+          "reviews"
+        ]
+      }
+    },
+    "/api/v1/reviews/{job_id}/decision": {
+      "post": {
+        "operationId": "decideReview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Decide",
+        "tags": [
+          "reviews"
         ]
       }
     },

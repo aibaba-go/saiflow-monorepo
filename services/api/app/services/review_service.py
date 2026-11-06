@@ -81,6 +81,7 @@ async def on_confirm(
     db.add(rnd)
     job.review_status = states.PENDING_L1
     await db.flush()
+    await on_level_entered(db, job, rnd, 1)
     return rnd
 
 
@@ -354,5 +355,7 @@ async def decide(
 
 
 async def on_level_entered(db: AsyncSession, job: OcrJob, rnd: ReviewRound, level: int) -> None:
-    """Notify the reviewers of this level (FR-SYS-126; Task 6)."""
-    return None
+    """Notify the reviewers of this level (FR-SYS-126)."""
+    from app.services import review_notice_service
+
+    await review_notice_service.notify(db, job, rnd, level)

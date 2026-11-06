@@ -76,13 +76,15 @@ async def _smtp_check(to: str) -> int:
 async def _reminders_pass(settings, sessionmaker) -> str:
     from app.clock import utcnow
     from app.integrations.email import smtp_sender_from
-    from app.services import reminder_service
+    from app.services import reminder_service, review_notice_service
 
+    sender = smtp_sender_from(settings, retries=0)  # one attempt per email (A6, FR-SYS-126)
+    # review notice emails go out even when reminders are switched off
+    mails = await review_notice_service.send_pending(sessionmaker, sender)
     if not settings.reminders_enabled:
-        return "reminders disabled"
-    sender = smtp_sender_from(settings, retries=0)  # one attempt per reminder (A6)
+        return f"reminders disabled; review mails {mails}"
     created = await reminder_service.run_once(sessionmaker, sender, utcnow())
-    return f"reminders OK ({created} created)"
+    return f"reminders OK ({created} created); review mails {mails}"
 
 
 async def _reminders(loop: bool) -> int:

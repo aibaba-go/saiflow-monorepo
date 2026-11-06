@@ -1026,6 +1026,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ocr/jobs/{job_id}/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Changes
+         * @description The change log, oldest first (FR-VERIFY-007).
+         */
+        get: operations["listOcrResultChanges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ocr/jobs/{job_id}/exports": {
         parameters: {
             query?: never;
@@ -1355,6 +1375,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/review-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read */
+        get: operations["getReviewSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/review-settings/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Email */
+        put: operations["setReviewEmail"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/review-settings/levels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Level */
+        put: operations["setReviewLevel"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Reviews */
+        get: operations["listReviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reviews/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Summary */
+        get: operations["getReviewSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reviews/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detail */
+        get: operations["getReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reviews/{job_id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decide */
+        post: operations["decideReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/templates/versions/{version_id}": {
         parameters: {
             query?: never;
@@ -1612,12 +1751,48 @@ export interface components {
             /** Next Before */
             next_before: number | null;
         };
+        /** ChangeOut */
+        ChangeOut: {
+            /** After */
+            after?: unknown;
+            /** Before */
+            before?: unknown;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** From Template */
+            from_template: string | null;
+            /** Kind */
+            kind: string;
+            /** Path */
+            path: string | null;
+            /** To Template */
+            to_template: string | null;
+            /** User Name */
+            user_name: string | null;
+            /** Version */
+            version: number | null;
+        };
         /** ChangePasswordIn */
         ChangePasswordIn: {
             /** Current Password */
             current_password?: string | null;
             /** New Password */
             new_password?: string | null;
+        };
+        /**
+         * DecisionIn
+         * @description Types are checked by the service, which answers 422 naming the field.
+         */
+        DecisionIn: {
+            /** Comment */
+            comment?: unknown;
+            /** Decision */
+            decision?: unknown;
+            /** Level */
+            level?: unknown;
         };
         /** EmailChangeRequest */
         EmailChangeRequest: {
@@ -1630,6 +1805,11 @@ export interface components {
         EmailCodeRequest: {
             /** Email */
             email?: string | null;
+        };
+        /** EmailIn */
+        EmailIn: {
+            /** Enabled */
+            enabled?: unknown;
         };
         /** ExportIn */
         ExportIn: {
@@ -1784,11 +1964,13 @@ export interface components {
             id: string;
             /** Page Count */
             page_count: number;
+            /** Review Level */
+            review_level?: number | null;
             /**
              * Stage
              * @enum {string}
              */
-            stage: "OCR_PROCESSING" | "OCR_FAILED" | "TEMPLATE_MATCHING" | "VERIFYING" | "CONFIRMED";
+            stage: "OCR_PROCESSING" | "OCR_FAILED" | "TEMPLATE_MATCHING" | "VERIFYING" | "PENDING_REVIEW" | "CONFIRMED";
             /** Status */
             status: string;
             /** Template Name */
@@ -1813,6 +1995,16 @@ export interface components {
             llm: boolean;
             /** Textin */
             textin: boolean;
+        };
+        /**
+         * LevelIn
+         * @description Types are checked by the service, which answers 422 naming the field.
+         */
+        LevelIn: {
+            /** Level */
+            level?: unknown;
+            /** Template Id */
+            template_id?: unknown;
         };
         /**
          * LineLoginRequest
@@ -2206,6 +2398,7 @@ export interface components {
             match?: components["schemas"]["MatchOut"] | null;
             /** Missing Required */
             missing_required: string[];
+            review: components["schemas"]["ReviewStateOut"];
             /** Structured */
             structured: {
                 [key: string]: unknown;
@@ -2218,6 +2411,110 @@ export interface components {
              * @default []
              */
             warnings: components["schemas"]["WarningOut"][];
+        };
+        /** ReviewDetailOut */
+        ReviewDetailOut: {
+            /** Block Reason */
+            block_reason: string | null;
+            /** Confirmed At */
+            confirmed_at: string | null;
+            /** Confirmed By Name */
+            confirmed_by_name: string | null;
+            job: components["schemas"]["JobOut"];
+            /** Level */
+            level: number | null;
+            /** Required Level */
+            required_level: number;
+        };
+        /** ReviewItemOut */
+        ReviewItemOut: {
+            /** Block Reason */
+            block_reason: string | null;
+            /** Confirmed At */
+            confirmed_at: string | null;
+            /** Confirmed By Name */
+            confirmed_by_name: string | null;
+            /** File Id */
+            file_id: string;
+            /** File Name */
+            file_name: string;
+            /** Job Id */
+            job_id: string;
+            /** Level */
+            level: number;
+            /**
+             * Level Entered At
+             * Format: date-time
+             */
+            level_entered_at: string;
+            /** Page Count */
+            page_count: number;
+            /** Required Level */
+            required_level: number;
+            /** Template Name */
+            template_name: string | null;
+        };
+        /** ReviewLevelItem */
+        ReviewLevelItem: {
+            /** Level */
+            level: number;
+            /** Name */
+            name: string | null;
+            /** Template Id */
+            template_id: number | null;
+        };
+        /** ReviewPageOut */
+        ReviewPageOut: {
+            /** Items */
+            items: components["schemas"]["ReviewItemOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /** ReviewRecordOut */
+        ReviewRecordOut: {
+            /** Comment */
+            comment: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Decision */
+            decision: string;
+            /** Level */
+            level: number;
+            /** Reviewer Name */
+            reviewer_name: string | null;
+            /** Round No */
+            round_no: number;
+        };
+        /** ReviewSettingsOut */
+        ReviewSettingsOut: {
+            /** Email Enabled */
+            email_enabled: boolean;
+            /** Items */
+            items: components["schemas"]["ReviewLevelItem"][];
+        };
+        /** ReviewStateOut */
+        ReviewStateOut: {
+            last_return: components["schemas"]["ReviewRecordOut"] | null;
+            /** Records */
+            records: components["schemas"]["ReviewRecordOut"][];
+            /** Required Level */
+            required_level: number | null;
+            /** Stage */
+            stage: string;
+        };
+        /** ReviewSummaryOut */
+        ReviewSummaryOut: {
+            /** L1 */
+            l1: number | null;
+            /** L2 */
+            l2: number | null;
         };
         /** RoleAssignedOut */
         RoleAssignedOut: {
@@ -4539,6 +4836,40 @@ export interface operations {
             };
         };
     };
+    listOcrResultChanges: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     createExport: {
         parameters: {
             query?: never;
@@ -5367,6 +5698,250 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VerificationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getReviewSettings: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewSettingsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    setReviewEmail: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewSettingsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    setReviewLevel: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LevelIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewLevelItem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listReviews: {
+        parameters: {
+            query?: {
+                level?: string | null;
+                page?: string | null;
+                page_size?: string | null;
+            };
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewPageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getReviewSummary: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewSummaryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getReview: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decideReview: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDetailOut"];
                 };
             };
             /** @description Validation Error */
