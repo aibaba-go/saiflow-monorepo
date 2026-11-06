@@ -5,6 +5,7 @@ limits are checked before the file becomes READY, and a rejected upload keeps no
 Every lookup is inside the current tenant; anything the caller may not see is 404.
 """
 
+import asyncio
 import hashlib
 import uuid
 from datetime import timedelta
@@ -142,13 +143,14 @@ async def complete(
     kind = inspect.sniff(data)
     if kind is None:
         raise await _reject(db, store, row, "unsupported_format")
-    try:
-        pages = inspect.page_count(kind, data)
+    try:  # PyMuPDF work runs in a thread so a big PDF does not stall other requests
+        pages = await asyncio.to_thread(inspect.page_count, kind, data)
     except inspect.FileCorrupt:
         raise await _reject(db, store, row, "file_corrupt") from None
     if pages > MAX_PAGES:
         raise await _reject(db, store, row, "too_many_pages")
-    row.page_count, row.sha256 = pages, hashlib.sha256(data).hexdigest()
+    digest = await asyncio.to_thread(lambda: hashlib.sha256(data).hexdigest())
+    row.page_count, row.sha256 = pages, digest
     row.status, row.expires_at, row.updated_at = "READY", None, utcnow()
     await db.flush()
     await _audit(db, principal, "file.upload", row.id)
@@ -247,7 +249,9 @@ async def page_preview(store: ObjectStore, row: File, page: int) -> tuple[bytes,
     except ObjectMissing:
         pass
     try:
-        png = inspect.render_page_png(await read_original(store, row), page)
+        png = await asyncio.to_thread(
+            inspect.render_page_png, await read_original(store, row), page
+        )
     except (inspect.PageOutOfRange, inspect.FileCorrupt):
         raise not_found() from None
     await store.put(name, png, "image/png")

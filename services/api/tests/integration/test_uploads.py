@@ -212,3 +212,24 @@ async def test_no_bucket_503(api, line):
     await login(api, line)
     r = await api.post("/api/v1/uploads", json={"file_name": "a.png"})
     assert (r.status_code, r.json()["code"]) == (503, "storage_unavailable")
+
+
+async def test_pdf_work_runs_off_the_event_loop(api, line, store, monkeypatch):
+    """Parsing and rendering run in a thread so one big PDF does not stall every request."""
+    import asyncio
+
+    from app.services import upload_service
+
+    seen = []
+    real = asyncio.to_thread
+
+    async def spy(fn, *args, **kwargs):
+        seen.append(getattr(fn, "__name__", str(fn)))
+        return await real(fn, *args, **kwargs)
+
+    monkeypatch.setattr(upload_service.asyncio, "to_thread", spy)
+    await login(api, line)
+    r = await upload(api, "a.pdf", pdf(2))
+    assert r.status_code == 200, r.text
+    assert (await api.get(f"/api/v1/files/{r.json()['id']}/pages/1/preview")).status_code == 200
+    assert "page_count" in seen and "render_page_png" in seen

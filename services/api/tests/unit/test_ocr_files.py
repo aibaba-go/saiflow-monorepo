@@ -61,3 +61,30 @@ def test_render_page():
         render_page_png(data, 4)
     with pytest.raises(PageOutOfRange):
         render_page_png(data, 0)
+
+
+def _bad_xref(data: bytes) -> bytes:
+    """A whole PDF whose xref offsets are wrong, as cheap generators write them."""
+    start = data.rindex(b"startxref")
+    return data[:start] + b"startxref\n9\n%%EOF\n"
+
+
+def test_pdf_with_wrong_xref_still_counts():
+    """PyMuPDF repairs it and every page renders: refusing it would refuse a document that
+    opens fine (final review 6)."""
+    data = _bad_xref(make_pdf(3))
+    doc = pymupdf.open(stream=data, filetype="pdf")
+    assert doc.is_repaired  # the case under test
+    doc.close()
+    assert page_count("pdf", data) == 3
+
+
+def test_render_is_capped_for_huge_pages():
+    """A page with a 14400 pt MediaBox must not render at 2x (~28800 px) (final review 5)."""
+    doc = pymupdf.open()
+    doc.new_page(width=14400, height=14400)
+    data = doc.tobytes()
+    doc.close()
+    png = render_page_png(data, 1)
+    pix = pymupdf.Pixmap(png)
+    assert max(pix.width, pix.height) <= 2500
