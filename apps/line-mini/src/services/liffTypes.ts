@@ -9,4 +9,6 @@ export interface Liff {
   getIDToken(): string | null;
   isApiAvailable(api: string): boolean;
   shareTargetPicker(messages: { type: "text"; text: string }[]): Promise<unknown>;
+  /** Opens a URL; external: true hands it to the system browser (export downloads). */
+  openWindow(params: { url: string; external: boolean }): void;
 }

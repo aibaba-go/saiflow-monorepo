@@ -271,3 +271,7 @@ body {
   flex-direction: column;
   gap: 8px;
 }
+.history__end {
+  text-align: center;
+  padding: 8px 0;
+}

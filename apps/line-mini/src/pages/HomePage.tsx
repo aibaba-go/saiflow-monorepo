@@ -23,16 +23,6 @@ export function HomePage() {
   );
 }
 
-export function HistoryPage() {
-  const t = useT();
-  return (
-    <div className="page">
-      <h1 className="page__title">{t("nav.history")}</h1>
-      <ComingSoon />
-    </div>
-  );
-}
-
 export function ReportPage() {
   const t = useT();
   return (

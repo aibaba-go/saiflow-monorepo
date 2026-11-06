@@ -45,9 +45,10 @@ describe("shell (FR-SYS-056)", () => {
     expect(within(nav).getAllByRole("tab").map((t) => t.textContent)).toEqual(["Home", "History", "My"]);
   });
 
-  it("History shows coming soon", async () => {
+  it("History shows the history list, not coming soon (056-05)", async () => {
     boot(USER, "/history");
-    expect(await screen.findByText("Coming soon")).toBeInTheDocument();
+    expect(await screen.findByText("All")).toBeInTheDocument();
+    expect(screen.queryByText("Coming soon")).toBeNull();
   });
 
   it("home shows the usage card (053-01)", async () => {

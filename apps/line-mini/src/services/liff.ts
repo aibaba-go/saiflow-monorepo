@@ -16,6 +16,7 @@ export function realLiff(liffId: string): Liff {
     getIDToken: () => liff.getIDToken(),
     isApiAvailable: (api) => liff.isApiAvailable(api),
     shareTargetPicker: (messages) => liff.shareTargetPicker(messages),
+    openWindow: (params) => liff.openWindow(params),
   };
 }
 

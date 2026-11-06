@@ -10,7 +10,8 @@ import { boot, configureAuth, retryLogout } from "./features/auth/session";
 import { useSubmit } from "./hooks/useSubmit";
 import { useT } from "./i18n";
 import { HealthPage } from "./pages/HealthPage";
-import { HistoryPage, HomePage, ReportPage } from "./pages/HomePage";
+import { HistoryPage } from "./pages/HistoryPage";
+import { HomePage, ReportPage } from "./pages/HomePage";
 import { MyPage } from "./pages/MyPage";
 import { RegisterDialog } from "./features/auth/RegisterDialog";
 import { ProfilePage } from "./features/profile/ProfilePage";
@@ -23,6 +24,7 @@ import { PlansPage } from "./features/billing/PlansPage";
 import { NotificationsPage } from "./features/notifications/NotificationsPage";
 import { TabBar } from "./components/TabBar";
 import { ConfirmPage } from "./features/scan/ConfirmPage";
+import { FinalResultPage } from "./features/scan/FinalResultPage";
 import { ProcessingPage } from "./features/scan/ProcessingPage";
 import { ResultPage } from "./features/scan/ResultPage";
 import { useUsage } from "./features/billing/useUsage";
@@ -140,6 +142,7 @@ function MainShell() {
         <Route path="/scan/confirm" element={<ConfirmPage />} />
         <Route path="/scan/jobs/:id/progress" element={<ProcessingPage />} />
         <Route path="/scan/jobs/:id/result" element={<ResultPage />} />
+        <Route path="/scan/jobs/:id/final" element={<FinalResultPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/health" element={<HealthPage />} />
         {/* Anything else is not a page: e.g. LIFF hands its tokens over in the URL fragment

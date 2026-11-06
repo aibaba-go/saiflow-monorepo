@@ -1,7 +1,7 @@
 import type { components } from "@saiflow/api-client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, NavBar, Toast } from "antd-mobile";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { BrandLoading } from "../../components/BrandLoading";
@@ -10,6 +10,8 @@ import { OriginalPreview } from "../../components/OriginalPreview";
 import { useT } from "../../i18n";
 import { api, call } from "../../services/api";
 import { ApiError } from "../../services/errors";
+import { useSession } from "../../stores/session";
+import { confirmResult, scrollToField, wantsConfirm } from "./confirm";
 import { useCurrentTenant } from "../tenants/useCurrentTenant";
 import { failureText, POLL_MS, useJob } from "./ProcessingPage";
 import { StructuredEditor } from "./StructuredEditor";
@@ -42,6 +44,11 @@ export function ResultPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [picker, setPicker] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [missing, setMissing] = useState<string[]>([]);
+  const [expired, setExpired] = useState(false);
+  const me = useSession((s) => s.me);
+  const autoConfirm = useRef(false);
   const data = result.data;
   // An edit is kept only against the version it was made on.
   const dirty = draft !== null && data !== undefined && draft.base === data.version;
@@ -52,9 +59,10 @@ export function ResultPage() {
     await client.invalidateQueries({ queryKey: ["result"] });
   }
 
-  /** Save the edits as a draft; true when there was nothing to save or it was saved. */
-  async function saveDraft(): Promise<boolean> {
-    if (!dirty || !data) return true;
+  /** Save the edits as a draft: the version now current, or null when saving failed. */
+  async function saveDraft(): Promise<ResultOut | null> {
+    if (!data) return null;
+    if (!dirty) return data;
     setSaving(true);
     setError(null);
     setNotice(null);
@@ -70,17 +78,51 @@ export function ResultPage() {
       );
       setDraft(null);
       Toast.show({ content: t("scan.saved") });
-      return true;
+      return saved;
     } catch (e) {
       if (e instanceof ApiError && e.code === "version_conflict") {
         setNotice(t("scan.conflict"));
         await reload();
       } else setError(e);
-      return false;
+      return null;
     } finally {
       setSaving(false);
     }
   }
+
+  /** Save, then confirm (FR-SYS-106): login first for a guest, the fields marked and the
+   * first one scrolled to on 422, the plans page offered on 402. */
+  async function confirm() {
+    setExpired(false);
+    const saved = await saveDraft();
+    if (!saved) return;
+    setConfirming(true);
+    try {
+      const out = await confirmResult(id, saved.version, (saved.structured ?? {}) as Json);
+      if (out.kind === "confirmed") {
+        void client.invalidateQueries({ queryKey: ["jobs"] });
+        void client.invalidateQueries({ queryKey: ["job"] });
+        client.setQueriesData({ queryKey: ["result"] }, () => out.result);
+        navigate(`/scan/jobs/${id}/final`, { replace: true });
+      } else if (out.kind === "missing") {
+        setMissing(out.paths);
+        if (out.paths[0]) setTimeout(() => scrollToField(out.paths[0]!), 0);
+      } else if (out.kind === "error") {
+        if (out.error.code === "plan_expired") setExpired(true);
+        setError(out.error);
+      }
+    } finally {
+      setConfirming(false);
+    }
+  }
+
+  // Back from LINE login or registration with a confirm waiting (AC-FR-SYS-106-01).
+  const registered = me?.kind === "user" && me.registered;
+  useEffect(() => {
+    if (!data || !registered || autoConfirm.current || !wantsConfirm(id)) return;
+    autoConfirm.current = true;
+    void confirm();
+  });
 
   const mapping = data?.mapping;
   const running = mapping ? RUNNING.has(mapping.status) : false;
@@ -107,11 +149,15 @@ export function ResultPage() {
         <StructuredEditor
           value={value}
           groups={groups}
-          missing={new Set(data.missing_required)}
+          missing={new Set([...data.missing_required, ...missing])}
           onChange={(next) => setDraft({ base: data.version, value: next })}
         />
       )}
       <ErrorText error={error} />
+      {expired && <Button onClick={() => navigate("/plans")}>{t("scan.toPlans")}</Button>}
+      {data?.confirmed && (
+        <Button onClick={() => navigate(`/scan/jobs/${id}/final`)}>{t("scan.finalTitle")}</Button>
+      )}
       {data && !data.confirmed && (
         <div className="result__actions">
           <Button loading={saving} disabled={!dirty} onClick={() => void saveDraft()}>
@@ -120,13 +166,16 @@ export function ResultPage() {
           <Button disabled={running} onClick={() => setPicker(true)}>
             {t("scan.changeTemplate")}
           </Button>
+          <Button color="primary" loading={confirming} disabled={running || saving} onClick={() => void confirm()}>
+            {t("common.confirm")}
+          </Button>
         </div>
       )}
       <TemplatePicker
         jobId={id}
         open={picker}
         onClose={() => setPicker(false)}
-        onBeforeSwitch={saveDraft}
+        onBeforeSwitch={async () => (await saveDraft()) !== null}
         onSwitched={() => {
           void client.invalidateQueries({ queryKey: ["template-options", id] });
           void reload();

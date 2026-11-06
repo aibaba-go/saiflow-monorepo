@@ -24,6 +24,8 @@ interface Props {
   groups: Group[] | null;
   missing: Set<string>;
   onChange(next: Json): void;
+  /** The final result page: values as text, no add or remove. */
+  readOnly?: boolean;
 }
 
 function FieldInput({ name, path, type, required, props }: {
@@ -42,6 +44,11 @@ function FieldInput({ name, path, type, required, props }: {
         {name}
         {required && <span className="result__required"> *</span>}
       </span>
+      {props.readOnly ? (
+        <div className="result__value" aria-label={name}>
+          {asText(getAt(props.value, path)) || "—"}
+        </div>
+      ) : (
       <Input
         aria-label={name}
         aria-invalid={bad || undefined}
@@ -53,6 +60,7 @@ function FieldInput({ name, path, type, required, props }: {
           if (clean !== text) props.onChange(setAt(props.value, path, clean));
         }}
       />
+      )}
       {bad && <span className="field-error">{t("scan.required")}</span>}
     </div>
   );
@@ -84,19 +92,21 @@ function TableEditor({ title, path, columns, props }: {
               props={props}
             />
           ))}
-          <Button
+          {!props.readOnly && <Button
             size="mini"
             fill="none"
             aria-label={t("scan.removeRow", { n: index + 1 })}
             onClick={() => props.onChange(removeAt(props.value, [...path, index]))}
           >
             {t("scan.removeRow", { n: index + 1 })}
-          </Button>
+          </Button>}
         </div>
       ))}
-      <Button size="small" onClick={() => props.onChange(setAt(props.value, [...path, list.length], empty))}>
-        {t("scan.addRow")}
-      </Button>
+      {!props.readOnly && (
+        <Button size="small" onClick={() => props.onChange(setAt(props.value, [...path, list.length], empty))}>
+          {t("scan.addRow")}
+        </Button>
+      )}
     </div>
   );
 }
@@ -173,18 +183,18 @@ function GenericSection({ title, path, props }: { title: string | null; path: Pa
         return (
           <div key={key} className="result__generic">
             <FieldInput name={key} path={[...path, key]} props={props} />
-            <Button
+            {!props.readOnly && <Button
               size="mini"
               fill="none"
               aria-label={t("scan.removeField", { name: key })}
               onClick={() => props.onChange(removeAt(props.value, [...path, key]))}
             >
               {t("common.delete")}
-            </Button>
+            </Button>}
           </div>
         );
       })}
-      <AddField path={path} props={props} />
+      {!props.readOnly && <AddField path={path} props={props} />}
     </Card>
   );
 }

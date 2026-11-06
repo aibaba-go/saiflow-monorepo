@@ -287,6 +287,22 @@ export const en = {
   "err.result_confirmed": "This result is already confirmed.",
   "err.mapping_in_progress": "A template conversion is already running.",
   "err.mapping_limit": "No more template conversions are allowed for this document.",
+  "scan.finalTitle": "Final result",
+  "scan.confirmedNote": "This result is confirmed.",
+  "scan.exportExcel": "Export Excel",
+  "history.filter.all": "All",
+  "history.stage.OCR_PROCESSING": "Recognising",
+  "history.stage.OCR_FAILED": "Failed",
+  "history.stage.TEMPLATE_MATCHING": "Matching",
+  "history.stage.VERIFYING": "To verify",
+  "history.stage.CONFIRMED": "Confirmed",
+  "history.noTemplate": "No template",
+  "history.empty": "No documents yet.",
+  "history.end": "That's all.",
+  "err.required_missing": "Please fill in the required fields.",
+  "err.result_not_confirmed": "Confirm the result before exporting.",
+  "err.download_ticket_unavailable": "Download from LINE is not available right now.",
+  "history.more": "Load more",
 } as const;
 
 export type MessageKey = keyof typeof en;

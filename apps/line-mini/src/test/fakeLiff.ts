@@ -15,6 +15,7 @@ export type FakeLiff = Liff & {
   login: ReturnType<typeof vi.fn>;
   logout: ReturnType<typeof vi.fn>;
   shareTargetPicker: ReturnType<typeof vi.fn>;
+  openWindow: ReturnType<typeof vi.fn>;
 };
 
 export function fakeLiff(options: FakeLiffOptions = {}): FakeLiff {
@@ -36,5 +37,6 @@ export function fakeLiff(options: FakeLiffOptions = {}): FakeLiff {
     getIDToken: () => (state.loggedIn ? (options.idToken ?? "id-token") : null),
     isApiAvailable: (api: string) => api === "shareTargetPicker" && (options.share ?? true),
     shareTargetPicker: vi.fn(() => Promise.resolve({ status: "success" })),
+    openWindow: vi.fn(),
   } as FakeLiff;
 }
