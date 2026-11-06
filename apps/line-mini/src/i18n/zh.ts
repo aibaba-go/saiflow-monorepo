@@ -493,4 +493,7 @@ export const zh: Record<MessageKey, string> = {
   "viewer.reset": "还原",
   "viewer.zoomIn": "放大",
   "viewer.zoomOut": "缩小",
+  "err.import_address_not_allowed": "不允许该地址，请使用公开链接。",
+  "err.import_fetch_failed": "无法从该链接下载文件。",
+  "err.import_invalid_url": "请输入 http 或 https 的文件链接。",
 };

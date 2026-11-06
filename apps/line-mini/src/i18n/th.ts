@@ -493,4 +493,7 @@ export const th: Record<MessageKey, string> = {
   "viewer.reset": "รีเซ็ตการซูม",
   "viewer.zoomIn": "ซูมเข้า",
   "viewer.zoomOut": "ซูมออก",
+  "err.import_address_not_allowed": "ไม่อนุญาตที่อยู่นี้ กรุณาใช้ลิงก์สาธารณะ",
+  "err.import_fetch_failed": "ไม่สามารถดาวน์โหลดไฟล์จากลิงก์นี้",
+  "err.import_invalid_url": "กรุณาใส่ลิงก์ http หรือ https ของไฟล์",
 };

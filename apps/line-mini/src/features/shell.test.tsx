@@ -51,12 +51,11 @@ describe("shell (FR-SYS-056)", () => {
     expect(screen.queryByText("Coming soon")).toBeNull();
   });
 
-  it("home shows the usage card (053-01)", async () => {
+  it("home shows the usage in main's quota banner (053-01)", async () => {
     boot(USER);
-    expect(await screen.findByText("4,880 / 5,000")).toBeInTheDocument();
-    expect(screen.getByText(/Starter/)).toBeInTheDocument();
-    expect(screen.getByText(/2026-12-10/)).toBeInTheDocument();
-    expect(screen.getByText(/40/)).toBeInTheDocument();
+    expect(await screen.findByText("Starter · 4,880 / 5,000 pages left this month")).toBeInTheDocument();
+    expect(screen.getByText(/Valid until 2026-12-10/)).toBeInTheDocument();
+    expect(screen.getAllByText(/40/).length).toBeGreaterThan(0); // free scans
   });
 
   it("guest My: identity, language, login; no notifications entry (054-04)", async () => {

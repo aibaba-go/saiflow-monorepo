@@ -491,6 +491,9 @@ export const en = {
   "viewer.reset": "Reset zoom",
   "viewer.zoomIn": "Zoom in",
   "viewer.zoomOut": "Zoom out",
+  "err.import_address_not_allowed": "This address is not allowed. Use a public link.",
+  "err.import_fetch_failed": "Could not download the file from this link.",
+  "err.import_invalid_url": "Enter an http or https link to a file.",
 } as const;
 
 export type MessageKey = keyof typeof en;

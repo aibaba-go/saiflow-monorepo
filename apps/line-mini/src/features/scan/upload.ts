@@ -22,12 +22,17 @@ export function localCheck(file: File): "unsupported_format" | "file_too_large" 
 /** Create the upload, send the bytes, complete it (FR-UPLOAD-003). Any failure deletes the
  * half-created upload, best effort, so a failed file never stays in Pending (main
  * ScanHomePage). onProgress gets 0–100 per step: there are no byte events with fetch. */
-export async function uploadFile(file: File, onProgress: (percent: number) => void): Promise<FileOut> {
+export async function uploadFile(
+  file: File,
+  onProgress: (percent: number) => void,
+  { signal }: { signal?: AbortSignal } = {},
+): Promise<FileOut> {
   const local = localCheck(file);
   if (local) throw new ApiError(400, local, ["file"]);
   onProgress(5);
-  const created = await call(api.POST("/api/v1/uploads", { body: { file_name: file.name } }));
+  const created = await call(api.POST("/api/v1/uploads", { body: { file_name: file.name }, signal }));
   try {
+    if (signal?.aborted) throw new ApiError(0, "cancelled", []);
     onProgress(15);
     const bytes = new Uint8Array(await file.arrayBuffer());
     await call(
@@ -36,15 +41,21 @@ export async function uploadFile(file: File, onProgress: (percent: number) => vo
         body: bytes as never,
         bodySerializer: (b: unknown) => b as BodyInit,
         headers: { "Content-Type": file.type || "application/octet-stream" },
+        signal,
       }),
     );
+    if (signal?.aborted) throw new ApiError(0, "cancelled", []);
     onProgress(85);
     const ready = await call(
-      api.POST("/api/v1/uploads/{upload_id}/complete", { params: { path: { upload_id: created.id } } }),
+      api.POST("/api/v1/uploads/{upload_id}/complete", {
+        params: { path: { upload_id: created.id } },
+        signal,
+      }),
     );
     onProgress(100);
     return ready;
   } catch (error) {
+    // Failed or cancelled: the half-made upload goes, so it never shows in Pending.
     void call(api.DELETE("/api/v1/files/{file_id}", { params: { path: { file_id: created.id } } })).catch(
       () => undefined,
     );

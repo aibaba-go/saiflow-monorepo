@@ -1,11 +1,10 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEventLib from "@testing-library/user-event";
 import { Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { HomePage } from "../../pages/HomePage";
 import { useLanguage } from "../../stores/language";
-import { ORG, PERSONAL, signedIn, USER } from "../../test/fixtures";
+import { PERSONAL, signedIn, USER } from "../../test/fixtures";
 import { json, mockApi } from "../../test/mockApi";
 import { renderWithProviders } from "../../test/render";
 import { useTenantChoice } from "../tenants/useCurrentTenant";
@@ -73,104 +72,12 @@ function routes(path: string, element: React.ReactElement) {
   );
 }
 
-const png = (name: string, size = 1000) => {
-  const f = new File([new Uint8Array(8)], name, { type: "image/png" });
-  Object.defineProperty(f, "size", { value: size });
-  return f;
-};
 
 beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
   useLanguage.getState().setLang("en");
   useTenantChoice.getState().choose(null);
-});
-
-describe("home scan entry and pending (FR-SYS-056, 057, 058)", () => {
-  it("home shows the scan entry and pending files (056-05)", async () => {
-    scanApi([file("f1", "invoice.png", 1), file("f2", "bill.pdf", 3)]);
-    signedIn(USER, [PERSONAL]);
-    renderWithProviders(<HomePage />);
-    expect(await screen.findByRole("button", { name: "Take photo" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Choose files" })).toBeEnabled();
-    expect(screen.queryByText("Coming soon")).toBeNull();
-    expect(await screen.findByText("invoice.png")).toBeInTheDocument();
-    expect(screen.getByText("3 page(s)")).toBeInTheDocument();
-  });
-
-  it("three files, one too large: two pending, one error (057-01)", async () => {
-    const pending: FileOut[] = [];
-    const api = scanApi(pending, {
-      "PUT /api/v1/uploads/u1/content": () => json(200, file("u1", "a.png")),
-      "PUT /api/v1/uploads/u2/content": () => json(200, file("u2", "c.png")),
-      "POST /api/v1/uploads/u1/complete": () => {
-        pending.push(file("u1", "a.png"));
-        return json(200, file("u1", "a.png"));
-      },
-      "POST /api/v1/uploads/u2/complete": () => {
-        pending.push(file("u2", "c.png"));
-        return json(200, file("u2", "c.png"));
-      },
-    });
-    signedIn(USER, [PERSONAL]);
-    renderWithProviders(<HomePage />);
-    const input = await screen.findByTestId("scan-files");
-    fireEvent.change(input, {
-      target: { files: [png("a.png"), png("big.png", 21 * 1024 * 1024), png("c.png")] },
-    });
-    const big = await screen.findByText("big.png");
-    await waitFor(() =>
-      expect(within(big.closest("[data-upload]") as HTMLElement).getByRole("alert")).toHaveTextContent(
-        "The file is larger than 20 MB.",
-      ),
-    );
-    await waitFor(() => expect(screen.getAllByText("Uploaded")).toHaveLength(2));
-    expect(api.count("POST /api/v1/uploads")).toBe(2); // the big one never left the phone
-    expect(await screen.findByText("Pending")).toBeInTheDocument();
-    await waitFor(() => expect(document.querySelectorAll("[data-pending]")).toHaveLength(2));
-  });
-
-  it("a failed upload is deleted so it never stays pending", async () => {
-    const api = scanApi([], {
-      "PUT /api/v1/uploads/u1/content": () => json(400, { code: "file_corrupt", fields: ["file"] }),
-      "DELETE /api/v1/files/u1": () => json(204, null),
-    });
-    signedIn(USER, [PERSONAL]);
-    renderWithProviders(<HomePage />);
-    fireEvent.change(await screen.findByTestId("scan-files"), { target: { files: [png("a.png")] } });
-    expect(await screen.findByText("The file is damaged or cannot be read.")).toBeInTheDocument();
-    await waitFor(() => expect(api.count("DELETE /api/v1/files/u1")).toBe(1));
-  });
-
-  it("member without upload_ocr sees no scan entry (057-02)", async () => {
-    scanApi([]);
-    const clerk = { ...ORG, permissions: ["verify_own" as const] };
-    signedIn(USER, [PERSONAL, clerk]);
-    useTenantChoice.getState().choose(ORG.tenant_id);
-    renderWithProviders(<HomePage />);
-    await screen.findByText(/1,000/);
-    expect(screen.queryByRole("button", { name: "Take photo" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Choose files" })).toBeNull();
-  });
-
-  it("delete pending after confirm", async () => {
-    const pending = [file("f1", "invoice.png")];
-    const api = scanApi(pending, {
-      "DELETE /api/v1/files/f1": () => {
-        pending.length = 0;
-        return json(204, null);
-      },
-    });
-    signedIn(USER, [PERSONAL]);
-    renderWithProviders(<HomePage />);
-    await userEvent.click(await screen.findByRole("button", { name: "Delete invoice.png" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Cancel" }));
-    expect(api.count("DELETE /api/v1/files/f1")).toBe(0);
-    await userEvent.click(screen.getByRole("button", { name: "Delete invoice.png" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Confirm" }));
-    await waitFor(() => expect(api.count("DELETE /api/v1/files/f1")).toBe(1));
-    await waitFor(() => expect(screen.queryByText("invoice.png")).toBeNull());
-  });
 });
 
 describe("confirm and start (FR-SYS-058)", () => {

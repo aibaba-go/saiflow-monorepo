@@ -1,26 +1,11 @@
 import { ComingSoon } from "../components/ComingSoon";
-import { UsageCard } from "../features/billing/UsageCard";
-import { TenantSwitcher } from "../features/tenants/TenantSwitcher";
-import { BellBadge } from "../features/notifications/BellBadge";
-import { PendingList } from "../features/scan/PendingList";
-import { ScanEntry } from "../features/scan/ScanEntry";
+import { ScanHomePage } from "../features/scan/ScanHomePage";
 import { useT } from "../i18n";
 
-/** Home: usage, the scan entry and the user's pending originals (FR-SYS-056, 057, 058). */
+/** Home is main's scan home (FR-SYS-056, 057, 058, 109–111): plan banner, scan entry,
+ * upload batch, Pending and recent tasks. */
 export function HomePage() {
-  const t = useT();
-  return (
-    <div className="page">
-      <div className="page__header">
-        <h1 className="page__title">{t("nav.home")}</h1>
-        <BellBadge />
-      </div>
-      <TenantSwitcher />
-      <UsageCard />
-      <ScanEntry />
-      <PendingList />
-    </div>
-  );
+  return <ScanHomePage />;
 }
 
 export function ReportPage() {
