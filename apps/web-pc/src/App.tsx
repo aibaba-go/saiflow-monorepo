@@ -10,13 +10,16 @@ import { RequireUser } from "./auth/RequireUser";
 import { forgetSession, useSessionNotice } from "./auth/session";
 import { useT, type MessageKey } from "./i18n";
 import { AppLayout } from "./layout/AppLayout";
+import { ApplyOrgPage } from "./pages/ApplyOrgPage";
 import { DataBrowsePage } from "./pages/DataBrowsePage";
 import { HealthPage } from "./pages/HealthPage";
 import { HomePage } from "./pages/HomePage";
 import { OrgGate } from "./pages/OrgGate";
+import { OrgPage } from "./pages/OrgPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterGuidePage } from "./pages/RegisterGuidePage";
+import { RolesPage } from "./pages/RolesPage";
 import { setUnauthenticatedHandler } from "./services/api";
 import { useLanguage } from "./stores/language";
 
@@ -64,8 +67,9 @@ export function AppRoutes() {
           <Route element={<RequireUser />}>
             <Route element={<AppLayout />}>
               <Route path="/" element={<HomePage />} />
-              <Route path="/org" element={<OrgGate><Placeholder name="org" title="nav.org" /></OrgGate>} />
-              <Route path="/roles" element={<OrgGate><Placeholder name="roles" title="nav.roles" /></OrgGate>} />
+              <Route path="/org" element={<OrgGate><OrgPage /></OrgGate>} />
+              <Route path="/org/apply" element={<ApplyOrgPage />} />
+              <Route path="/roles" element={<OrgGate><RolesPage /></OrgGate>} />
               <Route path="/plans" element={<Placeholder name="plans" title="nav.plans" />} />
               <Route path="/notifications" element={<Placeholder name="notifications" title="nav.notifications" />} />
               <Route path="/profile" element={<ProfilePage />} />

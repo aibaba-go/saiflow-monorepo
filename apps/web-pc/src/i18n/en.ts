@@ -241,6 +241,22 @@ export const en = {
   "profile.lineLinked": "Linked",
   "profile.edit": "Edit profile",
   "profile.saved": "Saved.",
+  "org.submitted": "Application submitted. We will review it soon.",
+  "org.myApplications": "My applications",
+  "org.profile": "Organization profile",
+  "org.members": "Members",
+  "org.createHint": "Create an organization",
+  "member.name": "Name",
+  "member.role": "Role",
+  "member.joinedAt": "Joined",
+  "common.actions": "Actions",
+  "invite.pending": "Pending invitations",
+  "invite.none": "No pending invitations.",
+  "invite.dialogTitle": "Invitation link",
+  "invite.scan": "Or scan with LINE on a phone",
+  "invite.copyFailed": "Could not copy. Select the link and copy it yourself.",
+  "owner.pick": "New owner",
+  "verify.status": "Status",
 } as const;
 
 export type MessageKey = keyof typeof en;
