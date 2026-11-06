@@ -234,3 +234,40 @@ body {
   padding: 60px 12px;
   color: #888;
 }
+
+.result__field {
+  display: block;
+  padding: 6px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+.result__field--missing {
+  border-bottom-color: #d4380d;
+  background: #fff2f0;
+}
+.result__required {
+  color: #d4380d;
+}
+.result__row {
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+}
+.result__generic {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+.result__generic > .result__field {
+  flex: 1;
+}
+.result__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.picker__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
