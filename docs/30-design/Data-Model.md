@@ -3,8 +3,8 @@ doc_id: DES-002
 title: "SaiFlow — 数据模型"
 type: data-model
 status: active
-version: 2.11.0
-updated: 2026-11-06
+version: 2.12.0
+updated: 2026-11-07
 owner: Product Engineering
 source: "PRD-001 v3.3 §3, §4, §4.9; ADR-008"
 related: [ADR-008, DM-FormDocument, DM-ExtractionPayload, DM-OcrJob, DM-DocumentTemplate, DM-Tenant, DM-Subscription]
@@ -80,6 +80,7 @@ erDiagram
 - 登录会话、邮箱验证码等短期技术数据不作为实体登记，设计见 B-2a 的 `openspec/changes/archive/2026-11-03-rebuild-identity/plan.md`。
 - **`ocr-ui-parity`：** `DM-DocumentTemplate` 的字段与明细列可带“角色”（数量、单价、行金额、合计、税额等），供金额校验使用（迁移 0011 为两个系统模板写入新版本）；`DM-TemplateMapping` 保存每个模板的匹配度，自动匹配低于 70% 时记为“没有合适的模板”，结果按自由格式显示；按链接导入的文件与上传的文件同为 `DM-File`。
 - **B-3 已实现（`ocr-scan-flow`）：** `DM-File`（上传的原件，24 小时内未完成的上传自动清理；同一文件同时只能有一个识别任务）、`DM-OcrJob`（状态与阶段：识别中、识别失败、模板匹配中、待核验、已确认）、`DM-ExtractionPayload`（原始识别载荷只可追加，应用账号不能修改或删除）、`DM-DocumentTemplate` 及其版本（两份系统模板 Tax Invoice 与 Billing Note 由迁移写入，字段名带英、泰、中三种语言）、`DM-TemplateMapping`、`DM-Export`、`DM-OcrEngineHealth`。`DM-FormDocument` 在 B-3 只实现结果版本（每次保存一个版本，确认后不可再改）；核验修改记录与复核随 B-4。原件、页面预览与导出文件存在私有 GCS 桶，由后端代为读取。
+- **B-4 已实现（`review-flow`）：** 识别任务的复核状态增加待一级复核、待二级复核，“已确认”即正式业务数据（记录成为正式业务数据的时间）；`DM-ReviewPolicy` → 复核层级（组织 × 模板，“通用结果”单独一条，未设置为 0）与组织的“邮件通知复核人”开关；`DM-ReviewRecord` → 复核轮次（每次需要复核的确认一轮，记录层级、确认人、当前级别与一级复核人）与复核记录（每次通过或退回一条，不可修改）；`DM-ChangeLog` → 修改记录（每次保存一行，全部字段改动以 jsonb 保存；更换模板一行）；新增复核通知记录（每位收件人一条，记录邮件是否发送成功）。删除任务结果时，修改记录、复核轮次与复核记录一并删除。
 - **B-5b 已实现（`web-admin-console`）：** `DM-SystemSetting` 增加 OCR 与大模型配置七项（首选引擎、备用引擎、单据重试次数、全局切换阈值、首选引擎试探间隔、大模型地址、模型名称），由迁移写入默认值，B-3 读取；修改时每项写一条操作日志；四项密钥（TextIn 两项、Google Cloud Vision、大模型）不入库，只在服务器环境变量文件中。
 - **B-2d 已实现（`rebuild-notifications`）：** `DM-Notification` 与 `DM-PlanReminder`；提醒由独立的提醒进程定时产生，不写操作日志；两者都不随游客数据归集（游客不收提醒）。
 - **B-2c 已实现（`rebuild-plans-metering`）：** `DM-Plan`、`DM-Subscription`（保留历史）、`DM-FreeQuota`、续费与开通申请；扫描次数的预占记录（所属租户、关联识别、次数、来自免费额度与月配额的拆分、预占与退还时间）按记录逐笔计算用量，不另记操作日志；这些记录都不随游客数据归集。`DM-PlanReminder` 随 B-2d（见上）。
@@ -99,7 +100,8 @@ erDiagram
 | `DM-ConversionJob` | 取消（不再有关系投影）；处理状态见 `DM-OcrJob` |
 | `DM-TemplateFieldMapping` | 取消（JSONPath 映射由大模型结构化转换取代） |
 | `DM-ExtractedField`、`DM-LineItem`、`DM-ResultVersion`、`DM-ChangeLog`、`DM-ReviewRecord` | 并入 `DM-FormDocument` |
-| `DM-ReviewPolicy`、`DM-Settings` | `DM-SystemSetting`（复核配置的具体形式在 B-4 确定） |
+| `DM-ReviewPolicy` | 复核层级（B-4，`review-flow`） |
+| `DM-Settings` | `DM-SystemSetting` |
 | `DM-ArchiveRecord`、`DM-ExportJob` | `DM-File` + `DM-StoredObject`（导出文件） |
 | `DM-User`、`DM-Role`、`DM-OperationLog`、`DM-DocumentTemplate` | 保留 |
 
@@ -141,6 +143,7 @@ erDiagram
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.12.0 | 2026-11-07 | Product Engineering | `review-flow`：复核层级、复核轮次与记录、修改记录（jsonb）、复核通知记录；识别任务的复核状态与正式业务数据时间 |
 | 2.11.0 | 2026-11-06 | Product Engineering | `ocr-ui-parity`：模板字段角色（金额校验）、匹配度与“没有合适的模板”、按链接导入 |
 | 2.10.0 | 2026-11-06 | Product Engineering | 按 B-3：新增 `DM-TemplateMapping`、`DM-Export`、`DM-OcrEngineHealth`；记录 B-3 已实现的范围（文件、识别任务、原始载荷、模板、结果版本） |
 | 2.9.0 | 2026-11-06 | Product Engineering | 按 B-5b：`DM-SystemSetting` 的 OCR 与大模型配置七项；密钥只在服务器环境变量文件中 |

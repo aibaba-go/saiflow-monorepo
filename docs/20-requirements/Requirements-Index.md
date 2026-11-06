@@ -3,8 +3,8 @@ doc_id: REQ-INDEX
 title: "SaiFlow — 需求索引与可追溯性矩阵"
 type: index
 status: active
-version: 1.12.0
-updated: 2026-11-06
+version: 1.13.0
+updated: 2026-11-07
 owner: Product Engineering
 ---
 
@@ -76,13 +76,14 @@ owner: Product Engineering
 | FR-VERIFY-004 | 错误红色标记 | P0 | §4.3 | OCR-015 | AC-FR-VERIFY-004-01 | API-4 | active |
 | FR-VERIFY-005 | 缺失字段提醒 | P0 | §4.3 | VERIFY-001 | AC-FR-VERIFY-005-01 | API-4 | active |
 | FR-VERIFY-006 | 确认后锁定 | P0 | EPIC-03（已迁移，`ocr-scan-flow`） | — | `openspec/specs/results/spec.md` | `openspec/specs/results/spec.md` | active |
-| FR-VERIFY-007 | 变更日志 | P0 | §4.3 | VERIFY-002 | AC-FR-VERIFY-007-01 | DM-ChangeLog | active |
+| FR-VERIFY-007 | 修改记录 | P0 | EPIC-03（已迁移，`review-flow`） | — | `openspec/specs/results/spec.md` | `openspec/specs/results/spec.md` | active |
 | FR-VERIFY-008 | 边界框高亮 | P1 | §4.3 | VERIFY-001 | AC-FR-VERIFY-008-01 | API-4 | active |
 | FR-VERIFY-009 | 确认门控 | P0 | EPIC-03（已迁移，`ocr-scan-flow`） | — | `openspec/specs/results/spec.md` | `openspec/specs/results/spec.md` | active |
-| FR-VERIFY-010 | 配置 0/1/2 级复核 | P0 | §3.1/§4.3 | SYS-002 | AC-FR-VERIFY-010-01 | DM-ReviewPolicy | active |
-| FR-VERIFY-011 | 创建待复核记录 | P0 | §3.1 | VERIFY-006/010 | AC-FR-VERIFY-011-01 | DM-ReviewRecord | active |
-| FR-VERIFY-012 | 最终复核门控业务录入 | P0 | §3.1/§4.3 | VERIFY-011 | AC-FR-VERIFY-012-01/02 | DM-Document | active |
-| FR-VERIFY-013 | 复核日志 | P0 | §3.1 | VERIFY-011 | AC-FR-VERIFY-013-01 | DM-ReviewRecord | active |
+| FR-VERIFY-010 | 复核层级设置 | P0 | EPIC-03（已迁移，`review-flow`） | — | `openspec/specs/reviews/spec.md` | `openspec/specs/reviews/spec.md` | active |
+| FR-VERIFY-011 | 确认后进入复核 | P0 | EPIC-03（已迁移，`review-flow`） | — | `openspec/specs/reviews/spec.md` | `openspec/specs/reviews/spec.md` | active |
+| FR-VERIFY-012 | 复核通过 | P0 | EPIC-03（已迁移，`review-flow`） | — | `openspec/specs/reviews/spec.md` | `openspec/specs/reviews/spec.md` | active |
+| FR-VERIFY-013 | 退回与复核记录 | P0 | EPIC-03（已迁移，`review-flow`） | — | `openspec/specs/reviews/spec.md` | `openspec/specs/reviews/spec.md` | active |
+| FR-VERIFY-019 | 复核队列与查看 | P0 | `review-flow`（2026-11-07） | — | `openspec/specs/reviews/spec.md` | `openspec/specs/reviews/spec.md` | active |
 | FR-VERIFY-014 | 原图置顶与全屏触控缩放（上传确认页、结果页、最终结果页、公司证书） | P0 | 界面调整 2026-10-17/19 | VERIFY-001 | AC-FR-VERIFY-014-01/02 | OriginalPreview、ImageViewer | active |
 | FR-VERIFY-015 | 结构化结果的版本化修改 | P0 | EPIC-03（已迁移，`ocr-scan-flow`） | — | `openspec/specs/results/spec.md` | `openspec/specs/results/spec.md` | active |
 | FR-VERIFY-016 | LINE 确认前认证与工作空间订阅检查；已注册付费用户显式确认后进入最终页，恢复未完成任务返回结果页 | P0 | 界面调整 2026-10-17/18 | VERIFY-006/SYS-011/SYS-012 | AC-FR-VERIFY-016-01/02 | DM-ResultVersion | active |
@@ -213,6 +214,14 @@ owner: Product Engineering
 | FR-SYS-116 | 识别进度与最终结果的补充 | P0 | `ocr-ui-parity`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
 | FR-SYS-117 | 历史搜索 | P0 | `ocr-ui-parity`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
 | FR-SYS-118 | 界面与 main 一致 | P0 | `ocr-ui-parity`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-119 | 首页的待复核入口 | P0 | `review-flow`（2026-11-07） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-120 | 复核队列与复核详情 | P0 | `review-flow`（2026-11-07） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-121 | 复核设置 | P0 | `review-flow`（2026-11-07） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-122 | 修改记录 | P0 | `review-flow`（2026-11-07） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-123 | 复核队列 | P0 | `review-flow`（2026-11-07） | — | `openspec/specs/web-pc/spec.md` | `openspec/specs/web-pc/spec.md` | active |
+| FR-SYS-124 | 复核详情 | P0 | `review-flow`（2026-11-07） | — | `openspec/specs/web-pc/spec.md` | `openspec/specs/web-pc/spec.md` | active |
+| FR-SYS-125 | 复核设置 | P0 | `review-flow`（2026-11-07） | — | `openspec/specs/web-pc/spec.md` | `openspec/specs/web-pc/spec.md` | active |
+| FR-SYS-126 | 待复核通知 | P0 | `review-flow`（2026-11-07） | — | `openspec/specs/notifications/spec.md` | `openspec/specs/notifications/spec.md` | active |
 | FR-REPORT-001 | 管理层访问运营报表 | P1 | §3.1/§4.7 | SYS-002 | AC-FR-REPORT-001-01 | API-9（待设计） | in-review |
 | FR-REPORT-002 | 展示已配置运营指标 | P1 | §1.2/§4.7 | REPORT-001/OQ-5 | AC-FR-REPORT-002-01 | DM-ReportDefinition（待设计） | in-review |
 | FR-REPORT-003 | 报表授权范围限制 | P1 | §4.7 | SYS-002 | AC-FR-REPORT-003-01 | API-9（待设计） | in-review |
@@ -263,6 +272,7 @@ owner: Product Engineering
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.13.0 | 2026-11-07 | Product Engineering | `review-flow`：FR-VERIFY-007、010～013 迁入 `openspec/specs/reviews` 与 `results`；新增 FR-VERIFY-019、FR-SYS-119…126 |
 | 1.12.0 | 2026-11-06 | Product Engineering | `ocr-ui-parity`：新增 FR-UPLOAD-014、FR-OCR-024、FR-SYS-109…118；FR-OCR-013、016 迁入 `openspec/specs/recognition` |
 | 1.11.0 | 2026-11-06 | Product Engineering | B-3（`ocr-scan-flow`）：上传、识别、模板匹配与转换、结果、导出与小程序扫描页面的需求迁入 `openspec/specs/{documents,recognition,results,exports,line-mini}`；新增 FR-UPLOAD-013、FR-OCR-021…023、FR-SYS-057…059、FR-SYS-105…108 |
 | 1.10.0 | 2026-11-06 | Product Engineering | B-5c：新增 FR-SYS-090…104（web-pc 企业版） |

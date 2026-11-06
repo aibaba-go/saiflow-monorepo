@@ -3,8 +3,8 @@ doc_id: EPIC-04
 title: "EPIC-04 — 多渠道录入与归档"
 type: epic
 status: active
-version: 1.3.0
-updated: 2026-11-06
+version: 1.4.0
+updated: 2026-11-07
 owner: Product Engineering
 priority: P0
 source: "PRD-001 §4.4"
@@ -113,6 +113,7 @@ Feature: EPIC-04 录入与归档
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.4.0 | 2026-11-07 | Product Engineering | FR-ENTRY-015：待复核的单据不能导出，复核通过（或无需复核）后才能导出（变更 `review-flow`，见 `openspec/specs/exports/spec.md`） |
 | 1.3.0 | 2026-11-06 | Product Engineering | FR-ENTRY-015 迁移至 `openspec/specs/`（变更 `ocr-scan-flow`），本文件中对应条目只作参考 |
 | 1.2.2 | 2026-10-18 | Product Engineering | FR-ENTRY-015：XLSX 样式按产品样例 sample-format.xlsx 细化（标题合并、字体、对齐、列宽、行高） |
 | 1.2.1 | 2026-10-18 | Product Engineering | FR-ENTRY-015：XLSX 导出改为单工作表，版式与解析结果页一致；更新 AC-FR-ENTRY-015-01 |
