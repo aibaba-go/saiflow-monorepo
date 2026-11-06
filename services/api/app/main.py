@@ -31,6 +31,7 @@ from app.routers import (
     organizations,
     results,
     review_settings,
+    reviews,
     templates,
     uploads,
 )
@@ -113,6 +114,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(exports.router)
     app.include_router(imports.router)
     app.include_router(review_settings.router)
+    app.include_router(reviews.router)
     return app
 
 
