@@ -215,6 +215,8 @@ describe("review state on the result pages (FR-SYS-105-108)", () => {
     signedIn(USER, [PERSONAL]);
     pages("/history");
     await userEvent.click(await screen.findByRole("button", { name: "To review" }));
+    // the row says which level it waits for (AC-FR-SYS-108-03; final review Important 1)
+    expect(await screen.findByText("Waiting for level-1 review")).toBeInTheDocument();
     await userEvent.click(await screen.findByText("invoice.png"));
     await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/scan/jobs/j1/final"));
   });

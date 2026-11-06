@@ -199,3 +199,26 @@ async def test_notifications_api_lists_review_pending(
     items = [i for i in body["items"] if i["type"] == "review_pending"]
     assert len(items) == 1 and items[0]["data"]["job_id"] == job["id"]
     assert items[0]["tenant_id"] == org.tenant_id
+
+
+async def test_interrupted_sending_is_recorded_failed(
+    api, line, mail, store, sm, ai_settings, llm, db, db_engine
+):  # final review Important 2: a crash mid-pass must not leave notices in 'sending'
+    org, job = await _email_org(api, line, mail, store, sm, ai_settings, llm, db)
+    await db.execute(
+        text(
+            "update review_notices set email_status = 'sending', "
+            "email_at = now() - interval '1 hour' where job_id = :j"
+        ),
+        {"j": job["id"]},
+    )
+    await db.commit()
+    assert await review_notice_service.send_pending(create_sessionmaker(db_engine), mail) == 0
+    rows = (
+        await db.execute(
+            text("select email_status, email_error from review_notices where job_id = :j"),
+            {"j": job["id"]},
+        )
+    ).all()
+    assert {tuple(r) for r in rows} == {("failed", "interrupted")}
+    assert review_mails(mail) == []

@@ -247,7 +247,7 @@ export function ResultPage() {
         <>
           <div className={s.summary}>
             <div className={s.chips}>
-              {job.data && <StatusChip stage={job.data.stage} />}
+              {job.data && <StatusChip stage={job.data.stage} level={job.data.review_level} />}
               <span className={cx("review-chip", locked && "confirmed", !locked && data.version > 1 && "edited")}>
                 {t(reviewKey)}
               </span>

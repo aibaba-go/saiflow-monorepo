@@ -5,6 +5,7 @@ reminders loop (`send_pending`). A failed email is never retried. Notices are no
 to the operation log."""
 
 import logging
+from datetime import timedelta
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -89,22 +90,51 @@ async def notify(db: AsyncSession, job: OcrJob, rnd: ReviewRound, level: int) ->
     return len(users)
 
 
-async def send_pending(sessionmaker: async_sessionmaker, sender) -> int:
-    """Claim every pending email, attempt each once, record sent or failed. Returns how
-    many were attempted. Without a sender (no SMTP configured) they are recorded failed."""
+STALE_SENDING = timedelta(minutes=10)
+
+
+async def _claim_one(sessionmaker: async_sessionmaker) -> int | None:
+    """Mark the oldest pending notice 'sending' (with the claim time) and return it; one
+    at a time, so a crash leaves at most one notice claimed (final review Important 2)."""
     async with sessionmaker() as db:
-        claimed = list(
-            (
-                await db.execute(
-                    update(ReviewNotice)
-                    .where(ReviewNotice.email_status == "pending")
-                    .values(email_status="sending")
-                    .returning(ReviewNotice.id)
-                )
-            ).scalars()
+        pick = (
+            select(ReviewNotice.id)
+            .where(ReviewNotice.email_status == "pending")
+            .order_by(ReviewNotice.id)
+            .limit(1)
+            .with_for_update(skip_locked=True)
+            .scalar_subquery()
+        )
+        notice_id = (
+            await db.execute(
+                update(ReviewNotice)
+                .where(ReviewNotice.id == pick)
+                .values(email_status="sending", email_at=utcnow())
+                .returning(ReviewNotice.id)
+            )
+        ).scalar_one_or_none()
+        await db.commit()
+        return notice_id
+
+
+async def send_pending(sessionmaker: async_sessionmaker, sender) -> int:
+    """Attempt each pending email once and record sent or failed; returns how many were
+    attempted. Without a sender (no SMTP configured) they are recorded failed. A notice
+    left 'sending' by an interrupted pass is recorded failed ('interrupted'), never resent:
+    each email is attempted at most once (FR-SYS-126)."""
+    async with sessionmaker() as db:
+        await db.execute(
+            update(ReviewNotice)
+            .where(
+                ReviewNotice.email_status == "sending",
+                ReviewNotice.email_at < utcnow() - STALE_SENDING,
+            )
+            .values(email_status="failed", email_error="interrupted")
         )
         await db.commit()
-    for notice_id in claimed:
+    attempted = 0
+    while (notice_id := await _claim_one(sessionmaker)) is not None:
+        attempted += 1
         status, error = "sent", None
         try:
             if sender is None:
@@ -128,4 +158,4 @@ async def send_pending(sessionmaker: async_sessionmaker, sender) -> int:
                 .values(email_status=status, email_error=error, email_at=utcnow())
             )
             await db.commit()
-    return len(claimed)
+    return attempted

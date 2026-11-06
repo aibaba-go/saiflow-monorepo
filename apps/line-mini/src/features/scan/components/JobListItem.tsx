@@ -26,7 +26,7 @@ export function JobListItem({ job, onOpen }: { job: JobOut; onOpen(job: JobOut):
         </div>
         {job.template_name && <div className={s.template}>{job.template_name}</div>}
       </div>
-      <StatusChip stage={job.stage} />
+      <StatusChip stage={job.stage} level={job.review_level} />
     </button>
   );
 }

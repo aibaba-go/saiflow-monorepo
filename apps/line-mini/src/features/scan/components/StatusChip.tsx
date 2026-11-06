@@ -12,9 +12,15 @@ const TONE: Record<string, string | undefined> = {
   CONFIRMED: s.completed,
 };
 
-export function StatusChip({ stage }: { stage: string }) {
+/** A task waiting for review names its level: 待一级复核 / 待二级复核 (FR-VERIFY-017). */
+export function StatusChip({ stage, level }: { stage: string; level?: number | null }) {
   const t = useT();
-  const key = stage === "CONFIRMED" ? "job.review.CONFIRMED" : `job.stage.${stage}`;
+  const key =
+    stage === "CONFIRMED"
+      ? "job.review.CONFIRMED"
+      : stage === "PENDING_REVIEW" && (level === 1 || level === 2)
+        ? `review.pending${level}`
+        : `job.stage.${stage}`;
   return (
     <span className={[s.chip, TONE[stage]].filter(Boolean).join(" ")}>
       {isMessageKey(key) ? t(key) : stage}
