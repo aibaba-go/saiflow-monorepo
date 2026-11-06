@@ -87,7 +87,7 @@ describe("confirm (FR-SYS-106)", () => {
     const no = await screen.findByRole("textbox", { name: "Tax Invoice No." });
     await userEvent.clear(no);
     await userEvent.type(no, "IV9");
-    await userEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
     await waitFor(() => expect(liff.login).toHaveBeenCalled()); // sent to LINE login
     const [draft] = (await api.bodies(`PATCH ${JOB}/result`)) as { confirm: boolean; structured: { document: { invoice_no: string } } }[];
     expect(draft!.confirm).toBe(false); // the edit was saved before leaving
@@ -111,10 +111,10 @@ describe("confirm (FR-SYS-106)", () => {
     });
     signedIn(USER, [PERSONAL]);
     pages("/scan/jobs/j1/result");
-    await userEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Continue" }));
     await waitFor(() => {
       const date = document.querySelector('[data-path="document.invoice_date"]') as HTMLElement;
-      expect(date.className).toContain("result__field--missing");
+      expect(date.className).toContain("required-missing");
     });
     await waitFor(() => expect(scroll).toHaveBeenCalled());
     expect(scroll.mock.contexts[0]).toBe(document.querySelector('[data-path="document.invoice_date"]'));
@@ -129,7 +129,7 @@ describe("confirm (FR-SYS-106)", () => {
     });
     signedIn(USER, [PERSONAL]);
     pages("/scan/jobs/j1/result");
-    await userEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Continue" }));
     await userEvent.click(await screen.findByRole("button", { name: "Open Plans" }));
     expect(await screen.findByText("plans page")).toBeInTheDocument();
   });

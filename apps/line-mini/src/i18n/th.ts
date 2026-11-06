@@ -496,4 +496,12 @@ export const th: Record<MessageKey, string> = {
   "err.import_address_not_allowed": "ไม่อนุญาตที่อยู่นี้ กรุณาใช้ลิงก์สาธารณะ",
   "err.import_fetch_failed": "ไม่สามารถดาวน์โหลดไฟล์จากลิงก์นี้",
   "err.import_invalid_url": "กรุณาใส่ลิงก์ http หรือ https ของไฟล์",
+  "result.amountIssues": "มี {n} ยอดเงินที่ไม่ตรงกัน กรุณาตรวจสอบ",
+  "result.computed": "คำนวณได้: {value}",
+  "result.copied": "คัดลอกแล้ว",
+  "result.copyFailed": "คัดลอกไม่สำเร็จ",
+  "result.copyJson": "คัดลอก",
+  "result.saveDraft": "บันทึกฉบับร่าง",
+  "result.tabJson": "JSON",
+  "result.tabTable": "ตาราง",
 };

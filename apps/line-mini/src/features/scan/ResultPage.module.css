@@ -1,0 +1,273 @@
+/* main views/ResultPage.vue <style scoped>, copied verbatim (FR-SYS-118). */
+.template-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.template-select:disabled { opacity: .7; }
+.template-caption { color: var(--primary); font-weight: 700; flex-shrink: 0; }
+.template-notice { margin: 0; padding: 10px 12px; border-radius: 10px; font-size: 11px; line-height: 1.6; background: #fff5db; color: #80601b; }
+.template-notice.danger { background: #fdeaea; color: var(--danger); }
+.template-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+.template-actions button { color: var(--primary); font-size: 11px; font-weight: 700; }
+.data-area { position: relative; }
+.mapping-mask { position: absolute; inset: 0; z-index: 2; padding: 24px 12px; background: rgba(245,247,250,.92); border: 1px solid var(--border); border-radius: 14px; display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 12px; text-align: center; }
+.template-option { display: block; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+.template-option label { display: flex; align-items: flex-start; gap: 8px; }
+.template-option input { flex-shrink: 0; accent-color: var(--primary); }
+.template-option small { display: inline-block; margin: 3px 4px 0 0; color: var(--primary); font-size: 10px; }
+.template-option details { margin: 8px 0 0 24px; font-size: 11px; }
+.template-option summary { cursor: pointer; color: var(--primary); }
+.template-preview { padding: 8px 0; line-height: 1.6; overflow-wrap: anywhere; }
+.template-preview small { display: block; color: var(--text-secondary); }
+.template-toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); z-index: 60; width: max-content; max-width: calc(100% - 40px); border-radius: 12px; padding: 12px 18px; background: #29344b; color: white; font-size: 12px; }
+.result {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.fatal {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+}
+
+.failure {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+}
+
+.failure-badge {
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  background: #fdeaea;
+  color: var(--danger);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.failure h2 {
+  margin: 2px 0 0;
+  font-size: 16px;
+}
+
+.failure-file {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+.failure-reason {
+  margin: 4px 0 10px;
+  max-width: 320px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--danger);
+}
+
+.failure .primary-btn,
+.failure .home-btn {
+  width: 100%;
+  max-width: 320px;
+}
+
+.failure .home-btn {
+  height: 44px;
+}
+
+.summary {
+  padding: 2px 20px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chips {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.review-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--track);
+  color: var(--icon);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.review-chip.confirmed {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.review-chip.edited {
+  background: var(--processing-bg);
+  color: var(--processing);
+}
+
+.content {
+  flex: 1;
+  padding: 0 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.edit-hint {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  padding: 0 2px;
+}
+
+.action-bar {
+  position: sticky;
+  bottom: 0;
+  background: linear-gradient(180deg, rgba(245, 247, 250, 0) 0%, var(--bg) 28%);
+  padding: 12px 20px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.guest-hint {
+  margin: 0;
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--processing);
+  font-weight: 600;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.action-buttons .primary-btn,
+.action-buttons .reset-btn {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.reset-btn {
+  height: 53px;
+  border: 0;
+  /* 用内阴影画边框，避免 border 宽度让两个等宽按钮出现 1px 偏差 */
+  box-shadow: inset 0 0 0 1px var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.reset-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.primary-btn {
+  height: 53px;
+  border-radius: 14px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.primary-btn:disabled {
+  opacity: 0.6;
+}
+
+.status-error {
+  margin: 0;
+  padding: 4px 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--danger);
+}
+
+.home-btn {
+  height: 44px;
+  padding: 0 24px;
+  border-radius: 12px;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* ours: Table / JSON switch (FR-SYS-114) and the amount-issue line */
+.view-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.view-tab {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--icon);
+  background: var(--card);
+  border: 1px solid var(--border) !important;
+}
+
+.view-tab.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary) !important;
+}
+
+.json-view {
+  margin: 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.copy-btn {
+  align-self: flex-end;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary);
+}

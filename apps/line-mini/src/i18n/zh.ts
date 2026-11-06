@@ -496,4 +496,12 @@ export const zh: Record<MessageKey, string> = {
   "err.import_address_not_allowed": "不允许该地址，请使用公开链接。",
   "err.import_fetch_failed": "无法从该链接下载文件。",
   "err.import_invalid_url": "请输入 http 或 https 的文件链接。",
+  "result.amountIssues": "有 {n} 处金额对不上，请核对。",
+  "result.computed": "计算值：{value}",
+  "result.copied": "已复制",
+  "result.copyFailed": "复制失败",
+  "result.copyJson": "复制",
+  "result.saveDraft": "保存草稿",
+  "result.tabJson": "JSON",
+  "result.tabTable": "表格",
 };

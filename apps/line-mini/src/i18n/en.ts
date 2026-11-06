@@ -494,6 +494,14 @@ export const en = {
   "err.import_address_not_allowed": "This address is not allowed. Use a public link.",
   "err.import_fetch_failed": "Could not download the file from this link.",
   "err.import_invalid_url": "Enter an http or https link to a file.",
+  "result.amountIssues": "{n} amount(s) do not add up. Please check them.",
+  "result.computed": "Calculated: {value}",
+  "result.copied": "Copied",
+  "result.copyFailed": "Copy failed",
+  "result.copyJson": "Copy",
+  "result.saveDraft": "Save draft",
+  "result.tabJson": "JSON",
+  "result.tabTable": "Table",
 } as const;
 
 export type MessageKey = keyof typeof en;

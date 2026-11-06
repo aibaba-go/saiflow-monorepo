@@ -103,9 +103,9 @@ describe("processing page copied from main (FR-SYS-059, 116)", () => {
     page("progress");
     expect(await screen.findByText("Template matching")).toBeInTheDocument();
     await act(() => vi.advanceTimersByTimeAsync(89_000));
-    expect(screen.queryByText("Matching the template…")).toBeNull();
+    expect(screen.queryByText("Applying template…")).toBeNull();
     await act(() => vi.advanceTimersByTimeAsync(2_000));
-    expect(await screen.findByText("Matching the template…")).toBeInTheDocument();
+    expect(await screen.findByText("Applying template…")).toBeInTheDocument();
   });
 
   it("failure shows reason and rerun (059-02)", async () => {
