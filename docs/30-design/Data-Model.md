@@ -3,7 +3,7 @@ doc_id: DES-002
 title: "SaiFlow — 数据模型"
 type: data-model
 status: active
-version: 2.10.0
+version: 2.11.0
 updated: 2026-11-06
 owner: Product Engineering
 source: "PRD-001 v3.3 §3, §4, §4.9; ADR-008"
@@ -78,6 +78,7 @@ erDiagram
 | `DM-OcrEngineHealth` | 各 OCR 引擎的健康状态：连续失败次数、是否已切换到备用引擎、下次试探首选引擎的时间 | PostgreSQL | 全局 | — | 由识别服务更新；首选引擎恢复后切回 |
 
 - 登录会话、邮箱验证码等短期技术数据不作为实体登记，设计见 B-2a 的 `openspec/changes/archive/2026-11-03-rebuild-identity/plan.md`。
+- **`ocr-ui-parity`：** `DM-DocumentTemplate` 的字段与明细列可带“角色”（数量、单价、行金额、合计、税额等），供金额校验使用（迁移 0011 为两个系统模板写入新版本）；`DM-TemplateMapping` 保存每个模板的匹配度，自动匹配低于 70% 时记为“没有合适的模板”，结果按自由格式显示；按链接导入的文件与上传的文件同为 `DM-File`。
 - **B-3 已实现（`ocr-scan-flow`）：** `DM-File`（上传的原件，24 小时内未完成的上传自动清理；同一文件同时只能有一个识别任务）、`DM-OcrJob`（状态与阶段：识别中、识别失败、模板匹配中、待核验、已确认）、`DM-ExtractionPayload`（原始识别载荷只可追加，应用账号不能修改或删除）、`DM-DocumentTemplate` 及其版本（两份系统模板 Tax Invoice 与 Billing Note 由迁移写入，字段名带英、泰、中三种语言）、`DM-TemplateMapping`、`DM-Export`、`DM-OcrEngineHealth`。`DM-FormDocument` 在 B-3 只实现结果版本（每次保存一个版本，确认后不可再改）；核验修改记录与复核随 B-4。原件、页面预览与导出文件存在私有 GCS 桶，由后端代为读取。
 - **B-5b 已实现（`web-admin-console`）：** `DM-SystemSetting` 增加 OCR 与大模型配置七项（首选引擎、备用引擎、单据重试次数、全局切换阈值、首选引擎试探间隔、大模型地址、模型名称），由迁移写入默认值，B-3 读取；修改时每项写一条操作日志；四项密钥（TextIn 两项、Google Cloud Vision、大模型）不入库，只在服务器环境变量文件中。
 - **B-2d 已实现（`rebuild-notifications`）：** `DM-Notification` 与 `DM-PlanReminder`；提醒由独立的提醒进程定时产生，不写操作日志；两者都不随游客数据归集（游客不收提醒）。
@@ -140,6 +141,7 @@ erDiagram
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.11.0 | 2026-11-06 | Product Engineering | `ocr-ui-parity`：模板字段角色（金额校验）、匹配度与“没有合适的模板”、按链接导入 |
 | 2.10.0 | 2026-11-06 | Product Engineering | 按 B-3：新增 `DM-TemplateMapping`、`DM-Export`、`DM-OcrEngineHealth`；记录 B-3 已实现的范围（文件、识别任务、原始载荷、模板、结果版本） |
 | 2.9.0 | 2026-11-06 | Product Engineering | 按 B-5b：`DM-SystemSetting` 的 OCR 与大模型配置七项；密钥只在服务器环境变量文件中 |
 | 2.8.0 | 2026-11-05 | Product Engineering | 按 B-5a：`DM-Plan` 增加按月价与按年价 |

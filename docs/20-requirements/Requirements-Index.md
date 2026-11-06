@@ -3,7 +3,7 @@ doc_id: REQ-INDEX
 title: "SaiFlow — 需求索引与可追溯性矩阵"
 type: index
 status: active
-version: 1.11.0
+version: 1.12.0
 updated: 2026-11-06
 owner: Product Engineering
 ---
@@ -45,6 +45,7 @@ owner: Product Engineering
 | FR-UPLOAD-011 | 原件保留与读取 | P0 | EPIC-01（已迁移，`ocr-scan-flow`） | — | `openspec/specs/documents/spec.md` | `openspec/specs/documents/spec.md` | active |
 | FR-UPLOAD-012 | 低质量警告 | P1 | §5.4 | 006 | AC-FR-UPLOAD-012-01 | OCR-Pipeline | active |
 | FR-UPLOAD-013 | 待处理记录 | P0 | `ocr-scan-flow`（2026-11-06） | — | `openspec/specs/documents/spec.md` | `openspec/specs/documents/spec.md` | active |
+| FR-UPLOAD-014 | 按链接导入 | P0 | `ocr-ui-parity`（2026-11-06） | — | `openspec/specs/documents/spec.md` | `openspec/specs/documents/spec.md` | active |
 | FR-OCR-001 | 文档类型处理 | P0 | §4.2 | UPLOAD-006 | AC-FR-OCR-001-01 | OCR-Pipeline | active |
 | FR-OCR-002 | PO 字段提取 | P0 | §4.2 | OCR-001 | AC-FR-OCR-002-01 | DM-ExtractedField | active |
 | FR-OCR-003 | Delivery Note 提取 | P0 | §4.2 | OCR-001 | AC-FR-OCR-003-01 | DM-ExtractedField | active |
@@ -57,10 +58,10 @@ owner: Product Engineering
 | FR-OCR-010 | 行项目表提取 | P0 | §4.2 | OCR-001 | AC-FR-OCR-010-01 | DM-LineItem | active |
 | FR-OCR-011 | 泰语/英语/中文混合识别 | P0 | §4.2 | OCR-001 | AC-FR-OCR-011-01 | OCR-Pipeline | active |
 | FR-OCR-012 | 按字段输出置信度评分 | P0 | §3.2 | OCR-002 | AC-FR-OCR-012-01 | DM-ExtractedField | active |
-| FR-OCR-013 | 金额纠错 | P0 | §4.2 | OCR-010 | AC-FR-OCR-013-01/02 | OCR-Pipeline | active |
+| FR-OCR-013 | 金额校验 | P0 | EPIC-02（已迁移，`ocr-ui-parity`） | — | `openspec/specs/recognition/spec.md` | `openspec/specs/recognition/spec.md` | active |
 | FR-OCR-014 | 签字检测 | P1 | §4.2 | OCR-001 | AC-FR-OCR-014-01 | DM-ExtractedField | active |
 | FR-OCR-015 | 低置信度标记 | P0 | §3.1 | OCR-012 | AC-FR-OCR-015-01 | DM-ExtractedField | active |
-| FR-OCR-016 | 标准化日期/数值/THB | P0 | §3.1 | OCR-002 | AC-FR-OCR-016-01 | OCR-Pipeline | active |
+| FR-OCR-016 | 标准化 | P0 | EPIC-02（已迁移，`ocr-ui-parity`） | — | `openspec/specs/recognition/spec.md` | `openspec/specs/recognition/spec.md` | active |
 | FR-OCR-017 | 识别任务 | P0 | EPIC-02（已迁移，`ocr-scan-flow`） | — | `openspec/specs/recognition/spec.md` | `openspec/specs/recognition/spec.md` | active |
 | FR-OCR-018 | 原始识别结果 | P0 | EPIC-02（已迁移，`ocr-scan-flow`） | — | `openspec/specs/recognition/spec.md` | `openspec/specs/recognition/spec.md` | active |
 | FR-OCR-019 | 大模型匹配模板 | P0 | EPIC-02（已迁移，`ocr-scan-flow`） | — | `openspec/specs/recognition/spec.md` | `openspec/specs/recognition/spec.md` | active |
@@ -68,6 +69,7 @@ owner: Product Engineering
 | FR-OCR-021 | OCR 引擎与切换 | P0 | `ocr-scan-flow`（2026-11-06） | — | `openspec/specs/recognition/spec.md` | `openspec/specs/recognition/spec.md` | active |
 | FR-OCR-022 | 后台处理与恢复 | P0 | `ocr-scan-flow`（2026-11-06） | — | `openspec/specs/recognition/spec.md` | `openspec/specs/recognition/spec.md` | active |
 | FR-OCR-023 | 通用结果 | P0 | `ocr-scan-flow`（2026-11-06） | — | `openspec/specs/recognition/spec.md` | `openspec/specs/recognition/spec.md` | active |
+| FR-OCR-024 | 模板匹配的展示信息 | P0 | `ocr-ui-parity`（2026-11-06） | — | `openspec/specs/recognition/spec.md` | `openspec/specs/recognition/spec.md` | active |
 | FR-VERIFY-001 | 并排展示结果 | P0 | §4.3 | OCR-012 | AC-FR-VERIFY-001-01 | API-4 | active |
 | FR-VERIFY-002 | 单字段编辑 | P0 | §4.3 | VERIFY-001 | AC-FR-VERIFY-002-01 | DM-ChangeLog | active |
 | FR-VERIFY-003 | 批量更正 | P1 | §4.3 | VERIFY-002 | AC-FR-VERIFY-003-01 | API-4 | active |
@@ -201,6 +203,16 @@ owner: Product Engineering
 | FR-SYS-106 | 确认结果 | P0 | `ocr-scan-flow`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
 | FR-SYS-107 | 最终结果与导出 | P0 | `ocr-scan-flow`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
 | FR-SYS-108 | 历史 | P0 | `ocr-scan-flow`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-109 | 扫描首页的配额与最近任务 | P0 | `ocr-ui-parity`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-110 | 上传队列与按链接导入 | P0 | `ocr-ui-parity`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-111 | 待处理的多选 | P0 | `ocr-ui-parity`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-112 | 确认页逐个浏览 | P0 | `ocr-ui-parity`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-113 | 原件查看器 | P0 | `ocr-ui-parity`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-114 | 结果页的视图与重置 | P0 | `ocr-ui-parity`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-115 | 更换模板面板 | P0 | `ocr-ui-parity`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-116 | 识别进度与最终结果的补充 | P0 | `ocr-ui-parity`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-117 | 历史搜索 | P0 | `ocr-ui-parity`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
+| FR-SYS-118 | 界面与 main 一致 | P0 | `ocr-ui-parity`（2026-11-06） | — | `openspec/specs/line-mini/spec.md` | `openspec/specs/line-mini/spec.md` | active |
 | FR-REPORT-001 | 管理层访问运营报表 | P1 | §3.1/§4.7 | SYS-002 | AC-FR-REPORT-001-01 | API-9（待设计） | in-review |
 | FR-REPORT-002 | 展示已配置运营指标 | P1 | §1.2/§4.7 | REPORT-001/OQ-5 | AC-FR-REPORT-002-01 | DM-ReportDefinition（待设计） | in-review |
 | FR-REPORT-003 | 报表授权范围限制 | P1 | §4.7 | SYS-002 | AC-FR-REPORT-003-01 | API-9（待设计） | in-review |
@@ -251,6 +263,7 @@ owner: Product Engineering
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.12.0 | 2026-11-06 | Product Engineering | `ocr-ui-parity`：新增 FR-UPLOAD-014、FR-OCR-024、FR-SYS-109…118；FR-OCR-013、016 迁入 `openspec/specs/recognition` |
 | 1.11.0 | 2026-11-06 | Product Engineering | B-3（`ocr-scan-flow`）：上传、识别、模板匹配与转换、结果、导出与小程序扫描页面的需求迁入 `openspec/specs/{documents,recognition,results,exports,line-mini}`；新增 FR-UPLOAD-013、FR-OCR-021…023、FR-SYS-057…059、FR-SYS-105…108 |
 | 1.10.0 | 2026-11-06 | Product Engineering | B-5c：新增 FR-SYS-090…104（web-pc 企业版） |
 | 1.9.0 | 2026-11-06 | Product Engineering | B-5b：FR-SYS-005 指向 `openspec/specs/ocr-settings/spec.md`；新增 FR-SYS-060…073（admin 后台）与 FR-SYS-080（后台查询用户）；FR-SYS-003、019 的新增场景在 `openspec/specs/identity/spec.md` |

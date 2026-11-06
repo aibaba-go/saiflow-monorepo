@@ -3,8 +3,8 @@ doc_id: DES-004
 title: "SaiFlow — OCR 与提取流水线"
 type: design
 status: active
-version: 1.1.1
-updated: 2026-10-18
+version: 1.2.0
+updated: 2026-11-06
 owner: Product Engineering
 source: "EPIC-01, EPIC-02, EPIC-08"
 related: [DM-ExtractionPayload, DM-ConversionJob, DM-DocumentTemplate, DM-ExtractedField, DM-LineItem, NFR-PERF, NFR-I18N]
@@ -87,6 +87,8 @@ Cloud Functions 监听 Firestore 新建载荷事件。函数加载载荷记录�
 
 ## 5. 多语言、标准化与校验
 
+> 标准化规则（FR-OCR-016）已实现：日期接受 `dd/mm/yyyy`、`dd.mm.yyyy`、`dd-mm-yyyy` 与 `yyyy-mm-dd`，佛历年份（≥ 2400）减 543，输出 `YYYY-MM-DD`；数字去掉千位分隔符、空白与 `฿`/`THB`/`บาท`，金额补足两位小数；文本去掉首尾空白；无法识别为该类型的值原样保留并给出“类型或精度不符”的提示（`ocr-ui-parity`）。
+
 ### 5.1 多语言（FR-OCR-011、NFR-I18N-001）
 
 - TextIn 请求必须启用模板所需的泰语、英语和简体/繁体中文识别能力。
@@ -102,12 +104,12 @@ Cloud Functions 监听 Firestore 新建载荷事件。函数加载载荷记录�
 | 货币 | THB；`decimal(14,2)`；不得出现浮点漂移（NFR-DATA-004） |
 | 文本 | 去除首尾空白；在 `raw_text` 中保留原文 |
 
-### 5.3 置信度与金额校验（FR-OCR-012、013、015）
+### 5.3 金额校验（FR-OCR-013，已实现于 `ocr-ui-parity`）
 
-- 默认核验阈值：`confidence < 0.85` → `needs_review = true`；阈值可按文档类型和字段配置。
-- `line_total = quantity × unit_price`，容差为 ±0.01 THB。
-- `document_total = Σ line_total + tax − discount`；超出容差时设置 `amount_mismatch = true` 并标记核验。
-- 必填字段缺失、无可用模板、模板映射失败或供应商未返回置信度时，文档必须进入核验或失败状态，不得静默猜测。
+- 参与校验的字段由模板字段的角色决定，不看字段名：明细列 `quantity`、`unit_price`、`line_discount`、`line_base`、`line_tax`、`line_total`；表头字段 `lines_total`、`discount`、`base`、`tax`、`grand_total`。
+- 规则（容差 ±0.01 THB，只用十进制，不经浮点）：每行 数量 × 单价 = 行金额（有行折扣时跳过）、行未税额 + 行税额 = 行金额；明细合计 = Σ 行金额；未税额 = 明细合计 − 折扣；合计 = 未税额 + 税额。缺少字段或值无法解析时跳过该项。
+- 不一致时只标记（字段路径、计算值、识别值）并在结果页提示，**不改值**，也不阻止确认；每次读取当前版本时重新计算。
+- 字段置信度与低置信度标记（FR-OCR-012、015）为 P1，未实现。
 
 ## 6. 重试、重处理与批量处理
 
@@ -150,6 +152,7 @@ interface ConversionService {
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.2.0 | 2026-11-06 | Product Engineering | `ocr-ui-parity`：§5 标准化与金额校验按实现改写（模板字段角色、±0.01 THB、只标记不改值）；置信度标注为 P1 未实现 |
 | 1.1.1 | 2026-10-18 | Product Engineering | 补充接收阶段上传进度：实际字节反馈与文件大小估算，完成确认后才报告 100%（FR-UPLOAD-010） |
 | 1.1.0 | 2026-10-07 | Product Engineering | 改为 TextIn → Firestore → Cloud Functions → Cloud SQL 的模板化转换流水线 |
 | 1.0.1 | 2026-10-02 | Product Engineering | 将人类可读内容翻译为简体中文 |

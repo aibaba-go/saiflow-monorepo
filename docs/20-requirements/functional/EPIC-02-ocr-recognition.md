@@ -3,7 +3,7 @@ doc_id: EPIC-02
 title: "EPIC-02 — 多类型文档 OCR 识别"
 type: epic
 status: active
-version: 1.4.0
+version: 1.5.0
 updated: 2026-11-06
 owner: Product Engineering
 priority: P0
@@ -29,10 +29,10 @@ related: [DM-Document, DM-LineItem, DM-ExtractedField, DM-ExtractionPayload, DM-
 | ID | 陈述（系统必须……） | 优先级 | 来源 | 依赖项 | 验证方式 |
 |----|--------------------|--------|------|--------|----------|
 | FR-OCR-001 | 在提取前确定/接受文档类型 | P0 | §4.2 | FR-UPLOAD-006 | AC-FR-OCR-001-01 |
-| FR-OCR-002 | 从 **Purchase Order（订单）**中提取必需字段 | P0 | §4.2 | FR-OCR-001 | AC-FR-OCR-002-01 |
-| FR-OCR-003 | 从 **Delivery Note** 中提取必需字段 | P0 | §4.2 | FR-OCR-001 | AC-FR-OCR-003-01 |
-| FR-OCR-004 | 从 **Invoice** 中提取必需字段 | P0 | §4.2 | FR-OCR-001 | AC-FR-OCR-004-01 |
-| FR-OCR-005 | 从 **Receipt** 中提取必需字段 | P0 | §4.2 | FR-OCR-001 | AC-FR-OCR-005-01 |
+| FR-OCR-002 | （V1.0 不预设该类型的模板：匹配不到模板时由自由格式承接，负责人 2026-11-06，`ocr-ui-parity` D4）从 **Purchase Order（订单）**中提取必需字段 | P0 | §4.2 | FR-OCR-001 | AC-FR-OCR-002-01 |
+| FR-OCR-003 | （V1.0 不预设该类型的模板：匹配不到模板时由自由格式承接，负责人 2026-11-06，`ocr-ui-parity` D4）从 **Delivery Note** 中提取必需字段 | P0 | §4.2 | FR-OCR-001 | AC-FR-OCR-003-01 |
+| FR-OCR-004 | （V1.0 不预设该类型的模板：匹配不到模板时由自由格式承接，负责人 2026-11-06，`ocr-ui-parity` D4）从 **Invoice** 中提取必需字段 | P0 | §4.2 | FR-OCR-001 | AC-FR-OCR-004-01 |
+| FR-OCR-005 | （V1.0 不预设该类型的模板：匹配不到模板时由自由格式承接，负责人 2026-11-06，`ocr-ui-parity` D4）从 **Receipt** 中提取必需字段 | P0 | §4.2 | FR-OCR-001 | AC-FR-OCR-005-01 |
 | FR-OCR-006 | 从 **Bill** 中提取必需字段 | P1 | §4.2 | FR-OCR-001 | AC-FR-OCR-006-01 |
 | FR-OCR-007 | 从 **Credit Note** 中提取必需字段 | P1 | §4.2 | FR-OCR-001 | AC-FR-OCR-007-01 |
 | FR-OCR-008 | 从 **Tax Receipt / Withholding Tax** 中提取必需字段 | P1 | §4.2 | FR-OCR-001 | AC-FR-OCR-008-01 |
@@ -40,10 +40,10 @@ related: [DM-Document, DM-LineItem, DM-ExtractedField, DM-ExtractionPayload, DM-
 | FR-OCR-010 | 将多行 / 嵌套项目表提取为结构化行项目 | P0 | §4.2 | FR-OCR-001 | AC-FR-OCR-010-01 |
 | FR-OCR-011 | 识别同一文档中混合的泰语 / 英语 / 简体及繁体中文 | P0 | §4.2 | FR-OCR-001 | AC-FR-OCR-011-01 |
 | FR-OCR-012 | 为每个提取字段生成置信度评分（0.0–1.0） | P0 | §3.2 P2.1 | FR-OCR-002 | AC-FR-OCR-012-01 |
-| FR-OCR-013 | 应用金额纠错（行总额与文档总额、税款计算） | P0 | §4.2 | FR-OCR-010 | AC-FR-OCR-013-01/02 |
+| FR-OCR-013 | **已迁移至 `openspec/specs/recognition/spec.md`（deprecated，`ocr-ui-parity`）** 应用金额纠错（行总额与文档总额、税款计算） | P0 | §4.2 | FR-OCR-010 | AC-FR-OCR-013-01/02 |
 | FR-OCR-014 | 检测并捕获签字区域是否存在 | P1 | §4.2 | FR-OCR-001 | AC-FR-OCR-014-01 |
 | FR-OCR-015 | 将置信度低于阈值的字段标记为需要人工核验 | P0 | §3.1 | FR-OCR-012 | AC-FR-OCR-015-01 |
-| FR-OCR-016 | 将日期、数字和货币（THB）标准化为规范格式 | P0 | §3.1 | FR-OCR-002 | AC-FR-OCR-016-01 |
+| FR-OCR-016 | **已迁移至 `openspec/specs/recognition/spec.md`（deprecated，`ocr-ui-parity`）** 将日期、数字和货币（THB）标准化为规范格式 | P0 | §3.1 | FR-OCR-002 | AC-FR-OCR-016-01 |
 | FR-OCR-017 | **已迁移至 `openspec/specs/recognition/spec.md`（deprecated，`ocr-scan-flow`）** 将预处理后的文档提交至 TextIn API，并关联文档与所选模板的服务参数 | P0 | §4.2 | FR-UPLOAD-006、FR-TEMPLATE-006 | AC-FR-OCR-017-01 |
 | FR-OCR-018 | **已迁移至 `openspec/specs/recognition/spec.md`（deprecated，`ocr-scan-flow`）** 将 TextIn 返回的完整原始 JSON、请求关联信息和处理状态保存至 Firestore | P0 | §4.2 | FR-OCR-017 | AC-FR-OCR-018-01 |
 | FR-OCR-019 | **已迁移至 `openspec/specs/recognition/spec.md`（deprecated，`ocr-scan-flow`）** 在 Firestore 原始 JSON 创建后，通过 Cloud Functions 按已发布模板将其转换并写入 Cloud SQL | P0 | §4.2 | FR-OCR-018、FR-TEMPLATE-006 | AC-FR-OCR-019-01 |
@@ -179,6 +179,7 @@ Feature: EPIC-02 OCR 识别
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.5.0 | 2026-11-06 | Product Engineering | FR-OCR-013、016 迁移至 `openspec/specs/recognition`（`ocr-ui-parity`）；FR-OCR-002…005 注明由自由格式承接（D4） |
 | 1.4.0 | 2026-11-06 | Product Engineering | FR-OCR-017, FR-OCR-018, FR-OCR-019, FR-OCR-020 迁移至 `openspec/specs/`（变更 `ocr-scan-flow`），本文件中对应条目只作参考 |
 | 1.3.0 | 2026-10-18 | Product Engineering | 取消任务前需确认（AC-FR-OCR-020-03） |
 | 1.2.0 | 2026-10-17 | Product Engineering | 新增失败任务可读原因与重试验收场景（厂商余额不足等失败不再显示 404） |
