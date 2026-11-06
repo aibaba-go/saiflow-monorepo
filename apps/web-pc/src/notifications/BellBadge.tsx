@@ -4,8 +4,10 @@ import { useNavigate } from "react-router-dom";
 
 import { useT } from "../i18n";
 import { api, call } from "../services/api";
+import { notificationKeys } from "./data";
 
-export const UNREAD_KEY = ["notifications", "unread"] as const;
+
+export const UNREAD_KEY = notificationKeys.unread;
 
 /** The unread count in the header, hidden at 0 (FR-SYS-103). */
 export function BellBadge() {

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { App as AntApp, ConfigProvider, Result, Typography } from "antd";
+import { App as AntApp, ConfigProvider, Result } from "antd";
 import enUS from "antd/locale/en_US";
 import thTH from "antd/locale/th_TH";
 import zhCN from "antd/locale/zh_CN";
@@ -8,7 +8,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import { RequireUser } from "./auth/RequireUser";
 import { forgetSession, useSessionNotice } from "./auth/session";
-import { useT, type MessageKey } from "./i18n";
+import { useT } from "./i18n";
 import { AppLayout } from "./layout/AppLayout";
 import { ApplyOrgPage } from "./pages/ApplyOrgPage";
 import { DataBrowsePage } from "./pages/DataBrowsePage";
@@ -18,6 +18,8 @@ import { OrgGate } from "./pages/OrgGate";
 import { OrgPage } from "./pages/OrgPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { LoginPage } from "./pages/LoginPage";
+import { NotificationsPage } from "./pages/NotificationsPage";
+import { PlansPage } from "./pages/PlansPage";
 import { RegisterGuidePage } from "./pages/RegisterGuidePage";
 import { RolesPage } from "./pages/RolesPage";
 import { setUnauthenticatedHandler } from "./services/api";
@@ -37,16 +39,6 @@ function SessionWatcher() {
     return () => setUnauthenticatedHandler(() => {});
   }, [queryClient, setExpired]);
   return null;
-}
-
-/** Until each page lands (Tasks 3–5). */
-function Placeholder({ name, title }: { name: string; title: MessageKey }) {
-  const t = useT();
-  return (
-    <div data-testid={`page-${name}`}>
-      <Typography.Title level={3}>{t(title)}</Typography.Title>
-    </div>
-  );
 }
 
 function NotFound() {
@@ -70,8 +62,8 @@ export function AppRoutes() {
               <Route path="/org" element={<OrgGate><OrgPage /></OrgGate>} />
               <Route path="/org/apply" element={<ApplyOrgPage />} />
               <Route path="/roles" element={<OrgGate><RolesPage /></OrgGate>} />
-              <Route path="/plans" element={<Placeholder name="plans" title="nav.plans" />} />
-              <Route path="/notifications" element={<Placeholder name="notifications" title="nav.notifications" />} />
+              <Route path="/plans" element={<PlansPage />} />
+              <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/data" element={<DataBrowsePage />} />
               <Route path="*" element={<NotFound />} />

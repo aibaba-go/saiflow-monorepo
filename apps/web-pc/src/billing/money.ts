@@ -7,5 +7,6 @@ export function formatTHB(value: string | null, t: T): string {
   if (value === null) return t("plans.contactUs");
   const [whole = "0", cents = "00"] = value.split(".");
   const grouped = Number(whole).toLocaleString("en-US");
-  return /^0*$/.test(cents) ? grouped : `${grouped}.${cents.padEnd(2, "0")}`;
+  // web-pc shows the baht sign (A6): "฿5,990".
+  return /^0*$/.test(cents) ? `฿${grouped}` : `฿${grouped}.${cents.padEnd(2, "0")}`;
 }
