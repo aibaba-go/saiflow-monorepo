@@ -53,4 +53,21 @@ for var in TEXTIN_APP_ID TEXTIN_SECRET_CODE GOOGLE_VISION_API_KEY LLM_API_KEY; d
   check "backend receives $var" grep -q "$var: \${$var:-" <<<"$backend"
   check "env.example lists $var" grep -q "^$var=" "$deploy/env.example"
 done
+# ocr-scan-flow: originals in a private GCS bucket for the backend and the OCR worker; the
+# worker is its own service (ADR-009 class C) with the engine and LLM keys.
+for var in GCS_BUCKET GCS_CREDENTIALS_FILE; do
+  check "backend receives $var" grep -q "$var: \${$var:-" <<<"$backend"
+  check "env.example lists $var" grep -q "^$var=" "$deploy/env.example"
+done
+ocr="$(awk '/^  saiflow-be-ocr:/{p=1;next} /^  [a-z]/{p=0} p' "$deploy/compose.yaml")"
+check "ocr worker service exists" test -n "$ocr"
+check "ocr worker runs the loop" grep -qF 'command: ["python", "-m", "app.cli", "ocr-worker-loop"]' <<<"$ocr"
+check "ocr worker runs as the app role" grep -q 'DB_USER: saiflow_v3_app' <<<"$ocr"
+check "ocr worker publishes no ports" bash -c "! grep -v '^ *#' <<<\"\$1\" | grep -q 'ports:'" _ "$ocr"
+for var in GCS_BUCKET GCS_CREDENTIALS_FILE TEXTIN_APP_ID TEXTIN_SECRET_CODE GOOGLE_VISION_API_KEY LLM_API_KEY; do
+  check "ocr worker receives $var" grep -q "$var: \${$var:-" <<<"$ocr"
+done
+check "ocr worker receives OCR_WORKER_ENABLED" grep -qF "OCR_WORKER_ENABLED: \${OCR_WORKER_ENABLED:-true}" <<<"$ocr"
+check "env.example lists OCR_WORKER_ENABLED" grep -q '^OCR_WORKER_ENABLED=' "$deploy/env.example"
+check "the secrets folder (service-account key) is mounted read-only" bash -c "grep -qF './secrets:/run/secrets:ro' <<<\"\$1\" && grep -qF './secrets:/run/secrets:ro' <<<\"\$2\"" _ "$backend" "$ocr"
 finish

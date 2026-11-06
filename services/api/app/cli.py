@@ -7,6 +7,7 @@ import sys
 
 from app.config import load_settings
 from app.db import create_engine, create_sessionmaker
+from app.integrations.storage import GcsStore
 
 
 async def _audit_verify() -> int:
@@ -128,7 +129,52 @@ ADMIN_COMMANDS = {
 }
 
 
-def main(argv: list[str] | None = None) -> int:
+async def _ocr_worker(loop: bool) -> int:
+    """One recognition pass after recovery, or (loop) the compose service until SIGTERM.
+    Without GCS_BUCKET nothing is processed: every job would fail as FILE_MISSING."""
+    import logging
+    import signal
+
+    from app.clock import utcnow
+    from app.logging_setup import configure_logging
+    from app.ocr import worker
+
+    settings = load_settings()
+    if not settings.gcs_bucket:
+        print("ocr worker: GCS_BUCKET is not configured; nothing is processed")
+        if not loop:
+            return 0
+    store = (
+        GcsStore(settings.gcs_bucket, settings.gcs_credentials_file)
+        if settings.gcs_bucket
+        else None
+    )
+    engine = create_engine(settings)
+    sessionmaker = create_sessionmaker(engine)
+    try:
+        if not loop:
+            await worker.recover(sessionmaker, utcnow())
+            busy = await worker.run_once(sessionmaker, store, settings)
+            print("ocr worker: processed a job" if busy else "ocr worker: idle")
+            return 0
+        configure_logging()
+        logging.getLogger("app.ocr.worker").info("ocr worker started")
+        stop = asyncio.Event()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            try:
+                asyncio.get_running_loop().add_signal_handler(sig, stop.set)
+            except (NotImplementedError, RuntimeError):  # Windows: Ctrl+C still interrupts
+                pass
+        if store is None:
+            await stop.wait()  # idle until configured and restarted
+            return 0
+        await worker.loop(sessionmaker, store, settings, stop)
+        return 0
+    finally:
+        await engine.dispose()
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("audit-verify", help="check that the operation log was not altered")
@@ -139,9 +185,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub.add_parser("reminders-run-once", help="run one reminder pass now")
     sub.add_parser("reminders-loop", help="run reminder passes until stopped (compose service)")
-    args = parser.parse_args(argv)
+    sub.add_parser("ocr-worker-run-once", help="recover, then process one queued OCR job")
+    sub.add_parser("ocr-worker-loop", help="process OCR jobs until stopped (compose service)")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
     if args.command in ("reminders-run-once", "reminders-loop"):
         return asyncio.run(_reminders(args.command == "reminders-loop"))
+    if args.command in ("ocr-worker-run-once", "ocr-worker-loop"):
+        return asyncio.run(_ocr_worker(args.command == "ocr-worker-loop"))
     if args.command == "smtp-check":
         return asyncio.run(_smtp_check(args.to))
     if args.command == "audit-verify":

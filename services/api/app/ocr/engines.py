@@ -52,6 +52,10 @@ class EngineUnavailable(RuntimeError):
     """No configured engine can be used (keys missing)."""
 
 
+class JobCancelled(RuntimeError):
+    """The job was cancelled while waiting for an engine (FR-OCR-022)."""
+
+
 class Engine(Protocol):
     name: str
 
@@ -177,7 +181,7 @@ async def recognise(
         engine = engines[name]
         for attempt in range(attempts):
             if cancelled is not None and await cancelled():
-                raise asyncio.CancelledError
+                raise JobCancelled
             try:
                 result = await asyncio.to_thread(
                     engine.run, kind=kind, content=content, filename=filename, pages=pages

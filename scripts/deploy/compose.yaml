@@ -60,6 +60,36 @@ services:
       TEXTIN_SECRET_CODE: ${TEXTIN_SECRET_CODE:-}
       GOOGLE_VISION_API_KEY: ${GOOGLE_VISION_API_KEY:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
+      # Originals, previews and exports (ocr-scan-flow, ADR-008); empty bucket = uploads 503
+      GCS_BUCKET: ${GCS_BUCKET:-}
+      GCS_CREDENTIALS_FILE: ${GCS_CREDENTIALS_FILE:-}
+    volumes:
+      - ./secrets:/run/secrets:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Recognition and template conversion (ocr-scan-flow, FR-OCR-022): its own process, never
+  # inside the web service. OCR_WORKER_ENABLED=false in .env keeps it idle.
+  saiflow-be-ocr:
+    <<: *common
+    image: ${IMAGE_REGISTRY:-ghcr.io/aibaba-go}/saiflow-be-api:${IMAGE_TAG:?}
+    command: ["python", "-m", "app.cli", "ocr-worker-loop"]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: saiflow
+      DB_USER: saiflow_v3_app
+      DB_PASSWORD: ${DB_PASSWORD:?}
+      GCS_BUCKET: ${GCS_BUCKET:-}
+      GCS_CREDENTIALS_FILE: ${GCS_CREDENTIALS_FILE:-}
+      TEXTIN_APP_ID: ${TEXTIN_APP_ID:-}
+      TEXTIN_SECRET_CODE: ${TEXTIN_SECRET_CODE:-}
+      GOOGLE_VISION_API_KEY: ${GOOGLE_VISION_API_KEY:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      OCR_WORKER_ENABLED: ${OCR_WORKER_ENABLED:-true}
+    volumes:
+      - ./secrets:/run/secrets:ro
     depends_on:
       postgres:
         condition: service_healthy
