@@ -27,6 +27,7 @@ from app.routers import (
     notifications,
     ocr_jobs,
     organizations,
+    results,
     templates,
     uploads,
 )
@@ -90,6 +91,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(uploads.router)
     app.include_router(ocr_jobs.router)
     app.include_router(templates.router)
+    app.include_router(results.router)
     return app
 
 

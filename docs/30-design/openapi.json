@@ -1122,6 +1122,31 @@
         "title": "MappingOut",
         "type": "object"
       },
+      "MappingStateOut": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "error"
+        ],
+        "title": "MappingStateOut",
+        "type": "object"
+      },
       "MarkReadIn": {
         "description": "`ids` absent or null: every unread notification; [] marks nothing.",
         "properties": {
@@ -2140,6 +2165,88 @@
         "title": "ReservationOut",
         "type": "object"
       },
+      "ResultIn": {
+        "description": "Types are checked by the service, which answers 400 naming the field.",
+        "properties": {
+          "confirm": {
+            "default": false,
+            "title": "Confirm"
+          },
+          "expected_version": {
+            "title": "Expected Version"
+          },
+          "structured": {
+            "title": "Structured"
+          }
+        },
+        "title": "ResultIn",
+        "type": "object"
+      },
+      "ResultOut": {
+        "properties": {
+          "confirmed": {
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "mapping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MappingStateOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "missing_required": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Required",
+            "type": "array"
+          },
+          "structured": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Structured"
+          },
+          "template": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TemplateOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "structured",
+          "template",
+          "missing_required",
+          "mapping",
+          "confirmed"
+        ],
+        "title": "ResultOut",
+        "type": "object"
+      },
       "RoleAssignedOut": {
         "properties": {
           "role_id": {
@@ -2466,6 +2573,33 @@
           "last_failure"
         ],
         "title": "TemplateOptionsOut",
+        "type": "object"
+      },
+      "TemplateOut": {
+        "properties": {
+          "groups": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "template_version_id": {
+            "title": "Template Version Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "template_version_id",
+          "name",
+          "groups"
+        ],
+        "title": "TemplateOut",
         "type": "object"
       },
       "TransferIn": {
@@ -5822,6 +5956,134 @@
           }
         },
         "summary": "Rerun",
+        "tags": [
+          "ocr"
+        ]
+      }
+    },
+    "/api/v1/ocr/jobs/{job_id}/result": {
+      "get": {
+        "operationId": "getOcrResult",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read",
+        "tags": [
+          "ocr"
+        ]
+      },
+      "patch": {
+        "operationId": "saveOcrResult",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResultIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save",
         "tags": [
           "ocr"
         ]

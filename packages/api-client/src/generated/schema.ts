@@ -971,6 +971,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ocr/jobs/{job_id}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read */
+        get: operations["getOcrResult"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Save */
+        patch: operations["saveOcrResult"];
+        trace?: never;
+    };
     "/api/v1/ocr/jobs/{job_id}/results": {
         parameters: {
             query?: never;
@@ -1655,6 +1673,13 @@ export interface components {
             /** Result */
             result: string;
         };
+        /** MappingStateOut */
+        MappingStateOut: {
+            /** Error */
+            error: string | null;
+            /** Status */
+            status: string;
+        };
         /**
          * MarkReadIn
          * @description `ids` absent or null: every unread notification; [] marks nothing.
@@ -1983,6 +2008,36 @@ export interface components {
              */
             reserved_at: string;
         };
+        /**
+         * ResultIn
+         * @description Types are checked by the service, which answers 400 naming the field.
+         */
+        ResultIn: {
+            /**
+             * Confirm
+             * @default false
+             */
+            confirm: unknown;
+            /** Expected Version */
+            expected_version?: unknown;
+            /** Structured */
+            structured?: unknown;
+        };
+        /** ResultOut */
+        ResultOut: {
+            /** Confirmed */
+            confirmed: boolean;
+            mapping: components["schemas"]["MappingStateOut"] | null;
+            /** Missing Required */
+            missing_required: string[];
+            /** Structured */
+            structured: {
+                [key: string]: unknown;
+            } | unknown[] | null;
+            template: components["schemas"]["TemplateOut"] | null;
+            /** Version */
+            version: number;
+        };
         /** RoleAssignedOut */
         RoleAssignedOut: {
             /** Role Id */
@@ -2093,6 +2148,17 @@ export interface components {
             limit: number;
             /** Templates */
             templates: components["schemas"]["TemplateOption"][];
+        };
+        /** TemplateOut */
+        TemplateOut: {
+            /** Groups */
+            groups: {
+                [key: string]: unknown;
+            }[];
+            /** Name */
+            name: string;
+            /** Template Version Id */
+            template_version_id: number;
         };
         /** TransferIn */
         TransferIn: {
@@ -4114,6 +4180,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getOcrResult: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    saveOcrResult: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResultIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultOut"];
                 };
             };
             /** @description Validation Error */
