@@ -228,6 +228,18 @@ describe("result page (FR-SYS-105)", () => {
     expect(await screen.findByDisplayValue("THEIRS")).toBeInTheDocument();
   });
 
+  it("no editing while a conversion runs, so its result cannot wipe edits", async () => {
+    mockApi({
+      [`GET ${JOB}`]: () => json(200, job("TEMPLATE_MATCHING")),
+      [`GET ${JOB}/result`]: () =>
+        json(200, result(1, { a: "1" }, { template: null, mapping: { status: "CONVERTING", error: null } })),
+    });
+    page("result");
+    expect(await screen.findByText("Matching the template…")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.getByLabelText("a")).toHaveTextContent("1");
+  });
+
   it("a failed conversion shows the reason", async () => {
     mockApi({
       [`GET ${JOB}`]: () => json(200, job("VERIFYING")),

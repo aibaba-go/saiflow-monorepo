@@ -151,6 +151,8 @@ export function ResultPage() {
           groups={groups}
           missing={new Set([...data.missing_required, ...missing])}
           onChange={(next) => setDraft({ base: data.version, value: next })}
+          // A running conversion replaces the version: no edits that it would wipe (final review 4).
+          readOnly={running}
         />
       )}
       <ErrorText error={error} />
