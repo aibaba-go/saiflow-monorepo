@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make the LINE mini app's OCR pages a React copy of main's Vue pages. Behind them, the backend gets the matching rule "free-form when no template fits", URL import, amount checks, standardisation, matching info and "restore the recognised result".
+**Goal:** Make the LINE mini app's OCR pages a React copy of main's Vue pages. Behind them, the backend gets the matching rule "free-form when no template fits", URL import, amount checks, standardisation, matching info and main's "Reset" (discard unsaved edits).
 
-**Architecture:** The backend changes are small additions to `services/api`. A new router covers file imports, template versions and the reset; the mapping worker learns the 70% rule and quiet AUTO failures; a pure module `app/ocr/amounts.py` does the amount checks. The front end replaces `apps/line-mini/src/features/scan/*` with ports of main's views and components. Each port is one `.tsx` and one `.module.css`: the CSS is copied from the Vue `<style scoped>` block, the markup from `<template>`. Data comes from our existing API types; main's own `api.ts` and `store.ts` are not ported.
+**Architecture:** The backend changes are small additions to `services/api`. A new router covers file imports; template versions get a read route; the mapping worker learns the 70% rule and quiet AUTO failures; a pure module `app/ocr/amounts.py` does the amount checks. The front end replaces `apps/line-mini/src/features/scan/*` with ports of main's views and components. Each port is one `.tsx` and one `.module.css`: the CSS is copied from the Vue `<style scoped>` block, the markup from `<template>`. Data comes from our existing API types; main's own `api.ts` and `store.ts` are not ported.
 
 **Tech Stack:**
 - Backend: FastAPI, SQLAlchemy async, Alembic, httpx, pytest.
@@ -17,7 +17,7 @@
 
 ## Global Constraints
 
-- Requirements and AC IDs exactly as in the specs: FR-UPLOAD-014, FR-OCR-013/016/019/023/024, FR-VERIFY-018, FR-SYS-109…118.
+- Requirements and AC IDs exactly as in the specs: FR-UPLOAD-014, FR-OCR-013/016/019/023/024, FR-SYS-109…118.
 - Auto-match threshold **70%** (score ≥ 0.70 converts; below, free-form). The manual low-score hint is also below 70%.
 - Amount tolerance **±0.01 THB**. Decimal arithmetic only, never float. Never change recognised values.
 - URL import:
@@ -46,13 +46,13 @@
    The connected peer address is checked again after connect, so DNS rebinding also fails. Task 5 tests each.
 2. **Quiet AUTO failures vs. manual failures.** A failed AUTO mapping never shows as an error. A later manual failure must show. After a manual success, the old manual failure must not resurface. Task 1 tests the sequence auto-fail → manual-fail → manual-ok.
 3. **Messy amounts.** These are skipped, not errors and not issues: `"1,234.50"`, `" 100 "`, `"-"`, `""`, `None`, `"฿ 70"`, a negative discount, a row without quantity. Task 3 tests a table of these.
-4. **Reset edge cases.**
-   - Reset while a conversion is pending: 409 `mapping_in_progress`.
-   - Reset of a generic-only job restores version 1.
-   - Reset of a confirmed job: 409 `result_confirmed`.
-   - A stale `expected_version`: 409 `version_conflict`.
+4. **Reset and unsaved edits.**
+   - "Reset" is disabled with no unsaved edits.
+   - After added and removed rows and fields, Reset brings back exactly the last saved structure.
+   - Reset never sends a request and never changes the version.
+   - A draft started before a background conversion finished is not resurrected by Reset; the editor was read-only then.
 
-   Task 4 tests each.
+   Task 10 tests each.
 5. **Cancelling an upload mid-transfer.** A cancelled file never appears in Pending, and its half-made upload is deleted. "Cancel all" keeps the files already uploaded. A cancel during the PUT aborts the request. Task 8 tests with a held PUT.
 
 ---
@@ -63,10 +63,7 @@
 - `app/ocr/amounts.py` (new): `check(groups, structured) -> list[AmountIssue]`.
 - `app/ocr/fetch.py` (new): `fetch_public(url, *, max_bytes, timeout, max_redirects, resolver, transport) -> FetchResult`, `AddressNotAllowed`, `FetchFailed`.
 - `app/routers/imports.py` (new): `POST /api/v1/file-imports`.
-- `app/routers/templates.py` (modified):
-  - `GET /api/v1/templates/versions/{id}`;
-  - `POST /api/v1/ocr/jobs/{id}/result/reset`;
-  - options gain `score` and `recommended`.
+- `app/routers/templates.py` (modified): `GET /api/v1/templates/versions/{id}`; options gain `score` and `recommended`.
 - `app/routers/uploads.py` (modified): `GET /api/v1/files/{id}`.
 - `app/routers/exports.py` (modified): `GET /api/v1/exports/{id}`.
 - `app/routers/results.py` (modified): `ResultOut` gains `match`, `warnings`, `amount_issues`, `updated_at`.
@@ -209,32 +206,19 @@
 - [ ] **Step 4: Run** the unit and integration tests above. Expected: PASS.
 - [ ] **Step 5: Regenerate the client and commit** `[ocr-ui-parity] amount checks from template roles`.
 
-### Task 4: Reset, and reads for files and exports (FR-VERIFY-018)
+### Task 4: Reads for files and exports (used by main's confirm and final pages)
 
-**Files:**
-- Modify: `app/services/result_service.py`, `app/routers/templates.py` (the reset route sits with the job routes), `app/routers/uploads.py`, `app/routers/exports.py`, `app/services/export_service.py`.
-- Test: `tests/integration/test_results.py`, `tests/integration/test_uploads.py`, `tests/integration/test_exports.py`.
+**Files:** modify `app/routers/uploads.py`, `app/routers/exports.py`, `app/services/export_service.py`. Test: `tests/integration/test_uploads.py`, `tests/integration/test_exports.py`.
 
 **Interfaces:**
-- `result_service.reset(db, ctx, principal, job, *, expected_version:int) -> ResultVersion`:
-  - source: the current mapping's `result_version_id`; for a free-form current version, the job's version 1;
-  - new version = copy of the source's structured, `mapping_id` = the source's;
-  - permission: `require_edit`;
-  - 409 `mapping_in_progress` when `pending_mapping_id`;
-  - 409 `result_confirmed`; 409 `version_conflict`.
-- `POST /api/v1/ocr/jobs/{id}/result/reset {expected_version}` → `ResultOut`.
 - `GET /api/v1/files/{id}` → `FileOut` (via `file_access`).
 - `GET /api/v1/exports/{id}` → `ExportOut{id, status, expires_at}` (`_visible_export`; 404 when expired).
 
-- [ ] **Step 1: Failing tests.**
-  - `test_reset_restores_recognised` (AC-018-01): v1 auto Tax "IV1" … save "IV9" (v3) → reset → v4 with "IV1"; v3 still present.
-  - `test_reset_free_form_goes_to_v1`.
-  - `test_reset_conflicts` (AC-018-02, Review Focus 4): stale version 409 `version_conflict`; confirmed 409 `result_confirmed`; pending mapping 409 `mapping_in_progress`; data_browse-only member 403.
-  - `test_get_file` and `test_get_export`: own → 200; another tenant → 404.
+- [ ] **Step 1: Failing tests.** `test_get_file` and `test_get_export`: own → 200; another tenant → 404; an expired export → 404.
 - [ ] **Step 2: Run them.** Expected: FAIL.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run** them. Expected: PASS.
-- [ ] **Step 5: Regenerate the client and commit** `[ocr-ui-parity] restore the recognised result; file and export reads`.
+- [ ] **Step 5: Regenerate the client and commit** `[ocr-ui-parity] file and export reads`.
 
 ### Task 5: URL import (FR-UPLOAD-014)
 
@@ -289,7 +273,7 @@
 - `api.ts` exports thin typed wrappers around `call(api.X(...))`, with types from `@saiflow/api-client`:
   - files and uploads: `listPending`, `getFile`, `deleteFile`, `importUrl(url)`;
   - jobs: `listJobs({page, pageSize, stage?, q?})`, `getJob`, `createJob(fileId, key)`, `cancelJob`, `rerunJob`;
-  - results: `getResult`, `saveResult(id, expectedVersion, structured, confirm)`, `resetResult(id, expectedVersion)`;
+  - results: `getResult`, `saveResult(id, expectedVersion, structured, confirm)`;
   - templates: `templateOptions`, `templateVersion`, `applyTemplate`, `useGeneric`;
   - exports: `createExport(id, lang)`, `getExport`, `exportTicket`.
 - `StatusChip({stage})` uses main's colours: success, processing, danger and neutral from `theme`.
@@ -417,7 +401,7 @@
 - The editor:
   - while a conversion runs, it is read-only (kept from the final review);
   - in a generic result, the field-name checks show "Field name required" and "Field name already used".
-- Reset uses `resetResult` behind a confirm dialog.
+- "Reset" (main's `resetDraft`): enabled only when dirty; behind main's confirm dialog; restores the last saved structured result locally, with no request.
 - `TemplatePanel`:
   - options sorted with score badges and "Recommended";
   - "Preview fields" (`templateVersion`) then "Apply";
@@ -436,7 +420,7 @@
   - `no editing while a conversion runs`;
   - `json tab and copy` (114-01);
   - `field name checks` (114-02);
-  - `reset after confirm dialog` (114-03): a POST to `/result/reset` with `{expected_version}`, and the page shows the restored value;
+  - `reset discards unsaved edits` (114-03; Review Focus 4): edit a field and delete a row, Reset → confirm → the saved values and row are back, no request was sent, the version is unchanged; with no edits, Reset is disabled;
   - `free form without error` (019-02): `mapping: null, template: null` → no alert role in the page;
   - `amount issue and warning marks`;
   - `low score notice` (024-02);
@@ -480,7 +464,7 @@
 - `docs/30-design/API-Spec.md`: the new endpoints.
 - `docs/30-design/Data-Model.md`: template field roles; the B-3/B-4 note updated.
 - `docs/20-requirements/Requirements-Index.md`:
-  - rows FR-UPLOAD-014, FR-OCR-024, FR-VERIFY-018, FR-SYS-109…118;
+  - rows FR-UPLOAD-014, FR-OCR-024, FR-SYS-109…118;
   - FR-OCR-013 and 016 point to `openspec/specs/recognition/spec.md`.
 - `docs/20-requirements/functional/EPIC-01*.md` and `EPIC-02*.md`: mark FR-OCR-013 and 016 migrated; note on FR-OCR-002…005 that free-form covers them (D4).
 - [ ] **Step 1: Edit, then run** `openspec validate ocr-ui-parity` and `bash scripts/check-no-secrets.sh`. Expected: pass.
@@ -500,8 +484,8 @@
     - file-by-file confirm;
     - viewer zoom;
     - JSON tab;
-    - reset;
+    - reset of unsaved edits;
     - template preview and apply;
     - history search.
   - Then the side-by-side check of the six pages against main (AC-118-01).
-  - Then write `verification.md`. Archive `ocr-scan-flow` first, then this change. Its delta modifies `recognition` FR-OCR-019 and 023 and adds to `documents`, `recognition`, `results` and `line-mini`.
+  - Then write `verification.md`. Archive `ocr-scan-flow` first, then this change. Its delta modifies `recognition` FR-OCR-019 and 023 and adds to `documents`, `recognition` and `line-mini`.
