@@ -1,0 +1,78 @@
+/* main components/OriginalPreview.vue <style scoped>, copied verbatim. */
+.original-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.original-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 14px;
+}
+
+.original-title {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.original-hint {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.pager {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 0 14px 10px;
+}
+
+.page-pill {
+  min-width: 30px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--icon);
+}
+
+.page-pill.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.original-frame {
+  position: relative;
+  display: block;
+  width: 100%;
+  background: var(--track);
+  border-top: 1px solid var(--border);
+}
+
+.original {
+  display: block;
+  width: 100%;
+  max-height: 260px;
+  object-fit: contain;
+  background: #fff;
+}
+
+.zoom-badge {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(23, 26, 28, 0.68);
+  color: #fff;
+}
