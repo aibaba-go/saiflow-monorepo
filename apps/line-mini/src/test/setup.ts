@@ -25,6 +25,9 @@ afterEach(() => {
   Dialog.clear();
   Toast.clear();
   cleanup();
+  // A cleared dialog stays in the DOM while it animates out; under load (CI, `pnpm -r test`)
+  // the next test then saw two "Confirm" buttons (049-03, 050-01, 050-02). Drop the leftovers.
+  document.body.innerHTML = "";
 });
 
 // antd-mobile popups capture the pointer for swipe gestures; jsdom has no pointer capture.
