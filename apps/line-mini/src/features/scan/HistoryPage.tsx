@@ -12,14 +12,22 @@ import s from "./HistoryPage.module.css";
 import theme from "./theme.module.css";
 
 export const PAGE_SIZE = 20;
-const FILTERS = ["ALL", "OCR_PROCESSING", "OCR_FAILED", "TEMPLATE_MATCHING", "VERIFYING", "CONFIRMED"] as const;
+const FILTERS = [
+  "ALL",
+  "OCR_PROCESSING",
+  "OCR_FAILED",
+  "TEMPLATE_MATCHING",
+  "VERIFYING",
+  "PENDING_REVIEW",
+  "CONFIRMED",
+] as const;
 type Filter = (typeof FILTERS)[number];
 
 /** Where a row opens (AC-FR-SYS-108-01): progress while recognising, matching or failed;
  * the result page to verify; the final result once confirmed. */
 export function jobTarget(job: Pick<JobOut, "id" | "stage">): string {
   if (job.stage === "VERIFYING") return `/scan/jobs/${job.id}/result`;
-  if (job.stage === "CONFIRMED") return `/scan/jobs/${job.id}/final`;
+  if (job.stage === "CONFIRMED" || job.stage === "PENDING_REVIEW") return `/scan/jobs/${job.id}/final`;
   return `/scan/jobs/${job.id}/progress`;
 }
 

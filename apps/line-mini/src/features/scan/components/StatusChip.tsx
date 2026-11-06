@@ -8,6 +8,7 @@ const TONE: Record<string, string | undefined> = {
   TEMPLATE_MATCHING: s.processing,
   OCR_FAILED: s.failed,
   VERIFYING: s.verifying,
+  PENDING_REVIEW: s.processing,
   CONFIRMED: s.completed,
 };
 

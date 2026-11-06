@@ -8,8 +8,10 @@ import { useT } from "../../i18n";
 import { api, call } from "../../services/api";
 import { ApiError, errorMessage } from "../../services/errors";
 import { useSession } from "../../stores/session";
+import { formatBangkokDateTime } from "../../utils/format";
 import { useCurrentTenant } from "../tenants/useCurrentTenant";
 import { applyTemplate, chooseGeneric, rerunJob, saveResult } from "./api";
+import { ChangeLog } from "./components/ChangeLog";
 import { FormDialog, fd } from "./components/FormDialog";
 import { OriginalPreview } from "./components/OriginalPreview";
 import { PageHeader } from "./components/PageHeader";
@@ -137,7 +139,10 @@ export function ResultPage() {
         void client.invalidateQueries({ queryKey: ["jobs"] });
         void client.invalidateQueries({ queryKey: ["job"] });
         client.setQueriesData({ queryKey: ["result"] }, () => out.result);
-        navigate(`/scan/jobs/${id}/final`, { replace: true });
+        void client.invalidateQueries({ queryKey: ["reviewSummary"] });
+        // into review: the final page says so (FR-SYS-106)
+        const submitted = out.result.review?.stage === "PENDING_L1" || out.result.review?.stage === "PENDING_L2";
+        navigate(`/scan/jobs/${id}/final`, { replace: true, state: submitted ? { submitted: true } : null });
       } else if (out.kind === "missing") {
         setMissing(out.paths);
         if (out.paths[0]) setTimeout(() => scrollToField(out.paths[0]!), 0);
@@ -297,11 +302,23 @@ export function ResultPage() {
               </div>
             )}
 
+            {data.review?.last_return && (
+              <div className={cx("template-notice", "danger")} role="note">
+                {t("review.lastReturn", {
+                  level: t(data.review.last_return.level === 2 ? "review.level2" : "review.level1"),
+                  name: data.review.last_return.reviewer_name ?? "-",
+                  time: formatBangkokDateTime(data.review.last_return.created_at),
+                })}
+                {data.review.last_return.comment && <div>{data.review.last_return.comment}</div>}
+              </div>
+            )}
+
             {job.data && (
               <OriginalPreview fileId={job.data.file_id} fileName={job.data.file_name} pageCount={job.data.page_count || 1} />
             )}
 
             <div className={s["edit-hint"]}>{locked ? t("result.lockedHint") : t("result.editHint")}</div>
+            <ChangeLog jobId={id} groups={(data.template?.groups ?? null) as Group[] | null} />
             <div className={s["view-tabs"]} role="tablist">
               {(["table", "json"] as const).map((k) => (
                 <button

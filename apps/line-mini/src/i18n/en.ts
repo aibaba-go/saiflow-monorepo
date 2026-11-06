@@ -548,6 +548,7 @@ export const en = {
   "history.stage.PENDING_REVIEW": "To review",
   "notif.review_pending.title": "A document is waiting for your review",
   "notif.review_pending.body": "{tenant} · {file} · {template} · {level} · confirmed by {name}",
+  "job.stage.PENDING_REVIEW": "To review",
 } as const;
 
 export type MessageKey = keyof typeof en;

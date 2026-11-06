@@ -550,4 +550,5 @@ export const th: Record<MessageKey, string> = {
   "history.stage.PENDING_REVIEW": "รอตรวจสอบ",
   "notif.review_pending.title": "มีเอกสารรอให้คุณตรวจสอบ",
   "notif.review_pending.body": "{tenant} · {file} · {template} · {level} · ยืนยันโดย {name}",
+  "job.stage.PENDING_REVIEW": "รอตรวจสอบ",
 };

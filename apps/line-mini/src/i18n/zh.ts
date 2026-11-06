@@ -550,4 +550,5 @@ export const zh: Record<MessageKey, string> = {
   "history.stage.PENDING_REVIEW": "待复核",
   "notif.review_pending.title": "有单据待你复核",
   "notif.review_pending.body": "{tenant} · {file} · {template} · {level} · 确认人 {name}",
+  "job.stage.PENDING_REVIEW": "待复核",
 };

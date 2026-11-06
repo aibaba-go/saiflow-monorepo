@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { BrandLoading } from "../../components/BrandLoading";
 import { useT } from "../../i18n";
@@ -8,6 +8,8 @@ import { useLanguage } from "../../stores/language";
 import { authLiff } from "../auth/session";
 import { can } from "../tenants/permissions";
 import { useCurrentTenant } from "../tenants/useCurrentTenant";
+import { ReviewRecords } from "../reviews/ReviewRecords";
+import { ChangeLog } from "./components/ChangeLog";
 import { OriginalPreview } from "./components/OriginalPreview";
 import { PageHeader } from "./components/PageHeader";
 import { StatusChip } from "./components/StatusChip";
@@ -28,6 +30,13 @@ export function FinalResultPage() {
   const lang = useLanguage((st) => st.lang);
   const { tenant } = useCurrentTenant();
   const { id = "" } = useParams();
+  const location = useLocation();
+  const [toast, setToast] = useState<boolean>(Boolean((location.state as { submitted?: boolean } | null)?.submitted));
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(false), 2500);
+    return () => clearTimeout(timer);
+  }, [toast]);
   const job = useJob(id, false);
   const result = useResult(id);
   const [exporting, setExporting] = useState(false);
@@ -65,6 +74,17 @@ export function FinalResultPage() {
           <div className={s.summary}>
             <div className={s.chips}>{job.data && <StatusChip stage={job.data.stage} />}</div>
             <div className={s.title}>{t("final.title")}</div>
+            {data.review && data.review.stage !== "NONE" && (
+              <div className={s.meta}>
+                {t(
+                  data.review.stage === "PENDING_L1"
+                    ? "review.pending1"
+                    : data.review.stage === "PENDING_L2"
+                      ? "review.pending2"
+                      : "review.status.CONFIRMED",
+                )}
+              </div>
+            )}
             <div className={s.meta}>
               {(job.data?.page_count ?? 1) === 1
                 ? t("home.pending.pageOne")
@@ -87,6 +107,8 @@ export function FinalResultPage() {
               editable={false}
               onChange={() => {}}
             />
+            <ReviewRecords records={data.review?.records ?? []} />
+            <ChangeLog jobId={id} groups={(data.template?.groups ?? null) as Group[] | null} />
             {Boolean(error) && (
               <p className={s["status-error"]} role="alert">
                 {errorMessage(error, t)}
@@ -96,7 +118,7 @@ export function FinalResultPage() {
             {hint === "external" && <p className={s["export-ready"]}>{t("final.exportExternal")}</p>}
           </div>
           <div className={s["action-bar"]}>
-            {can(tenant, "export") && (
+            {can(tenant, "export") && job.data?.stage === "CONFIRMED" && (
               <button type="button" className={s["primary-btn"]} disabled={exporting} onClick={() => void exportExcel()}>
                 {exporting ? (
                   <BrandLoading variant="inline" label={t("final.exporting")} />
@@ -120,6 +142,11 @@ export function FinalResultPage() {
       ) : (
         <div className={s.fatal}>
           <BrandLoading variant="inline" label={t("common.loading")} />
+        </div>
+      )}
+      {toast && (
+        <div className={s["export-ready"]} role="status">
+          {t("review.submitted")}
         </div>
       )}
     </div>

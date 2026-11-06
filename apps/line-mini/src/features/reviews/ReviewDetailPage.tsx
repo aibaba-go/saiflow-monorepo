@@ -6,6 +6,7 @@ import { BrandLoading } from "../../components/BrandLoading";
 import { useT } from "../../i18n";
 import { ApiError, errorMessage } from "../../services/errors";
 import { formatBangkokDateTime } from "../../utils/format";
+import { ChangeLog } from "../scan/components/ChangeLog";
 import { FormDialog, fd } from "../scan/components/FormDialog";
 import { OriginalPreview } from "../scan/components/OriginalPreview";
 import { PageHeader } from "../scan/components/PageHeader";
@@ -22,7 +23,7 @@ export const COMMENT_MAX = 500;
 /** Review detail (FR-SYS-120): the original, the confirmed result read-only, the review
  * history and the change log, with Approve (optional comment) and Return (comment
  * required). A document someone else already handled sends the user back to the queue. */
-export function ReviewDetailPage({ changeLog }: { changeLog?: (jobId: string) => React.ReactNode }) {
+export function ReviewDetailPage() {
   const t = useT();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -110,7 +111,7 @@ export function ReviewDetailPage({ changeLog }: { changeLog?: (jobId: string) =>
             onChange={() => {}}
           />
           <ReviewRecords records={data.review.records} />
-          {changeLog?.(id)}
+          <ChangeLog jobId={id} groups={(data.template?.groups ?? null) as Group[] | null} />
         </div>
       )}
       {canDecide && (
