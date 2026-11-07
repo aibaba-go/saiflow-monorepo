@@ -34,7 +34,7 @@
 }
 
 .meta {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -49,8 +49,8 @@
 .export-ready {
   margin: 0;
   text-align: center;
-  font-size: 10.5px;
-  color: var(--success);
+  font-size: 12px;
+  color: var(--success-text);
   font-weight: 600;
 }
 
@@ -66,9 +66,9 @@
 
 .primary-btn {
   height: 53px;
-  border-radius: 14px;
+  border-radius: var(--card-radius);
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   font-size: 13px;
   font-weight: 700;
   display: flex;
@@ -82,7 +82,7 @@
 }
 
 .secondary-btn {
-  height: 40px;
+  min-height: var(--control-h);
   font-size: 12px;
   font-weight: 600;
   color: var(--icon);
@@ -93,14 +93,14 @@
   padding: 4px 0;
   text-align: center;
   font-size: 12px;
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .home-btn {
   height: 44px;
   padding: 0 24px;
-  border-radius: 12px;
-  background: var(--primary-light);
+  border-radius: var(--card-radius);
+  background: var(--primary-soft);
   color: var(--primary);
   font-size: 12px;
   font-weight: 700;

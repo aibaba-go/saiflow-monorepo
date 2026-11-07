@@ -15,8 +15,8 @@
 .logo-chip {
   width: 40px;
   height: 40px;
-  border-radius: 12px;
-  background: var(--card);
+  border-radius: var(--card-radius);
+  background: var(--surface);
   border: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -37,7 +37,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--card);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 999px;
 }
@@ -51,7 +51,7 @@
   height: 8px;
   border-radius: 50%;
   background: var(--danger);
-  border: 1.5px solid var(--card);
+  border: 1.5px solid var(--surface);
 }
 
 .ws-row {
@@ -66,11 +66,11 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  background: var(--card);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 6px 12px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--icon);
   max-width: 180px;
@@ -110,9 +110,9 @@
   top: calc(100% + 6px);
   left: 0;
   min-width: 220px;
-  background: var(--card);
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--card-radius);
   box-shadow: 0 12px 32px rgba(23, 26, 28, 0.14);
   padding: 6px;
   z-index: 11;
@@ -125,7 +125,7 @@
   align-items: center;
   gap: 8px;
   padding: 10px 10px;
-  border-radius: 10px;
+  border-radius: var(--control-radius);
   font-size: 12px;
   color: var(--text);
   text-align: left;
@@ -149,7 +149,7 @@
 
 .ws-menu-item em {
   font-style: normal;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
 }
@@ -159,8 +159,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  background: var(--primary-light);
-  border-radius: 14px;
+  background: var(--primary-soft);
+  border-radius: var(--card-radius);
   padding: 12px 14px;
 }
 
@@ -168,7 +168,7 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: var(--card);
+  background: var(--surface);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -181,19 +181,18 @@
 }
 
 .quota-text {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* a label: wraps in Thai instead of being cut (FR-SYS-136) */
+  overflow-wrap: anywhere;
 }
 
 .quota-track {
   margin-top: 7px;
   height: 6px;
   border-radius: 3px;
-  background: #ffffff;
+  background: var(--surface);
   overflow: hidden;
 }
 
@@ -205,7 +204,7 @@
 }
 
 .quota-plans {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--primary);
   white-space: nowrap;
@@ -220,13 +219,13 @@
   align-items: center;
   gap: 4px;
   flex-wrap: wrap;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
 .quota-expiry.warn,
 .quota-expiry.danger {
-  color: var(--danger);
+  color: var(--danger-text);
   font-weight: 700;
 }
 
@@ -237,15 +236,15 @@
 .quota-soon {
   padding: 1px 6px;
   border-radius: 999px;
-  background: var(--card);
-  color: var(--danger);
+  background: var(--surface);
+  color: var(--danger-text);
   font-weight: 800;
 }
 
 .expired-card {
-  background: var(--card);
+  background: var(--surface);
   border: 1px solid var(--danger);
-  border-radius: 14px;
+  border-radius: var(--card-radius);
   padding: 12px 14px;
 }
 
@@ -260,8 +259,8 @@
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--danger);
-  color: #fff;
-  font-size: 9px;
+  color: var(--on-primary);
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.4px;
   text-transform: uppercase;
@@ -275,7 +274,7 @@
 
 .expired-body {
   margin: 7px 0 0;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
   color: var(--text-secondary);
 }
@@ -283,10 +282,10 @@
 .expired-cta {
   margin-top: 9px;
   width: 100%;
-  min-height: 38px;
-  border-radius: 12px;
+  min-height: var(--control-h);
+  border-radius: var(--card-radius);
   background: var(--danger);
-  color: #fff;
+  color: var(--on-primary);
   font-size: 12px;
   font-weight: 700;
 }
@@ -305,9 +304,9 @@
 }
 
 .entry-card {
-  background: var(--card);
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--card-radius);
   padding: 16px 8px 12px;
   display: flex;
   flex-direction: column;
@@ -328,7 +327,7 @@
   width: 44px;
   height: 44px;
   border-radius: 999px;
-  background: var(--primary-light);
+  background: var(--primary-soft);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -339,9 +338,9 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  background: var(--card);
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--card-radius);
   padding: 14px 16px;
   font-size: 12px;
   font-weight: 600;
@@ -362,9 +361,9 @@
   flex: 1;
   min-width: 0;
   height: 44px;
-  border-radius: 12px;
+  border-radius: var(--card-radius);
   border: 1px solid var(--border);
-  background: var(--card);
+  background: var(--surface);
   padding: 0 14px;
   font-size: 12px;
   outline: none;
@@ -378,9 +377,9 @@
   flex-shrink: 0;
   height: 44px;
   padding: 0 18px;
-  border-radius: 12px;
+  border-radius: var(--card-radius);
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   font-size: 12px;
   font-weight: 700;
 }
@@ -396,13 +395,13 @@
 
 .status-line {
   margin: 0;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
   text-align: center;
 }
 
 .status-line.error {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .sr-only {
@@ -420,8 +419,8 @@
 /* ---- 上传批次（FR-UPLOAD-010/013） ---- */
 .upload-box {
   border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--card);
+  border-radius: var(--card-radius);
+  background: var(--surface);
   overflow: hidden;
 }
 
@@ -454,12 +453,12 @@
 
 .cancel-all,
 .retry-btn {
-  min-height: 34px;
+  min-height: var(--control-h);
   padding: 0 10px;
   border: 1px solid var(--danger);
-  border-radius: 8px;
-  color: var(--danger);
-  font-size: 11px;
+  border-radius: var(--control-radius);
+  color: var(--danger-text);
+  font-size: 12px;
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -469,7 +468,7 @@
 }
 
 .upload-meta {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -484,7 +483,7 @@
   flex: 1;
   min-width: 0;
   border-radius: 4px;
-  background: var(--primary-light);
+  background: var(--primary-soft);
   overflow: hidden;
 }
 
@@ -514,8 +513,8 @@
 .file-icon {
   width: 32px;
   height: 38px;
-  border-radius: 9px;
-  background: var(--primary-light);
+  border-radius: var(--control-radius);
+  background: var(--primary-soft);
   color: var(--primary);
   display: flex;
   align-items: center;
@@ -557,7 +556,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 7px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -565,7 +564,7 @@
   height: 4px;
   margin-top: 6px;
   border-radius: 4px;
-  background: var(--primary-light);
+  background: var(--primary-soft);
   overflow: hidden;
 }
 
@@ -579,8 +578,8 @@
 
 .row-error {
   margin: 5px 0 0;
-  font-size: 11px;
-  color: var(--danger);
+  font-size: 12px;
+  color: var(--danger-text);
   overflow-wrap: anywhere;
 }
 
@@ -592,37 +591,37 @@
 }
 
 .row-state {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
   white-space: nowrap;
 }
 
-.row-state.uploaded { color: var(--success); }
+.row-state.uploaded { color: var(--success-text); }
 .row-state.uploading { color: var(--primary); }
-.row-state.failed { color: var(--danger); }
+.row-state.failed { color: var(--danger-text); }
 
 .row-cancel {
   min-height: 32px;
   padding: 0 8px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--control-radius);
   color: var(--icon);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
 .row-cancel.active {
   border-color: var(--danger);
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .row-retry {
-  min-height: 32px;
+  min-height: var(--control-h);
   padding: 0 8px;
   border: 1px solid var(--danger);
-  border-radius: 8px;
-  color: var(--danger);
-  font-size: 11px;
+  border-radius: var(--control-radius);
+  color: var(--danger-text);
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -634,25 +633,25 @@
   margin: 0 13px 12px;
   padding: 12px;
   border: 1px solid var(--danger);
-  border-radius: 12px;
+  border-radius: var(--card-radius);
   background: rgba(230, 71, 77, 0.06);
 }
 
 .inline-confirm.delete-confirm {
   margin: 0;
-  background: var(--card);
+  background: var(--surface);
 }
 
 .confirm-title {
   margin: 0 0 4px;
   font-size: 12px;
   font-weight: 700;
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .confirm-body {
   margin: 0 0 10px;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--icon);
 }
@@ -673,14 +672,14 @@
 }
 
 .confirm-actions button {
-  min-height: 38px;
-  border-radius: 9px;
+  min-height: var(--control-h);
+  border-radius: var(--control-radius);
   font-size: 12px;
   font-weight: 600;
 }
 
 .confirm-keep {
-  background: var(--card);
+  background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text);
 }
@@ -688,7 +687,7 @@
 .confirm-danger {
   background: var(--danger);
   border: 1px solid var(--danger);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .confirm-actions button:disabled {
@@ -701,7 +700,7 @@
   gap: 8px;
   padding: 10px 13px;
   border-top: 1px solid var(--border);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -725,17 +724,17 @@
 .batch-note small {
   display: block;
   margin-top: 3px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 400;
 }
 
 .batch-note.done {
   background: var(--success-bg);
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .batch-note.cancelled {
-  background: var(--primary-light);
+  background: var(--primary-soft);
   color: var(--primary);
 }
 
@@ -774,9 +773,9 @@
   height: 22px;
   padding: 0 6px;
   border-radius: 7px;
-  background: var(--processing-bg);
-  color: var(--processing);
-  font-size: 11px;
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  font-size: 12px;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
@@ -784,8 +783,8 @@
 }
 
 .select-all {
-  min-height: 36px;
-  font-size: 11px;
+  min-height: var(--control-h);
+  font-size: 12px;
   font-weight: 600;
   color: var(--primary);
 }
@@ -796,14 +795,14 @@
 
 .section-desc {
   margin: -4px 0 0;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
 .pending-box {
   border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--card);
+  border-radius: var(--card-radius);
+  background: var(--surface);
   overflow: hidden;
 }
 
@@ -830,12 +829,12 @@
 }
 
 .pending-row.chosen {
-  background: var(--primary-light);
+  background: var(--primary-soft);
 }
 
 .check {
   width: 30px;
-  min-height: 40px;
+  min-height: var(--control-h);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -852,27 +851,27 @@
 .pending-badge {
   padding: 2px 7px;
   border-radius: 7px;
-  background: var(--processing-bg);
-  color: var(--processing);
+  background: var(--warning-bg);
+  color: var(--warning-text);
   white-space: nowrap;
 }
 
 .process-btn {
-  min-height: 36px;
+  min-height: var(--control-h);
   padding: 0 9px;
   border: 1px solid var(--primary);
-  border-radius: 9px;
+  border-radius: var(--control-radius);
   color: var(--primary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   flex-shrink: 0;
 }
 
 .trash-btn {
   width: 32px;
-  min-height: 36px;
-  border-radius: 8px;
-  color: var(--danger);
+  min-height: var(--control-h);
+  border-radius: var(--control-radius);
+  color: var(--danger-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -886,7 +885,7 @@
 
 .batch-bar {
   padding: 11px 12px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .batch-selected {
@@ -902,20 +901,20 @@
 }
 
 .batch-actions button {
-  min-height: 42px;
-  border-radius: 10px;
+  min-height: var(--control-h);
+  border-radius: var(--control-radius);
   font-size: 12px;
   font-weight: 700;
 }
 
 .bulk-delete {
   border: 1px solid var(--danger);
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .bulk-process {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .bulk-delete:disabled {
@@ -953,4 +952,11 @@
   object-fit: cover;
   border-radius: inherit;
   display: block;
+}
+
+/* 34px icon button, 44px tap area (FR-SYS-134) */
+.bell::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
 }

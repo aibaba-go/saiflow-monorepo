@@ -44,6 +44,15 @@ describe("shared scan parts (main's components)", () => {
     expect(screen.getByText("Verifying")).toBeInTheDocument();
   });
 
+  it("status chip uses the STD-008 review colour and shows returned (FR-SYS-133)", () => {
+    const { unmount } = render(<StatusChip stage="PENDING_REVIEW" level={2} />);
+    expect(screen.getByText("Waiting for level-2 review").className).toMatch(/review/);
+    unmount();
+    render(<StatusChip stage="VERIFYING" returned />);
+    expect(screen.getByText("Verifying").className).toMatch(/verifying/);
+    expect(screen.getByText("Returned").className).toMatch(/failed/);
+  });
+
   it("job list item shows name, pages, template and Bangkok time", async () => {
     const open = vi.fn();
     render(<JobListItem job={job} onOpen={open} />);

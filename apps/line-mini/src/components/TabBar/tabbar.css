@@ -3,8 +3,8 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: #fff;
-  border-top: 1px solid #e5e6eb;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
   padding-bottom: env(safe-area-inset-bottom);
 }
 .tabbar__list {
@@ -16,9 +16,9 @@
   background: none;
   padding: 12px 0;
   font-size: 13px;
-  color: #666;
+  color: var(--text-secondary);
 }
 .tabbar__tab[aria-selected="true"] {
-  color: #1f5fbf;
+  color: var(--primary);
   font-weight: 600;
 }

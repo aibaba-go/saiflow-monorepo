@@ -21,7 +21,7 @@
   padding: 14px 16px;
   border: none;
   border-radius: 16px;
-  background: var(--card);
+  background: var(--surface);
   color: var(--text);
   text-align: left;
   box-shadow: 0 1px 3px rgba(17, 24, 39, 0.06);
@@ -36,9 +36,9 @@
 .badge {
   min-width: 24px;
   padding: 2px 8px;
-  border-radius: 12px;
+  border-radius: var(--card-radius);
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   font-size: 12px;
   font-weight: 700;
   text-align: center;
@@ -54,7 +54,7 @@
   padding: 8px 0;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--card);
+  background: var(--surface);
   color: var(--text-secondary);
   font-size: 13px;
   font-weight: 700;
@@ -63,7 +63,7 @@
 .tab.active {
   border-color: var(--primary);
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .item {
@@ -73,8 +73,8 @@
   width: 100%;
   padding: 12px 14px;
   border: none;
-  border-radius: 14px;
-  background: var(--card);
+  border-radius: var(--card-radius);
+  background: var(--surface);
   color: var(--text);
   text-align: left;
 }
@@ -93,7 +93,7 @@
 .blocked {
   font-size: 12px;
   font-weight: 700;
-  color: var(--warning, #b45309);
+  color: var(--warning-text);
 }
 
 .status-line {
@@ -105,7 +105,7 @@
 
 .error {
   font-size: 13px;
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .section {
@@ -113,8 +113,8 @@
   flex-direction: column;
   gap: 8px;
   padding: 12px 14px;
-  border-radius: 14px;
-  background: var(--card);
+  border-radius: var(--card-radius);
+  background: var(--surface);
 }
 
 .section-title {
@@ -137,12 +137,12 @@
 }
 
 .approve {
-  color: var(--success, #15803d);
+  color: var(--success-text);
   font-weight: 700;
 }
 
 .return {
-  color: var(--danger);
+  color: var(--danger-text);
   font-weight: 700;
 }
 
@@ -154,7 +154,7 @@
   display: flex;
   gap: 10px;
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-  background: var(--card);
+  background: var(--surface);
   box-shadow: 0 -1px 6px rgba(17, 24, 39, 0.08);
 }
 
@@ -162,19 +162,19 @@
   flex: 1;
   height: 44px;
   border: none;
-  border-radius: 12px;
+  border-radius: var(--card-radius);
   font-size: 14px;
   font-weight: 800;
 }
 
 .primary {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .danger {
   background: var(--danger);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .secondary {
@@ -187,7 +187,7 @@
   min-height: 84px;
   padding: 10px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--control-radius);
   background: var(--bg);
   color: var(--text);
   font: inherit;
@@ -210,11 +210,11 @@
 }
 
 .select {
-  height: 34px;
+  min-height: var(--control-h);
   padding: 0 8px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--card);
+  border-radius: var(--control-radius);
+  background: var(--surface);
   color: var(--text);
   font-size: 13px;
 }
@@ -241,7 +241,7 @@
   padding: 8px 16px;
   border-radius: 999px;
   background: rgba(17, 24, 39, 0.85);
-  color: #fff;
+  color: var(--on-primary);
   font-size: 13px;
   z-index: 60;
 }

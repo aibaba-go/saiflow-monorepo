@@ -72,7 +72,7 @@ export function FinalResultPage() {
       ) : data ? (
         <>
           <div className={s.summary}>
-            <div className={s.chips}>{job.data && <StatusChip stage={job.data.stage} level={job.data.review_level} />}</div>
+            <div className={s.chips}>{job.data && <StatusChip stage={job.data.stage} level={job.data.review_level} returned={job.data.returned} />}</div>
             <div className={s.title}>{t("final.title")}</div>
             {data.review && data.review.stage !== "NONE" && (
               <div className={s.meta}>

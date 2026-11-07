@@ -4,7 +4,7 @@
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: #1f5fbf;
+  color: var(--primary);
 }
 .brand-loading--splash {
   min-height: 100vh;
@@ -42,7 +42,7 @@
 }
 .brand-loading__label {
   font-size: 14px;
-  color: #555;
+  color: var(--text-secondary);
 }
 @keyframes brand-dot {
   0%,

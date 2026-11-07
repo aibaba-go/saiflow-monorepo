@@ -14,7 +14,8 @@
   align-items: center;
   justify-content: center;
   color: var(--text);
-  border-radius: 10px;
+  border-radius: var(--control-radius);
+  position: relative;
 }
 
 .title {
@@ -22,13 +23,20 @@
   font-weight: 700;
   margin: 0;
   flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
+  /* page titles wrap instead of being cut (FR-SYS-136) */
+  overflow-wrap: anywhere;
 }
 
 .slot {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* 32px icon button, 44px tap area (FR-SYS-134) */
+.back::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
 }

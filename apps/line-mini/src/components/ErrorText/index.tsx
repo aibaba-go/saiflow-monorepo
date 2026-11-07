@@ -10,7 +10,7 @@ export function ErrorText({ error }: ErrorTextProps) {
   const t = useT();
   if (!error) return null;
   return (
-    <div role="alert" style={{ color: "#d4380d", fontSize: 13, marginTop: 4 }}>
+    <div role="alert" style={{ color: "var(--danger-text)", fontSize: 13, marginTop: 4 }}>
       {errorMessage(error, t)}
     </div>
   );

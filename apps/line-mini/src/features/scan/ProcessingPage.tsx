@@ -127,11 +127,11 @@ export function ProcessingPage() {
                 <div key={step.key} className={s.step}>
                   <div className={cx("step-dot", step.done && "done", step.active && "active", step.failed && "failed")}>
                     {step.done ? (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: "var(--on-primary)" }} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M20 6L9 17l-5-5" />
                       </svg>
                     ) : step.failed ? (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: "var(--on-primary)" }} strokeWidth="3" strokeLinecap="round">
                         <path d="M18 6L6 18M6 6l12 12" />
                       </svg>
                     ) : step.active ? (

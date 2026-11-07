@@ -13,7 +13,7 @@
 }
 
 .status-card {
-  background: var(--card);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 26px 20px;
@@ -41,7 +41,7 @@
 }
 
 .status-sub {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -77,7 +77,7 @@
 }
 
 .step-dot.active {
-  background: var(--primary-light);
+  background: var(--primary-soft);
 }
 
 .step-dot.failed {
@@ -100,7 +100,7 @@
 }
 
 .step-label {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-secondary);
   text-align: center;
 }
@@ -111,7 +111,7 @@
 }
 
 .step-label.failed {
-  color: var(--danger);
+  color: var(--danger-text);
   font-weight: 600;
 }
 
@@ -130,40 +130,40 @@
 }
 
 .info-box {
-  background: var(--primary-light);
-  border-radius: 12px;
+  background: var(--primary-soft);
+  border-radius: var(--card-radius);
   padding: 13px 16px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--icon);
   line-height: 1.6;
 }
 
 .info-box.error {
-  background: #fdeaea;
-  color: var(--danger);
+  background: var(--danger-bg);
+  color: var(--danger-text);
 }
 
 .status-error {
   margin: 0;
   text-align: center;
   font-size: 12px;
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .home-btn {
   height: 48px;
-  border-radius: 14px;
-  background: var(--primary-light);
+  border-radius: var(--card-radius);
+  background: var(--primary-soft);
   color: var(--primary);
   font-size: 13px;
   font-weight: 700;
 }
 
 .cancel-btn {
-  height: 40px;
+  min-height: var(--control-h);
   font-size: 13px;
   font-weight: 600;
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .cancel-btn:disabled {

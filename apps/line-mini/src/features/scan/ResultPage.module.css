@@ -5,8 +5,8 @@
   gap: 8px;
   padding: 12px;
   border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--card);
+  border-radius: var(--card-radius);
+  background: var(--surface);
   color: var(--text);
   font-size: 12px;
   text-align: left;
@@ -14,21 +14,21 @@
 }
 .template-select:disabled { opacity: .7; }
 .template-caption { color: var(--primary); font-weight: 700; flex-shrink: 0; }
-.template-notice { margin: 0; padding: 10px 12px; border-radius: 10px; font-size: 11px; line-height: 1.6; background: #fff5db; color: #80601b; }
-.template-notice.danger { background: #fdeaea; color: var(--danger); }
+.template-notice { margin: 0; padding: 10px 12px; border-radius: var(--control-radius); font-size: 12px; line-height: 1.6; background: var(--warning-bg); color: var(--warning-text); }
+.template-notice.danger { background: var(--danger-bg); color: var(--danger-text); }
 .template-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
-.template-actions button { color: var(--primary); font-size: 11px; font-weight: 700; }
+.template-actions button { color: var(--primary); font-size: 12px; font-weight: 700; }
 .data-area { position: relative; }
-.mapping-mask { position: absolute; inset: 0; z-index: 2; padding: 24px 12px; background: rgba(245,247,250,.92); border: 1px solid var(--border); border-radius: 14px; display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 12px; text-align: center; }
+.mapping-mask { position: absolute; inset: 0; z-index: 2; padding: 24px 12px; background: rgba(245,247,250,.92); border: 1px solid var(--border); border-radius: var(--card-radius); display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 12px; text-align: center; }
 .template-option { display: block; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
 .template-option label { display: flex; align-items: flex-start; gap: 8px; }
 .template-option input { flex-shrink: 0; accent-color: var(--primary); }
-.template-option small { display: inline-block; margin: 3px 4px 0 0; color: var(--primary); font-size: 10px; }
-.template-option details { margin: 8px 0 0 24px; font-size: 11px; }
+.template-option small { display: inline-block; margin: 3px 4px 0 0; color: var(--primary); font-size: 12px; }
+.template-option details { margin: 8px 0 0 24px; font-size: 12px; }
 .template-option summary { cursor: pointer; color: var(--primary); }
 .template-preview { padding: 8px 0; line-height: 1.6; overflow-wrap: anywhere; }
 .template-preview small { display: block; color: var(--text-secondary); }
-.template-toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); z-index: 60; width: max-content; max-width: calc(100% - 40px); border-radius: 12px; padding: 12px 18px; background: #29344b; color: white; font-size: 12px; }
+.template-toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); z-index: 60; width: max-content; max-width: calc(100% - 40px); border-radius: var(--card-radius); padding: 12px 18px; background: var(--text); color: white; font-size: 12px; }
 .result {
   display: flex;
   flex-direction: column;
@@ -60,8 +60,8 @@
   width: 46px;
   height: 46px;
   border-radius: 999px;
-  background: #fdeaea;
-  color: var(--danger);
+  background: var(--danger-bg);
+  color: var(--danger-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -76,7 +76,7 @@
 
 .failure-file {
   margin: 0;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
   word-break: break-all;
 }
@@ -86,7 +86,7 @@
   max-width: 320px;
   font-size: 12px;
   line-height: 1.6;
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .failure .primary-btn,
@@ -114,7 +114,7 @@
 }
 
 .meta {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -125,18 +125,18 @@
   border-radius: 999px;
   background: var(--track);
   color: var(--icon);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
 }
 
 .review-chip.confirmed {
   background: var(--success-bg);
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .review-chip.edited {
-  background: var(--processing-bg);
-  color: var(--processing);
+  background: var(--warning-bg);
+  color: var(--warning-text);
 }
 
 .content {
@@ -148,7 +148,7 @@
 }
 
 .edit-hint {
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-secondary);
   padding: 0 2px;
 }
@@ -166,8 +166,8 @@
 .guest-hint {
   margin: 0;
   text-align: center;
-  font-size: 10.5px;
-  color: var(--processing);
+  font-size: 12px;
+  color: var(--warning-text);
   font-weight: 600;
 }
 
@@ -187,8 +187,8 @@
   border: 0;
   /* 用内阴影画边框，避免 border 宽度让两个等宽按钮出现 1px 偏差 */
   box-shadow: inset 0 0 0 1px var(--border);
-  border-radius: 14px;
-  background: var(--card);
+  border-radius: var(--card-radius);
+  background: var(--surface);
   color: var(--text-secondary);
   font-size: 13px;
   font-weight: 700;
@@ -201,9 +201,9 @@
 
 .primary-btn {
   height: 53px;
-  border-radius: 14px;
+  border-radius: var(--card-radius);
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   font-size: 13px;
   font-weight: 700;
 }
@@ -217,14 +217,14 @@
   padding: 4px 0;
   text-align: center;
   font-size: 12px;
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .home-btn {
   height: 44px;
   padding: 0 24px;
-  border-radius: 12px;
-  background: var(--primary-light);
+  border-radius: var(--card-radius);
+  background: var(--primary-soft);
   color: var(--primary);
   font-size: 12px;
   font-weight: 700;
@@ -239,26 +239,26 @@
 .view-tab {
   padding: 5px 12px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--icon);
-  background: var(--card);
+  background: var(--surface);
   border: 1px solid var(--border) !important;
 }
 
 .view-tab.active {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   border-color: var(--primary) !important;
 }
 
 .json-view {
   margin: 0;
   padding: 12px;
-  border-radius: 12px;
-  background: var(--card);
+  border-radius: var(--card-radius);
+  background: var(--surface);
   border: 1px solid var(--border);
-  font-size: 11px;
+  font-size: 12px;
   white-space: pre-wrap;
   word-break: break-all;
   max-height: 60vh;
@@ -267,7 +267,7 @@
 
 .copy-btn {
   align-self: flex-end;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--primary);
 }

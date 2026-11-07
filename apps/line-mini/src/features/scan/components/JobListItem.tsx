@@ -14,7 +14,7 @@ export function JobListItem({ job, onOpen }: { job: JobOut; onOpen(job: JobOut):
   return (
     <button type="button" className={s.card} data-job={job.id} onClick={() => onOpen(job)}>
       <div className={s.icon}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4A66F7" strokeWidth="2" strokeLinecap="round">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: "var(--primary)" }} strokeWidth="2" strokeLinecap="round">
           <path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" />
           <path d="M14 2v6h6" />
         </svg>
@@ -26,7 +26,9 @@ export function JobListItem({ job, onOpen }: { job: JobOut; onOpen(job: JobOut):
         </div>
         {job.template_name && <div className={s.template}>{job.template_name}</div>}
       </div>
-      <StatusChip stage={job.stage} level={job.review_level} />
+      <div className={s.status}>
+        <StatusChip stage={job.stage} level={job.review_level} returned={job.returned} />
+      </div>
     </button>
   );
 }

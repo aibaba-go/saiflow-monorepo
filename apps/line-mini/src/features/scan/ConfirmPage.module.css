@@ -14,7 +14,7 @@
 
 .review-context {
   margin: -6px 0 -4px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -33,10 +33,10 @@
 
 .switch-btn {
   min-width: 38px;
-  min-height: 38px;
-  border-radius: 10px;
+  min-height: var(--control-h);
+  border-radius: var(--control-radius);
   border: 1px solid var(--border);
-  background: var(--card);
+  background: var(--surface);
   color: var(--text);
   font-size: 18px;
 }
@@ -67,7 +67,7 @@
   align-items: center;
   justify-content: center;
   background: rgba(23, 26, 28, 0.68);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .preview {
@@ -82,17 +82,17 @@
   top: 10px;
   right: 10px;
   background: rgba(23, 26, 28, 0.72);
-  color: #fff;
-  font-size: 10px;
+  color: var(--on-primary);
+  font-size: 12px;
   font-weight: 600;
   padding: 4px 10px;
   border-radius: 999px;
 }
 
 .file-summary {
-  background: var(--card);
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--card-radius);
   padding: 14px 16px;
 }
 
@@ -103,27 +103,27 @@
 }
 
 .file-meta {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
   margin-top: 3px;
 }
 
 .file-state {
   margin-top: 6px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--processing);
+  color: var(--warning-text);
 }
 
 .file-state.started {
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .primary-btn {
   height: 53px;
-  border-radius: 14px;
+  border-radius: var(--card-radius);
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   font-size: 13px;
   font-weight: 700;
 }
@@ -135,5 +135,5 @@
 .status-error {
   text-align: center;
   font-size: 12px;
-  color: var(--danger);
+  color: var(--danger-text);
 }

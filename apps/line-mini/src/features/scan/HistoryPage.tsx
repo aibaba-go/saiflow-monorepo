@@ -78,7 +78,7 @@ export function HistoryPage() {
       </header>
       <div className={s.content}>
         <div className={s["search-card"]}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#99A1B0" strokeWidth="2" strokeLinecap="round">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: "var(--icon)" }} strokeWidth="2" strokeLinecap="round">
             <circle cx="11" cy="11" r="8" />
             <path d="M21 21l-4.3-4.3" />
           </svg>

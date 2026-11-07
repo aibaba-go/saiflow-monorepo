@@ -197,15 +197,15 @@ function ScanHome() {
       <header className={s["home-header"]}>
         <div className={s["logo-chip"]}>
           <svg width="26" height="26" viewBox="0 0 40 40" fill="none">
-            <path d="M12 27V13h11" stroke="#4A66F7" strokeWidth="3.4" strokeLinecap="round" />
-            <path d="M12 20h8" stroke="#4A66F7" strokeWidth="3.4" strokeLinecap="round" />
-            <circle cx="27.5" cy="26.5" r="2.5" fill="#4A66F7" />
+            <path d="M12 27V13h11" stroke="currentColor" style={{ color: "var(--primary)" }} strokeWidth="3.4" strokeLinecap="round" />
+            <path d="M12 20h8" stroke="currentColor" style={{ color: "var(--primary)" }} strokeWidth="3.4" strokeLinecap="round" />
+            <circle cx="27.5" cy="26.5" r="2.5" fill="currentColor" style={{ color: "var(--primary)" }} />
           </svg>
         </div>
         <div className={s.brand}>saiflow</div>
         {isUser && (
           <button type="button" className={s.bell} aria-label={t("notify.title")} onClick={() => navigate("/notifications")}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#596170" strokeWidth="2" strokeLinecap="round">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: "var(--icon)" }} strokeWidth="2" strokeLinecap="round">
               <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
               <path d="M13.7 21a2 2 0 0 1-3.4 0" />
             </svg>
@@ -249,7 +249,7 @@ function ScanHome() {
                       <span className={s["ws-menu-name"]}>{tenantName(id)}</span>
                       {id !== null && <em>{orgs.find((o) => o.tenant_id === id)?.role?.name ?? ""}</em>}
                       {id === currentOrg && (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1F9E6B" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: "var(--success)" }} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M20 6L9 17l-5-5" />
                         </svg>
                       )}
@@ -277,7 +277,7 @@ function ScanHome() {
         {u && isUser && (
           <div className={s["quota-card"]}>
             <div className={s["quota-icon"]}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4A66F7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: "var(--primary)" }} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
                 <path d="M13 2v7h7" />
               </svg>
@@ -322,7 +322,7 @@ function ScanHome() {
             <div className={s["entry-grid"]}>
               <button type="button" className={s["entry-card"]} disabled={inputBusy} onClick={() => camera.current?.click()}>
                 <div className={s["entry-icon"]}>
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A66F7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: "var(--primary)" }} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
                     <circle cx="12" cy="13" r="4" />
                   </svg>
@@ -331,7 +331,7 @@ function ScanHome() {
               </button>
               <button type="button" className={s["entry-card"]} disabled={inputBusy} onClick={() => files.current?.click()}>
                 <div className={s["entry-icon"]}>
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A66F7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: "var(--primary)" }} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
                     <path d="M13 2v7h7" />
                   </svg>
@@ -344,12 +344,12 @@ function ScanHome() {
 
             {!urlMode ? (
               <button type="button" className={s["url-row"]} disabled={inputBusy} onClick={() => setUrlMode(true)}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4A66F7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: "var(--primary)" }} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />
                   <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
                 </svg>
                 <span>{t("home.importUrl")}</span>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#99A1B0" strokeWidth="2.2" strokeLinecap="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: "var(--icon)" }} strokeWidth="2.2" strokeLinecap="round">
                   <path d="M9 18l6-6-6-6" />
                 </svg>
               </button>
