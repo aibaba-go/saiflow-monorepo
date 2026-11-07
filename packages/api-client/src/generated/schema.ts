@@ -1964,6 +1964,11 @@ export interface components {
             id: string;
             /** Page Count */
             page_count: number;
+            /**
+             * Returned
+             * @default false
+             */
+            returned: boolean;
             /** Review Level */
             review_level?: number | null;
             /**

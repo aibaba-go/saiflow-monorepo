@@ -93,3 +93,34 @@ async def test_filters_combine(api, line, store, sm, ai_settings, llm, db):
     tax = await _template_id(db, "tax_invoice")
     got = await _ids(api, f"stage=VERIFYING&template={tax}&created_from=2026-11-01")
     assert got == [a]
+
+
+async def test_returned_flag(api, line, store, sm, ai_settings, llm, db):
+    """A task sent back by a reviewer is marked in the list until it is confirmed again
+    (FR-SYS-129 left column; web-pc-ocr Task 4)."""
+    await login(api, line)
+    a, b = await _jobs(api, store, sm, ai_settings, llm, db, 2)
+    await db.execute(
+        text(
+            "insert into review_rounds (job_id, round_no, required_level, current_level, "
+            "status, level_entered_at) values (:j, 1, 1, 1, 'RETURNED', now())"
+        ),
+        {"j": a},
+    )
+    await db.commit()
+    r = await api.get(f"{JOBS}?stage=VERIFYING")
+    flags = {i["id"]: i["returned"] for i in r.json()["items"]}
+    assert flags == {a: True, b: False}
+    await db.execute(
+        text(
+            "insert into review_rounds (job_id, round_no, required_level, current_level, "
+            "status, level_entered_at) values (:j, 2, 1, 1, 'OPEN', now())"
+        ),
+        {"j": a},
+    )
+    await db.execute(
+        text("update ocr_jobs set review_status = 'PENDING_L1' where id = :j"), {"j": a}
+    )
+    await db.commit()
+    got = (await api.get(f"{JOBS}/{a}")).json()
+    assert got["returned"] is False

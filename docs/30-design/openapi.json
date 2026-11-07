@@ -1168,6 +1168,11 @@
             "title": "Page Count",
             "type": "integer"
           },
+          "returned": {
+            "default": false,
+            "title": "Returned",
+            "type": "boolean"
+          },
           "review_level": {
             "anyOf": [
               {

@@ -143,6 +143,22 @@ async def _template_names(db: AsyncSession, jobs: list[OcrJob]) -> dict[str, str
     }
 
 
+async def _returned(db: AsyncSession, jobs: list[OcrJob]) -> set[str]:
+    """Jobs whose latest review round was returned and that wait for a new confirm."""
+    open_ids = [j.id for j in jobs if j.review_status not in states.LOCKED]
+    if not open_ids:
+        return set()
+    latest: dict[str, tuple[int, str]] = {}
+    for job_id, round_no, status in await db.execute(
+        select(ReviewRound.job_id, ReviewRound.round_no, ReviewRound.status).where(
+            ReviewRound.job_id.in_(open_ids)
+        )
+    ):
+        if job_id not in latest or round_no > latest[job_id][0]:
+            latest[job_id] = (round_no, status)
+    return {job_id for job_id, (_, status) in latest.items() if status == "RETURNED"}
+
+
 async def summaries(db: AsyncSession, jobs: list[OcrJob]) -> list[dict]:
     if not jobs:
         return []
@@ -153,6 +169,7 @@ async def summaries(db: AsyncSession, jobs: list[OcrJob]) -> list[dict]:
         ).scalars()
     }
     names = await _template_names(db, jobs)
+    returned = await _returned(db, jobs)
     out = []
     for j in jobs:
         f = files.get(j.file_id)
@@ -170,6 +187,7 @@ async def summaries(db: AsyncSession, jobs: list[OcrJob]) -> list[dict]:
                 "created_at": j.created_at,
                 "confirmed_at": j.confirmed_at,
                 "review_level": {states.PENDING_L1: 1, states.PENDING_L2: 2}.get(j.review_status),
+                "returned": j.id in returned,
             }
         )
     return out
