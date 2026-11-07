@@ -415,4 +415,8 @@ export const zh: Record<MessageKey, string> = {
   "home.noTasks": "还没有任务",
   "ocr.cancelled": "已取消",
   "ocr.clearFinished": "清除已结束",
+  "common.noPermission": "你没有此页面的权限。",
+  "field.permissions": "请选择有效的权限点。",
+  "verify.statusLabel": "状态：",
+  "tenant.left": "已退出的组织",
 };

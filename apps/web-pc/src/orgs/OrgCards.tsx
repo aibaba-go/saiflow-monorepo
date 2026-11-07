@@ -118,7 +118,7 @@ export function VerificationCard({ tenant }: { tenant: CurrentTenant }) {
       {data && (
         <Space direction="vertical" style={{ width: "100%" }}>
           <Space>
-            <Typography.Text>{t("verify.status")}:</Typography.Text>
+            <Typography.Text>{t("verify.statusLabel")}</Typography.Text>
             <Tag color={data.status === "rejected" ? "red" : data.status === "verified" ? "green" : "blue"}>
               {t(VERIFICATION[data.status]!)}
             </Tag>

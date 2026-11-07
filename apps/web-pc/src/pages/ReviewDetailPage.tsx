@@ -45,8 +45,9 @@ export function ReviewDetailPage() {
 
   useEffect(() => {
     if (detail.isError && handled(detail.error)) backHandled();
+    if (result.isError && handled(result.error)) backHandled();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detail.isError, detail.error]);
+  }, [detail.isError, detail.error, result.isError, result.error]);
 
   async function submit() {
     if (!dialog || !detail.data?.level) return;
@@ -75,6 +76,13 @@ export function ReviewDetailPage() {
     return (
       <Page name="review-detail" title={t("nav.reviews")}>
         <ErrorText error={detail.error} />
+      </Page>
+    );
+  }
+  if (result.isError && !handled(result.error)) {
+    return (
+      <Page name="review-detail" title={t("nav.reviews")}>
+        <ErrorText error={result.error} />
       </Page>
     );
   }

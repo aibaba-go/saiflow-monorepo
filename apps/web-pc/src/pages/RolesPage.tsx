@@ -1,4 +1,4 @@
-import { Button, Checkbox, Form, Input, Modal, Space, Spin, Table } from "antd";
+import { Button, Checkbox, Form, Input, Modal, Space, Spin, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useState } from "react";
 
@@ -75,6 +75,8 @@ function RolesContent({ tenant }: { tenant: CurrentTenant }) {
   // Never the owner's role or the editor's own current role (FR-SYS-099, 049).
   const ownRole = tenant.is_owner ? null : (tenant.role?.id ?? null);
   const manage = can(tenant, "role_manage");
+  // the page is for role managers; others are told so (minor-fixes-ui)
+  if (!manage) return <Typography.Text>{t("common.noPermission")}</Typography.Text>;
 
   const moves = (role: Role) => {
     const users = (members.data ?? []).filter((m) => m.role?.id === role.id).length;

@@ -413,6 +413,10 @@ export const en = {
   "home.noTasks": "No tasks yet",
   "ocr.cancelled": "Cancelled",
   "ocr.clearFinished": "Clear finished",
+  "common.noPermission": "You have no permission for this page.",
+  "field.permissions": "Choose valid permissions.",
+  "verify.statusLabel": "Status:",
+  "tenant.left": "Left organization",
 } as const;
 
 export type MessageKey = keyof typeof en;

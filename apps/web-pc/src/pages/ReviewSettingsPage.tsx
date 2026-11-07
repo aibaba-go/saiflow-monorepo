@@ -24,16 +24,20 @@ export function ReviewSettingsPage() {
   const settings = useQuery({ queryKey: key, queryFn: getReviewSettings, enabled: owner });
   const [error, setError] = useState<unknown>(null);
 
-  async function save(change: (old: ReviewSettings) => ReviewSettings, call: () => Promise<unknown>) {
-    const old = queryClient.getQueryData<ReviewSettings>(key);
-    if (!old) return;
+  // A failed save puts back only what it changed, so another change made meanwhile stays.
+  async function save(
+    change: (cur: ReviewSettings) => ReviewSettings,
+    undo: (cur: ReviewSettings) => ReviewSettings,
+    call: () => Promise<unknown>,
+  ) {
+    if (!queryClient.getQueryData<ReviewSettings>(key)) return;
     setError(null);
-    queryClient.setQueryData(key, change(old));
+    queryClient.setQueryData<ReviewSettings>(key, (cur) => (cur ? change(cur) : cur));
     try {
       await call();
       void message.success(t("review.saved"));
     } catch (e) {
-      queryClient.setQueryData(key, old);
+      queryClient.setQueryData<ReviewSettings>(key, (cur) => (cur ? undo(cur) : cur));
       setError(e);
     }
   }
@@ -65,13 +69,12 @@ export function ReviewSettingsPage() {
                   value={r.level}
                   onChange={(e) => {
                     const level = e.target.value as 0 | 1 | 2;
-                    void save(
-                      (old) => ({
-                        ...old,
-                        items: old.items.map((i) => (i.template_id === r.template_id ? { ...i, level } : i)),
-                      }),
-                      () => setReviewLevel(r.template_id ?? null, level),
-                    );
+                    const before = r.level;
+                    const put = (to: number) => (cur: ReviewSettings) => ({
+                      ...cur,
+                      items: cur.items.map((i) => (i.template_id === r.template_id ? { ...i, level: to } : i)),
+                    });
+                    void save(put(level), put(before), () => setReviewLevel(r.template_id ?? null, level));
                   }}
                   options={LEVELS.map((k, level) => ({ value: level, label: t(k) }))}
                 />
@@ -91,7 +94,11 @@ export function ReviewSettingsPage() {
                   aria-label={t("review.settings.email")}
                   checked={settings.data.email_enabled}
                   onChange={(enabled) =>
-                    void save((old) => ({ ...old, email_enabled: enabled }), () => setReviewEmail(enabled))
+                    void save(
+                      (cur) => ({ ...cur, email_enabled: enabled }),
+                      (cur) => ({ ...cur, email_enabled: !enabled }),
+                      () => setReviewEmail(enabled),
+                    )
                   }
                 />
                 <Typography.Text>{t("review.settings.email")}</Typography.Text>

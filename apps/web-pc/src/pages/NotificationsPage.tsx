@@ -18,6 +18,7 @@ export function NotificationsPage() {
   const pages = useNotificationPages();
   const markRead = useMarkRead();
   const [error, setError] = useState<unknown>(null);
+  const [handled, setHandled] = useState(false);
   const all = useSubmit(async () => {
     setError(null);
     try {
@@ -29,7 +30,8 @@ export function NotificationsPage() {
 
   const tenantName = (id: number) => {
     const tenant = tenants.find((x) => x.tenant_id === id);
-    return tenant?.kind === "organization" ? (tenant.name ?? "") : t("tenant.personal");
+    if (!tenant) return t("tenant.left"); // an organization the user has left
+    return tenant.kind === "organization" ? (tenant.name ?? "") : t("tenant.personal");
   };
   const navigate = useNavigate();
   const choose = useTenantChoice((s) => s.choose);
@@ -46,6 +48,10 @@ export function NotificationsPage() {
     // a review notice opens the review detail in its organization (FR-SYS-103)
     const jobId = (n.data as Record<string, unknown>).job_id;
     if (n.type === "review_pending" && typeof jobId === "string") {
+      if (!tenants.some((x) => x.tenant_id === n.tenant_id)) {
+        setHandled(true); // no longer a member: nothing to review there
+        return;
+      }
       if (current !== n.tenant_id) choose(n.tenant_id);
       navigate(`/reviews/${jobId}`);
     }
@@ -64,6 +70,7 @@ export function NotificationsPage() {
           </Button>
         )}
         <ErrorText error={error} />
+        {handled && <Typography.Text type="warning">{t("review.handled")}</Typography.Text>}
         <List<NotificationItem>
           bordered
           locale={{ emptyText: t("notif.empty") }}

@@ -415,4 +415,8 @@ export const th: Record<MessageKey, string> = {
   "home.noTasks": "ยังไม่มีงาน",
   "ocr.cancelled": "ยกเลิกแล้ว",
   "ocr.clearFinished": "ล้างรายการที่เสร็จแล้ว",
+  "common.noPermission": "คุณไม่มีสิทธิ์เข้าถึงหน้านี้",
+  "field.permissions": "กรุณาเลือกสิทธิ์ที่ถูกต้อง",
+  "verify.statusLabel": "สถานะ:",
+  "tenant.left": "องค์กรที่ออกแล้ว",
 };

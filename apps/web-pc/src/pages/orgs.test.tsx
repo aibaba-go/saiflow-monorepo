@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useLanguage } from "../stores/language";
 import { useTenantChoice } from "../tenants/useCurrentTenant";
+import { translate } from "../i18n";
 import { en, renderAt, signedIn, userEvent } from "../test/app";
 import { ORG, PERSONAL, USER, type UsableTenant } from "../test/fixtures";
 import { json } from "../test/mockApi";
@@ -337,5 +338,35 @@ describe("roles (FR-SYS-099)", () => {
     expect(await screen.findByText(en("roles.deleteMovesOne"))).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: en("common.confirm") }));
     await waitFor(() => expect(within(table).queryByText("Reviewer")).not.toBeInTheDocument());
+  });
+});
+
+
+describe("account page fixes (minor-fixes-ui)", () => {
+  it("roles page without permission", async () => {
+    orgBackend({ tenant: { ...OWNER_ORG, is_owner: false, permissions: ["upload_ocr"] } });
+    renderAt("/roles");
+    expect(await screen.findByText(en("common.noPermission"))).toBeInTheDocument();
+    expect(screen.queryByTestId("roles")).not.toBeInTheDocument();
+  });
+
+  it("role permission error text", async () => {
+    const { api } = orgBackend();
+    api.set("POST /api/v1/organizations/5/roles", () => json(400, { code: "validation_error", fields: ["permissions"] }));
+    renderAt("/roles");
+    await userEvent.click(await screen.findByRole("button", { name: en("roles.new") }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText(en("roles.name")), "Reviewer");
+    await userEvent.click(within(dialog).getByRole("checkbox", { name: en("perm.review_l1") }));
+    await userEvent.click(within(dialog).getByRole("button", { name: en("common.save") }));
+    expect(await within(dialog).findByText(en("field.permissions"))).toBeInTheDocument();
+  });
+
+  it("verification status label translated", async () => {
+    orgBackend();
+    useLanguage.getState().setLang("zh");
+    renderAt("/org");
+    const card = await screen.findByTestId("verification");
+    expect(await within(card).findByText(translate("zh", "verify.statusLabel"))).toBeInTheDocument();
   });
 });

@@ -195,3 +195,73 @@ describe("notifications (FR-SYS-103)", () => {
     await waitFor(() => expect(useTenantChoice.getState().id).toBe(ORG.tenant_id));
   });
 });
+
+
+describe("review page fixes (minor-fixes-ui)", () => {
+  it("left org notice label and no tenant switch", async () => {
+    const note = {
+      id: 9,
+      type: "review_pending",
+      tenant_id: 99,
+      data: { stage: "l1", job_id: "j1", file_name: "inv.pdf", template_name: "Tax Invoice", level: 1, confirmer_name: "S", round_no: 1 },
+      created_at: "2026-11-06T03:00:00Z",
+      read: false,
+    };
+    signedIn({
+      "GET /api/v1/me/notifications": () => json(200, { unread_count: 1, items: [note], next_before: null }),
+      "POST /api/v1/me/notifications/read": () => json(200, { updated: 1, unread_count: 0 }),
+    });
+    renderAt("/notifications");
+    expect(await screen.findByText(new RegExp(en("tenant.left")))).toBeInTheDocument();
+    await userEvent.click(screen.getByText(en("notif.review_pending.title")));
+    expect(await screen.findByText(en("review.handled"))).toBeInTheDocument();
+    expect(useTenantChoice.getState().id).toBeNull();
+  });
+
+  it("result error does not spin", async () => {
+    signedIn(
+      {
+        ...detailRoutes,
+        "GET /api/v1/ocr/jobs/j1/result": () => json(500, { code: "internal" }),
+      },
+      inOrg({ ...ORG, permissions: ["review_l2"] }),
+    );
+    renderAt("/reviews/j1");
+    expect(await screen.findByText(en("err.unknown"))).toBeInTheDocument();
+  });
+
+  it("failed save keeps the other change", async () => {
+    let first = true;
+    signedIn(
+      {
+        "GET /api/v1/review-settings": () =>
+          json(200, {
+            email_enabled: false,
+            items: [
+              { template_id: 7, name: "Tax Invoice", level: 0 },
+              { template_id: 8, name: "Billing Note", level: 0 },
+            ],
+          }),
+        "PUT /api/v1/review-settings/levels": async () => {
+          if (first) {
+            first = false;
+            await new Promise((r) => setTimeout(r, 600));
+            return json(500, { code: "internal" });
+          }
+          return json(200, { template_id: 8, name: "Billing Note", level: 2 });
+        },
+      },
+      inOrg(OWNER),
+    );
+    renderAt("/review-settings");
+    const tax = (await screen.findByText("Tax Invoice")).closest("tr") as HTMLElement;
+    const bill = screen.getByText("Billing Note").closest("tr") as HTMLElement;
+    await userEvent.click(within(tax).getByText(en("review.settings.l1")));
+    await userEvent.click(within(bill).getByText(en("review.settings.l2")));
+    // the failed save puts back only its own row; the other change stays
+    const picked = (row: HTMLElement, key: Parameters<typeof en>[0]) =>
+      within(row).getByText(en(key)).closest("label")!.classList.contains("ant-radio-button-wrapper-checked");
+    await waitFor(() => expect(picked(tax, "review.settings.none")).toBe(true), { timeout: 3000 });
+    expect(picked(bill, "review.settings.l2")).toBe(true);
+  });
+});
