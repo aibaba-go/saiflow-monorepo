@@ -3,7 +3,7 @@ doc_id: REQ-INDEX
 title: "SaiFlow — 需求索引与可追溯性矩阵"
 type: index
 status: active
-version: 1.13.0
+version: 1.14.0
 updated: 2026-11-07
 owner: Product Engineering
 ---
@@ -222,6 +222,11 @@ owner: Product Engineering
 | FR-SYS-124 | 复核详情 | P0 | `review-flow`（2026-11-07） | — | `openspec/specs/web-pc/spec.md` | `openspec/specs/web-pc/spec.md` | active |
 | FR-SYS-125 | 复核设置 | P0 | `review-flow`（2026-11-07） | — | `openspec/specs/web-pc/spec.md` | `openspec/specs/web-pc/spec.md` | active |
 | FR-SYS-126 | 待复核通知 | P0 | `review-flow`（2026-11-07） | — | `openspec/specs/notifications/spec.md` | `openspec/specs/notifications/spec.md` | active |
+| FR-SYS-127 | 上传（web-pc） | P0 | `web-pc-ocr`（2026-11-07） | — | `openspec/specs/web-pc/spec.md` | `openspec/specs/web-pc/spec.md` | active |
+| FR-SYS-128 | 识别状态（web-pc） | P0 | `web-pc-ocr`（2026-11-07） | — | `openspec/specs/web-pc/spec.md` | `openspec/specs/web-pc/spec.md` | active |
+| FR-SYS-129 | 核验（web-pc） | P0 | `web-pc-ocr`（2026-11-07） | — | `openspec/specs/web-pc/spec.md` | `openspec/specs/web-pc/spec.md` | active |
+| FR-SYS-130 | 单据库（web-pc） | P0 | `web-pc-ocr`（2026-11-07） | — | `openspec/specs/web-pc/spec.md` | `openspec/specs/web-pc/spec.md` | active |
+| FR-SYS-131 | 单据详情与导出（web-pc） | P0 | `web-pc-ocr`（2026-11-07） | — | `openspec/specs/web-pc/spec.md` | `openspec/specs/web-pc/spec.md` | active |
 | FR-REPORT-001 | 管理层访问运营报表 | P1 | §3.1/§4.7 | SYS-002 | AC-FR-REPORT-001-01 | API-9（待设计） | in-review |
 | FR-REPORT-002 | 展示已配置运营指标 | P1 | §1.2/§4.7 | REPORT-001/OQ-5 | AC-FR-REPORT-002-01 | DM-ReportDefinition（待设计） | in-review |
 | FR-REPORT-003 | 报表授权范围限制 | P1 | §4.7 | SYS-002 | AC-FR-REPORT-003-01 | API-9（待设计） | in-review |
@@ -272,6 +277,7 @@ owner: Product Engineering
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.14.0 | 2026-11-07 | Product Engineering | `web-pc-ocr`：新增 FR-SYS-127…131；FR-VERIFY-017 增加按模板与建立日期筛选；FR-MGMT-001、006 由 web-pc 单据库与详情覆盖 |
 | 1.13.0 | 2026-11-07 | Product Engineering | `review-flow`：FR-VERIFY-007、010～013 迁入 `openspec/specs/reviews` 与 `results`；新增 FR-VERIFY-019、FR-SYS-119…126 |
 | 1.12.0 | 2026-11-06 | Product Engineering | `ocr-ui-parity`：新增 FR-UPLOAD-014、FR-OCR-024、FR-SYS-109…118；FR-OCR-013、016 迁入 `openspec/specs/recognition` |
 | 1.11.0 | 2026-11-06 | Product Engineering | B-3（`ocr-scan-flow`）：上传、识别、模板匹配与转换、结果、导出与小程序扫描页面的需求迁入 `openspec/specs/{documents,recognition,results,exports,line-mini}`；新增 FR-UPLOAD-013、FR-OCR-021…023、FR-SYS-057…059、FR-SYS-105…108 |

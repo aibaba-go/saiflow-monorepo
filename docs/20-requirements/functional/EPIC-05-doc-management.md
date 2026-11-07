@@ -3,8 +3,8 @@ doc_id: EPIC-05
 title: "EPIC-05 — 文档管理与检索"
 type: epic
 status: active
-version: 1.0.1
-updated: 2026-10-02
+version: 1.1.0
+updated: 2026-11-07
 owner: Product Engineering
 priority: P1
 source: "PRD-001 §4.5"
@@ -24,12 +24,12 @@ related: [DM-Document, DM-ArchiveRecord, API-7]
 
 | ID | 陈述（系统必须……） | 优先级 | 来源 | 依赖项 | 验证方式 |
 |----|--------------------|--------|------|--------|----------|
-| FR-MGMT-001 | 按类型、企业和日期对文档分类 | P0 | §4.5 | FR-ENTRY-005 | AC-FR-MGMT-001-01 |
+| FR-MGMT-001 | **由 web-pc 单据库覆盖（FR-SYS-130，按阶段、模板、建立日期筛选，`openspec/specs/web-pc/spec.md`，`web-pc-ocr`）** 按类型、企业和日期对文档分类 | P0 | §4.5 | FR-ENTRY-005 | AC-FR-MGMT-001-01 |
 | FR-MGMT-002 | 按编号检索文档 | P1 | §4.5 | FR-MGMT-001 | AC-FR-MGMT-002-01 |
 | FR-MGMT-003 | 按日期 / 日期范围检索文档 | P1 | §4.5 | FR-MGMT-001 | AC-FR-MGMT-003-01 |
 | FR-MGMT-004 | 按企业检索文档 | P1 | §4.5 | FR-MGMT-001 | AC-FR-MGMT-004-01 |
 | FR-MGMT-005 | 按文档类型检索文档 | P1 | §4.5 | FR-MGMT-001 | AC-FR-MGMT-005-01 |
-| FR-MGMT-006 | 预览文档（原始图像 + 提取数据） | P0 | §4.5 | FR-ENTRY-005 | AC-FR-MGMT-006-01 |
+| FR-MGMT-006 | **由 web-pc 单据详情覆盖（FR-SYS-131，`openspec/specs/web-pc/spec.md`，`web-pc-ocr`）** 预览文档（原始图像 + 提取数据） | P0 | §4.5 | FR-ENTRY-005 | AC-FR-MGMT-006-01 |
 | FR-MGMT-007 | 查询文档的历史处理记录 | P2 | §4.5 | FR-VERIFY-007 | AC-FR-MGMT-007-01 |
 | FR-MGMT-008 | 按文档文本包含的关键词搜索 | P2 | §4.5 | FR-OCR-002 | AC-FR-MGMT-008-01 |
 | FR-MGMT-009 | 检测重复文档（相同编号/类型/企业） | P1 | §4.5 | FR-OCR-002 | AC-FR-MGMT-009-01 |
@@ -64,5 +64,6 @@ Feature: EPIC-05 管理与检索
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.1.0 | 2026-11-07 | Product Engineering | FR-MGMT-001、006 由 web-pc 单据库与单据详情覆盖（变更 `web-pc-ocr`）；按企业分类未做（V1.0 没有企业主数据） |
 | 1.0.1 | 2026-10-02 | Product Engineering | 将人类可读内容与验收场景翻译为简体中文 |
 | 1.0.0 | 2026-09-10 | Product Engineering | 根据 PRD 第 4.5 节生成初始管理/检索需求 |
