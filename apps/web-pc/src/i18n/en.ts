@@ -408,6 +408,9 @@ export const en = {
   "library.createdAt": "Created at",
   "library.exportExcel": "Export Excel",
   "library.result": "Result",
+  "home.toVerify": "To verify",
+  "home.recent": "Recent tasks",
+  "home.noTasks": "No tasks yet",
 } as const;
 
 export type MessageKey = keyof typeof en;

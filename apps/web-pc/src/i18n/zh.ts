@@ -410,4 +410,7 @@ export const zh: Record<MessageKey, string> = {
   "library.createdAt": "建立时间",
   "library.exportExcel": "导出 Excel",
   "library.result": "结果",
+  "home.toVerify": "待核验",
+  "home.recent": "最近任务",
+  "home.noTasks": "还没有任务",
 };

@@ -410,4 +410,7 @@ export const th: Record<MessageKey, string> = {
   "library.createdAt": "เวลาสร้าง",
   "library.exportExcel": "ส่งออก Excel",
   "library.result": "ผลลัพธ์",
+  "home.toVerify": "รอตรวจทาน",
+  "home.recent": "งานล่าสุด",
+  "home.noTasks": "ยังไม่มีงาน",
 };
