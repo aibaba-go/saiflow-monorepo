@@ -254,6 +254,9 @@ importers:
       '@saiflow/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
+      '@saiflow/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@tanstack/react-query':
         specifier: ^5.105.1
         version: 5.105.1(@types/react@18.3.31)(react@18.3.1)
@@ -315,6 +318,9 @@ importers:
       '@saiflow/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
+      '@saiflow/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@tanstack/react-query':
         specifier: ^5.105.1
         version: 5.105.1(@types/react@18.3.31)(react@18.3.1)

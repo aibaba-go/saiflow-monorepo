@@ -1,10 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { App as AntApp, ConfigProvider, Result } from "antd";
-import enUS from "antd/locale/en_US";
-import zhCN from "antd/locale/zh_CN";
+import { App as AntApp, Result } from "antd";
 import { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
+import { AppConfig } from "./AppConfig";
 import { RequireAdmin } from "./auth/RequireAdmin";
 import { useForgetAdmin, useSessionNotice } from "./auth/session";
 import { useT } from "./i18n";
@@ -51,7 +50,7 @@ function NotFound() {
 export function AppRoutes() {
   const lang = useLanguage((s) => s.lang);
   return (
-    <ConfigProvider locale={lang === "zh" ? zhCN : enUS} button={{ autoInsertSpace: false }}>
+    <AppConfig lang={lang}>
       <AntApp>
         <SessionWatcher />
         <Routes>
@@ -82,7 +81,7 @@ export function AppRoutes() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AntApp>
-    </ConfigProvider>
+    </AppConfig>
   );
 }
 

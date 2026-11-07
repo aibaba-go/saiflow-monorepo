@@ -307,7 +307,7 @@ function UploadContent() {
             rowSelection={{ selectedRowKeys: chosen, onChange: (keys) => setSelected(keys as string[]) }}
             columns={[
               { key: "name", title: t("review.col.file"), render: (_, f) => f.original_name },
-              { key: "pages", title: t("review.col.pages"), render: (_, f) => f.page_count ?? "-" },
+              { key: "pages", title: t("review.col.pages"), align: "right", className: "num", render: (_, f) => f.page_count ?? "-" },
               { key: "at", title: t("ocr.uploadedAt"), render: (_, f) => formatBangkokDateTime(f.created_at) },
             ]}
           />

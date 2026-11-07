@@ -10,6 +10,7 @@ import {
   getAt,
   type Group,
   isObj,
+  isNumeric,
   isTable,
   type Json,
   label,
@@ -111,6 +112,8 @@ function RowsEditor({
           ...columns.map((c) => ({
             key: c.key,
             title: label(c, lang),
+            align: isNumeric(c.type) ? ("right" as const) : undefined,
+            className: isNumeric(c.type) ? "num" : undefined,
             render: (_: unknown, r: Obj & { _i: number }) => {
               const p = [...path, r._i, c.key];
               const key = pathText(p);
@@ -119,6 +122,7 @@ function RowsEditor({
                 <div data-path={key} className={cls}>
                   <Input
                     size="small"
+                    className={isNumeric(c.type) ? "num num--right" : undefined}
                     aria-label={`${label(c, lang)} ${r._i + 1}`}
                     status={cls ? "error" : undefined}
                     disabled={!editable}

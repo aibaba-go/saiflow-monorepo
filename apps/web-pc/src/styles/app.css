@@ -1,0 +1,14 @@
+/* web-pc base styles on the STD-008 tokens (FR-SYS-132, FR-SYS-135, FR-SYS-136). */
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-stack);
+}
+/* amounts, quantities, dates and numbers line up (FR-SYS-136) */
+.num {
+  font-variant-numeric: tabular-nums;
+}
+.num--right {
+  text-align: right;
+}

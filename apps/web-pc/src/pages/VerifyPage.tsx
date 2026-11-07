@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Alert, App, Button, Card, Col, Drawer, Empty, List, Modal, Row, Space, Spin, Tag, Typography } from "antd";
+import { Alert, App, Button, Card, Col, Drawer, Empty, List, Modal, Row, Space, Spin, Typography } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useBlocker, useNavigate, useParams } from "react-router-dom";
 
@@ -20,6 +20,7 @@ import { OriginalPages } from "../reviews/OriginalPages";
 import { ApiError } from "../services/errors";
 import { useLanguage } from "../stores/language";
 import { can } from "../tenants/permissions";
+import { ReturnedTag } from "../ocr/StageTag";
 import { useTenant } from "../tenants/useTenant";
 
 type Draft = { jobId: string; base: number; value: Json };
@@ -323,7 +324,7 @@ export function VerifyPage() {
                     <Typography.Text strong>{j.file_name}</Typography.Text>
                     <Typography.Text type="secondary">{j.template_name ?? t("review.generic")}</Typography.Text>
                     <Typography.Text type="secondary">{formatBangkokDateTime(j.created_at)}</Typography.Text>
-                    {j.returned && <Tag color="red">{t("ocr.returned")}</Tag>}
+                    {j.returned && <ReturnedTag />}
                   </Space>
                 </List.Item>
               )}

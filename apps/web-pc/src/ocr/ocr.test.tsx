@@ -67,6 +67,13 @@ describe("stage helpers", () => {
 });
 
 describe("EditableResult", () => {
+  it("numbers in a table are right-aligned with even digits (FR-SYS-136-02)", () => {
+    renderWithProviders(<Harness initial={{ document: { invoice_no: "IV1", total: "" }, goods: { line_items: [{ qty: "1" }, { qty: "950" }] } }} />);
+    const qty = screen.getByRole("textbox", { name: "Qty 2" });
+    expect(qty).toHaveClass("num", "num--right");
+    expect(qty.closest("td")).toHaveClass("ant-table-cell", "num");
+    expect(screen.getByRole("textbox", { name: "Invoice No." })).not.toHaveClass("num");
+  });
   it("edits a field and a row", async () => {
     renderWithProviders(<Harness initial={{ document: { invoice_no: "IV1", total: "" }, goods: { line_items: [{ qty: "1" }] } }} />);
     const no = screen.getByRole("textbox", { name: "Invoice No." });

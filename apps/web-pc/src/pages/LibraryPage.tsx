@@ -112,7 +112,7 @@ function Library() {
           { key: "file", title: t("review.col.file"), render: (_, j) => j.file_name },
           { key: "template", title: t("review.col.template"), render: (_, j) => j.template_name ?? t("review.generic") },
           { key: "stage", title: t("ocr.status"), render: (_, j) => <StageTag stage={j.stage} level={j.review_level} /> },
-          { key: "pages", title: t("review.col.pages"), render: (_, j) => j.page_count },
+          { key: "pages", title: t("review.col.pages"), align: "right", className: "num", render: (_, j) => j.page_count },
           { key: "at", title: t("library.createdAt"), render: (_, j) => formatBangkokDateTime(j.created_at) },
         ]}
       />

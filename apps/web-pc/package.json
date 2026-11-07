@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@saiflow/api-client": "workspace:*",
+    "@saiflow/ui": "workspace:*",
     "@tanstack/react-query": "^5.105.1",
     "antd": "^5.29.3",
     "dayjs": "^1.11.23",

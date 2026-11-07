@@ -1,11 +1,9 @@
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { App as AntApp, ConfigProvider, Result } from "antd";
-import enUS from "antd/locale/en_US";
-import thTH from "antd/locale/th_TH";
-import zhCN from "antd/locale/zh_CN";
+import { App as AntApp, Result } from "antd";
 import { useEffect } from "react";
 import { createBrowserRouter, Navigate, Route, RouterProvider, Routes } from "react-router-dom";
 
+import { AppConfig } from "./AppConfig";
 import { RequireUser } from "./auth/RequireUser";
 import { forgetSession, useSessionNotice } from "./auth/session";
 import { useT } from "./i18n";
@@ -31,8 +29,6 @@ import { VerifyPage } from "./pages/VerifyPage";
 import { setTenantGoneHandler, setUnauthenticatedHandler } from "./services/api";
 import { refreshTenants } from "./tenants/useCurrentTenant";
 import { useLanguage } from "./stores/language";
-
-const LOCALES = { en: enUS, th: thTH, zh: zhCN };
 
 /** Any 401 outside login: forget the user; RequireUser then goes to /login?next= (090-04). */
 function SessionWatcher() {
@@ -60,7 +56,7 @@ function NotFound() {
 export function AppRoutes() {
   const lang = useLanguage((s) => s.lang);
   return (
-    <ConfigProvider locale={LOCALES[lang]} button={{ autoInsertSpace: false }}>
+    <AppConfig lang={lang}>
       <AntApp>
         <SessionWatcher />
         <Routes>
@@ -90,7 +86,7 @@ export function AppRoutes() {
           </Route>
         </Routes>
       </AntApp>
-    </ConfigProvider>
+    </AppConfig>
   );
 }
 

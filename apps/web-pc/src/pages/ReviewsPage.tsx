@@ -67,7 +67,7 @@ export function ReviewsPage() {
               </>
             ),
           },
-          { key: "pages", title: t("review.col.pages"), render: (_, r) => r.page_count },
+          { key: "pages", title: t("review.col.pages"), align: "right", className: "num", render: (_, r) => r.page_count },
           { key: "template", title: t("review.col.template"), render: (_, r) => r.template_name ?? t("review.generic") },
           { key: "by", title: t("review.col.confirmedBy"), render: (_, r) => r.confirmed_by_name ?? "-" },
           {

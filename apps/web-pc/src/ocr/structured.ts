@@ -80,6 +80,9 @@ export function removeAt(root: Json, path: Path): Json {
 }
 
 const NUMERIC = new Set(["integer", "decimal", "amount"]);
+
+/** Whether a field holds a number (integer, decimal, amount): shown right-aligned (FR-SYS-136). */
+export const isNumeric = (type?: string): boolean => !!type && NUMERIC.has(type);
 const GROUPED = /^-?\d{1,3}(,\d{3})+(\.\d+)?$|^-?\d+(\.\d+)?$/;
 
 /** Number fields keep the typed text; a thousands separator is dropped when the rest is a

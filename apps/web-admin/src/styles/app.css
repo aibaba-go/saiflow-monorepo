@@ -1,0 +1,7 @@
+/* admin base styles on the STD-008 tokens (STD-008 §11.3). */
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-stack);
+}
