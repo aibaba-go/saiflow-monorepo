@@ -80,3 +80,42 @@ def test_edit_and_delete_rows():  # Review Focus 1
 def test_emptied_table_logs_rows():  # Review Focus 2
     got = diff({"g": {"items": [{"qty": "1"}]}}, {"g": {"items": []}})
     assert got == [("g.items[0].qty", "1", None)]
+
+
+# --- final review: bounded alignment (C1) and a sort that never mixes types (I1) ---
+
+
+def test_large_tables_stay_fast():
+    import time
+
+    old = {"g": {"t": [{"a": str(i), "b": "x"} for i in range(3000)]}}
+    new_rows = [{"a": str(i), "b": "y"} for i in range(3000)]  # every row changed: no common ends
+    started = time.monotonic()
+    got = diff(old, {"g": {"t": new_rows}})
+    assert time.monotonic() - started < 2.0
+    assert len(got) == 3000 and got[0] == ("g.t[0].b", "x", "y")
+
+
+def test_one_change_in_a_long_table_is_found_quickly():
+    import time
+
+    rows = [{"a": str(i)} for i in range(5000)]
+    changed = [dict(r) for r in rows]
+    changed[2500] = {"a": "edited"}
+    del changed[10]
+    started = time.monotonic()
+    got = diff({"g": {"t": rows}}, {"g": {"t": changed}})
+    assert time.monotonic() - started < 2.0
+    assert ("g.t[10].a", "10", None) in got
+    assert ("g.t[2499].a", "2500", "edited") in got
+    assert len(got) == 2
+
+
+def test_digit_and_name_keys_sort_without_error():
+    got = diff({"d": {"2": "x", "name": "y"}}, {"d": {"2": "z", "name": "w"}})
+    assert {p for p, _, _ in got} == {"d.2", "d.name"}
+
+
+def test_table_replaced_by_object():
+    got = diff({"g": {"items": [{"a": 1}]}}, {"g": {"items": {"a": 2}}})
+    assert ("g.items.a", None, 2) in got and ("g.items[0].a", 1, None) in got

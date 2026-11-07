@@ -5,6 +5,8 @@ each save that makes a new version writes one row whose `items` hold every chang
 Paths: dict keys joined with ".", list items as "[i]" — "document.invoice_no",
 "goods.line_items[1].quantity". A scalar is a leaf, and so is an empty dict or list."""
 
+import difflib
+import json
 import re
 from typing import Any
 
@@ -38,9 +40,10 @@ def _is_table(value: Any) -> bool:
     return isinstance(value, list) and all(isinstance(r, dict) for r in value)
 
 
-def _sort_key(path: str) -> list:
-    """Paths compare part by part, row numbers as numbers (items[2] before items[10])."""
-    return [int(p) if p.isdigit() else p for p in re.split(r"[.\[\]]+", path) if p != ""]
+def _sort_key(path: str) -> list[tuple[int, int | str]]:
+    """Paths compare part by part, numbers as numbers (items[2] before items[10]); a number
+    and a name never compare directly (final review I1)."""
+    return [(0, int(p)) if p.isdigit() else (1, p) for p in re.split(r"[.\[\]]+", path) if p != ""]
 
 
 def _flat(value: Any, path: str) -> dict[str, Any]:
@@ -51,36 +54,91 @@ def _flat(value: Any, path: str) -> dict[str, Any]:
     return out
 
 
+ALIGN_LIMIT = 250_000  # cells in the matching grid; beyond it rows pair by position
+MATCH_LIMIT = 20_000  # changed rows (both sides) beyond which rows pair by position
+
+
 def _align(old: list[dict], new: list[dict]) -> list[tuple[int | None, int | None]]:
-    """Pair rows with the least change: a pair costs its differing leaves, a deleted or an
-    inserted row costs all of its leaves. Unchanged rows after a deleted or inserted one
-    then pair with themselves, so they are not reported (FR-VERIFY-007)."""
-    size = [max(len(leaves(r)), 1) for r in old], [max(len(leaves(r)), 1) for r in new]
+    """Pair rows with the least change (FR-VERIFY-007): runs of identical rows pair first
+    (difflib), and only each changed stretch between them is aligned by cost — a pair
+    costs its differing leaves, a deleted or inserted row all of its leaves. A stretch
+    whose grid would exceed ALIGN_LIMIT cells pairs by position, so no save can make this
+    slow (final review C1)."""
+    n, m = len(old), len(new)
+    head = 0
+    while head < n and head < m and old[head] == new[head]:
+        head += 1
+    tail = 0
+    while tail < n - head and tail < m - head and old[n - 1 - tail] == new[m - 1 - tail]:
+        tail += 1
+    out: list[tuple[int | None, int | None]] = [(k, k) for k in range(head)]
+    a_mid, b_mid = old[head : n - tail], new[head : m - tail]
+    if len(a_mid) + len(b_mid) > MATCH_LIMIT:
+        # very long changed stretches: pair by position (bounded work for any input)
+        span = max(len(a_mid), len(b_mid))
+        out.extend(
+            (head + k if k < len(a_mid) else None, head + k if k < len(b_mid) else None)
+            for k in range(span)
+        )
+    else:
+        out.extend(_matched(a_mid, b_mid, head))
+    out.extend((n - tail + k, m - tail + k) for k in range(tail))
+    return out
+
+
+def _matched(old: list[dict], new: list[dict], offset: int) -> list[tuple[int | None, int | None]]:
+    keys_a = [json.dumps(r, sort_keys=True, default=str) for r in old]
+    keys_b = [json.dumps(r, sort_keys=True, default=str) for r in new]
+    out: list[tuple[int | None, int | None]] = []
+    # autojunk: rows repeated very often do not anchor matches (keeps difflib near-linear)
+    matcher = difflib.SequenceMatcher(None, keys_a, keys_b, autojunk=True)
+    for op, i1, i2, j1, j2 in matcher.get_opcodes():
+        if op == "equal":
+            out.extend((i1 + k, j1 + k) for k in range(i2 - i1))
+            continue
+        a, b = old[i1:i2], new[j1:j2]
+        if len(a) * len(b) > ALIGN_LIMIT:
+            part = [
+                (k if k < len(a) else None, k if k < len(b) else None)
+                for k in range(max(len(a), len(b)))
+            ]
+        else:
+            part = _grid(a, b)
+        out.extend((None if i is None else i + i1, None if j is None else j + j1) for i, j in part)
+    return [(None if i is None else i + offset, None if j is None else j + offset) for i, j in out]
+
+
+def _grid(old: list[dict], new: list[dict]) -> list[tuple[int | None, int | None]]:
+    la, lb = [leaves(r) for r in old], [leaves(r) for r in new]
+    size_a, size_b = [max(len(x), 1) for x in la], [max(len(x), 1) for x in lb]
 
     def cost(i: int, j: int) -> int:
-        a, b = leaves(old[i]), leaves(new[j])
+        a, b = la[i], lb[j]
         return sum(1 for k in a.keys() | b.keys() if a.get(k) != b.get(k))
 
     n, m = len(old), len(new)
     best = [[0] * (m + 1) for _ in range(n + 1)]
+    pair = [[0] * (m + 1) for _ in range(n + 1)]
     for i in range(1, n + 1):
-        best[i][0] = best[i - 1][0] + size[0][i - 1]
+        best[i][0] = best[i - 1][0] + size_a[i - 1]
     for j in range(1, m + 1):
-        best[0][j] = best[0][j - 1] + size[1][j - 1]
+        best[0][j] = best[0][j - 1] + size_b[j - 1]
     for i in range(1, n + 1):
         for j in range(1, m + 1):
+            c = cost(i - 1, j - 1)
+            pair[i][j] = c
             best[i][j] = min(
-                best[i - 1][j - 1] + cost(i - 1, j - 1),
-                best[i - 1][j] + size[0][i - 1],
-                best[i][j - 1] + size[1][j - 1],
+                best[i - 1][j - 1] + c,
+                best[i - 1][j] + size_a[i - 1],
+                best[i][j - 1] + size_b[j - 1],
             )
     pairs: list[tuple[int | None, int | None]] = []
     i, j = n, m
     while i or j:
-        if i and j and best[i][j] == best[i - 1][j - 1] + cost(i - 1, j - 1):
+        if i and j and best[i][j] == best[i - 1][j - 1] + pair[i][j]:
             pairs.append((i - 1, j - 1))
             i, j = i - 1, j - 1
-        elif i and best[i][j] == best[i - 1][j] + size[0][i - 1]:
+        elif i and best[i][j] == best[i - 1][j] + size_a[i - 1]:
             pairs.append((i - 1, None))
             i -= 1
         else:
