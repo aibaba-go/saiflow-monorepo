@@ -19,7 +19,10 @@ export function HomePage() {
   const navigate = useNavigate();
   const { tenant } = useTenant();
   const me = useMe();
-  const toVerify = useJobs({ page: 1, pageSize: 1, stage: "VERIFYING" });
+  const canVerify = can(tenant, "verify_own") || can(tenant, "verify_others");
+  // only the jobs this user may verify (minor-fixes-ui)
+  const toVerify = useJobs({ page: 1, pageSize: 100, stage: "VERIFYING" });
+  const verifiable = (toVerify.data?.items ?? []).filter((j) => canEditJob(j, tenant, me.data?.user_id)).length;
   const recent = useJobs({ page: 1, pageSize: 5 });
   const rows = recent.data?.items ?? [];
   return (
@@ -27,11 +30,13 @@ export function HomePage() {
       <Space direction="vertical" size="large" style={{ width: "100%", maxWidth: 1000 }}>
         <UsageCard />
         <Link to="/plans">{t("my.plans")}</Link>
-        <Card size="small" data-testid="to-verify">
-          <Link to="/verify">
-            <Statistic title={t("home.toVerify")} value={toVerify.data?.total ?? 0} loading={toVerify.isPending} />
-          </Link>
-        </Card>
+        {canVerify && (
+          <Card size="small" data-testid="to-verify">
+            <Link to="/verify">
+              <Statistic title={t("home.toVerify")} value={verifiable} loading={toVerify.isPending} />
+            </Link>
+          </Card>
+        )}
         <Card size="small" title={t("home.recent")}>
           {!recent.isPending && !rows.length ? (
             <Empty description={t("home.noTasks")}>

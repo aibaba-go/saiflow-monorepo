@@ -12,7 +12,7 @@ import { applyTemplate, chooseGeneric, type JobOut, type ResultOut, saveResult, 
 import { EditableResult } from "../ocr/EditableResult";
 import { canEditJob, jobTarget } from "../ocr/stage";
 import { useUnsaved } from "../ocr/unsaved";
-import type { Group, Json } from "../ocr/structured";
+import { getAt, type Group, type Json } from "../ocr/structured";
 import { type SwitchTarget, TemplateSwitch } from "../ocr/TemplateSwitch";
 import { useChanges } from "../reviews/api";
 import { ChangeLogTable } from "../reviews/ChangeLogTable";
@@ -31,6 +31,14 @@ function failureText(code: string | null | undefined, t: ReturnType<typeof useT>
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
+/** "document.date" / "goods.items[1].qty" as a path for getAt. */
+const pathParts = (p: string): (string | number)[] =>
+  p
+    .split(/\.|\[(\d+)\]/)
+    .filter((x) => x !== undefined && x !== "")
+    .map((x) => (/^\d+$/.test(x) ? Number(x) : x));
+const blank = (v: unknown) => v === null || v === undefined || (typeof v === "string" && !v.trim());
+
 /** The right column for one task: notices, the editable result and its actions. */
 function Workspace({ job, queue }: { job: JobOut; queue: JobOut[] }) {
   const t = useT();
@@ -40,7 +48,8 @@ function Workspace({ job, queue }: { job: JobOut; queue: JobOut[] }) {
   const { message } = App.useApp();
   const result = useResult(job.id);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [missing, setMissing] = useState<string[]>([]);
+  // paths the server said were missing, with the content they were judged on
+  const [missing, setMissing] = useState<{ paths: string[]; at: Json }>({ paths: [], at: null });
   const [expired, setExpired] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -50,6 +59,7 @@ function Workspace({ job, queue }: { job: JobOut; queue: JobOut[] }) {
   const changes = useChanges(job.id, logOpen);
   const leaving = useRef(false);
 
+  const { tenant } = useTenant();
   const data = result.data;
   const value: Json = draft && draft.jobId === job.id ? draft.value : ((data?.structured ?? {}) as Json);
   const dirty = Boolean(data && draft && draft.jobId === job.id && !same(draft.value, data.structured));
@@ -71,9 +81,11 @@ function Workspace({ job, queue }: { job: JobOut; queue: JobOut[] }) {
     return () => window.removeEventListener("beforeunload", onUnload);
   }, [dirty]);
 
-  const loaded = () => {
-    void queryClient.invalidateQueries({ queryKey: ["result"] });
+  // the saved result goes straight into the cache, so the fields never show the old values
+  const loaded = (body: ResultOut) => {
+    queryClient.setQueryData(["result", tenant?.tenant_id, job.id], body);
     setDraft(null);
+    void queryClient.invalidateQueries({ queryKey: ["result"] });
   };
 
   // The edit's own base version, so a colleague's save in between is a conflict, not
@@ -87,13 +99,13 @@ function Workspace({ job, queue }: { job: JobOut; queue: JobOut[] }) {
       const edits = !confirm || version === undefined ? dirty : false;
       const base = version ?? (dirty && draft ? draft.base : data.version);
       const body = await saveResult(job.id, base, edits ? value : null, confirm);
-      setMissing([]);
-      if (!confirm) loaded();
+      setMissing({ paths: [], at: null });
+      if (!confirm) loaded(body);
       return body;
     } catch (e) {
       if (e instanceof ApiError && e.code === "required_missing") {
         const paths = e.fields.map((f) => f.replace(/^structured\./, ""));
-        setMissing(paths);
+        setMissing({ paths, at: value });
         setTimeout(() => document.querySelector(`[data-path="${paths[0]}"]`)?.scrollIntoView?.({ block: "center" }), 0);
       } else if (e instanceof ApiError && e.code === "plan_expired") {
         setExpired(true);
@@ -154,6 +166,15 @@ function Workspace({ job, queue }: { job: JobOut; queue: JobOut[] }) {
   const mapping = data.mapping;
   const converting = mapping && ["PENDING", "MATCHING", "CONVERTING"].includes(mapping.status);
   const back = data.review?.last_return;
+  // a mark clears as soon as the user fills the field in (minor-fixes-ui)
+  const stillMissing = (p: string, judged: Json) => {
+    const now = getAt(value, pathParts(p));
+    return blank(now) || same(now, getAt(judged, pathParts(p)));
+  };
+  // retry the conversion that failed: the one switched to here, else the one the result names
+  const retryTarget: SwitchTarget | null =
+    lastApplied ??
+    (mapping?.template_version_id ? { kind: "template", versionId: mapping.template_version_id, name: "" } : null);
   const editable = !data.confirmed && !busy && !converting;
 
   return (
@@ -179,8 +200,8 @@ function Workspace({ job, queue }: { job: JobOut; queue: JobOut[] }) {
           message={`${t("ocr.conversionFailed")} ${failureText(mapping.error, t)}`}
           action={
             <Space>
-              {lastApplied && (
-                <Button size="small" onClick={() => void switchTo(lastApplied)}>
+              {retryTarget && (
+                <Button size="small" onClick={() => void switchTo(retryTarget)}>
                   {t("common.retry")}
                 </Button>
               )}
@@ -205,7 +226,12 @@ function Workspace({ job, queue }: { job: JobOut; queue: JobOut[] }) {
       <EditableResult
         value={value}
         groups={groups}
-        missing={new Set([...data.missing_required, ...missing])}
+        missing={
+          new Set([
+            ...data.missing_required.filter((p) => stillMissing(p, (data.structured ?? null) as Json)),
+            ...missing.paths.filter((p) => stillMissing(p, missing.at)),
+          ])
+        }
         warnings={new Set((data.warnings ?? []).map((w) => w.path))}
         amountIssues={new Map((data.amount_issues ?? []).map((a) => [a.path, a.computed]))}
         editable={editable}

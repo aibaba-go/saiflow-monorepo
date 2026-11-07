@@ -1,6 +1,6 @@
 import { App, Button, Card, Col, Descriptions, Row, Space, Spin } from "antd";
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
 
 import { useMe } from "../auth/session";
 import { ErrorText } from "../components/ErrorText";
@@ -33,7 +33,8 @@ export function DocumentPage() {
   const me = useMe();
   const { id = "" } = useParams();
   const job = useJob(id);
-  const result = useResult(id, job.isSuccess);
+  const unfinished = Boolean(job.data && ["OCR_PROCESSING", "TEMPLATE_MATCHING", "OCR_FAILED"].includes(job.data.stage));
+  const result = useResult(id, job.isSuccess && !unfinished);
   const changes = useChanges(id, job.isSuccess);
   const [exporting, setExporting] = useState(false);
 
@@ -44,6 +45,8 @@ export function DocumentPage() {
       </Page>
     );
   }
+  // still recognising or failed: its place is the recognition status (minor-fixes-ui)
+  if (unfinished) return <Navigate to={`/upload?job=${id}`} replace />;
   if (!job.data || !result.data) return result.isError ? <ErrorText error={result.error} /> : <Spin />;
   const j = job.data;
   const data = result.data;

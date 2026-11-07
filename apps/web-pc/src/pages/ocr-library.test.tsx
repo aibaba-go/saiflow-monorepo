@@ -236,3 +236,16 @@ describe("document detail (FR-SYS-131)", () => {
     expect(screen.queryByRole("button", { name: /Excel/ })).not.toBeInTheDocument();
   });
 });
+
+
+describe("detail fixes (minor-fixes-ui)", () => {
+  it("unfinished job detail redirects", async () => {
+    signedIn({
+      "GET /api/v1/ocr/jobs/jX": () => json(200, job("X", "OCR_PROCESSING")),
+      "GET /api/v1/files/pending": () => json(200, []),
+      "GET /api/v1/ocr/jobs": () => json(200, { items: [], total: 0, page: 1, page_size: 20 }),
+    });
+    renderAt("/documents/jX");
+    expect(await screen.findByTestId("page-upload")).toBeInTheDocument();
+  });
+});

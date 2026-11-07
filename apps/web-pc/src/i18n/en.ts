@@ -417,6 +417,16 @@ export const en = {
   "field.permissions": "Choose valid permissions.",
   "verify.statusLabel": "Status:",
   "tenant.left": "Left organization",
+  "ocr.tooManyFiles": "Up to {n} files at a time; the rest were not added.",
+  "ocr.progress": "Progress",
+  "ocr.pages": "{n} page(s)",
+  "ocr.step.QUEUED": "Queued",
+  "ocr.step.PREPROCESSING": "Preparing",
+  "ocr.step.PROCESSING": "Reading the document",
+  "ocr.step.POSTPROCESSING": "Structuring",
+  "ocr.step.CANCEL_REQUESTED": "Cancelling",
+  "ocr.step.SUCCEEDED": "Matching template",
+  "ocr.step.PARTIAL_SUCCESS": "Matching template",
 } as const;
 
 export type MessageKey = keyof typeof en;

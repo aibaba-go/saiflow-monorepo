@@ -266,3 +266,54 @@ describe("verify (FR-SYS-129)", () => {
     await waitFor(() => expect(api.count("GET /api/v1/ocr/jobs/A/result")).toBeGreaterThan(1));
   });
 });
+
+
+describe("verify page fixes (minor-fixes-ui)", () => {
+  it("saved values do not flash", async () => {
+    let saved = false;
+    const { state, api } = verifyApi({
+      "GET /api/v1/ocr/jobs/A/result": async () => {
+        // after the save, the refetch is slow: the page must keep showing the saved value
+        if (saved) await new Promise((r) => setTimeout(r, 1500));
+        return json(200, state.results.A);
+      },
+    });
+    api.set("PATCH /api/v1/ocr/jobs/A/result", async (r) => {
+      const body = (await r.json()) as { structured: Record<string, unknown> };
+      state.results.A = result(body.structured, { version: 2 });
+      saved = true;
+      return json(200, state.results.A);
+    });
+    renderAt("/verify/A");
+    await userEvent.type(await field("Invoice No."), "5");
+    await userEvent.click(screen.getByRole("button", { name: en("ocr.saveDraft") }));
+    await waitFor(() => expect(api.count("PATCH /api/v1/ocr/jobs/A/result")).toBe(1));
+    await new Promise((r) => setTimeout(r, 300));
+    expect(((await field("Invoice No.")) as HTMLInputElement).value).toBe("IV-A5");
+  });
+
+  it("missing mark clears when filled", async () => {
+    verifyApi({
+      "PATCH /api/v1/ocr/jobs/A/result": () => json(422, { code: "required_missing", fields: ["structured.document.invoice_date"] }),
+    });
+    renderAt("/verify/A");
+    const date = await field("Invoice date");
+    await userEvent.clear(date);
+    await userEvent.click(screen.getByRole("button", { name: en("ocr.confirm") }));
+    const box = () => document.querySelector('[data-path="document.invoice_date"]') as HTMLElement;
+    await waitFor(() => expect(box().className).toContain("required-missing"));
+    await userEvent.type(date, "2026-11-02");
+    await waitFor(() => expect(box().className).not.toContain("required-missing"));
+  });
+
+  it("auto conversion failure offers retry", async () => {
+    const { api, state } = verifyApi({
+      "POST /api/v1/ocr/jobs/A/template": () => json(202, { result: "started", mapping_id: "m2" }),
+    });
+    state.results.A = result(doc("IV-A"), { mapping: { status: "FAILED", error: "PRIMARY_MISSING", template_version_id: 4 } });
+    renderAt("/verify/A");
+    const alert = (await screen.findByText(new RegExp(en("ocr.conversionFailed")))).closest(".ant-alert") as HTMLElement;
+    await userEvent.click(within(alert).getByRole("button", { name: en("common.retry") }));
+    await waitFor(async () => expect(await api.bodies("POST /api/v1/ocr/jobs/A/template")).toEqual([{ template_version_id: 4 }]));
+  });
+});

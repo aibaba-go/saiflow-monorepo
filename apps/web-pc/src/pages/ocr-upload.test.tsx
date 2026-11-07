@@ -206,6 +206,7 @@ describe("recognition status (FR-SYS-128)", () => {
         const stage = new URL(r.url).searchParams.get("stage");
         return page(stage === "OCR_PROCESSING" && !done ? [job("j1", "OCR_PROCESSING")] : []);
       },
+      "GET /api/v1/ocr/jobs/j1": () => json(200, job("j1", "VERIFYING")),
     });
     renderAt("/upload");
     const status = await screen.findByTestId("recognition-status");
@@ -229,5 +230,95 @@ describe("recognition status (FR-SYS-128)", () => {
     expect(within(row).getByText(en("ocrerr.VENDOR_TIMEOUT"))).toBeInTheDocument();
     await userEvent.click(within(row).getByRole("button", { name: en("ocr.rerun") }));
     await waitFor(() => expect(api.count("POST /api/v1/ocr/jobs/j2/rerun")).toBe(1));
+  });
+});
+
+
+describe("upload page fixes (minor-fixes-ui)", () => {
+  it("status shows step and pages", async () => {
+    signedIn({
+      "GET /api/v1/files/pending": () => json(200, []),
+      "GET /api/v1/ocr/jobs": jobsBy({ OCR_PROCESSING: [job("j1", "OCR_PROCESSING", { status: "PROCESSING", page_count: 3 })] }),
+    });
+    renderAt("/upload");
+    const row = (await within(await screen.findByTestId("recognition-status")).findByText("j1.png")).closest("tr") as HTMLElement;
+    expect(within(row).getByText(en("ocr.step.PROCESSING"))).toBeInTheDocument();
+    expect(within(row).getByText(en("ocr.pages", { n: 3 }))).toBeInTheDocument();
+  });
+
+  it("fast finish is announced", async () => {
+    signedIn({
+      "GET /api/v1/files/pending": () => json(200, [file("p1", "x.png")]),
+      "POST /api/v1/ocr/jobs": () => json(201, job("j7", "OCR_PROCESSING")),
+      "GET /api/v1/ocr/jobs": jobsBy({}),
+      "GET /api/v1/ocr/jobs/j7": () => json(200, job("j7", "VERIFYING")),
+    });
+    renderAt("/upload");
+    const list = await screen.findByTestId("pending-list");
+    await within(list).findByText("x.png");
+    await userEvent.click(within(list).getAllByRole("checkbox")[1]!);
+    await userEvent.click(screen.getByRole("button", { name: en("ocr.startRecognition", { n: 1 }) }));
+    expect(await screen.findByRole("link", { name: en("ocr.goVerify") }, { timeout: 6000 })).toHaveAttribute("href", "/verify/j7");
+  }, 10000);
+
+  it("job beyond 20 is not falsely finished", async () => {
+    const many = Array.from({ length: 20 }, (_, i) => job(`n${i}`, "OCR_PROCESSING", { created_at: `2026-11-07T02:${String(10 + i).padStart(2, "0")}:00Z` }));
+    let round = 0;
+    signedIn({
+      "GET /api/v1/files/pending": () => json(200, []),
+      "GET /api/v1/ocr/jobs": (r) => {
+        const stage = new URL(r.url).searchParams.get("stage");
+        if (stage !== "OCR_PROCESSING") return page([]);
+        round += 1;
+        return page(round === 1 ? [job("old", "OCR_PROCESSING", { created_at: "2026-11-07T01:00:00Z" })] : many);
+      },
+      "GET /api/v1/ocr/jobs/old": () => json(200, job("old", "OCR_PROCESSING")),
+    });
+    renderAt("/upload");
+    await within(await screen.findByTestId("recognition-status")).findByText("old.png");
+    await within(screen.getByTestId("recognition-status")).findByText("n0.png", {}, { timeout: 6000 });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(screen.queryByRole("link", { name: en("ocr.goVerify") })).not.toBeInTheDocument();
+  }, 10000);
+
+  it("drop while busy appends; over 10 rejected", async () => {
+    let release: () => void = () => {};
+    let n = 0;
+    signedIn({
+      "POST /api/v1/uploads": async (r) => {
+        const body = (await r.json()) as { file_name: string };
+        n += 1;
+        return json(201, { ...file(`u${n}`, body.file_name), status: "UPLOADING" });
+      },
+      "PUT /api/v1/uploads/u1/content": () => new Promise<Response>((r) => (release = () => r(json(204, null)))),
+      "GET /api/v1/files/pending": () => json(200, []),
+      "GET /api/v1/ocr/jobs": jobsBy({}),
+    });
+    renderAt("/upload");
+    await screen.findByTestId("page-upload");
+    await drop([new File(["x"], "first.png", { type: "image/png" })]);
+    const queue = await screen.findByTestId("upload-queue");
+    await within(queue).findByText("first.png");
+    await drop(Array.from({ length: 11 }, (_, i) => new File(["x"], `more-${i}.png`, { type: "image/png" })));
+    expect(await within(queue).findByText("more-0.png")).toBeInTheDocument();
+    expect(within(queue).getByText("more-9.png")).toBeInTheDocument();
+    expect(within(queue).queryByText("more-10.png")).not.toBeInTheDocument();
+    expect(await screen.findByText(en("ocr.tooManyFiles", { n: 10 }))).toBeInTheDocument();
+    release();
+  });
+
+  it("delete failure shown", async () => {
+    signedIn({
+      "GET /api/v1/files/pending": () => json(200, [file("p1", "x.png")]),
+      "DELETE /api/v1/files/p1": () => json(500, { code: "internal" }),
+      "GET /api/v1/ocr/jobs": jobsBy({}),
+    });
+    renderAt("/upload");
+    const list = await screen.findByTestId("pending-list");
+    await within(list).findByText("x.png");
+    await userEvent.click(within(list).getAllByRole("checkbox")[1]!);
+    await userEvent.click(screen.getByRole("button", { name: en("ocr.deleteSelected") }));
+    await userEvent.click(await screen.findByRole("button", { name: en("common.confirm") }));
+    expect(await screen.findByText(en("err.unknown"))).toBeInTheDocument();
   });
 });

@@ -99,3 +99,33 @@ describe("home (FR-SYS-094)", () => {
     expect(await screen.findByTestId("page-upload")).toBeInTheDocument();
   });
 });
+
+
+describe("home to-verify (minor-fixes-ui)", () => {
+  it("to-verify hidden without permission", async () => {
+    localStorage.setItem("saiflow.pc.tenant.7", "5");
+    useTenantChoice.getState().reset();
+    signedIn(
+      { "GET /api/v1/billing/usage": () => json(200, USAGE), "GET /api/v1/ocr/jobs": jobsApi([job(1, "VERIFYING")]) },
+      { tenants: [PERSONAL, { ...ORG, permissions: ["data_browse"] }] },
+    );
+    renderAt("/");
+    await screen.findByTestId("recent-tasks");
+    expect(screen.queryByTestId("to-verify")).not.toBeInTheDocument();
+  });
+
+  it("to-verify counts own editable", async () => {
+    localStorage.setItem("saiflow.pc.tenant.7", "5");
+    useTenantChoice.getState().reset();
+    const mine = { ...job(1, "VERIFYING"), created_by_user_id: 7 };
+    const theirs = { ...job(2, "VERIFYING"), created_by_user_id: 8 };
+    signedIn(
+      { "GET /api/v1/billing/usage": () => json(200, USAGE), "GET /api/v1/ocr/jobs": jobsApi([mine, theirs]) },
+      { tenants: [PERSONAL, { ...ORG, permissions: ["verify_own", "data_browse"] }] },
+    );
+    renderAt("/");
+    const card = await screen.findByTestId("to-verify");
+    await waitFor(() => expect(card).toHaveTextContent("1"));
+    expect(card).not.toHaveTextContent("2");
+  });
+});

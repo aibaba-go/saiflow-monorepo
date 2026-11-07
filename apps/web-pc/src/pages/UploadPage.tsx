@@ -6,7 +6,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Page } from "../components/Page";
 import { formatBangkokDateTime } from "../format";
 import { isMessageKey, useT } from "../i18n";
-import { cancelJob, createJob, deleteFile, type JobOut, listJobs, listPending, rerunJob } from "../ocr/api";
+import { cancelJob, createJob, deleteFile, getJob, type JobOut, listJobs, listPending, rerunJob } from "../ocr/api";
+import { MAX_FILES } from "../ocr/upload";
 import { StageTag } from "../ocr/StageTag";
 import { formatSize, type UploadItem, useUploadQueue } from "../ocr/uploadQueue";
 import { ApiError, errorMessage } from "../services/errors";
@@ -33,7 +34,9 @@ function useRecognition() {
   const { tenant } = useTenant();
   const unfinishedBefore = useRef(new Set<string>());
   const finished = useRef<{ id: string; name: string }[]>([]);
-  return useQuery({
+  // jobs this page started: announced when they finish even if never seen running
+  const started = useRef(new Set<string>());
+  const query = useQuery({
     queryKey: ["recognition", tenant?.tenant_id],
     enabled: tenant !== null,
     queryFn: async () => {
@@ -47,16 +50,27 @@ function useRecognition() {
       const unfinished = new Set(rows.filter((j) => UNFINISHED.includes(j.stage)).map((j) => j.id));
       const failed = new Set(rows.filter((j) => j.stage === "OCR_FAILED").map((j) => j.id));
       const names = new Map(lists.flatMap((l) => l.items).map((j) => [j.id, j.file_name]));
-      for (const id of unfinishedBefore.current) {
-        if (!unfinished.has(id) && !failed.has(id) && !finished.current.some((f) => f.id === id)) {
-          finished.current = [...finished.current, { id, name: names.get(id) ?? "" }];
+      // A watched job missing from the newest 20 is looked up: only a job that really left
+      // recognition counts as finished (minor-fixes-ui).
+      const still = new Set(unfinished);
+      for (const id of new Set([...unfinishedBefore.current, ...started.current])) {
+        if (unfinished.has(id) || failed.has(id) || finished.current.some((f) => f.id === id)) continue;
+        const job = await getJob(id).catch(() => null);
+        if (!job || job.stage === "OCR_FAILED") {
+          started.current.delete(id);
+        } else if (UNFINISHED.includes(job.stage)) {
+          still.add(id);
+        } else {
+          finished.current = [...finished.current, { id, name: names.get(id) ?? job.file_name }];
+          started.current.delete(id);
         }
       }
-      unfinishedBefore.current = unfinished;
-      return { rows, finished: finished.current, running: unfinished.size > 0 };
+      unfinishedBefore.current = still;
+      return { rows, finished: finished.current, running: still.size > 0 };
     },
     refetchInterval: (q) => (q.state.data?.running ? 3000 : false),
   });
+  return { ...query, track: (id: string) => started.current.add(id) };
 }
 
 /** The upload page (FR-SYS-127, 128): drop or choose files into the upload queue; the
@@ -101,7 +115,8 @@ function UploadContent() {
     setStartError(null);
     try {
       for (const id of chosen) {
-        await createJob(id, `pc-${id}`);
+        const job = await createJob(id, `pc-${id}`);
+        recognition.track(job.id);
       }
     } catch (e) {
       setStartError(e);
@@ -122,7 +137,15 @@ function UploadContent() {
       okText: t("common.confirm"),
       cancelText: t("common.cancel"),
       onOk: async () => {
-        for (const id of chosen) await deleteFile(id).catch(() => undefined);
+        let failure: unknown = null;
+        for (const id of chosen) {
+          try {
+            await deleteFile(id);
+          } catch (e) {
+            failure ??= e;
+          }
+        }
+        if (failure) void message.error(errorMessage(failure, t));
         setSelected([]);
         await queryClient.invalidateQueries({ queryKey: ["pending"] });
       },
@@ -166,8 +189,10 @@ function UploadContent() {
           showUploadList={false}
           beforeUpload={(file, list) => {
             if (file === list[list.length - 1]) {
-              if (queue.busy) void message.warning(t("ocr.queueBusy"));
-              else queue.start(list as unknown as File[]);
+              // one selection holds at most 10 files (FR-UPLOAD-005); a drop while uploading
+              // joins the running batch
+              if (list.length > MAX_FILES) void message.warning(t("ocr.tooManyFiles", { n: MAX_FILES }));
+              queue.start(list.slice(0, MAX_FILES) as unknown as File[]);
             }
             return false;
           }}
@@ -311,6 +336,17 @@ function UploadContent() {
             columns={[
               { key: "name", title: t("review.col.file"), render: (_, j) => j.file_name },
               { key: "stage", title: t("ocr.status"), render: (_, j) => <StageTag stage={j.stage} /> },
+              {
+                key: "step",
+                title: t("ocr.progress"),
+                render: (_, j) =>
+                  j.stage === "OCR_FAILED" ? null : (
+                    <Space size={4} wrap>
+                      <Typography.Text>{isMessageKey(`ocr.step.${j.status}`) ? t(`ocr.step.${j.status}` as never) : j.status}</Typography.Text>
+                      <Typography.Text type="secondary">{t("ocr.pages", { n: j.page_count })}</Typography.Text>
+                    </Space>
+                  ),
+              },
               {
                 key: "detail",
                 title: "",
