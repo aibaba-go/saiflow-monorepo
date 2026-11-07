@@ -3,8 +3,8 @@ doc_id: STD-004
 title: "SaiFlow monorepo — 目录结构与文档地图"
 type: standard
 status: active
-version: 2.7.0
-updated: 2026-11-03
+version: 2.7.1
+updated: 2026-11-07
 owner: Product Engineering
 doc_source: manual
 ---
@@ -51,7 +51,7 @@ saiflow/
 │       └── archive/                       # 已归档变更
 │
 ├── docs/                                  # 产品级持久文档（SaiFlow 文档唯一根；除 API-Spec 外均为 manual）
-│   ├── 00-standards/                      # 文档与结构标准（manual；含 STD-005 / STD-006 / STD-007）
+│   ├── 00-standards/                      # 文档与结构标准（manual；含 STD-005 / STD-006 / STD-007 / STD-008 界面设计规范）
 │   ├── 01-templates/                      # 文档模板（manual）
 │   ├── 10-product/                        # 产品级设计：vision / roadmap / personas / glossary / PRD（manual）
 │   ├── 20-requirements/                   # 原子化 FR / NFR（manual）
@@ -130,6 +130,7 @@ saiflow/
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.7.1 | 2026-11-07 | Product Engineering | `00-standards/` 新增 STD-008 `UI-Design-System.md`（界面设计规范） |
 | 2.7.0 | 2026-11-03 | Product Engineering | B-1：新增 `apps/web-admin`、`.github/workflows/`、`eslint.config.js`、`docs/deployment/`、`scripts/{deploy,docker,tests}/`；规则 10 启用 `docs/deployment/`；新增服务命名规则 |
 | 2.6.0 | 2026-10-30 | Product Engineering | 规则 2：数据模型只登记实体层，字段以代码为唯一来源（ADR-007） |
 | 2.5.0 | 2026-10-30 | Product Engineering | 按 ADR-006：新增 `legacy/`（规则 12）与 `.claude/archive/`；删除 `.claude/agents/` 执行层；change 目录产物改为 proposal / specs / plan / verification；规则 2、4 的变更级设计改写入 `plan.md` |
