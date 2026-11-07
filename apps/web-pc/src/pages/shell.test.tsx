@@ -55,13 +55,6 @@ describe("layout and home (FR-SYS-094)", () => {
     expect(within(menu).getByText(en("nav.org"))).toBeInTheDocument();
   });
 
-  it("data browse is coming soon (094-03)", async () => {
-    signedIn({ "GET /api/v1/billing/usage": usageFor });
-    renderAt("/");
-    await userEvent.click(await screen.findByRole("link", { name: en("nav.data") }));
-    expect(await screen.findByText(en("common.comingSoon"))).toBeInTheDocument();
-  });
-
   it("switching the language changes the menu at once and is kept (093-02)", async () => {
     signedIn({ "GET /api/v1/billing/usage": usageFor });
     renderAt("/");
@@ -128,7 +121,7 @@ describe("an organization that disappears mid-session (Review Focus 4)", () => {
     gone = true;
     api.set("GET /api/v1/me/tenants", () => json(200, [PERSONAL]));
     // Leave home and come back: the usage is fetched again and now answers 404.
-    await userEvent.click(screen.getByRole("link", { name: en("nav.data") }));
+    await userEvent.click(screen.getByRole("link", { name: en("nav.notifications") }));
     await userEvent.click(await screen.findByRole("link", { name: en("nav.home") }));
     expect(await screen.findByText(en("tenant.gone"))).toBeInTheDocument();
     expect(await screen.findByText("1,000 / 1,000")).toBeInTheDocument();

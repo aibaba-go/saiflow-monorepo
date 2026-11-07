@@ -4,16 +4,17 @@ import enUS from "antd/locale/en_US";
 import thTH from "antd/locale/th_TH";
 import zhCN from "antd/locale/zh_CN";
 import { useEffect } from "react";
-import { createBrowserRouter, Route, RouterProvider, Routes } from "react-router-dom";
+import { createBrowserRouter, Navigate, Route, RouterProvider, Routes } from "react-router-dom";
 
 import { RequireUser } from "./auth/RequireUser";
 import { forgetSession, useSessionNotice } from "./auth/session";
 import { useT } from "./i18n";
 import { AppLayout } from "./layout/AppLayout";
 import { ApplyOrgPage } from "./pages/ApplyOrgPage";
-import { DataBrowsePage } from "./pages/DataBrowsePage";
+import { DocumentPage } from "./pages/DocumentPage";
 import { HealthPage } from "./pages/HealthPage";
 import { HomePage } from "./pages/HomePage";
+import { LibraryPage } from "./pages/LibraryPage";
 import { OrgGate } from "./pages/OrgGate";
 import { OrgPage } from "./pages/OrgPage";
 import { ProfilePage } from "./pages/ProfilePage";
@@ -81,7 +82,9 @@ export function AppRoutes() {
               <Route path="/plans" element={<PlansPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/data" element={<DataBrowsePage />} />
+              <Route path="/library" element={<LibraryPage />} />
+              <Route path="/documents/:id" element={<DocumentPage />} />
+              <Route path="/data" element={<Navigate to="/library" replace />} />
               <Route path="*" element={<NotFound />} />
             </Route>
           </Route>

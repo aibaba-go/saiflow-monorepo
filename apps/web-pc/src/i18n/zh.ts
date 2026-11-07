@@ -402,4 +402,12 @@ export const zh: Record<MessageKey, string> = {
   "ocr.recommended": "推荐",
   "ocr.current": "当前",
   "review.lastReturn": "{level}被 {name} 退回 · {time}",
+  "library.stage": "阶段",
+  "library.template": "模板",
+  "library.dates": "建立日期",
+  "library.search": "搜索文件名",
+  "library.empty": "没有单据",
+  "library.createdAt": "建立时间",
+  "library.exportExcel": "导出 Excel",
+  "library.result": "结果",
 };

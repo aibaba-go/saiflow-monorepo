@@ -400,6 +400,14 @@ export const en = {
   "ocr.recommended": "Recommended",
   "ocr.current": "Current",
   "review.lastReturn": "Returned at {level} by {name} · {time}",
+  "library.stage": "Stage",
+  "library.template": "Template",
+  "library.dates": "Created between",
+  "library.search": "Search file name",
+  "library.empty": "No documents",
+  "library.createdAt": "Created at",
+  "library.exportExcel": "Export Excel",
+  "library.result": "Result",
 } as const;
 
 export type MessageKey = keyof typeof en;

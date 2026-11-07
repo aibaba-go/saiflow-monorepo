@@ -402,4 +402,12 @@ export const th: Record<MessageKey, string> = {
   "ocr.recommended": "แนะนำ",
   "ocr.current": "ปัจจุบัน",
   "review.lastReturn": "ถูกส่งกลับที่{level}โดย {name} · {time}",
+  "library.stage": "ขั้นตอน",
+  "library.template": "แม่แบบ",
+  "library.dates": "วันที่สร้าง",
+  "library.search": "ค้นหาชื่อไฟล์",
+  "library.empty": "ไม่มีเอกสาร",
+  "library.createdAt": "เวลาสร้าง",
+  "library.exportExcel": "ส่งออก Excel",
+  "library.result": "ผลลัพธ์",
 };
