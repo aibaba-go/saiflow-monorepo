@@ -1,0 +1,25 @@
+/* LINE mini app styles: Tailwind with the STD-008 theme (ADR-010 §1). */
+@import "tailwindcss";
+@import "@saiflow/ui/styles/fonts.css";
+@import "@saiflow/ui/styles/tokens.css";
+@import "@saiflow/ui/styles/theme.css";
+
+/* mini app density (STD-008 §5, §6; FR-SYS-134) */
+:root {
+  --card-radius: 14px;
+  --control-radius: 10px;
+  --control-h: 44px;
+}
+
+body {
+  font-size: 15px;
+  line-height: 24px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-stack);
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}

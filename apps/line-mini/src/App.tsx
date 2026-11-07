@@ -1,3 +1,4 @@
+import { loadChineseFont } from "@saiflow/ui";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Button, Toast } from "antd-mobile";
 import { useEffect, useRef } from "react";
@@ -35,6 +36,7 @@ import { showReportTab } from "./features/tenants/reportTab";
 import { useCurrentTenant } from "./features/tenants/useCurrentTenant";
 import { realLiff } from "./services/liff";
 import type { Liff } from "./services/liffTypes";
+import { useLanguage } from "./stores/language";
 import { useSession } from "./stores/session";
 import "./styles/app.css";
 
@@ -87,6 +89,11 @@ export function Shell({ liff, search, liffTimeoutMs = 20_000, logoutTimeoutMs = 
   const notice = useSession((s) => s.notice);
   const path = useRef(location.pathname);
   const started = useRef(false);
+  const lang = useLanguage((s) => s.lang);
+
+  useEffect(() => {
+    if (lang === "zh") void loadChineseFont();
+  }, [lang]);
 
   useEffect(() => {
     path.current = location.pathname;

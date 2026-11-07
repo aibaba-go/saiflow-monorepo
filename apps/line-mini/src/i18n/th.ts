@@ -83,6 +83,7 @@ export const th: Record<MessageKey, string> = {
   "usage.free": "สแกนฟรี: {n}",
   "usage.paused": "หยุดชั่วคราว",
   "usage.freeExpires": "หมดอายุ {date}",
+  "common.clear": "ล้าง",
   "common.close": "ปิด",
   "tenant.personal": "บัญชีส่วนตัว",
   "tenant.current": "{name}",
