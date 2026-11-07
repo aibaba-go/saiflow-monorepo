@@ -1494,6 +1494,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Templates
+         * @description The templates published to the current tenant, by name (web-pc Library filter).
+         */
+        get: operations["listTemplates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/templates/versions/{version_id}": {
         parameters: {
             query?: never;
@@ -2605,6 +2625,13 @@ export interface components {
              * Format: date-time
              */
             starts_at: string;
+        };
+        /** TemplateItemOut */
+        TemplateItemOut: {
+            /** Name */
+            name: string;
+            /** Template Id */
+            template_id: number;
         };
         /** TemplateOption */
         TemplateOption: {
@@ -5950,6 +5977,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReviewDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listTemplates: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateItemOut"][];
                 };
             };
             /** @description Validation Error */

@@ -124,3 +124,14 @@ async def test_returned_flag(api, line, store, sm, ai_settings, llm, db):
     await db.commit()
     got = (await api.get(f"{JOBS}/{a}")).json()
     assert got["returned"] is False
+
+
+async def test_list_templates(api, line, db):
+    """Published templates of the current tenant, for the Library filter (web-pc-ocr)."""
+    await login(api, line)
+    r = await api.get("/api/v1/templates")
+    assert r.status_code == 200, r.text
+    names = {t["template_id"]: t["name"] for t in r.json()}
+    assert await _template_id(db, "tax_invoice") in names
+    assert await _template_id(db, "billing_note") in names
+    assert all(isinstance(n, str) and n for n in names.values())

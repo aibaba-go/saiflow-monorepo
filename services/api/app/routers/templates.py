@@ -123,3 +123,18 @@ async def template_version(version_id: int, ctx: Tenant, db: Db) -> TemplateVers
                 groups=ver.groups,
             )
     raise AppError(404, "not_found", "error.not_found")
+
+
+class TemplateItemOut(BaseModel):
+    template_id: int
+    name: str
+
+
+@versions_router.get("", operation_id="listTemplates", response_model=list[TemplateItemOut])
+async def list_templates(ctx: Tenant, db: Db) -> list[TemplateItemOut]:
+    """The templates published to the current tenant, by name (web-pc Library filter)."""
+    rows = await mapping_service.available_versions(db, ctx.tenant_id)
+    return sorted(
+        (TemplateItemOut(template_id=tpl.id, name=ver.name) for tpl, ver in rows),
+        key=lambda item: item.name,
+    )

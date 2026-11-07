@@ -3167,6 +3167,24 @@
         "title": "SubscriptionOut",
         "type": "object"
       },
+      "TemplateItemOut": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "template_id": {
+            "title": "Template Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "template_id",
+          "name"
+        ],
+        "title": "TemplateItemOut",
+        "type": "object"
+      },
       "TemplateOption": {
         "properties": {
           "code": {
@@ -8843,6 +8861,62 @@
         "summary": "Decide",
         "tags": [
           "reviews"
+        ]
+      }
+    },
+    "/api/v1/templates": {
+      "get": {
+        "description": "The templates published to the current tenant, by name (web-pc Library filter).",
+        "operationId": "listTemplates",
+        "parameters": [
+          {
+            "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+            "in": "header",
+            "name": "X-Tenant-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tenant this request acts on; omit for your own tenant (FR-SYS-017).",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TemplateItemOut"
+                  },
+                  "title": "Response Listtemplates",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Templates",
+        "tags": [
+          "ocr"
         ]
       }
     },
