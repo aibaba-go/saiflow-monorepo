@@ -48,7 +48,11 @@ async def _mapping_state(db: AsyncSession, job: OcrJob) -> dict | None:
     if job.pending_mapping_id:
         m = await db.get(TemplateMapping, job.pending_mapping_id)
         if m is not None:
-            return {"status": m.status, "error": m.error_code}
+            return {
+                "status": m.status,
+                "error": m.error_code,
+                "template_version_id": m.template_version_id,
+            }
     latest = (
         await db.execute(
             select(TemplateMapping)
@@ -69,7 +73,11 @@ async def _mapping_state(db: AsyncSession, job: OcrJob) -> dict | None:
         and not mapping_service.quiet(latest)
         and not settled
     ):
-        return {"status": latest.status, "error": latest.error_code}
+        return {
+            "status": latest.status,
+            "error": latest.error_code,
+            "template_version_id": latest.template_version_id,
+        }
     return None
 
 

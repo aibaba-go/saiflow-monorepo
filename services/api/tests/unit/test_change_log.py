@@ -30,11 +30,53 @@ def test_diff_equal():
 
 def test_empty_containers_are_leaves():
     assert leaves({"g": {"rows": [], "meta": {}}}) == {"g.rows": [], "g.meta": {}}
-    assert diff({"g": {"rows": [{"x": "1"}]}}, {"g": {"rows": []}}) == [
-        ("g.rows", None, []),
-        ("g.rows[0].x", "1", None),
-    ]
+    # emptying a table reports its deleted rows, not the empty container (minor-fixes-ui)
+    assert diff({"g": {"rows": [{"x": "1"}]}}, {"g": {"rows": []}}) == [("g.rows[0].x", "1", None)]
 
 
 def test_scalar_lists_by_index():
     assert diff({"g": {"tel": ["1", "2"]}}, {"g": {"tel": ["1", "3"]}}) == [("g.tel[1]", "2", "3")]
+
+
+# --- minor-fixes-ui: row alignment, filled containers, numeric order (FR-VERIFY-007) ---
+
+
+def _rows(n):
+    return [{"qty": str(i), "name": f"R{i}"} for i in range(n)]
+
+
+def test_delete_middle_row_logs_only_that_row():  # AC-FR-VERIFY-007-04
+    before = {"g": {"items": _rows(10)}}
+    after = {"g": {"items": _rows(10)[1:]}}
+    assert diff(before, after) == [("g.items[0].name", "R0", None), ("g.items[0].qty", "0", None)]
+
+
+def test_filled_empty_table_not_logged():  # AC-FR-VERIFY-007-05
+    before = {"document": {"no": "1"}}
+    after = {"document": {"no": "2"}, "goods": {"line_items": []}}
+    assert diff(before, after) == [("document.no", "1", "2")]
+
+
+def test_numeric_row_order():  # AC-FR-VERIFY-007-06
+    before = {"g": {"items": _rows(11)}}
+    rows = _rows(11)
+    rows[2] = {"qty": "x", "name": "R2"}
+    rows[10] = {"qty": "y", "name": "R10"}
+    assert [p for p, _, _ in diff(before, {"g": {"items": rows}})] == [
+        "g.items[2].qty",
+        "g.items[10].qty",
+    ]
+
+
+def test_edit_and_delete_rows():  # Review Focus 1
+    a, b, c = {"qty": "1", "n": "A"}, {"qty": "2", "n": "B"}, {"qty": "3", "n": "C"}
+    after_c = {"qty": "9", "n": "C"}
+    got = diff({"g": {"items": [a, b, c]}}, {"g": {"items": [a, after_c]}})
+    assert ("g.items[1].qty", "3", "9") in got
+    assert ("g.items[1].n", "B", None) in got and ("g.items[1].qty", "2", None) in got
+    assert len(got) == 3
+
+
+def test_emptied_table_logs_rows():  # Review Focus 2
+    got = diff({"g": {"items": [{"qty": "1"}]}}, {"g": {"items": []}})
+    assert got == [("g.items[0].qty", "1", None)]

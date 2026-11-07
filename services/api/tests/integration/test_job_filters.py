@@ -144,3 +144,55 @@ async def test_creator_in_list(api, line, store, sm, ai_settings, llm, db):
     (a,) = await _jobs(api, store, sm, ai_settings, llm, db, 1)
     item = (await api.get(JOBS)).json()["items"][0]
     assert (item["id"], item["created_by_user_id"]) == (a, me["user_id"])
+
+
+async def test_generic_filter_excludes_unfinished(api, line, store, db):
+    """A job still recognising has no result: it is not a generic result (minor-fixes-ui)."""
+    from tests.integration.test_ocr_jobs import new_job
+
+    await login(api, line)
+    queued = (await new_job(api)).json()
+    assert queued["id"] not in await _ids(api, "template=generic")
+
+
+async def test_generic_filter_keeps_finished(api, line, store, sm, ai_settings, llm, db):
+    # Review Focus 3: finished generic results (returned or confirmed) still match
+    await login(api, line)
+    a, b = await _jobs(api, store, sm, ai_settings, llm, db, 2)
+    await db.execute(
+        text(
+            "update ocr_jobs set current_mapping_id = null, review_status = 'CONFIRMED' where id = :j"
+        ),
+        {"j": a},
+    )
+    await db.execute(text("update ocr_jobs set current_mapping_id = null where id = :j"), {"j": b})
+    await db.commit()
+    assert sorted(await _ids(api, "template=generic")) == sorted([a, b])
+
+
+async def test_mapping_state_has_target(api, line, store, sm, ai_settings, llm, db):
+    """A failed manual conversion names its template version, so the page can retry it."""
+    await login(api, line)
+    (job_id,) = await _jobs(api, store, sm, ai_settings, llm, db, 1)
+    billing = (
+        await db.execute(
+            text(
+                "select t.id, t.current_version_id from document_templates t "
+                "where t.code = 'billing_note'"
+            )
+        )
+    ).one()
+    await db.execute(
+        text(
+            "insert into template_mappings (id, job_id, raw_result_id, template_id, "
+            "template_version_id, source, status, error_code, finished_at, created_at) "
+            "select gen_random_uuid()::text, :j, m.raw_result_id, :t, :v, 'MANUAL', 'FAILED', "
+            "'PRIMARY_MISSING', now() + interval '1 second', now() + interval '1 second' "
+            "from template_mappings m where m.job_id = :j limit 1"
+        ),
+        {"j": job_id, "t": billing[0], "v": billing[1]},
+    )
+    await db.commit()
+    body = (await api.get(f"{JOBS}/{job_id}/result")).json()
+    assert body["mapping"]["status"] == "FAILED"
+    assert body["mapping"]["template_version_id"] == billing[1]

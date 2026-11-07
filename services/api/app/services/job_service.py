@@ -324,7 +324,12 @@ def _template_condition(raw: str | None) -> list:
     if raw is None or raw == "":
         return []
     if raw == "generic":
-        return [OcrJob.current_mapping_id.is_(None)]
+        # a generic result exists: recognition succeeded and there is a current version
+        return [
+            OcrJob.current_mapping_id.is_(None),
+            OcrJob.status.in_(states.SUCCESS),
+            OcrJob.id.in_(select(ResultVersion.job_id).where(ResultVersion.is_current.is_(True))),
+        ]
     if not raw.isascii() or not raw.isdigit() or len(raw) > 18:
         raise _bad("template")
     return [

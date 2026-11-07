@@ -1387,6 +1387,17 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "template_version_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Version Id"
           }
         },
         "required": [

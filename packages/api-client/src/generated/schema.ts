@@ -2059,6 +2059,8 @@ export interface components {
             error: string | null;
             /** Status */
             status: string;
+            /** Template Version Id */
+            template_version_id?: number | null;
         };
         /**
          * MarkReadIn

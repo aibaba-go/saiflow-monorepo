@@ -30,6 +30,7 @@ class TemplateOut(BaseModel):
 class MappingStateOut(BaseModel):
     status: str
     error: str | None
+    template_version_id: int | None = None  # the conversion's target, for "Retry"
 
 
 class MatchOut(BaseModel):
