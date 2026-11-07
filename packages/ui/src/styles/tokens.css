@@ -1,0 +1,59 @@
+/* SaiFlow design tokens (STD-008 §2, §3, §11.1). Values equal src/tokens.ts (tested). Light only (§12). */
+:root {
+  color-scheme: light;
+
+  --primary: #4A66F7;
+  --primary-hover: #3D59EE;
+  --primary-pressed: #3149D4;
+  --primary-soft: #E8EDFF;
+  --on-primary: #FFFFFF;
+  --bg: #F5F7FA;
+  --surface: #FFFFFF;
+  --surface-muted: #F0F3F7;
+  --border: #E3E8F0;
+  --border-strong: #CDD5E0;
+  --text: #171A1C;
+  --text-secondary: #5D6673;
+  --text-tertiary: #99A1B0;
+  --icon: #596170;
+  --track: #EDF2F7;
+  --success: #1F9E6B;
+  --success-bg: #E3F5ED;
+  --success-text: #18774F;
+  --warning: #D98F1F;
+  --warning-bg: #FCF2E3;
+  --warning-text: #935D0E;
+  --review: #E07B1A;
+  --review-bg: #FFF0E0;
+  --review-text: #A35400;
+  --danger: #D6383E;
+  --danger-bg: #FDEAEA;
+  --danger-text: #C4343A;
+  --info: #4A66F7;
+  --info-bg: #E8EDFF;
+  --info-text: #3149D4;
+
+  --font-stack: "IBM Plex Sans", "IBM Plex Sans Thai", "Noto Sans SC", -apple-system, "Segoe UI", sans-serif;
+  --shadow-sm: 0 1px 2px rgb(16 24 40 / 0.06);
+  --shadow-md: 0 8px 24px rgb(16 24 40 / 0.12);
+  --overlay: rgb(23 26 28 / 0.45);
+
+  /* shadcn/ui names (STD-008 §11.1) */
+  --background: var(--bg);
+  --foreground: var(--text);
+  --card: var(--surface);
+  --card-foreground: var(--text);
+  --popover: var(--surface);
+  --popover-foreground: var(--text);
+  --primary-foreground: var(--on-primary);
+  --secondary: var(--primary-soft);
+  --secondary-foreground: var(--primary-pressed);
+  --muted: var(--surface-muted);
+  --muted-foreground: var(--text-secondary);
+  --accent: var(--primary-soft);
+  --accent-foreground: var(--primary-pressed);
+  --destructive: var(--danger);
+  --destructive-foreground: var(--on-primary);
+  --input: var(--border);
+  --ring: var(--primary);
+}
