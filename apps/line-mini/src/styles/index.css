@@ -19,6 +19,23 @@ body {
   font-family: var(--font-stack);
 }
 
+/* Tailwind's reset sets headings to the body weight and removes paragraph margins; the
+ * pages were written for browser defaults (final review I1). In the base layer, so a
+ * utility class (font-normal, m-0) still wins. */
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-weight: 600;
+  }
+  p {
+    margin: 1em 0;
+  }
+}
+
 :focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;

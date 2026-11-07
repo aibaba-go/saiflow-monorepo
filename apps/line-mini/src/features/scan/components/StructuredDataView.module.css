@@ -87,7 +87,7 @@
 .detail-row dt {
   border-right: 1px solid var(--border);
   background: var(--primary-soft);
-  color: var(--primary);
+  color: var(--primary-pressed);
   font-weight: 700;
   text-transform: capitalize;
 }
@@ -127,7 +127,7 @@ td {
 th {
   padding: 10px 12px;
   background: var(--primary-soft);
-  color: var(--primary);
+  color: var(--primary-pressed);
   font-weight: 700;
   text-transform: capitalize;
   white-space: nowrap;

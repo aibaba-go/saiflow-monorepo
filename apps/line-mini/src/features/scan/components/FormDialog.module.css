@@ -155,7 +155,7 @@
   padding: 4px 6px;
   border-radius: var(--control-radius);
   background: var(--primary-soft);
-  color: var(--primary);
+  color: var(--primary-pressed);
   font-size: 12px;
   font-weight: 700;
   overflow-wrap: anywhere;

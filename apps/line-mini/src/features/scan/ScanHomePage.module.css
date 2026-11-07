@@ -515,7 +515,7 @@
   height: 38px;
   border-radius: var(--control-radius);
   background: var(--primary-soft);
-  color: var(--primary);
+  color: var(--primary-pressed);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -735,7 +735,7 @@
 
 .batch-note.cancelled {
   background: var(--primary-soft);
-  color: var(--primary);
+  color: var(--primary-pressed);
 }
 
 .batch-note.cancelled small {

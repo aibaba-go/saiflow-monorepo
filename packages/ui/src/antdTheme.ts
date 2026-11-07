@@ -11,6 +11,11 @@ export const pcTheme = {
     colorWarning: COLORS.warning,
     colorError: COLORS.danger,
     colorInfo: COLORS.info,
+    // antd colours success/warning/danger text with these; the graphic colours are too light
+    // for text on white (FR-SYS-137)
+    colorSuccessText: COLORS["success-text"],
+    colorWarningText: COLORS["warning-text"],
+    colorErrorText: COLORS["danger-text"],
     colorBgLayout: COLORS.bg,
     colorBgContainer: COLORS.surface,
     colorBorder: COLORS.border,
@@ -38,6 +43,9 @@ export const adminTheme = {
     colorSuccess: COLORS.success,
     colorWarning: COLORS.warning,
     colorError: COLORS.danger,
+    colorSuccessText: COLORS["success-text"],
+    colorWarningText: COLORS["warning-text"],
+    colorErrorText: COLORS["danger-text"],
     borderRadius: DENSITY.pc.radiusControl,
     fontFamily: FONT_STACK,
   },

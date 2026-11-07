@@ -302,7 +302,7 @@ shadcn/ui 组件读取以下变量。值取自 §2，写在各应用的全局样
 ### 11.3 web-pc（Ant Design）
 
 `ConfigProvider theme` 使用 `@saiflow/ui` 的 `pcTheme`（ADR-010 §2）：
-- 颜色：`colorPrimary #4A66F7`、`colorSuccess #1F9E6B`、`colorWarning #D98F1F`、`colorError #D6383E`、`colorInfo #4A66F7`；`colorBgLayout`、`colorBgContainer`、`colorBorder`、`colorText`、`colorTextSecondary`、`colorTextPlaceholder` 取 §2.2；
+- 颜色：`colorPrimary #4A66F7`、`colorSuccess #1F9E6B`、`colorWarning #D98F1F`、`colorError #D6383E`、`colorInfo #4A66F7`；文字色 `colorSuccessText #18774F`、`colorWarningText #935D0E`、`colorErrorText #C4343A`（Typography 的成功、警告、错误文字用这三个，图形色对白底不足 4.5:1）；`colorBgLayout`、`colorBgContainer`、`colorBorder`、`colorText`、`colorTextSecondary`、`colorTextPlaceholder` 取 §2.2；
 - 尺寸：`borderRadius 8`、`borderRadiusLG 10`、`controlHeight 36`、`fontSize 14`、`lineHeight 22/14`、`fontFamily`（§3.1）；
 - 表格：`cellPaddingBlock 12`（行高约 44px）、表头底色 `--surface-muted`。
 
@@ -311,7 +311,7 @@ shadcn/ui 组件读取以下变量。值取自 §2，写在各应用的全局样
 ### 11.4 admin 后台（Ant Design）
 
 `ConfigProvider theme` 使用 `adminTheme`：
-- `colorPrimary: #4A66F7`、`colorSuccess: #1F9E6B`、`colorWarning: #D98F1F`、`colorError: #D6383E`；
+- `colorPrimary: #4A66F7`、`colorSuccess: #1F9E6B`、`colorWarning: #D98F1F`、`colorError: #D6383E`，以及与 §11.3 相同的三个文字色；
 - `borderRadius: 8`、`fontFamily`（§3.1）。
 
 其余沿用 Ant Design 默认。
@@ -332,6 +332,6 @@ shadcn/ui 组件读取以下变量。值取自 §2，写在各应用的全局样
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
-| 1.1.0 | 2026-11-07 | Product Engineering | 变更 `ui-restyle` 实现后对齐：字体随应用打包（不用 Google Fonts），中文字体按需加载；§11.2 改为 Tailwind v4 主题与应用密度变量；新增 §11.3 web-pc 的 Ant Design 令牌，admin 改为 §11.4 |
+| 1.1.0 | 2026-11-07 | Product Engineering | 变更 `ui-restyle` 实现后对齐：字体随应用打包（不用 Google Fonts），中文字体按需加载；§11.2 改为 Tailwind v4 主题与应用密度变量；新增 §11.3 web-pc 的 Ant Design 令牌（含成功、警告、错误的文字色），admin 改为 §11.4 |
 | 1.0.1 | 2026-11-07 | Product Engineering | 对比度修正：success/warning/review 文字色加深为 `#18774F`/`#935D0E`/`#A35400`，danger 改为 `#D6383E`，使标签文字与白字删除按钮达到 4.5:1（变更 `ui-restyle` FR-SYS-137）；说明白字只用于主色与 danger 实心底 |
 | 1.0.0 | 2026-11-07 | Product Engineering | 初始版：方向 A（亮蓝）、IBM Plex Sans + IBM Plex Sans Thai + Noto Sans SC、两端同一品牌色只区分圆角与密度、先只做浅色（负责人 2026-11-07） |

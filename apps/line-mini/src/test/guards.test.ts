@@ -42,3 +42,24 @@ describe("ADR-010 guards", () => {
     expect(all).not.toMatch(/--primary-light|--processing\b|--processing-bg/);
   });
 });
+
+describe("final review guards", () => {
+  it("no primary text on the soft blue background (FR-SYS-137: 3.97:1)", () => {
+    const hits: string[] = [];
+    for (const f of files(SRC, /\.css$/)) {
+      for (const m of readFileSync(f, "utf8").matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const body = m[2] ?? "";
+        if (/background(-color)?:\s*var\(--(primary-soft|info-bg)\)/.test(body) && /(^|[\s;])color:\s*var\(--primary\)/.test(body)) {
+          hits.push(`${f}: ${(m[1] ?? "").trim()}`);
+        }
+      }
+    }
+    expect(hits).toEqual([]);
+  });
+
+  it("headings keep their weight and paragraphs their spacing under Tailwind's reset", () => {
+    const css = readFileSync(join(SRC, "styles/index.css"), "utf8");
+    expect(css).toMatch(/@layer base\s*\{[^]*h1,\s*h2,\s*h3,\s*h4,\s*h5,\s*h6\s*\{[^}]*font-weight:\s*600/);
+    expect(css).toMatch(/@layer base\s*\{[^]*\bp\s*\{[^}]*margin:\s*1em 0/);
+  });
+});

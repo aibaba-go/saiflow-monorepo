@@ -27,6 +27,7 @@ describe("STD-008 tokens", () => {
       ["review-text", "review-bg"],
       ["danger-text", "danger-bg"],
       ["info-text", "info-bg"],
+      ["primary-pressed", "primary-soft"],
     ];
     for (const [fg, bg] of pairs) {
       expect(contrast(COLORS[fg], COLORS[bg]), `${fg} on ${bg}`).toBeGreaterThanOrEqual(4.5);
@@ -60,6 +61,13 @@ describe("STD-008 tokens", () => {
       fontFamily: FONT_STACK,
     });
     expect(adminTheme.token).not.toHaveProperty("controlHeight");
+    // antd colours Typography success/warning/danger text with these (final review I2)
+    for (const theme of [pcTheme, adminTheme]) {
+      const tk = theme.token as Record<string, unknown>;
+      for (const key of ["colorSuccessText", "colorWarningText", "colorErrorText"]) {
+        expect(contrast(String(tk[key] ?? "#FFFFFF"), COLORS.surface), key).toBeGreaterThanOrEqual(4.5);
+      }
+    }
     expect(DENSITY.mini.controlHeight).toBe(44);
     expect(DENSITY.pc.tableRow).toBe(44);
   });

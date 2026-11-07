@@ -55,7 +55,7 @@
   padding: 3px 7px;
   border-radius: 6px;
   background: var(--primary-soft);
-  color: var(--primary);
+  color: var(--primary-pressed);
   font-size: 12px;
 }
 
