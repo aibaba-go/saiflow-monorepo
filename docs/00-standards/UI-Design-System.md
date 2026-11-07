@@ -3,7 +3,7 @@ doc_id: STD-008
 title: "SaiFlow 界面设计规范"
 type: standard
 status: active
-version: 1.0.0
+version: 1.0.1
 updated: 2026-11-07
 owner: Product Engineering
 doc_source: manual
@@ -74,11 +74,13 @@ doc_source: manual
 
 | 语义 | 图形 `--x` | 底色 `--x-bg` | 文字 `--x-text` | 用途 |
 |---|---|---|---|---|
-| success | `#1F9E6B` | `#E3F5ED` | `#1A7F57` | 已确认、保存成功 |
-| warning | `#D98F1F` | `#FCF2E3` | `#A86A10` | 识别中、即将到期、需注意 |
-| review | `#E07B1A` | `#FFF0E0` | `#B35C00` | 待复核 |
-| danger | `#E6474D` | `#FDEAEA` | `#C4343A` | 识别失败、必填缺失、金额不一致、删除 |
+| success | `#1F9E6B` | `#E3F5ED` | `#18774F` | 已确认、保存成功 |
+| warning | `#D98F1F` | `#FCF2E3` | `#935D0E` | 识别中、即将到期、需注意 |
+| review | `#E07B1A` | `#FFF0E0` | `#A35400` | 待复核 |
+| danger | `#D6383E` | `#FDEAEA` | `#C4343A` | 识别失败、必填缺失、金额不一致、删除 |
 | info | `#4A66F7` | `#E8EDFF` | `#3149D4` | 待核验、一般提示（与主色相同） |
+
+白字只用于 `--primary` 与 `--danger` 的实心底（对比约 4.6:1、4.7:1）。success、warning、review 的图形色对白字不足 4.5:1，不作为带文字的实心底，标签一律用"底色 + 文字色"。
 
 ### 2.4 单据状态的配色（两端必须一致）
 
@@ -276,16 +278,16 @@ shadcn/ui 组件读取以下变量。值取自 §2，写在各应用的全局样
   --muted-foreground: #5D6673;
   --accent: #E8EDFF;
   --accent-foreground: #3149D4;
-  --destructive: #E6474D;
+  --destructive: #D6383E;
   --destructive-foreground: #FFFFFF;
   --border: #E3E8F0;
   --input: #E3E8F0;
   --ring: #4A66F7;
   --radius: 10px;             /* 小程序 --radius-control；web-pc 用 8px */
   /* 扩展：语义色 */
-  --success: #1F9E6B; --success-bg: #E3F5ED; --success-text: #1A7F57;
-  --warning: #D98F1F; --warning-bg: #FCF2E3; --warning-text: #A86A10;
-  --review: #E07B1A;  --review-bg: #FFF0E0;  --review-text: #B35C00;
+  --success: #1F9E6B; --success-bg: #E3F5ED; --success-text: #18774F;
+  --warning: #D98F1F; --warning-bg: #FCF2E3; --warning-text: #935D0E;
+  --review: #E07B1A;  --review-bg: #FFF0E0;  --review-text: #A35400;
   --danger-bg: #FDEAEA; --danger-text: #C4343A;
 }
 ```
@@ -299,7 +301,7 @@ shadcn/ui 组件读取以下变量。值取自 §2，写在各应用的全局样
 ### 11.3 admin 后台（Ant Design）
 
 在 `ConfigProvider` 的 `theme.token` 中设置：
-- `colorPrimary: #4A66F7`、`colorSuccess: #1F9E6B`、`colorWarning: #D98F1F`、`colorError: #E6474D`；
+- `colorPrimary: #4A66F7`、`colorSuccess: #1F9E6B`、`colorWarning: #D98F1F`、`colorError: #D6383E`；
 - `borderRadius: 8`、`fontFamily`（§3.1）。
 
 其余沿用 Ant Design 默认。
@@ -320,4 +322,5 @@ shadcn/ui 组件读取以下变量。值取自 §2，写在各应用的全局样
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.0.1 | 2026-11-07 | Product Engineering | 对比度修正：success/warning/review 文字色加深为 `#18774F`/`#935D0E`/`#A35400`，danger 改为 `#D6383E`，使标签文字与白字删除按钮达到 4.5:1（变更 `ui-restyle` FR-SYS-137）；说明白字只用于主色与 danger 实心底 |
 | 1.0.0 | 2026-11-07 | Product Engineering | 初始版：方向 A（亮蓝）、IBM Plex Sans + IBM Plex Sans Thai + Noto Sans SC、两端同一品牌色只区分圆角与密度、先只做浅色（负责人 2026-11-07） |
