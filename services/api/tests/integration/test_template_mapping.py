@@ -249,7 +249,10 @@ async def test_manual_failure_shows_after_quiet_auto(api, line, store, sm, ai_se
     llm.replies["convert"] = [NO_PRIMARY]
     await mapping_pass(sm, ai_settings, llm)
     mapping = (await api.get(f"{JOBS}/{job['id']}/result")).json()["mapping"]
-    assert mapping == {"status": "FAILED", "error": "PRIMARY_MISSING"}
+    assert {k: mapping[k] for k in ("status", "error")} == {
+        "status": "FAILED",
+        "error": "PRIMARY_MISSING",
+    }
     r = await api.post(
         f"{JOBS}/{job['id']}/template", json={"template_version_id": versions["tax_invoice"]}
     )

@@ -161,7 +161,8 @@ async def test_generic_filter_keeps_finished(api, line, store, sm, ai_settings, 
     a, b = await _jobs(api, store, sm, ai_settings, llm, db, 2)
     await db.execute(
         text(
-            "update ocr_jobs set current_mapping_id = null, review_status = 'CONFIRMED' where id = :j"
+            "update ocr_jobs set current_mapping_id = null, review_status = 'CONFIRMED' "
+            "where id = :j"
         ),
         {"j": a},
     )
