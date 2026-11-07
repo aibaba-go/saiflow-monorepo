@@ -7,11 +7,13 @@ transaction before the audit entry (B-2c locking order).
 """
 
 import uuid
+from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.billing_time import BANGKOK
 from app.clock import utcnow
 from app.errors import AppError
 from app.integrations.storage import ObjectStore
@@ -259,10 +261,15 @@ async def list_jobs(
     q: str | None,
     page: str | None,
     page_size: str | None,
+    template: str | None = None,
+    created_from: str | None = None,
+    created_to: str | None = None,
 ) -> dict:
     number = _int(page, "page", 1, 100_000) or 1
     size = _int(page_size, "page_size", 1, PAGE_SIZE_MAX) or 20
     cond = [_visible(ctx)]
+    cond.extend(_template_condition(template))
+    cond.extend(_date_conditions(created_from, created_to))
     if stage_filter:
         if stage_filter not in states.STAGES:
             raise _bad("stage")
@@ -290,6 +297,48 @@ async def list_jobs(
         ).scalars()
     )
     return {"items": await summaries(db, rows), "total": total, "page": number, "page_size": size}
+
+
+def _template_condition(raw: str | None) -> list:
+    """A template id (the current mapping's template, any version) or "generic" (no
+    current mapping) (FR-VERIFY-017, web-pc-ocr)."""
+    if raw is None or raw == "":
+        return []
+    if raw == "generic":
+        return [OcrJob.current_mapping_id.is_(None)]
+    if not raw.isascii() or not raw.isdigit() or len(raw) > 18:
+        raise _bad("template")
+    return [
+        OcrJob.current_mapping_id.in_(
+            select(TemplateMapping.id).where(TemplateMapping.template_id == int(raw))
+        )
+    ]
+
+
+def _thai_day(raw: str | None, field: str) -> date | None:
+    if raw is None or raw == "":
+        return None
+    try:
+        if len(raw) != 10:
+            raise ValueError(raw)
+        return date.fromisoformat(raw)
+    except ValueError:
+        raise _bad(field) from None
+
+
+def _date_conditions(created_from: str | None, created_to: str | None) -> list:
+    """Thai dates (UTC+7), both ends inclusive."""
+    start, end = _thai_day(created_from, "created_from"), _thai_day(created_to, "created_to")
+    if start and end and start > end:
+        raise _bad("created_from")
+    cond = []
+    if start:
+        cond.append(OcrJob.created_at >= datetime.combine(start, time.min, BANGKOK))
+    if end:
+        cond.append(
+            OcrJob.created_at < datetime.combine(end + timedelta(days=1), time.min, BANGKOK)
+        )
+    return cond
 
 
 def _int(raw: str | None, field: str, low: int, high: int) -> int | None:

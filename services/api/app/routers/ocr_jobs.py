@@ -52,11 +52,22 @@ async def list_jobs(
     db: Db,
     stage: str | None = None,
     q: str | None = None,
+    template: str | None = None,
+    created_from: str | None = None,
+    created_to: str | None = None,
     page: str | None = None,
     page_size: str | None = None,
 ) -> JobPageOut:
     body = await job_service.list_jobs(
-        db, ctx, stage_filter=stage, q=q, page=page, page_size=page_size
+        db,
+        ctx,
+        stage_filter=stage,
+        q=q,
+        page=page,
+        page_size=page_size,
+        template=template,
+        created_from=created_from,
+        created_to=created_to,
     )
     return JobPageOut(**body)
 

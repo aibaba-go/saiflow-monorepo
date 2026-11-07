@@ -4700,6 +4700,9 @@ export interface operations {
             query?: {
                 stage?: string | null;
                 q?: string | null;
+                template?: string | null;
+                created_from?: string | null;
+                created_to?: string | null;
                 page?: string | null;
                 page_size?: string | null;
             };
