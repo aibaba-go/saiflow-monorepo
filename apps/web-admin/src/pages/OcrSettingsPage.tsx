@@ -40,7 +40,7 @@ function KeyStatus({ keys }: { keys: OcrSettings["keys"] }) {
       <Descriptions data-testid="ocr-keys" column={1} size="small">
         <Descriptions.Item label="TextIn">{tag(keys.textin)}</Descriptions.Item>
         <Descriptions.Item label="Google Cloud Vision">{tag(keys.google_vision)}</Descriptions.Item>
-        <Descriptions.Item label="LLM">{tag(keys.llm)}</Descriptions.Item>
+        <Descriptions.Item label={t("ocr.llm")}>{tag(keys.llm)}</Descriptions.Item>
       </Descriptions>
       <Alert type="info" showIcon message={t("ocr.keyNote")} />
     </Card>

@@ -106,7 +106,10 @@ export function ApplicationQueue<A extends Row>({
     <Page title={t(title)}>
       <Tabs
         activeKey={status}
-        onChange={(key) => setParams({ status: key })}
+        onChange={(key) => {
+          setError(null); // the old tab's message does not belong to the new one
+          setParams({ status: key });
+        }}
         items={STATUSES.map((s) => ({ key: s, label: t(`app.status.${s}`) }))}
       />
       <Space direction="vertical" style={{ width: "100%" }}>

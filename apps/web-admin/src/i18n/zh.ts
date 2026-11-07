@@ -233,6 +233,10 @@ export const zh = {
 
   "billing.confirmSave": "设定后立即生效，替换该租户当前的订阅。确定保存？",
   "settings.confirmSave": "确定保存此参数？",
+  "log.result.success": "成功",
+  "log.result.failure": "失败",
+  "log.previous": "上一页（更新）",
+  "ocr.llm": "大模型",
 } as const;
 
 export type MessageKey = keyof typeof zh;

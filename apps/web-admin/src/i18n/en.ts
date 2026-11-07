@@ -234,4 +234,8 @@ export const en: Record<MessageKey, string> = {
 
   "billing.confirmSave": "This takes effect at once and replaces the tenant's current subscription. Save?",
   "settings.confirmSave": "Save this setting?",
+  "log.result.success": "Success",
+  "log.result.failure": "Failure",
+  "log.previous": "Previous (newer)",
+  "ocr.llm": "LLM",
 };

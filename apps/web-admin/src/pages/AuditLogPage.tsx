@@ -9,7 +9,7 @@ import { ErrorText } from "../components/ErrorText";
 import { fieldErrorText } from "../components/FieldError";
 import { Page } from "../components/Page";
 import { formatTime, toBangkokIso } from "../format";
-import { useT } from "../i18n";
+import { isMessageKey, type MessageKey, useT } from "../i18n";
 import { api, call } from "../services/api";
 
 type Entry = components["schemas"]["AuditEntryOut"];
@@ -36,6 +36,8 @@ export function AuditLogPage() {
   const [targetId, setTargetId] = useState("");
   const [applied, setApplied] = useState<Filters>({});
   const [before, setBefore] = useState<number | null>(null);
+  // cursors of the pages before the current one, for "Previous"
+  const [history, setHistory] = useState<number[]>([]);
 
   const page = useQuery({
     queryKey: ["audit-log", applied, before],
@@ -52,26 +54,40 @@ export function AuditLogPage() {
   function search() {
     const f: Filters = {};
     if (range?.[0]) f.since = toBangkokIso(range[0]);
-    if (range?.[1]) f.until = toBangkokIso(range[1]);
+    // the end is exclusive on the server: send the start of the next minute, so the
+    // selected minute is included (minor-fixes-ui)
+    if (range?.[1]) f.until = toBangkokIso(range[1].startOf("minute").add(1, "minute"));
     if (actorType) f.actor_type = actorType;
     if (action.trim()) f.action_prefix = action.trim();
     if (targetType.trim()) f.target_type = targetType.trim();
     if (targetId.trim()) f.target_id = targetId.trim();
     setApplied(f);
     setBefore(null);
+    setHistory([]);
   }
 
-  const item = (field: string) => {
-    const msg = fieldErrorText(page.error, field, t);
+  const item = (field: string, also?: string) => {
+    const msg = fieldErrorText(page.error, field, t) || (also ? fieldErrorText(page.error, also, t) : null);
     return { validateStatus: msg ? ("error" as const) : undefined, help: msg };
   };
 
   const columns: ColumnsType<Entry> = [
     { title: t("log.time"), key: "time", render: (_, e) => formatTime(e.occurred_at) },
-    { title: t("log.actor"), key: "actor", render: (_, e) => (e.actor_id ? `${e.actor_type} #${e.actor_id}` : e.actor_type) },
+    {
+      title: t("log.actor"),
+      key: "actor",
+      render: (_, e) => {
+        const kind = isMessageKey(`actor.${e.actor_type}`) ? t(`actor.${e.actor_type}` as MessageKey) : e.actor_type;
+        return e.actor_id ? `${kind} #${e.actor_id}` : kind;
+      },
+    },
     { title: t("log.action"), dataIndex: "action" },
     { title: t("log.target"), key: "target", render: (_, e) => (e.target_id ? `${e.target_type} #${e.target_id}` : e.target_type) },
-    { title: t("log.result"), dataIndex: "result" },
+    {
+      title: t("log.result"),
+      key: "result",
+      render: (_, e) => (isMessageKey(`log.result.${e.result}`) ? t(`log.result.${e.result}` as MessageKey) : e.result),
+    },
   ];
 
   return (
@@ -80,7 +96,7 @@ export function AuditLogPage() {
         <Card>
           <Form layout="vertical" onFinish={search}>
             <Space wrap align="start">
-              <Form.Item label={t("log.range")} {...item("since")}>
+              <Form.Item label={t("log.range")} {...item("since", "until")}>
                 <DatePicker.RangePicker showTime allowEmpty={[true, true]} value={range} onChange={setRange} />
               </Form.Item>
               <Form.Item label={t("log.actorType")} htmlFor="log-actor-type">
@@ -119,10 +135,31 @@ export function AuditLogPage() {
           scroll={{ x: true }}
         />
         <Space>
-          <Button disabled={before === null} onClick={() => setBefore(null)}>
+          <Button
+            disabled={before === null}
+            onClick={() => {
+              setBefore(null);
+              setHistory([]);
+            }}
+          >
             {t("log.first")}
           </Button>
-          <Button disabled={!page.data?.next_before} onClick={() => setBefore(page.data!.next_before!)}>
+          <Button
+            disabled={before === null}
+            onClick={() => {
+              setBefore(history.length ? history[history.length - 1]! : null);
+              setHistory(history.slice(0, -1));
+            }}
+          >
+            {t("log.previous")}
+          </Button>
+          <Button
+            disabled={!page.data?.next_before}
+            onClick={() => {
+              if (before !== null) setHistory([...history, before]);
+              setBefore(page.data!.next_before!);
+            }}
+          >
             {t("log.next")}
           </Button>
         </Space>

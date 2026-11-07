@@ -225,3 +225,19 @@ describe("plan applications (FR-SYS-067)", () => {
     expect(await screen.findByText("未收到款项")).toBeInTheDocument();
   });
 });
+
+
+describe("tabs (minor-fixes-ui)", () => {
+  it("tab switch clears the error", async () => {
+    const rows = [orgApp(1, "Siam Tools")];
+    signedIn({
+      "GET /api/v1/admin/organization-applications": lister(rows),
+      "POST /api/v1/admin/organization-applications/1/reject": () => json(409, { code: "already_decided" }),
+    });
+    renderAt("/organization-applications");
+    await rejectWith(await rowOf("Siam Tools"), "duplicate");
+    expect(await screen.findByText(zh("err.already_decided"))).toBeInTheDocument();
+    await openTab(zh("app.status.approved"));
+    await waitFor(() => expect(screen.queryByText(zh("err.already_decided"))).not.toBeInTheDocument());
+  });
+});

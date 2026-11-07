@@ -78,9 +78,9 @@ describe("operation log (FR-SYS-071)", () => {
     await waitFor(() => expect(screen.queryByText("plan.update")).not.toBeInTheDocument());
     const row = screen.getByText("org.disable").closest("tr") as HTMLElement;
     expect(within(row).getByText("2026-11-01 10:00")).toBeInTheDocument();
-    expect(within(row).getByText("admin #1")).toBeInTheDocument();
+    expect(within(row).getByText(`${zh("actor.admin")} #1`)).toBeInTheDocument();
     expect(within(row).getByText("tenant #5")).toBeInTheDocument();
-    expect(within(row).getByText("success")).toBeInTheDocument();
+    expect(within(row).getByText(zh("log.result.success"))).toBeInTheDocument();
     const last = query(api.calls.at(-1)!);
     expect(last.get("action_prefix")).toBe("org.");
     expect(last.get("limit")).toBe("50");
@@ -147,5 +147,50 @@ describe("change own password (FR-SYS-061)", () => {
     renderAt("/password");
     await fill("wrong-password-1", "new-password-456", "new-password-456");
     expect(await screen.findByText(zh("field.current_password"))).toBeInTheDocument();
+  });
+});
+
+
+describe("operation log fixes (minor-fixes-ui)", () => {
+  it("audit log shows translated actor and result", async () => {
+    signedIn({ "GET /api/v1/admin/audit-log": () => json(200, { items: [entry(9, "org.disable")], next_before: null }) });
+    renderAt("/audit-log");
+    const row = (await screen.findByText("org.disable")).closest("tr") as HTMLElement;
+    expect(within(row).getByText(`${zh("actor.admin")} #1`)).toBeInTheDocument();
+    expect(within(row).getByText(zh("log.result.success"))).toBeInTheDocument();
+  });
+
+  it("previous page returns to the first page", async () => {
+    const page = (from: number) => Array.from({ length: 50 }, (_, i) => entry(from - i));
+    signedIn({
+      "GET /api/v1/admin/audit-log": (r) =>
+        query(r).get("before") === "71"
+          ? json(200, { items: page(70), next_before: 21 })
+          : json(200, { items: page(120), next_before: 71 }),
+    });
+    renderAt("/audit-log");
+    await screen.findByText("org.update.120");
+    expect(screen.getByRole("button", { name: zh("log.previous") })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: zh("log.next") }));
+    await screen.findByText("org.update.70");
+    await userEvent.click(screen.getByRole("button", { name: zh("log.previous") }));
+    expect(await screen.findByText("org.update.120")).toBeInTheDocument();
+  });
+
+  it("until error under the field and until includes the selected minute", async () => {
+    const api = signedIn({
+      "GET /api/v1/admin/audit-log": (r) =>
+        query(r).get("until") ? json(400, { code: "validation_error", fields: ["until"] }) : json(200, { items: [], next_before: null }),
+    });
+    renderAt("/audit-log");
+    await screen.findByRole("button", { name: zh("log.search") });
+    const [start, end] = screen.getAllByRole("textbox").filter((el) => el.closest(".ant-picker-range"));
+    await userEvent.click(start!);
+    await userEvent.type(start!, "2026-11-01 10:00:00{enter}");
+    await userEvent.type(end!, "2026-11-01 11:30:00{enter}");
+    await userEvent.click(screen.getByRole("button", { name: zh("log.search") }));
+    await waitFor(() => expect(query(api.calls.at(-1)!).get("until")).toBe("2026-11-01T11:31:00+07:00"));
+    const range = (end!.closest(".ant-form-item") as HTMLElement);
+    expect(await within(range).findByText(zh("field.until"))).toBeInTheDocument();
   });
 });
