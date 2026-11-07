@@ -3,7 +3,7 @@ doc_id: STD-008
 title: "SaiFlow 界面设计规范"
 type: standard
 status: active
-version: 1.0.1
+version: 1.1.0
 updated: 2026-11-07
 owner: Product Engineering
 doc_source: manual
@@ -107,7 +107,8 @@ doc_source: manual
   BlinkMacSystemFont, "Segoe UI", sans-serif;
 ```
 
-- 三种字体都从 Google Fonts 加载，字重 400、500、600。
+- 字体文件随应用一起打包，由本站提供，不从 Google Fonts 等外部服务加载（FR-SYS-132，ADR-010 D6）；字重 400、500、600。
+- IBM Plex Sans 与 IBM Plex Sans Thai 随页面加载；Noto Sans SC 的字体声明很大，只在界面语言为中文时加载（`loadChineseFont()`），其他语言下的中文字符用系统字体。
 - 用 `font-display: swap`，加载完成前显示系统字体。
 - 金额、数量、日期、编号一律用等宽数字（`font-variant-numeric: tabular-nums`）。
 - 不使用斜体；强调用字重或颜色。
@@ -294,13 +295,22 @@ shadcn/ui 组件读取以下变量。值取自 §2，写在各应用的全局样
 
 ### 11.2 Tailwind
 
-- 共享的 Tailwind 预设放在 `packages/ui`，把以上变量映射为 `colors`、`borderRadius`、`fontFamily`、`fontSize`，各应用引用这份预设。
-- 小程序与 web-pc 只在 `--radius` 与控件高度上不同。
+- 共享的 Tailwind 主题放在 `packages/ui/src/styles/theme.css`（Tailwind v4 `@theme`），把以上变量映射为颜色、圆角（`rounded-card`、`rounded-control`、`rounded-pill`）、字体与字号（`text-caption` … `text-display`），小程序引用这份主题。
+- 密度由应用设置：`--card-radius`、`--control-radius`、`--control-h`（小程序 14px / 10px / 44px）。
 - 业务代码中只使用预设里的颜色与字号类名，不使用任意值（如 `text-[#4a66f7]`）。
 
-### 11.3 admin 后台（Ant Design）
+### 11.3 web-pc（Ant Design）
 
-在 `ConfigProvider` 的 `theme.token` 中设置：
+`ConfigProvider theme` 使用 `@saiflow/ui` 的 `pcTheme`（ADR-010 §2）：
+- 颜色：`colorPrimary #4A66F7`、`colorSuccess #1F9E6B`、`colorWarning #D98F1F`、`colorError #D6383E`、`colorInfo #4A66F7`；`colorBgLayout`、`colorBgContainer`、`colorBorder`、`colorText`、`colorTextSecondary`、`colorTextPlaceholder` 取 §2.2；
+- 尺寸：`borderRadius 8`、`borderRadiusLG 10`、`controlHeight 36`、`fontSize 14`、`lineHeight 22/14`、`fontFamily`（§3.1）；
+- 表格：`cellPaddingBlock 12`（行高约 44px）、表头底色 `--surface-muted`。
+
+单据阶段标签不用 antd `Tag` 的预设颜色，用 §2.4 的"底色 + 文字色"。
+
+### 11.4 admin 后台（Ant Design）
+
+`ConfigProvider theme` 使用 `adminTheme`：
 - `colorPrimary: #4A66F7`、`colorSuccess: #1F9E6B`、`colorWarning: #D98F1F`、`colorError: #D6383E`；
 - `borderRadius: 8`、`fontFamily`（§3.1）。
 
@@ -322,5 +332,6 @@ shadcn/ui 组件读取以下变量。值取自 §2，写在各应用的全局样
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.1.0 | 2026-11-07 | Product Engineering | 变更 `ui-restyle` 实现后对齐：字体随应用打包（不用 Google Fonts），中文字体按需加载；§11.2 改为 Tailwind v4 主题与应用密度变量；新增 §11.3 web-pc 的 Ant Design 令牌，admin 改为 §11.4 |
 | 1.0.1 | 2026-11-07 | Product Engineering | 对比度修正：success/warning/review 文字色加深为 `#18774F`/`#935D0E`/`#A35400`，danger 改为 `#D6383E`，使标签文字与白字删除按钮达到 4.5:1（变更 `ui-restyle` FR-SYS-137）；说明白字只用于主色与 danger 实心底 |
 | 1.0.0 | 2026-11-07 | Product Engineering | 初始版：方向 A（亮蓝）、IBM Plex Sans + IBM Plex Sans Thai + Noto Sans SC、两端同一品牌色只区分圆角与密度、先只做浅色（负责人 2026-11-07） |

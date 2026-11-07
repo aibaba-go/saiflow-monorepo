@@ -3,7 +3,7 @@ doc_id: STD-007
 title: "SaiFlow — 文档来源与可编辑性指南"
 type: standard
 status: active
-version: 1.2.0
+version: 1.2.1
 updated: 2026-10-30
 owner: Product Engineering
 applies_to: [docs, openspec, packages, apps, services]
@@ -101,7 +101,7 @@ generated_by: ""                      # 仅 generated / generated-but-curated �
 | 路径 | `doc_source` | 说明 |
 |------|:------------:|------|
 | `apps/*/src/**` | `manual` | 前端业务代码，开发者手写 |
-| `packages/ui/src/**` | `manual` | 共享 UI 组件，开发者手写 |
+| `packages/ui/src/**` | `manual` | 设计令牌与主题（STD-008 的唯一来源，ADR-010），开发者手写 |
 | `packages/tsconfig/**` | `manual` | 共享 TS 配置，开发者手写 |
 | `packages/api-client/**` | `generated` | 由后端 OpenAPI 生成，**禁止手写第二份** |
 | `services/api/**` | `manual` | 后端 FastAPI 代码，是 API 契约的真实来源 |
@@ -134,6 +134,7 @@ generated_by: ""                      # 仅 generated / generated-but-curated �
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.2.1 | 2026-11-07 | Product Engineering | `packages/ui/src/**` 改为设计令牌与主题（ADR-010） |
 | 1.2.0 | 2026-10-30 | Product Engineering | `Data-Model.md` 改为实体层，字段以代码为唯一来源（ADR-007） |
 | 1.1.0 | 2026-10-30 | Product Engineering | 按 ADR-006：change 产物以 plan.md、verification.md 取代 design.md、tasks.md；新增 `legacy/**` 行 |
 | 1.0.0 | 2026-10-12 | Product Engineering | 初始文档来源与可编辑性指南 |

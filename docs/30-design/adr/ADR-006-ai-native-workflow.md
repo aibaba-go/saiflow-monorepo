@@ -3,7 +3,7 @@ doc_id: ADR-006
 title: "ADR-006 — AI Native 开发模式：OpenSpec 管需求、SuperPowers 管实现，并重建代码"
 type: adr
 status: accepted
-version: 1.2.9
+version: 1.2.10
 updated: 2026-11-06
 owner: Product Engineering
 related: [WF-001, AGENTS, STD-004, STD-005, STD-006, PRD-001, ADR-008]
@@ -122,7 +122,7 @@ accepted（2026-10-30 负责人确认）
 ## 6. 技术栈与旧代码处理
 
 - 后端：FastAPI，严格按 STD-005（分层、async、Alembic、pydantic-settings、`tests/unit` + `tests/integration`）。
-- 前端：`apps/web-pc` 为 React + Ant Design；`apps/line-mini` 改为 React + Ant Design Mobile，均按 STD-006（Vitest + RTL）。
+- 前端：`apps/web-pc` 为 React + Ant Design；`apps/line-mini` 改为 React + Ant Design Mobile，均按 STD-006（Vitest + RTL）。**2026-11-07 起小程序改用 Tailwind CSS + shadcn/ui，见 ADR-010。**
 - API 契约：后端 OpenAPI 生成 `packages/api-client`，前端不手写第二份。
 - **线上现状（负责人确认，2026-10-30）**：线上没有真实用户，不考虑数据迁移、服务中断和用户体验延续。现有线上服务可以随时下线；新版本按 B-1 起的部署方式重新发布。
 - **旧代码**：只作参考，**不保留重新部署的能力**（Dockerfile、入口等随目录一起移走，不维护构建路径）。打 git tag `legacy-v1` 后，将现有 `services/api`、`apps/line-mini`、`apps/web-pc` 移至顶层 `legacy/`（不在 pnpm glob 内，不参与构建与测试）。`legacy/` 为只读参考：重建时可阅读，不修改、不引用、不复制未经测试的代码。新版本测试通过并运行一段时间后删除 `legacy/`，tag 保留。
@@ -212,6 +212,7 @@ B-2 到 B-5 的具体范围、优先级以各自 proposal 经负责人确认的�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.2.10 | 2026-11-07 | Product Engineering | §6 前端加注：小程序界面框架见 ADR-010 |
 | 1.2.9 | 2026-11-06 | Product Engineering | §7 B-3 定名 `ocr-scan-flow`，范围扩到 main 已跑通的扫描流程与小程序页面（含确认与导出）；B-4 缩小为复核、Confirm all 与正式业务数据；B-5d 范围相应调整（负责人 2026-11-06） |
 | 1.2.8 | 2026-11-06 | Product Engineering | §7 B-5c 行定名 `web-pc-account` 并写明范围（负责人 2026-11-06） |
 | 1.2.7 | 2026-11-06 | Product Engineering | §7 B-5b 行定名 `web-admin-console` 并写明范围（负责人 2026-11-06） |

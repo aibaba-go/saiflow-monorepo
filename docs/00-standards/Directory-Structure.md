@@ -3,7 +3,7 @@ doc_id: STD-004
 title: "SaiFlow monorepo — 目录结构与文档地图"
 type: standard
 status: active
-version: 2.7.1
+version: 2.7.2
 updated: 2026-11-07
 owner: Product Engineering
 doc_source: manual
@@ -36,10 +36,10 @@ saiflow/
 ├── apps/                                  # JS/TS 可部署应用（pnpm）
 │   ├── web-pc/                            # React + AntDesign PC 端（web-pc 企业版）
 │   ├── web-admin/                         # React + AntDesign admin 后台（独立应用）
-│   └── line-mini/                         # Line MiniApp 端
+│   └── line-mini/                         # Line MiniApp 端（React + Tailwind CSS + shadcn/ui，ADR-010）
 ├── packages/                              # JS/TS 共享库（pnpm）
 │   ├── api-client/                        # 由 OpenAPI 生成，三个前端共用（generated）
-│   ├── ui/                                # 共享 UI 组件（manual）
+│   ├── ui/                                # 设计令牌与主题：STD-008 的唯一来源（manual，ADR-010）
 │   └── tsconfig/                          # 共享 TS 配置（manual）
 ├── services/                              # 后端（Python，pnpm 不扫描）
 │   └── api/                               # FastAPI；自包含 pyproject.toml / app/ / tests/ / alembic/
@@ -130,6 +130,7 @@ saiflow/
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.7.2 | 2026-11-07 | Product Engineering | `line-mini` 技术栈与 `packages/ui` 的用途按 ADR-010 更新（变更 `ui-restyle`） |
 | 2.7.1 | 2026-11-07 | Product Engineering | `00-standards/` 新增 STD-008 `UI-Design-System.md`（界面设计规范） |
 | 2.7.0 | 2026-11-03 | Product Engineering | B-1：新增 `apps/web-admin`、`.github/workflows/`、`eslint.config.js`、`docs/deployment/`、`scripts/{deploy,docker,tests}/`；规则 10 启用 `docs/deployment/`；新增服务命名规则 |
 | 2.6.0 | 2026-10-30 | Product Engineering | 规则 2：数据模型只登记实体层，字段以代码为唯一来源（ADR-007） |

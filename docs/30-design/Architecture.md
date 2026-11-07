@@ -3,7 +3,7 @@ doc_id: DES-001
 title: "SaiFlow — 系统架构"
 type: design
 status: active
-version: 3.7.0
+version: 3.8.0
 updated: 2026-11-06
 owner: Product Engineering
 source: "PRD-001 v3.3 §3.1, §3.2, §4, §4.9, §5; ADR-008"
@@ -22,9 +22,9 @@ doc_source: manual
 | 层级 | 技术选择 |
 |------|----------|
 | 后端 | Python + FastAPI |
-| web-pc 企业版 | React + TypeScript + Ant Design（`apps/web-pc`） |
-| web-pc admin 后台 | React + TypeScript + Ant Design（`apps/web-admin`，独立应用） |
-| LINE 小程序 | React + TypeScript + Ant Design Mobile，运行于 LINE LIFF；路由用 hash，会话用应用 Cookie，LIFF 只用于取得 LINE 身份令牌与分享邀请；当前租户与界面语言只存在本机（B-5a） |
+| web-pc 企业版 | React + TypeScript + Ant Design（`apps/web-pc`），主题按 STD-008（ADR-010） |
+| web-pc admin 后台 | React + TypeScript + Ant Design（`apps/web-admin`，独立应用），主色与字体按 STD-008 |
+| LINE 小程序 | React + TypeScript + Tailwind CSS + shadcn/ui（ADR-010，界面按 STD-008），运行于 LINE LIFF；路由用 hash，会话用应用 Cookie，LIFF 只用于取得 LINE 身份令牌与分享邀请；当前租户与界面语言只存在本机（B-5a） |
 | 运行平台 | LightNode VPS（曼谷机房），Docker Compose |
 | 入口 | Caddy 反向代理（自动 HTTPS） |
 | 数据库 | PostgreSQL（Docker 容器）：系统数据与表单数据；识别结果用 jsonb |
@@ -168,6 +168,7 @@ v2 中列为 proposed 的 ADR-002（可插拔 OCR 引擎）已由 PRD §4.6 的�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 3.8.0 | 2026-11-07 | Product Engineering | 前端表按 ADR-010：小程序改用 Tailwind CSS + shadcn/ui，三个前端的界面按 STD-008（变更 `ui-restyle`） |
 | 3.7.0 | 2026-11-06 | Product Engineering | B-3（`ocr-scan-flow`）：识别服务 `saiflow-be-ocr` 承担 OCR 调用、引擎切换与大模型匹配转换；原件存私有 GCS 桶，文件由后端代为读取，LINE 内下载用 60 秒下载凭证（取代签名 URL 的设想） |
 | 3.6.0 | 2026-11-06 | Product Engineering | B-5c：web-pc 企业版的职责与前端要点（LINE 网页登录、注册引导、三种语言） |
 | 3.5.0 | 2026-11-06 | Product Engineering | B-5b：admin 后台的职责与前端要点（中文/英文、history 路由、会话失效回原页面）；OCR 与大模型密钥只在服务器环境变量文件中，后台只显示是否已配置 |

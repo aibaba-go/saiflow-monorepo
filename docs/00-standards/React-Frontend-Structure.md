@@ -3,8 +3,8 @@ doc_id: STD-006
 title: "SaiFlow React 前端 — 目录结构"
 type: standard
 status: active
-version: 1.1.0
-updated: 2026-11-03
+version: 1.2.0
+updated: 2026-11-07
 owner: Product Engineering
 doc_source: manual
 ---
@@ -20,7 +20,7 @@ doc_source: manual
 ### 1.1 应用层（`apps/*`）
 
 ```text
-apps/web-pc/                              # PC Web 端（React + Ant Design + Vite）
+apps/web-pc/                              # PC Web 端（React + Ant Design + Vite，STD-008 主题，ADR-010）
 ├── package.json                          # name: @saiflow/web-pc；依赖本地 packages/* 使用 workspace: 协议
 ├── tsconfig.json                         # extends @saiflow/tsconfig/react-app
 ├── vite.config.ts                        # Vite 构建配置
@@ -56,11 +56,15 @@ apps/web-pc/                              # PC Web 端（React + Ant Design + Vi
     ├── styles/                           # 全局样式、CSS 变量、主题覆盖
     └── assets/                           # 静态资源（图片、字体、图标）
 
-apps/web-admin/                           # admin 后台（React + Ant Design + Vite），独立应用
+apps/web-admin/                           # admin 后台（React + Ant Design + Vite，STD-008 主题），独立应用
 └── ...                                   # 结构与 web-pc 一致
 
-apps/line-mini/                           # Line MiniApp 端（React + Ant Design Mobile + Vite）
-└── ...                                   # 结构与 web-pc 一致，组件与样式针对移动端
+apps/line-mini/                           # Line MiniApp 端（React + Tailwind CSS + shadcn/ui + Vite，ADR-010）
+└── src/
+    ├── components/ui/                    # shadcn/ui 组件（复制进仓库，由我们维护）：button、sheet、dialogs、toast 等
+    ├── lib/cn.ts                         # 合并 Tailwind class
+    ├── styles/index.css                  # 引入 tailwindcss 与 @saiflow/ui 的令牌、主题、字体；小程序密度变量
+    └── ...                               # 其余结构与 web-pc 一致
 ```
 
 ### 1.2 共享库层（`packages/*`）
@@ -73,22 +77,19 @@ packages/
 │   ├── react-app.json                    # 给 apps/* 用
 │   └── react-package.json                # 给 packages/* 用
 │
-├── ui/                                   # 共享 React 组件库（基于 Ant Design）
+├── ui/                                   # 设计令牌与主题：STD-008 取值的唯一来源（ADR-010 §4）
 │   ├── package.json                      # name: @saiflow/ui
 │   ├── tsconfig.json
-│   ├── vite.config.ts                    # 库模式构建（或 tsup）
 │   ├── README.md
 │   └── src/
-│       ├── components/                   # 通用组件
-│       │   ├── DocumentCard/
-│       │   │   ├── index.tsx
-│       │   │   ├── DocumentCard.tsx
-│       │   │   └── DocumentCard.test.tsx
-│       │   └── ...
-│       ├── theme/                        # 主题 token、全局样式、Ant Design ConfigProvider 封装
-│       ├── hooks/                        # 通用 hook（如 useMediaQuery）
-│       ├── utils/
-│       ├── types/
+│       ├── tokens.ts                     # 颜色、字体栈、密度、对比度计算
+│       ├── antdTheme.ts                  # web-pc（pcTheme）与 admin（adminTheme）的 Ant Design 主题
+│       ├── fonts.ts                      # loadChineseFont()：中文界面才加载 Noto Sans SC
+│       ├── styles/
+│       │   ├── tokens.css                # CSS 变量（与 tokens.ts 一致，有测试比对）
+│       │   ├── theme.css                 # Tailwind v4 主题（小程序用）
+│       │   ├── fonts.css                 # IBM Plex Sans / IBM Plex Sans Thai（随应用打包）
+│       │   └── fonts-sc.css              # Noto Sans SC（按需加载）
 │       └── index.ts                      # 统一导出
 │
 └── api-client/                           # 由后端 OpenAPI 生成的 API 客户端
@@ -154,7 +155,9 @@ packages/
    - 浏览器无法访问的密钥（如后端服务账号、OCR 凭据）禁止出现在前端代码或构建产物中。
 
 7. **样式**
-   - 使用 Ant Design 主题 token；全局覆盖写 `packages/ui/src/theme/`。
+   - 颜色、字体、字号、圆角都取自 STD-008，值只在 `packages/ui` 定义；业务代码不写十六进制色值（小程序有静态检查测试）。
+   - web-pc 与 admin：`ConfigProvider theme` 使用 `@saiflow/ui` 的 `pcTheme` / `adminTheme`。
+   - LINE 小程序：Tailwind 类名用预设里的令牌（如 `bg-primary`、`text-text-secondary`），不用任意值；CSS Modules 中用 `var(--token)`。
    - 应用级样式只放 layout/页面级覆盖；组件级样式优先使用 CSS Modules 或 styled-components，避免全局 class 污染。
 
 8. **测试**
@@ -196,5 +199,6 @@ packages/
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.2.0 | 2026-11-07 | Product Engineering | ADR-010：小程序改用 Tailwind CSS + shadcn/ui；`packages/ui` 改为设计令牌与主题；样式规则按 STD-008（变更 `ui-restyle`） |
 | 1.1.0 | 2026-11-03 | Product Engineering | B-1：新增 `apps/web-admin`（`@saiflow/web-admin`） |
 | 1.0.0 | 2026-10-12 | Product Engineering | 初始 SaiFlow React 前端目录结构标准 |

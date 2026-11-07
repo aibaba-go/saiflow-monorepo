@@ -14,6 +14,8 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: "./src/test/setup.ts",
+    // like web-pc and web-admin: under `pnpm -r test` the three suites share the CPU
+    testTimeout: 15000,
     // Node's Request needs an absolute URL; the browser uses same-origin "" (config.ts).
     env: { VITE_API_BASE_URL: "http://localhost" },
     // CSS modules keep their source class names in tests, so tests can name a state class.
