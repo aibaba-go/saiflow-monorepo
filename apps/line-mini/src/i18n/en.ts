@@ -81,6 +81,7 @@ export const en = {
   "usage.free": "Free scans: {n}",
   "usage.paused": "paused",
   "usage.freeExpires": "expires {date}",
+  "common.messages": "Messages",
   "common.clear": "Clear",
   "common.close": "Close",
   "tenant.personal": "Personal account",

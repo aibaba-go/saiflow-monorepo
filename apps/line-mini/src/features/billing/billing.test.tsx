@@ -126,6 +126,8 @@ describe("plans page (FR-SYS-053)", () => {
     expect(await api.bodies("POST /api/v1/billing/applications")).toEqual([
       { plan_code: "intermediate", period: "month" },
     ]);
+    // the received notice is modal (the page behind is hidden from assistive tech): close it
+    await userEvent.click(screen.getByRole("button", { name: "OK" }));
     expect(await screen.findByText(/Intermediate \(monthly\) · in review/)).toBeInTheDocument();
     expect(within(card("Advance")).getByRole("button", { name: "Apply" })).toBeDisabled();
   });

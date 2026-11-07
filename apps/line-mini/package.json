@@ -19,7 +19,6 @@
     "@saiflow/ui": "workspace:*",
     "@tailwindcss/vite": "4.3.5",
     "@tanstack/react-query": "^5.105.1",
-    "antd-mobile": "^5.43.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "lucide-react": "1.70.0",

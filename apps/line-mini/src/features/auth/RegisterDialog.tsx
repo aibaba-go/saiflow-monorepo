@@ -1,4 +1,3 @@
-import { Button, Popup } from "antd-mobile";
 import { useState } from "react";
 
 import { ErrorText } from "../../components/ErrorText";
@@ -10,6 +9,8 @@ import { api, call } from "../../services/api";
 import { useSession, type Me } from "../../stores/session";
 import { EmailCodeButton } from "../profile/EmailCodeButton";
 import { loadIdentity } from "./session";
+import { Button } from "../../components/ui/button";
+import { BottomSheet } from "../../components/ui/sheet";
 
 function RegisterForm({ me }: { me: Me }) {
   const t = useT();
@@ -73,7 +74,7 @@ function RegisterForm({ me }: { me: Me }) {
         field="display_name"
       />
       <ErrorText error={formLevel(error)} />
-      <Button block color="primary" loading={submit.pending} onClick={() => void submit.run()}>
+      <Button block variant="primary" loading={submit.pending} onClick={() => void submit.run()}>
         {t("register.submit")}
       </Button>
     </div>
@@ -88,11 +89,11 @@ export function RegisterDialog() {
   const me = useSession((s) => s.me);
   const close = () => useSession.getState().set({ registerOpen: false });
   return (
-    <Popup visible={open && !!me} onMaskClick={close} bodyStyle={{ padding: 16 }}>
-      <Button size="mini" fill="none" aria-label={t("common.close")} onClick={close}>
+    <BottomSheet open={open && !!me} onClose={close} label={t("register.title")}>
+      <Button size="sm" variant="ghost" aria-label={t("common.close")} onClick={close}>
         ✕
       </Button>
       {open && me && <RegisterForm me={me} />}
-    </Popup>
+    </BottomSheet>
   );
 }

@@ -83,6 +83,7 @@ export const zh: Record<MessageKey, string> = {
   "usage.free": "免费额度：{n}",
   "usage.paused": "暂停中",
   "usage.freeExpires": "{date} 到期",
+  "common.messages": "消息",
   "common.clear": "清除",
   "common.close": "关闭",
   "tenant.personal": "个人账户",

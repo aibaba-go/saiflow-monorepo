@@ -1,6 +1,5 @@
 import { loadChineseFont } from "@saiflow/ui";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { Button, Toast } from "antd-mobile";
 import { useEffect, useRef } from "react";
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
@@ -38,6 +37,9 @@ import { realLiff } from "./services/liff";
 import type { Liff } from "./services/liffTypes";
 import { useLanguage } from "./stores/language";
 import { useSession } from "./stores/session";
+import { Button } from "./components/ui/button";
+import { DialogHost } from "./components/ui/dialogs";
+import { AppToaster, showToast } from "./components/ui/toast";
 import "./styles/app.css";
 
 export interface ShellProps {
@@ -59,7 +61,7 @@ function BootError() {
   return (
     <div className="page page--center">
       <ErrorText error={error} />
-      <Button color="primary" loading={retry.pending} onClick={() => void retry.run()}>
+      <Button variant="primary" loading={retry.pending} onClick={() => void retry.run()}>
         {t("common.retry")}
       </Button>
     </div>
@@ -72,7 +74,7 @@ function Locked() {
   return (
     <div className="page page--center">
       <div role="alert">{t("err.logout_failed")}</div>
-      <Button color="primary" loading={retry.pending} onClick={() => void retry.run()}>
+      <Button variant="primary" loading={retry.pending} onClick={() => void retry.run()}>
         {t("common.retry")}
       </Button>
     </div>
@@ -117,7 +119,7 @@ export function Shell({ liff, search, liffTimeoutMs = 20_000, logoutTimeoutMs = 
 
   useEffect(() => {
     if (!notice) return;
-    Toast.show({ content: t(notice) });
+    showToast(t(notice));
     useSession.getState().set({ notice: null });
   }, [notice, t]);
 
@@ -176,6 +178,8 @@ export function App() {
       <HashRouter>
         <Shell liff={realLiff(liffId)} search={window.location.search} />
       </HashRouter>
+      <DialogHost />
+      <AppToaster />
     </QueryClientProvider>
   );
 }

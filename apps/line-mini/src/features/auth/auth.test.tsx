@@ -21,7 +21,7 @@ const USER = {
   registered: true,
 };
 const GUEST = { ...USER, kind: "guest", user_id: null, tenant_id: 90, display_name: null, email: null, registered: false };
-// antd-mobile animates dialogs; skip the pointer-events check while they fade in
+// dialogs set pointer-events on the body while open; skip the pointer-events check
 const userEvent = userEventLib.setup({ pointerEventsCheck: 0 });
 
 const PERSONAL = { tenant_id: 70, kind: "personal", name: null, is_owner: true, role: null, permissions: [] };

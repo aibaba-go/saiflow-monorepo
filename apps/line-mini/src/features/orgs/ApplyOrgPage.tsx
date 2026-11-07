@@ -1,5 +1,4 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Tag } from "antd-mobile";
 import { useEffect, useRef, useState } from "react";
 
 import { ErrorText } from "../../components/ErrorText";
@@ -12,6 +11,8 @@ import { useSession } from "../../stores/session";
 import { formatBangkokDateTime } from "../../utils/format";
 import { reloadIdentity } from "../auth/session";
 import type { OrgApplication } from "./orgData";
+import { Button } from "../../components/ui/button";
+import { Tag } from "../../components/ui/tag";
 
 const STATUS: Record<string, MessageKey> = {
   pending: "app.pending",
@@ -24,7 +25,7 @@ function ApplicationRow({ app }: { app: OrgApplication }) {
   return (
     <div className="card-row">
       <div className="card-row__title">
-        {app.name} <Tag color={app.status === "rejected" ? "danger" : "primary"}>{t(STATUS[app.status]!)}</Tag>
+        {app.name} <Tag tone={app.status === "rejected" ? "danger" : "primary"}>{t(STATUS[app.status]!)}</Tag>
       </div>
       <div className="card-row__meta">{formatBangkokDateTime(app.created_at)}</div>
       {app.reject_reason && (
@@ -102,7 +103,7 @@ export function ApplyOrgPage() {
             field="address"
           />
           <ErrorText error={formLevel(error)} />
-          <Button block color="primary" loading={submit.pending} onClick={() => void submit.run()}>
+          <Button block variant="primary" loading={submit.pending} onClick={() => void submit.run()}>
             {t("org.submitApplication")}
           </Button>
         </div>

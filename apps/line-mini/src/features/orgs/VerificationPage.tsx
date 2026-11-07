@@ -1,4 +1,3 @@
-import { Button, Tag } from "antd-mobile";
 import { useState } from "react";
 
 import { BrandLoading } from "../../components/BrandLoading";
@@ -12,6 +11,8 @@ import type { CurrentTenant } from "../../stores/session";
 import { can } from "../tenants/permissions";
 import { useCurrentTenant } from "../tenants/useCurrentTenant";
 import { orgPath, useRefreshOrg, useVerification } from "./orgData";
+import { Button } from "../../components/ui/button";
+import { Tag } from "../../components/ui/tag";
 
 const STATUS: Record<string, MessageKey> = {
   none: "verify.none",
@@ -54,7 +55,7 @@ function VerificationContent({ tenant }: { tenant: CurrentTenant }) {
     <div className="page">
       <h1 className="page__title">{t("org.verification")}</h1>
       <div>
-        <Tag color={status === "rejected" ? "danger" : "primary"}>{t(STATUS[status]!)}</Tag>
+        <Tag tone={status === "rejected" ? "danger" : "primary"}>{t(STATUS[status]!)}</Tag>
       </div>
       {reject_reason && <div className="card-row__meta">{t("app.reason", { reason: reject_reason })}</div>}
       {open && (
@@ -70,7 +71,7 @@ function VerificationContent({ tenant }: { tenant: CurrentTenant }) {
             field="registered_address"
           />
           <ErrorText error={formLevel(error)} />
-          <Button color="primary" loading={submit.pending} onClick={() => void submit.run()}>
+          <Button variant="primary" loading={submit.pending} onClick={() => void submit.run()}>
             {t("common.submit")}
           </Button>
         </div>

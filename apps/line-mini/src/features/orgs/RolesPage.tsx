@@ -1,4 +1,3 @@
-import { Button, Popup } from "antd-mobile";
 import { useState } from "react";
 
 import { BrandLoading } from "../../components/BrandLoading";
@@ -14,6 +13,8 @@ import { can, PERMISSIONS, type Permission } from "../tenants/permissions";
 import { useCurrentTenant } from "../tenants/useCurrentTenant";
 import { orgPath, useMembers, useRefreshOrg, useRoles, type Role } from "./orgData";
 import { permissionKey } from "./permissionLabels";
+import { Button } from "../../components/ui/button";
+import { BottomSheet } from "../../components/ui/sheet";
 
 function RoleForm({ orgId, role, onDone }: { orgId: number; role: Role | null; onDone(): void }) {
   const t = useT();
@@ -63,7 +64,7 @@ function RoleForm({ orgId, role, onDone }: { orgId: number; role: Role | null; o
         ))}
       </fieldset>
       <ErrorText error={formLevel(error)} />
-      <Button color="primary" loading={save.pending} onClick={() => void save.run()}>
+      <Button variant="primary" loading={save.pending} onClick={() => void save.run()}>
         {t("common.save")}
       </Button>
     </div>
@@ -118,11 +119,11 @@ function RolesContent({ tenant }: { tenant: CurrentTenant }) {
           <div className="card-row__meta">{role.permissions.map((p) => t(permissionKey(p))).join(", ")}</div>
           {manage && role.id !== ownRole && (
             <div className="card-row__actions">
-              <Button size="mini" onClick={() => setEditing(role)}>
+              <Button size="sm" onClick={() => setEditing(role)}>
                 {t("common.edit")}
               </Button>
               {!role.is_default && (
-                <Button size="mini" color="danger" onClick={() => void removeOnce.run(role)}>
+                <Button size="sm" variant="danger" onClick={() => void removeOnce.run(role)}>
                   {t("common.delete")}
                 </Button>
               )}
@@ -131,15 +132,15 @@ function RolesContent({ tenant }: { tenant: CurrentTenant }) {
         </div>
       ))}
       {manage && (
-        <Button color="primary" onClick={() => setEditing("new")}>
+        <Button variant="primary" onClick={() => setEditing("new")}>
           {t("roles.new")}
         </Button>
       )}
-      <Popup visible={editing !== null} onMaskClick={() => setEditing(null)} bodyStyle={{ padding: 16 }}>
+      <BottomSheet open={editing !== null} onClose={() => setEditing(null)} label={t("roles.title")}>
         {editing !== null && (
           <RoleForm orgId={orgId} role={editing === "new" ? null : editing} onDone={() => setEditing(null)} />
         )}
-      </Popup>
+      </BottomSheet>
     </div>
   );
 }

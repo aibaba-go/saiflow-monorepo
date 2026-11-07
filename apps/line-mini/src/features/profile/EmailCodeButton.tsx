@@ -1,9 +1,9 @@
-import { Button } from "antd-mobile";
 import { useEffect, useState } from "react";
 
 import { useSubmit } from "../../hooks/useSubmit";
 import { useT } from "../../i18n";
 import { api, call } from "../../services/api";
+import { Button } from "../../components/ui/button";
 
 export const RESEND_SECONDS = 60;
 
@@ -39,7 +39,7 @@ export function EmailCodeButton({ email, onError }: EmailCodeButtonProps) {
 
   return (
     <Button
-      size="small"
+      size="sm"
       disabled={counting || !email}
       loading={send.pending}
       onClick={() => void send.run()}

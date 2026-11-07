@@ -1,4 +1,3 @@
-import { Button } from "antd-mobile";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -11,6 +10,7 @@ import { formatBangkokDateTime } from "../../utils/format";
 import { useTenantChoice } from "../tenants/useCurrentTenant";
 import { useMarkRead, useNotificationPages } from "./data";
 import { renderNotification, type NotificationItem } from "./render";
+import { Button } from "../../components/ui/button";
 
 /** The notification center (FR-SYS-054): newest first, read or unread, never deleted. */
 export function NotificationsPage() {
@@ -66,7 +66,7 @@ export function NotificationsPage() {
     <div className="page">
       <h1 className="page__title">{t("notif.title")}</h1>
       {unread > 0 && (
-        <Button size="small" loading={all.pending} onClick={() => void all.run()}>
+        <Button size="sm" loading={all.pending} onClick={() => void all.run()}>
           {t("notif.markAll")}
         </Button>
       )}

@@ -1,5 +1,4 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Dialog, NoticeBar, Popup, Tag } from "antd-mobile";
 import { useState } from "react";
 
 import { BrandLoading } from "../../components/BrandLoading";
@@ -15,6 +14,11 @@ import { formatTHB } from "./money";
 import { applicableAction, type CatalogPlan } from "./planRules";
 import { planName } from "./UsageCard";
 import { useUsage } from "./useUsage";
+import { Alert } from "../../components/ui/alert";
+import { alertDialog } from "../../components/ui/dialogs";
+import { Button } from "../../components/ui/button";
+import { BottomSheet } from "../../components/ui/sheet";
+import { Tag } from "../../components/ui/tag";
 
 type Period = "month" | "year";
 const PERIOD_KEY: Record<Period, MessageKey> = { month: "plans.periodMonth", year: "plans.periodYear" };
@@ -60,7 +64,7 @@ export function PlansPage() {
     try {
       await call(api.POST("/api/v1/billing/applications", { body: { plan_code: plan.code, period } }));
       await client.invalidateQueries({ queryKey: ["plan-applications"] });
-      await Dialog.alert({ content: t("plans.received"), confirmText: t("common.ok") });
+      await alertDialog({ content: t("plans.received"), confirmText: t("common.ok") });
     } catch (err) {
       setError(err);
     }
@@ -84,15 +88,13 @@ export function PlansPage() {
     <div className="page">
       <h1 className="page__title">{t("plans.title")}</h1>
       {pending && (
-        <NoticeBar
-          color="alert"
-          wrap
-          content={t("plans.pending", {
+        <Alert tone="warning">
+          {t("plans.pending", {
             plan: planName(pending.plan_code, t),
             period: t(PERIOD_KEY[pending.period]),
             date: formatBangkokDateTime(pending.created_at),
           })}
-        />
+        </Alert>
       )}
       {!isUser && <div className="card-row__meta">{t("plans.guestNote")}</div>}
       <ErrorText error={error} />
@@ -101,7 +103,7 @@ export function PlansPage() {
         return (
           <div key={plan.code} className="card-row" data-plan={plan.code}>
             <div className="card-row__title">
-              {planName(plan.code, t)} {plan.code === current && <Tag color="primary">{t("plans.current")}</Tag>}
+              {planName(plan.code, t)} {plan.code === current && <Tag tone="primary">{t("plans.current")}</Tag>}
             </div>
             <div className="card-row__meta">{t("plans.quota", { n: formatCount(plan.monthly_quota) })}</div>
             <div className="card-row__meta">
@@ -112,8 +114,8 @@ export function PlansPage() {
             <Prices plan={plan} />
             {action && (
               <Button
-                size="small"
-                color="primary"
+                size="sm"
+                variant="primary"
                 disabled={!!pending || submit.pending}
                 onClick={() => setChoosing(plan)}
               >
@@ -123,7 +125,7 @@ export function PlansPage() {
           </div>
         );
       })}
-      <Popup visible={choosing !== null} onMaskClick={() => setChoosing(null)} bodyStyle={{ padding: 12 }}>
+      <BottomSheet open={choosing !== null} onClose={() => setChoosing(null)} label={t("plans.choosePeriod")}>
         <div className="section__label">{t("plans.choosePeriod")}</div>
         <div role="listbox" aria-label={t("plans.choosePeriod")} className="choice-list">
           {(["month", "year"] as Period[]).map((p) => (
@@ -139,7 +141,7 @@ export function PlansPage() {
             </button>
           ))}
         </div>
-      </Popup>
+      </BottomSheet>
     </div>
   );
 }

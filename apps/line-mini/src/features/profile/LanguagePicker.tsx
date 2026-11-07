@@ -1,7 +1,7 @@
-import { Button, Space } from "antd-mobile";
 
 import { useT, type MessageKey } from "../../i18n";
 import { LANGS, useLanguage } from "../../stores/language";
+import { Button } from "../../components/ui/button";
 
 /** Language switch (FR-SYS-004): takes effect at once and is remembered on this device. */
 export function LanguagePicker() {
@@ -10,19 +10,19 @@ export function LanguagePicker() {
   return (
     <div>
       <div className="section__label">{t("my.language")}</div>
-      <Space wrap>
+      <div className="flex flex-wrap gap-2">
         {LANGS.map((l) => (
           <Button
             key={l}
-            size="small"
-            color={l === lang ? "primary" : "default"}
+            size="sm"
+            variant={l === lang ? "primary" : "outline"}
             aria-pressed={l === lang}
             onClick={() => setLang(l)}
           >
             {t(`lang.${l}` as MessageKey)}
           </Button>
         ))}
-      </Space>
+      </div>
     </div>
   );
 }

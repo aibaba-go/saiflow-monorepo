@@ -1,7 +1,8 @@
-import { Input } from "antd-mobile";
 import type { ReactNode } from "react";
 
+import { useT } from "../../i18n";
 import { FieldError } from "../FieldError";
+import { Input } from "../ui/input";
 
 export interface FieldProps {
   id: string;
@@ -17,13 +18,14 @@ export interface FieldProps {
 
 /** A labelled input with its own error line underneath. */
 export function Field({ id, label, value, onChange, error, field, type = "text", extra }: FieldProps) {
+  const t = useT();
   return (
     <div className="field">
       <label htmlFor={id} className="field__label">
         {label}
       </label>
       <div className="field__row">
-        <Input id={id} type={type} value={value} onChange={onChange} clearable />
+        <Input id={id} type={type} value={value} onChange={onChange} clearable clearLabel={t("common.clear")} />
         {extra}
       </div>
       <FieldError error={error} field={field} />

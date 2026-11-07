@@ -1,4 +1,3 @@
-import { Button, Popup, Tag, Toast } from "antd-mobile";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -17,6 +16,10 @@ import { formatBangkokDate } from "../../utils/format";
 import { authLiff, loadIdentity } from "../auth/session";
 import { can } from "../tenants/permissions";
 import { useCurrentTenant } from "../tenants/useCurrentTenant";
+import { Button } from "../../components/ui/button";
+import { BottomSheet } from "../../components/ui/sheet";
+import { Tag } from "../../components/ui/tag";
+import { showToast } from "../../components/ui/toast";
 import {
   orgPath,
   useInvitations,
@@ -54,7 +57,7 @@ function Chooser<V>({
   onClose(): void;
 }) {
   return (
-    <Popup visible={open} onMaskClick={onClose} bodyStyle={{ padding: 12 }}>
+    <BottomSheet open={open} onClose={onClose} label={title}>
       <div className="section__label">{title}</div>
       <div role="listbox" aria-label={title} className="choice-list">
         {options.map((o) => (
@@ -70,7 +73,7 @@ function Chooser<V>({
           </button>
         ))}
       </div>
-    </Popup>
+    </BottomSheet>
   );
 }
 
@@ -123,7 +126,7 @@ function ProfileSection({ org, tenant }: { org: OrgView; tenant: CurrentTenant }
           field="address"
         />
         <ErrorText error={formLevel(error)} />
-        <Button color="primary" loading={save.pending} onClick={() => void save.run()}>
+        <Button variant="primary" loading={save.pending} onClick={() => void save.run()}>
           {t("common.save")}
         </Button>
       </div>
@@ -138,7 +141,7 @@ function ProfileSection({ org, tenant }: { org: OrgView; tenant: CurrentTenant }
         {t("org.verification")}: {t(VERIFICATION[org.verification_status]!)}
       </div>
       {can(tenant, "member_manage") && (
-        <Button size="small" onClick={() => setEditing(true)}>
+        <Button size="sm" onClick={() => setEditing(true)}>
           {t("common.edit")}
         </Button>
       )}
@@ -165,7 +168,7 @@ function InviteSection({ org, tenant }: { org: OrgView; tenant: CurrentTenant })
     try {
       if (!navigator.clipboard) return;
       await navigator.clipboard.writeText(url);
-      Toast.show({ content: t("invite.copied") });
+      showToast(t("invite.copied"));
     } catch {
       // no clipboard permission: the user copies the link shown below
     }
@@ -204,7 +207,7 @@ function InviteSection({ org, tenant }: { org: OrgView; tenant: CurrentTenant })
   if (!can(tenant, "member_manage")) return null;
   return (
     <div className="section">
-      <Button color="primary" disabled={full} loading={invite.pending} onClick={() => void invite.run()}>
+      <Button variant="primary" disabled={full} loading={invite.pending} onClick={() => void invite.run()}>
         {t("org.invite")}
       </Button>
       {full && <div className="card-row__meta">{t("err.member_limit_reached")}</div>}
@@ -212,7 +215,7 @@ function InviteSection({ org, tenant }: { org: OrgView; tenant: CurrentTenant })
         <div className="card-row">
           <div className="card-row__meta">{t("invite.linkHint")}</div>
           <div className="invite-link">{link}</div>
-          <Button size="mini" onClick={() => void share(link)}>
+          <Button size="sm" onClick={() => void share(link)}>
             {canShare ? t("invite.shareAgain") : t("invite.copy")}
           </Button>
         </div>
@@ -221,7 +224,7 @@ function InviteSection({ org, tenant }: { org: OrgView; tenant: CurrentTenant })
       {invitations.data?.map((inv) => (
         <div key={inv.id} className="card-row card-row--inline">
           <span>{t("invite.expires", { date: formatBangkokDate(inv.expires_at) })}</span>
-          <Button size="mini" onClick={() => void revokeOnce.run(inv.id)}>
+          <Button size="sm" onClick={() => void revokeOnce.run(inv.id)}>
             {t("invite.revoke")}
           </Button>
         </div>
@@ -280,18 +283,18 @@ function MemberRow({
     <div className="card-row" data-member={member.user_id}>
       <div className="card-row__title">
         {member.display_name}{" "}
-        {member.is_owner ? <Tag color="primary">{t("member.owner")}</Tag> : <Tag>{member.role?.name}</Tag>}
+        {member.is_owner ? <Tag tone="primary">{t("member.owner")}</Tag> : <Tag>{member.role?.name}</Tag>}
       </div>
       <div className="card-row__meta">{t("member.joined", { date: formatBangkokDate(member.joined_at) })}</div>
       {actionable && (canRole || can(tenant, "member_manage")) && (
         <div className="card-row__actions">
           {canRole && (
-            <Button size="mini" onClick={() => setChoosing(true)}>
+            <Button size="sm" onClick={() => setChoosing(true)}>
               {t("member.changeRole")}
             </Button>
           )}
           {can(tenant, "member_manage") && (
-            <Button size="mini" color="danger" onClick={() => void removeOnce.run()}>
+            <Button size="sm" variant="danger" onClick={() => void removeOnce.run()}>
               {t("member.remove")}
             </Button>
           )}
@@ -353,7 +356,7 @@ function OwnerActions({ org, tenant, members }: { org: OrgView; tenant: CurrentT
       {tenant.is_owner ? (
         <Button onClick={() => setChoosing(true)}>{t("owner.transfer")}</Button>
       ) : (
-        <Button color="danger" fill="outline" onClick={() => void leaveOnce.run()}>
+        <Button variant="outline" className="border-danger text-danger-text" onClick={() => void leaveOnce.run()}>
           {t("org.leave")}
         </Button>
       )}

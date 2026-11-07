@@ -1,10 +1,11 @@
-import { Button, Popup } from "antd-mobile";
 import { useState } from "react";
 
 import { useT } from "../../i18n";
 import { refreshTenants } from "../auth/session";
 import { useSession, type CurrentTenant } from "../../stores/session";
 import { useCurrentTenant } from "./useCurrentTenant";
+import { Button } from "../../components/ui/button";
+import { BottomSheet } from "../../components/ui/sheet";
 
 export function tenantLabel(tenant: CurrentTenant, t: ReturnType<typeof useT>): string {
   return tenant.kind === "organization" ? (tenant.name ?? "") : t("tenant.personal");
@@ -27,7 +28,7 @@ export function TenantSwitcher() {
   return (
     <>
       <Button
-        size="small"
+        size="sm"
         onClick={() => {
           setOpen(true);
           void refreshTenants();
@@ -35,7 +36,7 @@ export function TenantSwitcher() {
       >
         {t("tenant.current", { name: tenantLabel(tenant, t) })}
       </Button>
-      <Popup visible={open} onMaskClick={() => setOpen(false)} bodyStyle={{ padding: 12 }}>
+      <BottomSheet open={open} onClose={() => setOpen(false)} label={t("tenant.switch")}>
         <div className="section__label">{t("tenant.switch")}</div>
         <div role="listbox" aria-label={t("tenant.switch")} className="choice-list">
           {tenants.map((item) => (
@@ -51,7 +52,7 @@ export function TenantSwitcher() {
             </button>
           ))}
         </div>
-      </Popup>
+      </BottomSheet>
     </>
   );
 }

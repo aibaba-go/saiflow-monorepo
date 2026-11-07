@@ -1,6 +1,12 @@
 import "@testing-library/jest-dom/vitest";
 
-// Ant Design reads matchMedia for responsive behaviour; jsdom does not provide it.
+import { cleanup } from "@testing-library/react";
+import { afterEach } from "vitest";
+
+import { closeAllDialogs } from "../components/ui/dialogs";
+import { clearToasts } from "../components/ui/toast";
+
+// Responsive helpers read matchMedia; jsdom does not provide it.
 if (!window.matchMedia) {
   window.matchMedia = (query: string) =>
     ({
@@ -15,24 +21,28 @@ if (!window.matchMedia) {
     }) as MediaQueryList;
 }
 
-// antd-mobile dialogs and toasts render into document.body outside React Testing Library's
-// container; close them between tests so one test's dialog never answers another's query.
-import { cleanup } from "@testing-library/react";
-import { Dialog, Toast } from "antd-mobile";
-import { afterEach } from "vitest";
+// sonner measures toasts; jsdom has no ResizeObserver.
+if (!window.ResizeObserver) {
+  window.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+}
 
-afterEach(() => {
-  Dialog.clear();
-  Toast.clear();
-  cleanup();
-  // A cleared dialog stays in the DOM while it animates out; under load (CI, `pnpm -r test`)
-  // the next test then saw two "Confirm" buttons (049-03, 050-01, 050-02). Drop the leftovers.
-  document.body.innerHTML = "";
-});
-
-// antd-mobile popups capture the pointer for swipe gestures; jsdom has no pointer capture.
+// Radix dialogs use pointer capture; jsdom has none.
 if (!Element.prototype.setPointerCapture) {
   Element.prototype.setPointerCapture = () => {};
   Element.prototype.releasePointerCapture = () => {};
   Element.prototype.hasPointerCapture = () => false;
 }
+
+// Dialogs and toasts render into document.body outside React Testing Library's container;
+// close them between tests so one test's dialog never answers another's query.
+afterEach(() => {
+  closeAllDialogs();
+  clearToasts();
+  cleanup();
+  document.body.innerHTML = "";
+  document.body.removeAttribute("style");
+});

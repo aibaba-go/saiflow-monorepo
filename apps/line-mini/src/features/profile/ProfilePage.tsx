@@ -1,4 +1,3 @@
-import { Button, Popup } from "antd-mobile";
 import { useState } from "react";
 
 import { ErrorText } from "../../components/ErrorText";
@@ -10,6 +9,8 @@ import { api, call } from "../../services/api";
 import { useSession, type Me } from "../../stores/session";
 import { reloadIdentity } from "../auth/session";
 import { EmailCodeButton } from "./EmailCodeButton";
+import { Button } from "../../components/ui/button";
+import { BottomSheet } from "../../components/ui/sheet";
 
 function ChangeEmail({ onDone }: { onDone(): void }) {
   const t = useT();
@@ -47,7 +48,7 @@ function ChangeEmail({ onDone }: { onDone(): void }) {
         field="code"
       />
       <ErrorText error={formLevel(error)} />
-      <Button block color="primary" loading={submit.pending} onClick={() => void submit.run()}>
+      <Button block variant="primary" loading={submit.pending} onClick={() => void submit.run()}>
         {t("common.confirm")}
       </Button>
     </div>
@@ -90,19 +91,19 @@ function ProfileForm({ me }: { me: Me }) {
         type="tel"
       />
       <ErrorText error={formLevel(error)} />
-      <Button block color="primary" loading={save.pending} onClick={() => void save.run()}>
+      <Button block variant="primary" loading={save.pending} onClick={() => void save.run()}>
         {t("common.save")}
       </Button>
       <div className="field">
         <div className="field__label">{t("profile.email")}</div>
         <div>{me.email ?? t("common.notSet")}</div>
-        <Button size="small" onClick={() => setEmailOpen(true)}>
+        <Button size="sm" onClick={() => setEmailOpen(true)}>
           {t("profile.changeEmail")}
         </Button>
       </div>
-      <Popup visible={emailOpen} onMaskClick={() => setEmailOpen(false)} bodyStyle={{ padding: 16 }}>
+      <BottomSheet open={emailOpen} onClose={() => setEmailOpen(false)} label={t("profile.changeEmail")}>
         {emailOpen && <ChangeEmail onDone={() => setEmailOpen(false)} />}
-      </Popup>
+      </BottomSheet>
     </div>
   );
 }

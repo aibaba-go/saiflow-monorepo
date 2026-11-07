@@ -1,4 +1,3 @@
-import { Button, Dialog, List } from "antd-mobile";
 import { useNavigate } from "react-router-dom";
 
 import { ErrorText } from "../components/ErrorText";
@@ -10,6 +9,9 @@ import { useRequireRegistered } from "../features/auth/useRequireRegistered";
 import { useSubmit } from "../hooks/useSubmit";
 import { useT } from "../i18n";
 import { isUser, useSession } from "../stores/session";
+import { confirmAction } from "../utils/confirm";
+import { Button } from "../components/ui/button";
+import { ListGroup, ListItem } from "../components/ui/list";
 
 /** "My": identity, login or logout (FR-SYS-041, FR-SYS-043). Profile, language and the
  * entries to organizations, plans and notifications are added by later tasks. */
@@ -24,12 +26,7 @@ export function MyPage() {
   const out = useSubmit(logout);
 
   const confirmLogout = async () => {
-    const ok = await Dialog.confirm({
-      title: t("my.logoutTitle"),
-      content: t("my.logoutBody"),
-      confirmText: t("common.confirm"),
-      cancelText: t("common.cancel"),
-    });
+    const ok = await confirmAction(t, t("my.logoutTitle"), t("my.logoutBody"));
     if (ok) await out.run();
   };
 
@@ -38,44 +35,44 @@ export function MyPage() {
       <h1 className="page__title">{t("my.title")}</h1>
       {isUser(me) ? (
         <>
-          <List>
-            <List.Item
+          <ListGroup>
+            <ListItem
               description={me?.email ?? t("common.notSet")}
               onClick={() => navigate("/profile")}
             >
               {me?.display_name}
-            </List.Item>
-          </List>
+            </ListItem>
+          </ListGroup>
           <TenantSwitcher />
-          <List>
+          <ListGroup>
             {tenant?.kind === "organization" && (
-              <List.Item onClick={() => navigate("/org")}>{t("my.organization")}</List.Item>
+              <ListItem onClick={() => navigate("/org")}>{t("my.organization")}</ListItem>
             )}
-            <List.Item onClick={() => requireRegistered() && navigate("/orgs/apply")}>
+            <ListItem onClick={() => requireRegistered() && navigate("/orgs/apply")}>
               {t("my.createOrg")}
-            </List.Item>
-          </List>
-          <Button block color="danger" fill="outline" loading={out.pending} onClick={confirmLogout}>
+            </ListItem>
+          </ListGroup>
+          <Button block variant="outline" className="border-danger text-danger-text" loading={out.pending} onClick={confirmLogout}>
             {t("my.logout")}
           </Button>
         </>
       ) : (
         <>
-          <List>
-            <List.Item description={t("my.guestHint")}>{t("my.guest")}</List.Item>
-          </List>
-          <Button block color="primary" loading={login.pending} onClick={() => void login.run()}>
+          <ListGroup>
+            <ListItem description={t("my.guestHint")}>{t("my.guest")}</ListItem>
+          </ListGroup>
+          <Button block variant="primary" loading={login.pending} onClick={() => void login.run()}>
             {t("auth.loginRegister")}
           </Button>
           <ErrorText error={loginError} />
         </>
       )}
-      <List>
-        <List.Item onClick={() => navigate("/plans")}>{t("my.plans")}</List.Item>
+      <ListGroup>
+        <ListItem onClick={() => navigate("/plans")}>{t("my.plans")}</ListItem>
         {isUser(me) && (
-          <List.Item onClick={() => navigate("/notifications")}>{t("notif.title")}</List.Item>
+          <ListItem onClick={() => navigate("/notifications")}>{t("notif.title")}</ListItem>
         )}
-      </List>
+      </ListGroup>
       <LanguagePicker />
     </div>
   );

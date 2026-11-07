@@ -107,12 +107,14 @@ describe("BottomSheet", () => {
       const [open, setOpen] = useState(true);
       return (
         <BottomSheet open={open} onClose={() => setOpen(false)} label="Languages">
+          <p>Languages</p>
           <p>body</p>
         </BottomSheet>
       );
     }
     render(<Page />);
     expect(screen.getByRole("dialog", { name: "Languages" })).toBeInTheDocument();
+    expect(screen.getAllByText("Languages")).toHaveLength(1); // the name does not repeat the heading
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByText("body")).not.toBeInTheDocument());
     await waitFor(() => expect(document.body.style.pointerEvents).not.toBe("none"));
@@ -143,13 +145,13 @@ describe("small parts", () => {
     expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("Siam");
   });
 
-  it("count badge caps at 99+", () => {
+  it("count badge shows the exact count, like before (FR-SYS-138)", () => {
     render(
       <CountBadge count={120}>
         <span>bell</span>
       </CountBadge>,
     );
-    expect(screen.getByText("99+")).toBeInTheDocument();
+    expect(screen.getByText("120")).toBeInTheDocument();
   });
 
   it("count badge hides zero", () => {

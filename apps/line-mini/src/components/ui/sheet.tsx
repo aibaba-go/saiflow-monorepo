@@ -13,7 +13,8 @@ export function BottomSheet({
 }: {
   open: boolean;
   onClose(): void;
-  /** The panel's accessible name (a hidden title). */
+  /** The panel's accessible name. Given to an empty title through aria-label, so it never
+   * repeats a heading the panel already shows (and tests finding that text see one match). */
   label: string;
   children: ReactNode;
   className?: string;
@@ -30,7 +31,7 @@ export function BottomSheet({
             className,
           )}
         >
-          <DialogPrimitive.Title className="sr-only">{label}</DialogPrimitive.Title>
+          <DialogPrimitive.Title className="sr-only" aria-label={label} />
           {children}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>

@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { Button, ErrorBlock } from "antd-mobile";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -12,6 +11,8 @@ import { useSession } from "../../stores/session";
 import { formatBangkokDate } from "../../utils/format";
 import { INVITE_KEY, JOIN_KEY, loadIdentity, startLogin } from "../auth/session";
 import { useCurrentTenant } from "../tenants/useCurrentTenant";
+import { Button } from "../../components/ui/button";
+import { EmptyState } from "../../components/ui/empty-state";
 
 export { INVITE_KEY } from "../auth/session";
 
@@ -36,12 +37,8 @@ function Gone({ error }: { error: unknown }) {
   const navigate = useNavigate();
   return (
     <div className="page page--center">
-      <ErrorBlock
-        status="default"
-        title={errorMessage(error ?? new ApiError(410, "invitation_gone", []), t)}
-        description=""
-      />
-      <Button color="primary" onClick={() => navigate("/")}>
+      <EmptyState status="error" title={errorMessage(error ?? new ApiError(410, "invitation_gone", []), t)} />
+      <Button variant="primary" onClick={() => navigate("/")}>
         {t("common.home")}
       </Button>
     </div>
@@ -111,7 +108,7 @@ export function InvitePage() {
       <div className="card-row__meta">
         {t("invite.validUntil", { date: formatBangkokDate(preview.data.expires_at) })}
       </div>
-      <Button color="primary" loading={accept.pending} onClick={() => void joinOnce.run()}>
+      <Button variant="primary" loading={accept.pending} onClick={() => void joinOnce.run()}>
         {t("invite.join")}
       </Button>
     </div>

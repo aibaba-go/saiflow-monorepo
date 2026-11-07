@@ -3,7 +3,11 @@ import { render } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 
-/** Render with a fresh query cache (no retries) and an in-memory router at `route`. */
+import { DialogHost } from "../components/ui/dialogs";
+import { AppToaster } from "../components/ui/toast";
+
+/** Render with a fresh query cache (no retries) and an in-memory router at `route`, plus the
+ * dialog host and toaster that App mounts (confirm dialogs and toasts render through them). */
 export function renderWithProviders(ui: ReactElement, { route = "/" }: { route?: string } = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -13,6 +17,8 @@ export function renderWithProviders(ui: ReactElement, { route = "/" }: { route?:
     ...render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
+        <DialogHost />
+        <AppToaster />
       </QueryClientProvider>,
     ),
   };

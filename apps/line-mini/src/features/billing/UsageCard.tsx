@@ -1,4 +1,3 @@
-import { Card } from "antd-mobile";
 
 import { BrandLoading } from "../../components/BrandLoading";
 import { ErrorText } from "../../components/ErrorText";
@@ -6,6 +5,7 @@ import { useT, type MessageKey } from "../../i18n";
 import { formatBangkokDate, formatCount } from "../../utils/format";
 import { useCurrentTenant } from "../tenants/useCurrentTenant";
 import { useUsage } from "./useUsage";
+import { Card } from "../../components/ui/card";
 
 export const planName = (code: string, t: (k: MessageKey) => string): string =>
   t(`plan.${code}` as MessageKey);
