@@ -194,3 +194,20 @@ describe("operation log fixes (minor-fixes-ui)", () => {
     expect(await within(range).findByText(zh("field.until"))).toBeInTheDocument();
   });
 });
+
+describe("operation log action names (minor-fixes-ui, owner check)", () => {
+  it("shows the action in the UI language next to its code", async () => {
+    signedIn({ "GET /api/v1/admin/audit-log": () => json(200, { items: [entry(9, "admin.login"), entry(8, "result.confirm")], next_before: null }) });
+    renderAt("/audit-log");
+    const login = (await screen.findByText("admin.login")).closest("tr") as HTMLElement;
+    expect(within(login).getByText(zh("action.admin.login"))).toBeInTheDocument();
+    const confirm = screen.getByText("result.confirm").closest("tr") as HTMLElement;
+    expect(within(confirm).getByText(zh("action.result.confirm"))).toBeInTheDocument();
+  });
+
+  it("an unknown action shows its code only", async () => {
+    signedIn({ "GET /api/v1/admin/audit-log": () => json(200, { items: [entry(9, "something.new")], next_before: null }) });
+    renderAt("/audit-log");
+    expect(await screen.findByText("something.new")).toBeInTheDocument();
+  });
+});

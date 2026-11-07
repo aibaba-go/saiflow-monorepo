@@ -1,6 +1,6 @@
 import type { components } from "@saiflow/api-client";
 import { useQuery } from "@tanstack/react-query";
-import { Button, Card, DatePicker, Form, Input, Select, Space, Table } from "antd";
+import { Button, Card, DatePicker, Form, Input, Select, Space, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { Dayjs } from "dayjs";
 import { useState } from "react";
@@ -81,7 +81,22 @@ export function AuditLogPage() {
         return e.actor_id ? `${kind} #${e.actor_id}` : kind;
       },
     },
-    { title: t("log.action"), dataIndex: "action" },
+    {
+      title: t("log.action"),
+      key: "action",
+      // the action in the UI language, with its code for the prefix filter (owner check)
+      render: (_, e) =>
+        isMessageKey(`action.${e.action}`) ? (
+          <Space direction="vertical" size={0}>
+            <span>{t(`action.${e.action}` as MessageKey)}</span>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {e.action}
+            </Typography.Text>
+          </Space>
+        ) : (
+          e.action
+        ),
+    },
     { title: t("log.target"), key: "target", render: (_, e) => (e.target_id ? `${e.target_type} #${e.target_id}` : e.target_type) },
     {
       title: t("log.result"),
