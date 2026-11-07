@@ -72,6 +72,9 @@ export function useResult(id: string, enabled = true) {
     queryFn: () => getResult(id),
     enabled: enabled && tenant !== null && Boolean(id),
     retry: false,
+    // a template conversion in progress: check again until it settles
+    refetchInterval: (q) =>
+      q.state.data?.mapping && ["PENDING", "MATCHING", "CONVERTING"].includes(q.state.data.mapping.status) ? 3000 : false,
   });
 }
 

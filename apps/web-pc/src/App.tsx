@@ -4,7 +4,7 @@ import enUS from "antd/locale/en_US";
 import thTH from "antd/locale/th_TH";
 import zhCN from "antd/locale/zh_CN";
 import { useEffect } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { createBrowserRouter, Route, RouterProvider, Routes } from "react-router-dom";
 
 import { RequireUser } from "./auth/RequireUser";
 import { forgetSession, useSessionNotice } from "./auth/session";
@@ -26,6 +26,7 @@ import { ReviewSettingsPage } from "./pages/ReviewSettingsPage";
 import { ReviewsPage } from "./pages/ReviewsPage";
 import { RolesPage } from "./pages/RolesPage";
 import { UploadPage } from "./pages/UploadPage";
+import { VerifyPage } from "./pages/VerifyPage";
 import { setTenantGoneHandler, setUnauthenticatedHandler } from "./services/api";
 import { refreshTenants } from "./tenants/useCurrentTenant";
 import { useLanguage } from "./stores/language";
@@ -75,6 +76,8 @@ export function AppRoutes() {
               <Route path="/reviews/:id" element={<ReviewDetailPage />} />
               <Route path="/review-settings" element={<ReviewSettingsPage />} />
               <Route path="/upload" element={<UploadPage />} />
+              <Route path="/verify" element={<VerifyPage />} />
+              <Route path="/verify/:id" element={<VerifyPage />} />
               <Route path="/plans" element={<PlansPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/profile" element={<ProfilePage />} />
@@ -90,12 +93,14 @@ export function AppRoutes() {
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
+// A data router, so pages can block navigation with unsaved edits (FR-SYS-129); the
+// routes themselves stay in <AppRoutes>.
+const router = createBrowserRouter([{ path: "*", element: <AppRoutes /> }]);
+
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>
   );
 }
