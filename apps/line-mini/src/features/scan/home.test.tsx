@@ -45,6 +45,7 @@ const job = (n: number, stage: JobOut["stage"] = "VERIFYING"): JobOut => ({
   template_name: null,
   created_at: "2026-11-06T00:00:00Z",
   confirmed_at: null,
+  returned: false,
 });
 
 type Handler = (r: Request) => Response | Promise<Response>;

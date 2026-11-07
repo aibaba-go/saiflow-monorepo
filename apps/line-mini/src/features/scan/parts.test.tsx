@@ -22,6 +22,7 @@ const job: JobOut = {
   template_name: "Tax Invoice",
   created_at: "2026-11-06T01:05:00Z",
   confirmed_at: null,
+  returned: false,
 };
 
 beforeEach(() => useLanguage.getState().setLang("en"));
