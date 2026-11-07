@@ -2,12 +2,14 @@ import { App, Button, Card, Col, Descriptions, Row, Space, Spin } from "antd";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import { useMe } from "../auth/session";
 import { ErrorText } from "../components/ErrorText";
 import { Page } from "../components/Page";
 import { formatBangkokDateTime } from "../format";
 import { useT } from "../i18n";
 import { useJob, useResult } from "../ocr/api";
 import { exportAndDownload } from "../ocr/download";
+import { canEditJob } from "../ocr/stage";
 import { StageTag } from "../ocr/StageTag";
 import { useChanges } from "../reviews/api";
 import { ChangeLogTable } from "../reviews/ChangeLogTable";
@@ -28,6 +30,7 @@ export function DocumentPage() {
   const navigate = useNavigate();
   const { message } = App.useApp();
   const { tenant } = useTenant();
+  const me = useMe();
   const { id = "" } = useParams();
   const job = useJob(id);
   const result = useResult(id, job.isSuccess);
@@ -46,7 +49,7 @@ export function DocumentPage() {
   const data = result.data;
   const groups = (data.template?.groups ?? null) as Group[] | null;
   const canExport = j.stage === "CONFIRMED" && can(tenant, "export");
-  const canVerify = j.stage === "VERIFYING" && (can(tenant, "verify_own") || can(tenant, "verify_others"));
+  const canVerify = j.stage === "VERIFYING" && canEditJob(j, tenant, me.data?.user_id);
 
   async function doExport() {
     setExporting(true);

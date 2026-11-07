@@ -6,7 +6,7 @@ import { localCheck, uploadFile } from "./upload";
 
 /** main ScanHomePage's upload batch (FR-SYS-110): one file at a time, each with its own
  * AbortController; cancel one or all, retry the failed ones that can be retried. */
-export type UploadStatus = "waiting" | "uploading" | "uploaded" | "failed";
+export type UploadStatus = "waiting" | "uploading" | "uploaded" | "failed" | "cancelled";
 
 export interface UploadItem {
   key: number;
@@ -60,7 +60,7 @@ export function useUploadQueue(onUploaded: () => void) {
       commit(list.current.map((i) => (i.key === key ? { ...i, ...change } : i))),
     [commit],
   );
-  const alive = (key: number) => list.current.some((i) => i.key === key);
+  const alive = (key: number) => list.current.some((i) => i.key === key && i.status !== "cancelled");
 
   const run = useCallback(async () => {
     if (running.current) return;
@@ -136,7 +136,8 @@ export function useUploadQueue(onUploaded: () => void) {
 
   const remove = useCallback(
     (keys: number[]) => {
-      commit(list.current.filter((i) => !keys.includes(i.key)));
+      // the row stays, marked cancelled (FR-SYS-127); its file is not retried
+      commit(list.current.map((i) => (keys.includes(i.key) ? { ...i, status: "cancelled", retryable: false } : i)));
       for (const key of keys) sources.current.delete(key);
       if (current.current && keys.includes(current.current.key)) current.current.controller.abort();
       setCancelled((n) => n + keys.length);
@@ -174,6 +175,13 @@ export function useUploadQueue(onUploaded: () => void) {
     [commit, run],
   );
 
+  /** Drop the ended rows: uploaded, failed and cancelled. */
+  const clearFinished = useCallback(() => {
+    const ended = list.current.filter((i) => ["uploaded", "failed", "cancelled"].includes(i.status));
+    for (const i of ended) sources.current.delete(i.key);
+    commit(list.current.filter((i) => !ended.includes(i)));
+  }, [commit]);
+
   const retryFailed = useCallback(
     () => retry(list.current.filter((i) => i.status === "failed").map((i) => i.key)),
     [retry],
@@ -189,6 +197,7 @@ export function useUploadQueue(onUploaded: () => void) {
     cancelAll,
     retry: (key: number) => retry([key]),
     retryFailed,
+    clearFinished,
     canRetry: (item: UploadItem) => item.status === "failed" && item.retryable,
   };
 }

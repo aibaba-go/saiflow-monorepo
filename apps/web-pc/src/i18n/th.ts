@@ -413,4 +413,6 @@ export const th: Record<MessageKey, string> = {
   "home.toVerify": "รอตรวจทาน",
   "home.recent": "งานล่าสุด",
   "home.noTasks": "ยังไม่มีงาน",
+  "ocr.cancelled": "ยกเลิกแล้ว",
+  "ocr.clearFinished": "ล้างรายการที่เสร็จแล้ว",
 };

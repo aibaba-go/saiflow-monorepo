@@ -1,12 +1,13 @@
 import { Button, Card, Empty, Space, Statistic, Table } from "antd";
 import { Link, useNavigate } from "react-router-dom";
 
+import { useMe } from "../auth/session";
 import { UsageCard } from "../billing/UsageCard";
 import { Page } from "../components/Page";
 import { formatBangkokDateTime } from "../format";
 import { useT } from "../i18n";
 import { type JobOut, useJobs } from "../ocr/api";
-import { jobTarget } from "../ocr/stage";
+import { canEditJob, jobTarget } from "../ocr/stage";
 import { StageTag } from "../ocr/StageTag";
 import { can } from "../tenants/permissions";
 import { useTenant } from "../tenants/useTenant";
@@ -17,7 +18,7 @@ export function HomePage() {
   const t = useT();
   const navigate = useNavigate();
   const { tenant } = useTenant();
-  const canVerify = can(tenant, "verify_own") || can(tenant, "verify_others");
+  const me = useMe();
   const toVerify = useJobs({ page: 1, pageSize: 1, stage: "VERIFYING" });
   const recent = useJobs({ page: 1, pageSize: 5 });
   const rows = recent.data?.items ?? [];
@@ -48,7 +49,7 @@ export function HomePage() {
               loading={recent.isPending}
               pagination={false}
               dataSource={rows}
-              onRow={(j) => ({ onClick: () => navigate(jobTarget(j, canVerify)), style: { cursor: "pointer" } })}
+              onRow={(j) => ({ onClick: () => navigate(jobTarget(j, canEditJob(j, tenant, me.data?.user_id))), style: { cursor: "pointer" } })}
               columns={[
                 { key: "file", title: t("review.col.file"), render: (_, j) => j.file_name },
                 { key: "stage", title: t("ocr.status"), render: (_, j) => <StageTag stage={j.stage} level={j.review_level} /> },

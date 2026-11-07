@@ -1,4 +1,5 @@
 import { screen, waitFor, within } from "@testing-library/react";
+import { focusManager } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useLanguage } from "../stores/language";
@@ -107,8 +108,10 @@ describe("verify (FR-SYS-129)", () => {
     expect(await screen.findByText(en("ocr.confirmed"))).toBeInTheDocument();
     await waitFor(async () => expect(((await field("Invoice No.")) as HTMLInputElement).value).toBe("IV-B"));
     const bodies = (await api.bodies("PATCH /api/v1/ocr/jobs/A/result")) as { confirm: boolean; structured: { document: { total: string } } }[];
+    // the edits are saved as a draft first, then confirmed (final review 2)
+    expect(bodies[0]!.confirm).toBe(false);
+    expect(bodies[0]!.structured.document.total).toBe("1234.50");
     expect(bodies.at(-1)!.confirm).toBe(true);
-    expect(bodies.at(-1)!.structured.document.total).toBe("1234.50");
   });
 
   it("asks before switching or leaving with unsaved edits (129-02, Review Focus 1)", async () => {
@@ -202,13 +205,56 @@ describe("verify (FR-SYS-129)", () => {
     expect(screen.queryByRole("textbox", { name: "Invoice No." })).not.toBeInTheDocument();
   });
 
-  it("plan expired shows plans link", async () => {
-    verifyApi({ "PATCH /api/v1/ocr/jobs/A/result": () => json(402, { code: "plan_expired" }) });
+  it("plan expired saves the draft first and shows plans link (final review 2)", async () => {
+    const { api } = verifyApi({
+      "PATCH /api/v1/ocr/jobs/A/result": async (r) => {
+        const body = (await r.json()) as { confirm: boolean; structured: Res | null };
+        if (body.confirm) return json(402, { code: "plan_expired" });
+        return json(200, result(body.structured ?? doc("IV-A"), { version: 2 }));
+      },
+    });
     renderAt("/verify/A");
-    await field("Invoice No.");
+    await userEvent.type(await field("Invoice No."), "7");
     await userEvent.click(screen.getByRole("button", { name: en("ocr.confirm") }));
+    await waitFor(async () => expect((await api.bodies("PATCH /api/v1/ocr/jobs/A/result")).length).toBe(2));
+    const [draft, confirm] = (await api.bodies("PATCH /api/v1/ocr/jobs/A/result")) as {
+      confirm: boolean;
+      expected_version: number;
+      structured: { document: { invoice_no: string } } | null;
+    }[];
+    expect(draft!.confirm).toBe(false);
+    expect(draft!.structured!.document.invoice_no).toBe("IV-A7");
+    expect(confirm!.confirm).toBe(true);
+    expect(confirm!.expected_version).toBe(2);
     const alert = (await screen.findByText(en("err.plan_expired"))).closest(".ant-alert") as HTMLElement;
     expect(within(alert).getByRole("link", { name: en("nav.plans") })).toHaveAttribute("href", "/plans");
+  });
+
+  it("save sends the version the edit was based on (final review 1)", async () => {
+    const { api, state } = verifyApi();
+    renderAt("/verify/A");
+    await userEvent.type(await field("Invoice No."), "1");
+    // a colleague saves meanwhile; the page refetches and now knows version 5
+    state.results.A = { ...state.results.A!, version: 5 };
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+    await waitFor(() => expect(api.count("GET /api/v1/ocr/jobs/A/result")).toBeGreaterThan(1));
+    await userEvent.click(screen.getByRole("button", { name: en("ocr.saveDraft") }));
+    await waitFor(async () => expect((await api.bodies("PATCH /api/v1/ocr/jobs/A/result")).length).toBe(1));
+    const [body] = (await api.bodies("PATCH /api/v1/ocr/jobs/A/result")) as { expected_version: number }[];
+    expect(body!.expected_version).toBe(1);
+  });
+
+  it("tenant switch with unsaved edits asks first (final review 5)", async () => {
+    verifyApi();
+    renderAt("/verify/A");
+    await userEvent.type(await field("Invoice No."), "X");
+    await userEvent.click(screen.getByRole("button", { name: en("tenant.switch") }));
+    const items = await screen.findAllByRole("menuitem");
+    await userEvent.click(items[items.length - 1]!);
+    const dialog = await screen.findByRole("dialog", { name: en("ocr.leaveTitle") });
+    await userEvent.click(within(dialog).getByRole("button", { name: en("common.cancel") }));
+    expect(((await field("Invoice No.")) as HTMLInputElement).value).toBe("IV-AX");
   });
 
   it("version conflict reloads", async () => {

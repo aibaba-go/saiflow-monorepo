@@ -116,8 +116,37 @@ describe("upload (FR-SYS-127)", () => {
     release();
     const rowB = (await within(queue).findByText("b.png")).closest("tr") as HTMLElement;
     await waitFor(() => expect(within(rowB).getByRole("button", { name: en("common.retry") })).toBeInTheDocument());
-    expect(within(queue).queryByText("a.png")).not.toBeInTheDocument();
+    // a cancelled file stays in the queue marked "Cancelled" (AC-127-02, final review 6)
+    const rowA2 = within(queue).getByText("a.png").closest("tr") as HTMLElement;
+    expect(within(rowA2).getByText(en("ocr.cancelled"))).toBeInTheDocument();
     expect(within(await screen.findByTestId("pending-list")).queryByText("a.png")).not.toBeInTheDocument();
+    // "Clear finished" removes the ended rows (cancelled, failed, uploaded)
+    await userEvent.click(screen.getByRole("button", { name: en("ocr.clearFinished") }));
+    await waitFor(() => expect(screen.queryByTestId("upload-queue")).not.toBeInTheDocument());
+  });
+
+  it("tenant switch resets the page (final review 4)", async () => {
+    signedIn(
+      {
+        "GET /api/v1/files/pending": () => json(200, []),
+        "GET /api/v1/ocr/jobs": (r) => {
+          const stage = new URL(r.url).searchParams.get("stage");
+          const org = r.headers.get("X-Tenant-Id") === "5";
+          return page(org && stage === "OCR_PROCESSING" ? [job("j9", "OCR_PROCESSING")] : []);
+        },
+      },
+      { tenants: [PERSONAL, ORG] },
+    );
+    localStorage.setItem("saiflow.pc.tenant.7", "5");
+    useTenantChoice.getState().reset();
+    renderAt("/upload");
+    const status = await screen.findByTestId("recognition-status");
+    await within(status).findByText("j9.png");
+    await userEvent.click(screen.getByRole("button", { name: en("tenant.switch") }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: en("tenant.personal") }));
+    await waitFor(() => expect(within(screen.getByTestId("recognition-status")).queryByText("j9.png")).not.toBeInTheDocument());
+    await new Promise((r) => setTimeout(r, 300));
+    expect(screen.queryByRole("link", { name: en("ocr.goVerify") })).not.toBeInTheDocument();
   });
 
   it("start recognition creates jobs and leaves pending (127-03)", async () => {

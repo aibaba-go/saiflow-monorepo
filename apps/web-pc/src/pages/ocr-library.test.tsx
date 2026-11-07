@@ -162,6 +162,36 @@ describe("library (FR-SYS-130)", () => {
     expect(screen.queryByRole("button", { name: en("ocr.goVerify") })).not.toBeInTheDocument();
   });
 
+  it("a colleague's job without verify_others opens the detail (final review 3)", async () => {
+    signedIn(
+      {
+        "GET /api/v1/templates": () => json(200, TEMPLATES),
+        "GET /api/v1/ocr/jobs": () =>
+          json(200, {
+            items: [job("C", "VERIFYING", { created_by_user_id: 8 }), job("M", "VERIFYING", { created_by_user_id: 7 })],
+            total: 2,
+            page: 1,
+            page_size: 20,
+          }),
+        "GET /api/v1/ocr/jobs/jC": () => json(200, job("C", "VERIFYING", { created_by_user_id: 8 })),
+        "GET /api/v1/ocr/jobs/jC/result": () =>
+          json(200, result({ confirmed: false, review: { stage: "NONE", required_level: null, records: [], last_return: null } })),
+        "GET /api/v1/ocr/jobs/jC/changes": () => json(200, []),
+        "GET /api/v1/files/fC/pages/1/preview": () => new Response(new Blob(["x"])),
+      },
+      inOrg(["upload_ocr", "verify_own", "data_browse"]),
+    );
+    renderAt("/library");
+    await userEvent.click(await screen.findByText("doc-C.png"));
+    expect(await screen.findByTestId("page-document")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: en("ocr.goVerify") })).not.toBeInTheDocument();
+    // the verify page lists only jobs this user may edit
+    await userEvent.click(within(screen.getByRole("menu")).getByText(en("nav.verify")));
+    const queue = await screen.findByTestId("verify-queue");
+    await within(queue).findByText("doc-M.png");
+    expect(within(queue).queryByText("doc-C.png")).not.toBeInTheDocument();
+  });
+
   it("menu has no data browse (094-03)", async () => {
     signedIn({ "GET /api/v1/templates": () => json(200, TEMPLATES), "GET /api/v1/ocr/jobs": () => json(200, { items: [], total: 0, page: 1, page_size: 20 }) });
     renderAt("/data");

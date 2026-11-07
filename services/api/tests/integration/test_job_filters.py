@@ -135,3 +135,12 @@ async def test_list_templates(api, line, db):
     assert await _template_id(db, "tax_invoice") in names
     assert await _template_id(db, "billing_note") in names
     assert all(isinstance(n, str) and n for n in names.values())
+
+
+async def test_creator_in_list(api, line, store, sm, ai_settings, llm, db):
+    """Each task names its creator, so web-pc can tell own from colleagues' jobs
+    (verify_own vs verify_others; final review Important 3)."""
+    me = await login(api, line)
+    (a,) = await _jobs(api, store, sm, ai_settings, llm, db, 1)
+    item = (await api.get(JOBS)).json()["items"][0]
+    assert (item["id"], item["created_by_user_id"]) == (a, me["user_id"])

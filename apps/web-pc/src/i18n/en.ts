@@ -411,6 +411,8 @@ export const en = {
   "home.toVerify": "To verify",
   "home.recent": "Recent tasks",
   "home.noTasks": "No tasks yet",
+  "ocr.cancelled": "Cancelled",
+  "ocr.clearFinished": "Clear finished",
 } as const;
 
 export type MessageKey = keyof typeof en;

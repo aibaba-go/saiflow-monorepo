@@ -1972,6 +1972,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Created By User Id */
+            created_by_user_id?: number | null;
             /** Engine */
             engine: string | null;
             /** Error Code */

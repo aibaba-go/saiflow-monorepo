@@ -413,4 +413,6 @@ export const zh: Record<MessageKey, string> = {
   "home.toVerify": "待核验",
   "home.recent": "最近任务",
   "home.noTasks": "还没有任务",
+  "ocr.cancelled": "已取消",
+  "ocr.clearFinished": "清除已结束",
 };

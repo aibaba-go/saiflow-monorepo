@@ -3,13 +3,15 @@ import { Alert, App, Button, Card, Col, Drawer, Empty, List, Modal, Row, Space, 
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useBlocker, useNavigate, useParams } from "react-router-dom";
 
+import { useMe } from "../auth/session";
 import { ErrorText } from "../components/ErrorText";
 import { Page } from "../components/Page";
 import { formatBangkokDateTime } from "../format";
 import { isMessageKey, useT } from "../i18n";
 import { applyTemplate, chooseGeneric, type JobOut, type ResultOut, saveResult, useJob, useJobs, useResult } from "../ocr/api";
 import { EditableResult } from "../ocr/EditableResult";
-import { jobTarget } from "../ocr/stage";
+import { canEditJob, jobTarget } from "../ocr/stage";
+import { useUnsaved } from "../ocr/unsaved";
 import type { Group, Json } from "../ocr/structured";
 import { type SwitchTarget, TemplateSwitch } from "../ocr/TemplateSwitch";
 import { useChanges } from "../reviews/api";
@@ -57,6 +59,11 @@ function Workspace({ job, queue }: { job: JobOut; queue: JobOut[] }) {
     ({ currentLocation, nextLocation }) =>
       dirty && !leaving.current && currentLocation.pathname !== nextLocation.pathname,
   );
+  const setUnsaved = useUnsaved((s) => s.setDirty);
+  useEffect(() => {
+    setUnsaved(dirty);
+    return () => setUnsaved(false);
+  }, [dirty, setUnsaved]);
   useEffect(() => {
     if (!dirty) return;
     const onUnload = (e: BeforeUnloadEvent) => e.preventDefault();
@@ -69,13 +76,17 @@ function Workspace({ job, queue }: { job: JobOut; queue: JobOut[] }) {
     setDraft(null);
   };
 
-  async function save(confirm: boolean): Promise<ResultOut | null> {
+  // The edit's own base version, so a colleague's save in between is a conflict, not
+  // silently overwritten (final review 1).
+  async function save(confirm: boolean, version?: number): Promise<ResultOut | null> {
     if (!data) return null;
     setBusy(true);
     setError(null);
     setExpired(false);
     try {
-      const body = await saveResult(job.id, data.version, dirty ? value : null, confirm);
+      const edits = !confirm || version === undefined ? dirty : false;
+      const base = version ?? (dirty && draft ? draft.base : data.version);
+      const body = await saveResult(job.id, base, edits ? value : null, confirm);
       setMissing([]);
       if (!confirm) loaded();
       return body;
@@ -100,7 +111,15 @@ function Workspace({ job, queue }: { job: JobOut; queue: JobOut[] }) {
   }
 
   async function confirm() {
-    const body = await save(true);
+    // Edits are saved as a draft first, so a refused confirm (plan expired, missing
+    // fields) loses nothing (FR-SYS-129; final review 2).
+    let version: number | undefined;
+    if (dirty) {
+      const saved = await save(false);
+      if (!saved) return;
+      version = saved.version;
+    }
+    const body = await save(true, version ?? data?.version);
     if (!body) return;
     const toReview = body.review?.stage === "PENDING_L1" || body.review?.stage === "PENDING_L2";
     void message.success(t(toReview ? "ocr.submitted" : "ocr.confirmed"));
@@ -231,8 +250,10 @@ export function VerifyPage() {
   const navigate = useNavigate();
   const { id } = useParams();
   const { tenant } = useTenant();
+  const me = useMe();
   const queue = useJobs({ page: 1, pageSize: 100, stage: "VERIFYING" });
-  const items = queue.data?.items ?? [];
+  // only the jobs this user may change (final review 3)
+  const items = (queue.data?.items ?? []).filter((j) => canEditJob(j, tenant, me.data?.user_id));
   const current = useJob(id ?? "");
   const tenantId = useRef(tenant?.tenant_id);
 
@@ -250,6 +271,9 @@ export function VerifyPage() {
   }
   if (!id && items.length) return <Navigate to={`/verify/${items[0]!.id}`} replace />;
   if (id && current.data && current.data.stage !== "VERIFYING") return <Navigate to={jobTarget(current.data, true)} replace />;
+  if (id && current.data && me.data && !canEditJob(current.data, tenant, me.data.user_id)) {
+    return <Navigate to={`/documents/${id}`} replace />;
+  }
   if (id && current.isError) return <Navigate to="/verify" replace />;
 
   const job = id ? (current.data ?? items.find((j) => j.id === id)) : undefined;

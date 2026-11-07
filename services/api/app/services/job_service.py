@@ -188,6 +188,7 @@ async def summaries(db: AsyncSession, jobs: list[OcrJob]) -> list[dict]:
                 "confirmed_at": j.confirmed_at,
                 "review_level": {states.PENDING_L1: 1, states.PENDING_L2: 2}.get(j.review_status),
                 "returned": j.id in returned,
+                "created_by_user_id": j.created_by_user_id,
             }
         )
     return out

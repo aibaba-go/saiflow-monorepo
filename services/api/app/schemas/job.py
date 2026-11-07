@@ -36,6 +36,7 @@ class JobOut(BaseModel):
     confirmed_at: datetime | None
     review_level: int | None = None  # 1 or 2 while waiting for review
     returned: bool = False  # sent back by a reviewer, waiting for a new confirm
+    created_by_user_id: int | None = None  # None for a guest's job
 
 
 class JobPageOut(BaseModel):

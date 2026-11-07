@@ -9,10 +9,10 @@ import { Page } from "../components/Page";
 import { formatBangkokDateTime } from "../format";
 import { useT } from "../i18n";
 import { type JobOut, useJobs } from "../ocr/api";
-import { jobTarget } from "../ocr/stage";
+import { canEditJob, jobTarget } from "../ocr/stage";
 import { StageTag } from "../ocr/StageTag";
 import { api, call } from "../services/api";
-import { can } from "../tenants/permissions";
+import { useMe } from "../auth/session";
 import { useTenant } from "../tenants/useTenant";
 
 const STAGES = ["OCR_PROCESSING", "OCR_FAILED", "TEMPLATE_MATCHING", "VERIFYING", "PENDING_REVIEW", "CONFIRMED"] as const;
@@ -22,7 +22,7 @@ function Library() {
   const t = useT();
   const navigate = useNavigate();
   const { tenant } = useTenant();
-  const canVerify = can(tenant, "verify_own") || can(tenant, "verify_others");
+  const me = useMe();
   const [stage, setStage] = useState<string | undefined>();
   const [template, setTemplate] = useState<string | undefined>();
   const [range, setRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
@@ -100,7 +100,7 @@ function Library() {
         loading={jobs.isPending}
         dataSource={jobs.data?.items ?? []}
         locale={{ emptyText: t("library.empty") }}
-        onRow={(j) => ({ onClick: () => navigate(jobTarget(j, canVerify)), style: { cursor: "pointer" } })}
+        onRow={(j) => ({ onClick: () => navigate(jobTarget(j, canEditJob(j, tenant, me.data?.user_id))), style: { cursor: "pointer" } })}
         pagination={{
           current: page,
           pageSize: PAGE_SIZE,

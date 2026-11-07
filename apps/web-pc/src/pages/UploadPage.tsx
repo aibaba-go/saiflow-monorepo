@@ -20,6 +20,13 @@ function failureText(code: string | null | undefined, t: ReturnType<typeof useT>
   return isMessageKey(key) ? t(key) : t("ocrerr.unknown");
 }
 
+/** The upload page (FR-SYS-127, 128), started afresh for each tenant: a switch stops the
+ * running upload and forgets the queue, selection and status of the old tenant. */
+export function UploadPage() {
+  const { tenant } = useTenant();
+  return <UploadContent key={tenant?.tenant_id ?? "none"} />;
+}
+
 /** Recognising, matching and failed jobs, newest first (at most 20), and the jobs that
  * left the unfinished stages without failing since the page opened (FR-SYS-128). */
 function useRecognition() {
@@ -54,7 +61,7 @@ function useRecognition() {
 
 /** The upload page (FR-SYS-127, 128): drop or choose files into the upload queue; the
  * pending originals with multi-select start or delete; and the recognition status. */
-export function UploadPage() {
+function UploadContent() {
   const t = useT();
   const { message, modal } = App.useApp();
   const queryClient = useQueryClient();
@@ -174,7 +181,7 @@ export function UploadPage() {
             size="small"
             title={t("ocr.queue")}
             extra={
-              queue.busy && (
+              queue.busy ? (
                 <Button
                   danger
                   size="small"
@@ -188,6 +195,10 @@ export function UploadPage() {
                   }
                 >
                   {t("ocr.cancelAll")}
+                </Button>
+              ) : (
+                <Button size="small" onClick={() => queue.clearFinished()}>
+                  {t("ocr.clearFinished")}
                 </Button>
               )
             }
@@ -207,6 +218,8 @@ export function UploadPage() {
                   render: (_, i) =>
                     i.status === "failed" ? (
                       <Typography.Text type="danger">{errorMessage(i.error, t)}</Typography.Text>
+                    ) : i.status === "cancelled" ? (
+                      <Typography.Text type="secondary">{t("ocr.cancelled")}</Typography.Text>
                     ) : i.status === "uploaded" ? (
                       t("ocr.uploaded")
                     ) : (
