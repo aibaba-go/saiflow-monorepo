@@ -7,11 +7,11 @@ import { ErrorText } from "../../components/ErrorText";
 import { Field } from "../../components/Field";
 import { formLevel, requireFields } from "../../components/FieldError";
 import { liffId } from "../../config";
-import { useSubmit } from "../../hooks/useSubmit";
 import { useT, type MessageKey } from "../../i18n";
 import { api, call } from "../../services/api";
 import { errorMessage } from "../../services/errors";
 import { useSession, type CurrentTenant } from "../../stores/session";
+import { useSubmit } from "../../hooks/useSubmit";
 import { confirmAction } from "../../utils/confirm";
 import { formatBangkokDate } from "../../utils/format";
 import { authLiff, loadIdentity } from "../auth/session";
@@ -199,6 +199,7 @@ function InviteSection({ org, tenant }: { org: OrgView; tenant: CurrentTenant })
       setError(err);
     }
   };
+  const revokeOnce = useSubmit(revoke); // one request per tap (minor-fixes-ui)
 
   if (!can(tenant, "member_manage")) return null;
   return (
@@ -220,7 +221,7 @@ function InviteSection({ org, tenant }: { org: OrgView; tenant: CurrentTenant })
       {invitations.data?.map((inv) => (
         <div key={inv.id} className="card-row card-row--inline">
           <span>{t("invite.expires", { date: formatBangkokDate(inv.expires_at) })}</span>
-          <Button size="mini" onClick={() => void revoke(inv.id)}>
+          <Button size="mini" onClick={() => void revokeOnce.run(inv.id)}>
             {t("invite.revoke")}
           </Button>
         </div>
@@ -273,6 +274,7 @@ function MemberRow({
       onError(err);
     }
   };
+  const removeOnce = useSubmit(remove); // one request per tap (minor-fixes-ui)
 
   return (
     <div className="card-row" data-member={member.user_id}>
@@ -289,7 +291,7 @@ function MemberRow({
             </Button>
           )}
           {can(tenant, "member_manage") && (
-            <Button size="mini" color="danger" onClick={() => void remove()}>
+            <Button size="mini" color="danger" onClick={() => void removeOnce.run()}>
               {t("member.remove")}
             </Button>
           )}
@@ -332,6 +334,7 @@ function OwnerActions({ org, tenant, members }: { org: OrgView; tenant: CurrentT
       setError(err);
     }
   };
+  const transferOnce = useSubmit(transfer); // one request per tap (minor-fixes-ui)
   const leave = async () => {
     if (!(await confirmAction(t, t("org.leaveTitle", { name: org.name })))) return;
     try {
@@ -343,13 +346,14 @@ function OwnerActions({ org, tenant, members }: { org: OrgView; tenant: CurrentT
       setError(err);
     }
   };
+  const leaveOnce = useSubmit(leave); // one request per tap (minor-fixes-ui)
 
   return (
     <div className="section">
       {tenant.is_owner ? (
         <Button onClick={() => setChoosing(true)}>{t("owner.transfer")}</Button>
       ) : (
-        <Button color="danger" fill="outline" onClick={() => void leave()}>
+        <Button color="danger" fill="outline" onClick={() => void leaveOnce.run()}>
           {t("org.leave")}
         </Button>
       )}
@@ -360,7 +364,7 @@ function OwnerActions({ org, tenant, members }: { org: OrgView; tenant: CurrentT
         options={members
           .filter((m) => m.user_id !== me?.user_id)
           .map((m) => ({ value: m.user_id, label: m.display_name ?? "" }))}
-        onPick={(id) => void transfer(id)}
+        onPick={(id) => void transferOnce.run(id)}
         onClose={() => setChoosing(false)}
       />
     </div>

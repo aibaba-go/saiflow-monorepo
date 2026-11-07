@@ -32,7 +32,10 @@ export function ReviewQueuePage() {
   const [picked, setPicked] = useState<Level | null>(null);
   const level = picked && levels.includes(picked) ? picked : (levels[0] ?? 1);
   const queue = useReviewQueue(level);
-  const rows = queue.data?.pages.flatMap((p) => p.items) ?? [];
+  // pages are offsets: items others cleared meanwhile can shift a row into the next page
+  const rows = (queue.data?.pages.flatMap((p) => p.items) ?? []).filter(
+    (item, i, all) => all.findIndex((x) => x.job_id === item.job_id) === i,
+  );
   const sentinel = useRef<HTMLDivElement>(null);
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = queue;
   useEffect(() => {

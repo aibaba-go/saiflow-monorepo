@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError } from "../../services/errors";
-import { localCheck, uploadFile } from "./upload";
+import { deletePending, localCheck, uploadFile } from "./upload";
 
 /** main ScanHomePage's upload batch (FR-SYS-110): one file at a time, each with its own
  * AbortController; cancel one or all, retry the failed ones that can be retried. */
@@ -75,7 +75,7 @@ export function useUploadQueue(onUploaded: () => void) {
         const controller = new AbortController();
         current.current = { key, controller };
         try {
-          await uploadFile(
+          const ready = await uploadFile(
             source,
             (percent) => {
               const now = list.current.find((i) => i.key === key);
@@ -84,7 +84,11 @@ export function useUploadQueue(onUploaded: () => void) {
             { signal: controller.signal },
           );
           current.current = null;
-          if (!alive(key)) continue; // cancelled meanwhile
+          if (!alive(key)) {
+            // cancelled while the last step finished: the file must not stay in Pending
+            void deletePending(ready.id).catch(() => undefined);
+            continue;
+          }
           patch(key, { status: "uploaded", percent: 100 });
           uploaded.current();
         } catch (error) {

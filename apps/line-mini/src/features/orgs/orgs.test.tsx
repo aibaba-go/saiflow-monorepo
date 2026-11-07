@@ -360,3 +360,38 @@ describe("enterprise verification (FR-SYS-051)", () => {
     expect(screen.getByLabelText("Legal name")).toBeInTheDocument();
   });
 });
+
+
+describe("one request per confirmed action (minor-fixes-ui)", () => {
+  it("double click sends one request", async () => {
+    const api = orgApi({
+      [`POST ${BASE}/leave`]: () => json(204, null),
+      "GET /api/v1/me/tenants": () => json(200, [PERSONAL]),
+    });
+    asMember();
+    renderWithProviders(<OrgPage />);
+    const leave = await screen.findByRole("button", { name: "Leave organization" });
+    await userEvent.click(leave);
+    await userEvent.click(leave);
+    const confirms = await screen.findAllByRole("button", { name: "Confirm" });
+    expect(confirms).toHaveLength(1);
+    await userEvent.click(confirms[0]!);
+    await waitFor(() => expect(api.count(`POST ${BASE}/leave`)).toBe(1));
+  });
+
+  it("failed action can be retried", async () => {
+    let n = 0;
+    const api = orgApi({
+      [`POST ${BASE}/leave`]: () => (++n === 1 ? json(500, { code: "internal" }) : json(204, null)),
+      "GET /api/v1/me/tenants": () => json(200, [PERSONAL]),
+    });
+    asMember();
+    renderWithProviders(<OrgPage />);
+    await userEvent.click(await screen.findByRole("button", { name: "Leave organization" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+    await waitFor(() => expect(api.count(`POST ${BASE}/leave`)).toBe(1));
+    await userEvent.click(await screen.findByRole("button", { name: "Leave organization" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+    await waitFor(() => expect(api.count(`POST ${BASE}/leave`)).toBe(2));
+  });
+});

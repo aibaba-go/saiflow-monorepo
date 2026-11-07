@@ -10,7 +10,7 @@ import { useT, type MessageKey } from "../../i18n";
 import { api, call } from "../../services/api";
 import { useSession } from "../../stores/session";
 import { formatBangkokDateTime } from "../../utils/format";
-import { loadIdentity } from "../auth/session";
+import { reloadIdentity } from "../auth/session";
 import type { OrgApplication } from "./orgData";
 
 const STATUS: Record<string, MessageKey> = {
@@ -55,7 +55,7 @@ export function ApplyOrgPage() {
     const fresh = apps.data?.some((a) => a.status === "approved" && a.tenant_id && !known.has(a.tenant_id));
     if (fresh && !refreshed.current) {
       refreshed.current = true;
-      void loadIdentity();
+      reloadIdentity().catch((err) => setError(err));
     }
   }, [apps.data, tenants]);
 

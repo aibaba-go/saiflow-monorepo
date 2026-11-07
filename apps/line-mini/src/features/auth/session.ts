@@ -68,6 +68,17 @@ export async function loadIdentity(): Promise<Me> {
   return me;
 }
 
+/** Re-read the identity after a change (profile, email, a new organization). A user whose
+ * session ended meanwhile is told so, instead of quietly becoming a guest. */
+export async function reloadIdentity(): Promise<void> {
+  const before = store().me;
+  const me = await loadIdentity();
+  if (before?.kind === "user" && me.kind !== "user") {
+    store().set({ notice: "err.session_expired", registerOpen: false });
+    deps.navigate("/");
+  }
+}
+
 /** Re-read the user's tenants, e.g. an organization approved since the app opened
  * (AC-FR-SYS-047-04). A failure keeps the list already shown. */
 export async function refreshTenants(): Promise<void> {
@@ -210,9 +221,18 @@ export async function handleUnauthenticated(): Promise<void> {
   if (recovering || transitioning || status === "locked" || status === "booting") return;
   recovering = true;
   try {
+    const before = store().me;
     deps.onIdentityChange();
-    await loadIdentity();
-    store().set({ notice: "err.session_expired", registerOpen: false });
+    const me = await loadIdentity();
+    // A guest still on the same trial was asked to log in; a guest whose trial ended got a
+    // new one; a user's session ended (minor-fixes-ui).
+    const notice =
+      before?.kind === "guest"
+        ? me.tenant_id === before.tenant_id
+          ? "err.unauthenticated"
+          : "err.guest_expired"
+        : "err.session_expired";
+    store().set({ notice, registerOpen: false });
     deps.navigate("/");
   } catch (error) {
     store().set({ status: "error", error });

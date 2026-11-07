@@ -247,3 +247,40 @@ describe("session expiry (AC-FR-SYS-055-04)", () => {
     expect(await screen.findByText("Your session has expired. Please log in again.")).toBeInTheDocument();
   });
 });
+
+
+describe("guest messages (minor-fixes-ui)", () => {
+  it("guest on a user-only page is told to log in first", async () => {
+    const api = mockApi(routes(GUEST));
+    start(api, fakeLiff({ loggedIn: false }), "", "/");
+    await waitFor(() => expect(useSession.getState().me?.kind).toBe("guest"));
+    const { handleUnauthenticated } = await import("./session");
+    await handleUnauthenticated();
+    expect(await screen.findByText("Please log in first.")).toBeInTheDocument();
+    expect(screen.queryByText("Your session has expired. Please log in again.")).toBeNull();
+  });
+
+  it("an expired guest is told the trial ended", async () => {
+    const api = mockApi(routes(GUEST));
+    start(api, fakeLiff({ loggedIn: false }), "", "/");
+    await waitFor(() => expect(useSession.getState().me?.kind).toBe("guest"));
+    api.set("GET /api/v1/me", () => json(401, { code: "unauthenticated" }));
+    api.set("POST /api/v1/auth/guest", () => {
+      api.set("GET /api/v1/me", () => json(200, { ...GUEST, tenant_id: 91 }));
+      return json(200, { ...GUEST, tenant_id: 91 });
+    });
+    const { handleUnauthenticated } = await import("./session");
+    await handleUnauthenticated();
+    expect(await screen.findByText("Your guest trial has ended. Log in to keep your work.")).toBeInTheDocument();
+  });
+
+  it("a user whose session ends during a profile refresh is told it expired", async () => {
+    const api = mockApi(routes(USER));
+    start(api, fakeLiff({ loggedIn: true }));
+    await screen.findByText("Somchai");
+    api.set("GET /api/v1/me", () => json(401, { code: "unauthenticated" }));
+    const { reloadIdentity } = await import("./session");
+    await reloadIdentity();
+    expect(await screen.findByText("Your session has expired. Please log in again.")).toBeInTheDocument();
+  });
+});

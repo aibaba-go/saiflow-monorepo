@@ -551,4 +551,6 @@ export const th: Record<MessageKey, string> = {
   "notif.review_pending.title": "มีเอกสารรอให้คุณตรวจสอบ",
   "notif.review_pending.body": "{tenant} · {file} · {template} · {level} · ยืนยันโดย {name}",
   "job.stage.PENDING_REVIEW": "รอตรวจสอบ",
+  "err.guest_expired": "การทดลองใช้แบบผู้เยี่ยมชมสิ้นสุดแล้ว เข้าสู่ระบบเพื่อเก็บงานของคุณ",
+  "tenant.left": "องค์กรที่ออกแล้ว",
 };

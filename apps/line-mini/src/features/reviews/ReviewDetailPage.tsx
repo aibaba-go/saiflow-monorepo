@@ -40,8 +40,9 @@ export function ReviewDetailPage() {
 
   useEffect(() => {
     if (detail.isError && handled(detail.error)) goBack("handled");
+    if (result.isError && handled(result.error)) goBack("handled");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detail.isError, detail.error]);
+  }, [detail.isError, detail.error, result.isError, result.error]);
 
   async function submit() {
     if (!dialog || !detail.data?.level) return;
@@ -80,6 +81,8 @@ export function ReviewDetailPage() {
         <div className={s.content}>
           {detail.isError && !handled(detail.error) ? (
             <p className={s.error}>{errorMessage(detail.error, t)}</p>
+          ) : result.isError && !handled(result.error) ? (
+            <p className={s.error}>{errorMessage(result.error, t)}</p>
           ) : (
             <BrandLoading variant="inline" label={t("common.loading")} />
           )}

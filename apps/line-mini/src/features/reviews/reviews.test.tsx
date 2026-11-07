@@ -227,3 +227,65 @@ describe("review settings (FR-SYS-121)", () => {
     expect(screen.getByRole("alert")).toBeInTheDocument();
   });
 });
+
+
+describe("review page fixes (minor-fixes-ui)", () => {
+  it("result error does not spin", async () => {
+    mockApi({
+      "GET /api/v1/reviews/j1": () => json(200, detail()),
+      "GET /api/v1/ocr/jobs/j1/result": () => json(500, { code: "internal" }),
+    });
+    signedIn(USER, [REVIEWER]);
+    useTenantChoice.getState().choose(REVIEWER.tenant_id);
+    pages("/reviews/j1");
+    expect(await screen.findByText("Something went wrong. Please try again later.")).toBeInTheDocument();
+  });
+
+  it("no duplicate rows across pages", async () => {
+    mockApi({
+      "GET /api/v1/reviews": (r) => {
+        const page = Number(new URL(r.url).searchParams.get("page"));
+        const items = page === 1 ? Array.from({ length: 20 }, (_, i) => item(`a${i}`)) : [item("a19"), item("b1")];
+        return json(200, { items, total: 22, page, page_size: 20 });
+      },
+    });
+    signedIn(USER, [REVIEWER]);
+    useTenantChoice.getState().choose(REVIEWER.tenant_id);
+    pages("/reviews");
+    await screen.findByText("a0.png");
+    await userEvent.click(screen.getByRole("button", { name: "Load more" }));
+    await screen.findByText("b1.png");
+    expect(screen.getAllByText("a19.png")).toHaveLength(1);
+  });
+
+  it("failed save keeps the other change", async () => {
+    let first = true;
+    const settings = {
+      email_enabled: false,
+      items: [
+        { template_id: 7, name: "Tax Invoice", level: 0 },
+        { template_id: 8, name: "Billing Note", level: 0 },
+      ],
+    };
+    mockApi({
+      "GET /api/v1/review-settings": () => json(200, settings),
+      "PUT /api/v1/review-settings/levels": async () => {
+        if (first) {
+          first = false;
+          await new Promise((r) => setTimeout(r, 600));
+          return json(500, { code: "internal" });
+        }
+        return json(200, { template_id: 8, name: "Billing Note", level: 2 });
+      },
+    });
+    signedIn(USER, [OWNER]);
+    useTenantChoice.getState().choose(OWNER.tenant_id);
+    pages("/org/review-settings");
+    const tax = (await screen.findByLabelText("Tax Invoice")) as HTMLSelectElement;
+    const bill = screen.getByLabelText("Billing Note") as HTMLSelectElement;
+    await userEvent.selectOptions(tax, "1");
+    await userEvent.selectOptions(bill, "2");
+    await waitFor(() => expect(tax.value).toBe("0"));
+    expect(bill.value).toBe("2");
+  });
+});

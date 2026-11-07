@@ -19,6 +19,7 @@ export function NotificationsPage() {
   const pages = useNotificationPages();
   const markRead = useMarkRead();
   const [error, setError] = useState<unknown>(null);
+  const [handled, setHandled] = useState(false);
   const all = useSubmit(async () => {
     try {
       await markRead();
@@ -29,7 +30,8 @@ export function NotificationsPage() {
 
   const tenantName = (id: number) => {
     const tenant = tenants.find((x) => x.tenant_id === id);
-    return tenant?.kind === "organization" ? (tenant.name ?? "") : t("tenant.personal");
+    if (!tenant) return t("tenant.left"); // an organization the user has left
+    return tenant.kind === "organization" ? (tenant.name ?? "") : t("tenant.personal");
   };
   const navigate = useNavigate();
   const choose = useTenantChoice((s) => s.choose);
@@ -46,6 +48,10 @@ export function NotificationsPage() {
     // a review notice opens the review detail in its organization (FR-SYS-054)
     const jobId = (n.data as Record<string, unknown>).job_id;
     if (n.type === "review_pending" && typeof jobId === "string") {
+      if (!tenants.some((x) => x.tenant_id === n.tenant_id)) {
+        setHandled(true); // no longer a member: nothing to review there
+        return;
+      }
       if (current !== n.tenant_id) choose(n.tenant_id);
       navigate(`/reviews/${jobId}`);
     }
@@ -65,6 +71,7 @@ export function NotificationsPage() {
         </Button>
       )}
       <ErrorText error={error} />
+      {handled && <div className="card-row__meta" role="status">{t("review.handled")}</div>}
       {items.length === 0 && <div className="card-row__meta">{t("notif.empty")}</div>}
       {items.map((n) => {
         const { title, body } = renderNotification(n, t, tenantName(n.tenant_id));

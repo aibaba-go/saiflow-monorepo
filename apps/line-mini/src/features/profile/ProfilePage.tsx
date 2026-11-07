@@ -8,7 +8,7 @@ import { useSubmit } from "../../hooks/useSubmit";
 import { useT } from "../../i18n";
 import { api, call } from "../../services/api";
 import { useSession, type Me } from "../../stores/session";
-import { loadIdentity } from "../auth/session";
+import { reloadIdentity } from "../auth/session";
 import { EmailCodeButton } from "./EmailCodeButton";
 
 function ChangeEmail({ onDone }: { onDone(): void }) {
@@ -20,7 +20,7 @@ function ChangeEmail({ onDone }: { onDone(): void }) {
     setError(null);
     try {
       await call(api.POST("/api/v1/me/email", { body: { email, code } }));
-      await loadIdentity();
+      await reloadIdentity();
       onDone();
     } catch (err) {
       setError(err);
@@ -64,7 +64,7 @@ function ProfileForm({ me }: { me: Me }) {
     setError(null);
     try {
       await call(api.PATCH("/api/v1/me", { body: { display_name: name, phone } }));
-      await loadIdentity();
+      await reloadIdentity();
     } catch (err) {
       setError(err);
     }

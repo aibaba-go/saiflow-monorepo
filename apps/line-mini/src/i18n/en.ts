@@ -549,6 +549,8 @@ export const en = {
   "notif.review_pending.title": "A document is waiting for your review",
   "notif.review_pending.body": "{tenant} · {file} · {template} · {level} · confirmed by {name}",
   "job.stage.PENDING_REVIEW": "To review",
+  "err.guest_expired": "Your guest trial has ended. Log in to keep your work.",
+  "tenant.left": "Left organization",
 } as const;
 
 export type MessageKey = keyof typeof en;

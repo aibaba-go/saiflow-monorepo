@@ -5,10 +5,10 @@ import { BrandLoading } from "../../components/BrandLoading";
 import { ErrorText } from "../../components/ErrorText";
 import { Field } from "../../components/Field";
 import { formLevel, requireFields } from "../../components/FieldError";
-import { useSubmit } from "../../hooks/useSubmit";
 import { useT } from "../../i18n";
 import { api, call } from "../../services/api";
 import type { CurrentTenant } from "../../stores/session";
+import { useSubmit } from "../../hooks/useSubmit";
 import { confirmAction } from "../../utils/confirm";
 import { can, PERMISSIONS, type Permission } from "../tenants/permissions";
 import { useCurrentTenant } from "../tenants/useCurrentTenant";
@@ -78,8 +78,6 @@ function RolesContent({ tenant }: { tenant: CurrentTenant }) {
   const refresh = useRefreshOrg(orgId);
   const [editing, setEditing] = useState<Role | "new" | null>(null);
   const [error, setError] = useState<unknown>(null);
-  if (roles.isPending) return <BrandLoading label={t("common.loading")} />;
-  if (roles.isError) return <ErrorText error={roles.error} />;
   const ownRole = tenant.is_owner ? null : (tenant.role?.id ?? null);
   const manage = can(tenant, "role_manage");
 
@@ -103,6 +101,9 @@ function RolesContent({ tenant }: { tenant: CurrentTenant }) {
       setError(err);
     }
   };
+  const removeOnce = useSubmit(remove); // one request per tap (minor-fixes-ui)
+  if (roles.isPending) return <BrandLoading label={t("common.loading")} />;
+  if (roles.isError) return <ErrorText error={roles.error} />;
 
   return (
     <div className="page">
@@ -121,7 +122,7 @@ function RolesContent({ tenant }: { tenant: CurrentTenant }) {
                 {t("common.edit")}
               </Button>
               {!role.is_default && (
-                <Button size="mini" color="danger" onClick={() => void remove(role)}>
+                <Button size="mini" color="danger" onClick={() => void removeOnce.run(role)}>
                   {t("common.delete")}
                 </Button>
               )}

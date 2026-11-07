@@ -91,6 +91,7 @@ export function InvitePage() {
     if (me?.kind === "user") useSession.getState().set({ registerOpen: true });
     else await startLogin("/invite");
   };
+  const joinOnce = useSubmit(join); // one request per tap (minor-fixes-ui)
 
   // Back from login and registration with Join pending on this very invitation: finish it.
   const previewed = preview.isSuccess;
@@ -110,7 +111,7 @@ export function InvitePage() {
       <div className="card-row__meta">
         {t("invite.validUntil", { date: formatBangkokDate(preview.data.expires_at) })}
       </div>
-      <Button color="primary" loading={accept.pending} onClick={() => void join()}>
+      <Button color="primary" loading={accept.pending} onClick={() => void joinOnce.run()}>
         {t("invite.join")}
       </Button>
     </div>

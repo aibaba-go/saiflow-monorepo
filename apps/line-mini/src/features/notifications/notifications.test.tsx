@@ -7,6 +7,7 @@ import { LANGS, useLanguage } from "../../stores/language";
 import { GUEST, ORG, PERSONAL, signedIn, USER } from "../../test/fixtures";
 import { json, mockApi } from "../../test/mockApi";
 import { renderWithProviders } from "../../test/render";
+import { useTenantChoice } from "../tenants/useCurrentTenant";
 import { BellBadge } from "./BellBadge";
 import { NotificationsPage } from "./NotificationsPage";
 import { renderNotification, type NotificationItem } from "./render";
@@ -149,5 +150,23 @@ describe("notification center (FR-SYS-054)", () => {
     expect(second.searchParams.get("before")).toBe("6");
     expect(await screen.findAllByText(translate("en", "notif.usage.low"))).toHaveLength(25);
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+  });
+});
+
+
+describe("left organizations (minor-fixes-ui)", () => {
+  it("left org notice label and no tenant switch", async () => {
+    const note = item(9, "review_pending", { stage: "l1", job_id: "j1", file_name: "inv.pdf", level: 1 });
+    mockApi({
+      "GET /api/v1/me/notifications": () => json(200, { unread_count: 1, items: [{ ...note, tenant_id: 99 }], next_before: null }),
+      "POST /api/v1/me/notifications/read": () => json(200, { updated: 1, unread_count: 0 }),
+    });
+    signedIn(USER, [PERSONAL]);
+    useTenantChoice.getState().choose(null);
+    renderWithProviders(<NotificationsPage />);
+    expect(await screen.findByText(/Left organization/)).toBeInTheDocument();
+    await userEvent.click(screen.getByText("A document is waiting for your review"));
+    expect(await screen.findByText("This document has already been handled by someone else.")).toBeInTheDocument();
+    expect(useTenantChoice.getState().id).toBeNull();
   });
 });
