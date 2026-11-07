@@ -25,6 +25,7 @@ import { ReviewDetailPage } from "./pages/ReviewDetailPage";
 import { ReviewSettingsPage } from "./pages/ReviewSettingsPage";
 import { ReviewsPage } from "./pages/ReviewsPage";
 import { RolesPage } from "./pages/RolesPage";
+import { UploadPage } from "./pages/UploadPage";
 import { setTenantGoneHandler, setUnauthenticatedHandler } from "./services/api";
 import { refreshTenants } from "./tenants/useCurrentTenant";
 import { useLanguage } from "./stores/language";
@@ -73,6 +74,7 @@ export function AppRoutes() {
               <Route path="/reviews" element={<ReviewsPage />} />
               <Route path="/reviews/:id" element={<ReviewDetailPage />} />
               <Route path="/review-settings" element={<ReviewSettingsPage />} />
+              <Route path="/upload" element={<UploadPage />} />
               <Route path="/plans" element={<PlansPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/profile" element={<ProfilePage />} />
