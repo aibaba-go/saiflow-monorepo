@@ -22,10 +22,11 @@ jobs:
         env:
           POSTGRES_USER: saiflow_test
           POSTGRES_PASSWORD: ci-throwaway-db
-          POSTGRES_DB: saiflow_test
+          # NFR-DEV-003: integration tests only run against loopback saiflow_test_<name>
+          POSTGRES_DB: saiflow_test_ci
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U saiflow_test -d saiflow_test"
+          --health-cmd "pg_isready -U saiflow_test -d saiflow_test_ci"
           --health-interval 5s --health-timeout 3s --health-retries 20
     defaults:
       run:
@@ -43,7 +44,7 @@ jobs:
           REQUIRE_INTEGRATION: "1"
           TEST_DB_HOST: localhost
           TEST_DB_PORT: "5432"
-          TEST_DB_NAME: saiflow_test
+          TEST_DB_NAME: saiflow_test_ci
           TEST_DB_USER: saiflow_test
           TEST_DB_PASSWORD: ci-throwaway-db
 

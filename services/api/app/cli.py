@@ -124,6 +124,29 @@ async def _reminders(loop: bool) -> int:
         await engine.dispose()
 
 
+async def _dev_seed() -> int:
+    """The fixed local dev account (NFR-DEV-002), only in an isolated development database;
+    the target is checked before any connection is made."""
+    from app.clock import utcnow
+    from app.services import dev_login_service
+
+    settings = load_settings()
+    if not dev_login_service.seed_allowed(settings):
+        print(
+            "dev-seed refused: needs APP_ENV=development, a loopback DB_HOST and "
+            "DB_NAME saiflow_dev or saiflow_dev_*"
+        )
+        return 1
+    engine = create_engine(settings)
+    try:
+        async with create_sessionmaker(engine)() as db:
+            user_id, tenant_id = await dev_login_service.seed(db, utcnow())
+            print(f"dev-seed OK: user {user_id}, personal tenant {tenant_id}")
+            return 0
+    finally:
+        await engine.dispose()
+
+
 ADMIN_COMMANDS = {
     "admin-create": "create a platform admin account (password from standard input)",
     "admin-reset-password": "set a new password (from standard input) and clear the lock",
@@ -189,6 +212,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("reminders-loop", help="run reminder passes until stopped (compose service)")
     sub.add_parser("ocr-worker-run-once", help="recover, then process one queued OCR job")
     sub.add_parser("ocr-worker-loop", help="process OCR jobs until stopped (compose service)")
+    sub.add_parser("dev-seed", help="local only: create or update the fixed dev account")
     return parser
 
 
@@ -200,6 +224,8 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_ocr_worker(args.command == "ocr-worker-loop"))
     if args.command == "smtp-check":
         return asyncio.run(_smtp_check(args.to))
+    if args.command == "dev-seed":
+        return asyncio.run(_dev_seed())
     if args.command == "audit-verify":
         return asyncio.run(_audit_verify())
     if args.command in ADMIN_COMMANDS:

@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI
 
-from app.config import Settings, load_settings
+from app.config import Settings, check_dev_login, load_settings
 from app.cookies import install_cookie_refresh
 from app.db import create_engine, create_sessionmaker
 from app.errors import register_error_handlers
@@ -82,6 +82,7 @@ async def lifespan(app: FastAPI):
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or load_settings()
+    check_dev_login(settings)  # also for settings built in code (NFR-DEV-002)
     configure_logging()
     app = FastAPI(
         title="SaiFlow API",

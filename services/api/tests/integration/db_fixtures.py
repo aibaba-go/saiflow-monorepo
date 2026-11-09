@@ -15,6 +15,7 @@ from sqlalchemy import BigInteger, Column, ForeignKey, Table, Text, text
 
 from app.db import SCHEMA, Base, create_engine, create_sessionmaker
 from app.main import create_app
+from tests.db_target_guard import check_engine, check_settings
 
 API_DIR = Path(__file__).resolve().parents[2]
 CSRF = {"X-Requested-With": "SaiFlow"}
@@ -33,6 +34,7 @@ test_tenant_items = Table(
 
 
 async def _create_test_tables(settings) -> None:
+    check_settings(settings)  # NFR-DEV-003
     engine = create_engine(settings)
     async with engine.begin() as conn:
         await conn.run_sync(test_tenant_items.drop, checkfirst=True)  # columns may have changed
@@ -41,6 +43,7 @@ async def _create_test_tables(settings) -> None:
 
 
 def _env_for(settings) -> dict:
+    check_settings(settings)  # NFR-DEV-003: alembic only ever runs on a test target
     return {
         **os.environ,
         "DB_HOST": settings.db_host,
@@ -57,6 +60,7 @@ APP_ROLE_PASSWORD = "local-app"
 
 async def _ensure_app_role(settings) -> None:
     """The least-privilege application role, as the server has it (AC-FR-SYS-003-06)."""
+    check_settings(settings)  # NFR-DEV-003: the role reset is cluster-wide
     engine = create_engine(settings)
     async with engine.begin() as conn:
         exists = await conn.scalar(
@@ -72,6 +76,8 @@ async def _ensure_app_role(settings) -> None:
 
 @pytest.fixture(scope="session")
 def migrated_db(db_settings_session):
+    # NFR-DEV-003 defense in depth: checked again before role reset, migration and truncation
+    check_settings(db_settings_session)
     asyncio.run(_ensure_app_role(db_settings_session))
     result = subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"],
@@ -98,6 +104,7 @@ def _seed_templates(conn) -> None:
 async def _truncate_all(engine) -> None:
     import app.models  # noqa: F401  (registers every table on Base.metadata)
 
+    check_engine(engine)  # NFR-DEV-003: never TRUNCATE a shared database
     names = [f'"{SCHEMA}"."{t.name}"' for t in Base.metadata.sorted_tables]
     if not names:
         return
@@ -140,6 +147,7 @@ async def _truncate_all(engine) -> None:
 
 @pytest.fixture
 async def db_engine(migrated_db):
+    check_settings(migrated_db)
     engine = create_engine(migrated_db)
     yield engine
     await _truncate_all(engine)
@@ -210,6 +218,7 @@ async def app_role_db(migrated_db, db_engine):
     settings = migrated_db.model_copy(
         update={"db_user": APP_ROLE, "db_password": SecretStr(APP_ROLE_PASSWORD)}
     )
+    check_settings(settings)
     engine = create_engine(settings)
     async with create_sessionmaker(engine)() as session:
         yield session

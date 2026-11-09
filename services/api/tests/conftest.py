@@ -104,11 +104,19 @@ async def silent_tcp_server():
 def _db_settings() -> Settings:
     import os
 
+    from tests.db_target_guard import UnsafeTestDatabaseError, check_test_db_target
+
     names = ["TEST_DB_HOST", "TEST_DB_PORT", "TEST_DB_NAME", "TEST_DB_USER", "TEST_DB_PASSWORD"]
     if not all(os.environ.get(n) for n in names):
         if os.environ.get("REQUIRE_INTEGRATION") == "1":
             pytest.fail("integration database not configured")
         pytest.skip("integration database not configured (TEST_DB_*)")
+    # NFR-DEV-003: refuse shared or remote targets before any connection; a configured but
+    # unsafe target is always a hard failure (never a skip), REQUIRE_INTEGRATION or not.
+    try:
+        check_test_db_target(os.environ["TEST_DB_HOST"], os.environ["TEST_DB_NAME"])
+    except UnsafeTestDatabaseError as exc:
+        pytest.fail(str(exc), pytrace=False)
     return Settings(
         db_host=os.environ["TEST_DB_HOST"],
         db_port=int(os.environ["TEST_DB_PORT"]),

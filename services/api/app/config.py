@@ -54,9 +54,63 @@ class Settings(BaseSettings):
     # Reminder process (rebuild-notifications, FR-SYS-037): a pass at least every 30 minutes
     reminders_enabled: bool = True
     reminder_interval_seconds: int = Field(default=900, ge=60, le=1800)
+    # Local development (NFR-DEV-001/002): production-like unless set explicitly. The
+    # restricted dev login also needs DEV_LOGIN_ENABLED and an isolated loopback database.
+    app_env: str = "production"
+    dev_login_enabled: bool = False
+
+
+DEVELOPMENT = "development"
+LOOPBACK_DB_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+DEV_DB_NAME = "saiflow_dev"
+
+
+def is_isolated_dev_target(db_host: str, db_name: str) -> bool:
+    """A local development database (NFR-DEV-001): loopback host and the name saiflow_dev
+    or saiflow_dev_<suffix>. Never the restored saiflow database or a remote server."""
+    host = db_host.strip().lower()
+    if host.startswith("[") and host.endswith("]"):
+        host = host[1:-1]
+    named = db_name == DEV_DB_NAME or (
+        db_name.startswith(DEV_DB_NAME + "_") and len(db_name) > len(DEV_DB_NAME) + 1
+    )
+    return host in LOOPBACK_DB_HOSTS and named
+
+
+def is_development(settings: Settings) -> bool:
+    return settings.app_env.strip().lower() == DEVELOPMENT
+
+
+def check_dev_login(settings: Settings) -> None:
+    """Fail closed (AC-NFR-DEV-002-02): the dev login switch is refused at startup unless
+    APP_ENV=development and the database is an isolated local target. Values never echo."""
+    if not settings.dev_login_enabled:
+        return
+    if not is_development(settings):
+        raise ConfigError("invalid configuration: DEV_LOGIN_ENABLED requires APP_ENV=development")
+    if not is_isolated_dev_target(settings.db_host, settings.db_name):
+        raise ConfigError(
+            "invalid configuration: DEV_LOGIN_ENABLED requires a loopback DB_HOST and "
+            "DB_NAME saiflow_dev or saiflow_dev_*"
+        )
+
+
+def dev_login_active(settings: Settings) -> bool:
+    """Whether the restricted dev login may be used at all (checked again per request)."""
+    return (
+        settings.dev_login_enabled
+        and is_development(settings)
+        and is_isolated_dev_target(settings.db_host, settings.db_name)
+    )
 
 
 def load_settings() -> Settings:
+    settings = _read_settings()
+    check_dev_login(settings)
+    return settings
+
+
+def _read_settings() -> Settings:
     try:
         return Settings()
     except ValidationError as exc:

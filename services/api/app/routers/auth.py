@@ -10,8 +10,8 @@ from app.cookies import clear_session_cookie, set_session_cookie
 from app.dependencies import (
     get_db,
     get_guest_limiter,
-    get_line_client,
     get_line_web_client,
+    get_optional_line_client,
     get_optional_principal,
     get_settings,
     require_csrf_header,
@@ -21,7 +21,7 @@ from app.integrations.line import LineClient
 from app.rate_limit import SlidingWindowLimiter, client_key
 from app.schemas.auth import LineLoginRequest, MeResponse
 from app.schemas.loose import ensure_text
-from app.services import auth_service, me_service, session_service
+from app.services import auth_service, dev_login_service, me_service, session_service
 from app.services.audit_service import AuditEvent, record
 from app.services.session_service import CUSTOMER_COOKIE, CUSTOMER_IDLE, Principal
 
@@ -83,15 +83,27 @@ async def logout(
 @router.post("/line", operation_id="loginWithLine", response_model=MeResponse)
 async def login_with_line(
     req: LineLoginRequest,
+    request: Request,
     response: Response,
     db: Db,
     current: Annotated[Principal | None, Depends(get_optional_principal)],
-    line: Annotated[LineClient, Depends(get_line_client)],
+    line: Annotated[LineClient | None, Depends(get_optional_line_client)],
     web: Annotated[LineClient | None, Depends(get_line_web_client)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> MeResponse:
+    client_host = request.client.host if request.client else None
+    dev = dev_login_service.dev_identity_for(  # NFR-DEV-002
+        settings, req, client_host, request.headers.get("host"), request.headers.get("origin")
+    )
+    if dev is None and line is None:
+        raise AppError(503, "line_unavailable", "auth.line_unavailable")
     ensure_text(req)
-    allowed = {u.strip() for u in settings.line_login_redirect_uris.split(",") if u.strip()}
-    token, principal = await auth_service.login_with_line(db, line, current, req, allowed, web=web)
+    if dev is not None:
+        token, principal = await auth_service.login_with_identity(db, dev, current)
+    else:
+        allowed = {u.strip() for u in settings.line_login_redirect_uris.split(",") if u.strip()}
+        token, principal = await auth_service.login_with_line(
+            db, line, current, req, allowed, web=web
+        )
     set_customer_cookie(response, token)
     return await me_service.me(db, principal)

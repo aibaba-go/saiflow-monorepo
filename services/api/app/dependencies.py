@@ -140,6 +140,12 @@ def get_line_client(request: Request) -> LineClient:
     return client
 
 
+def get_optional_line_client(request: Request) -> LineClient | None:
+    """The mini app channel, or None when LINE is not configured (the login route answers
+    503 itself, after the local dev login had its chance; NFR-DEV-002)."""
+    return getattr(request.app.state, "line_client", None)
+
+
 def get_line_web_client(request: Request) -> LineClient | None:
     """web-pc's LINE Login channel; None = use the mini app channel."""
     return getattr(request.app.state, "line_web_client", None)

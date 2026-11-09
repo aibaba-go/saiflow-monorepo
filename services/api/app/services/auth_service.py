@@ -43,8 +43,9 @@ async def _identity(
         raise AppError(503, "line_unavailable", "auth.line_unavailable") from None
 
 
-async def _ensure_user(db: AsyncSession, identity: LineIdentity) -> tuple[User, int]:
-    """Committed on its own, so a later failure (e.g. claiming) never loses the user."""
+async def ensure_user(db: AsyncSession, identity: LineIdentity) -> tuple[User, int]:
+    """Find or create the user and personal tenant (with its default subscription).
+    Committed on its own, so a later failure (e.g. claiming) never loses the user."""
     user = await user_repo.by_line_id(db, identity.sub)
     if user is None:
         try:
@@ -78,7 +79,15 @@ async def login_with_line(
     web: LineClient | None = None,
 ) -> tuple[str, Principal]:
     identity = await _identity(line, req, allowed_redirects, web)
-    user, personal_tenant_id = await _ensure_user(db, identity)
+    return await login_with_identity(db, identity, current)
+
+
+async def login_with_identity(
+    db: AsyncSession, identity: LineIdentity, current: Principal | None
+) -> tuple[str, Principal]:
+    """Open a user session for a verified identity: the LINE login path, and the local
+    dev login with its one fixed reserved identity (NFR-DEV-002)."""
+    user, personal_tenant_id = await ensure_user(db, identity)
     try:
         user.avatar_url = identity.picture  # the avatar always follows LINE
         if user.registered_at is None:
