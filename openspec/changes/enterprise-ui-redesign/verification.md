@@ -67,3 +67,13 @@
 | 小程序底部导航 | 对所有用户显示的“报表”标签 | 按 FR-SYS-056 原规则只对有权限的组织成员显示，个人账号不显示（`shell.test.tsx` 056-01） |
 | 小程序最终结果页 | 总金额大字、单据编号/供应商/单据日期/小计税额等摘要行，标题栏右侧信息按钮 | 这些字段随模板不同，没有统一接口字段；完整的识别字段仍在下方结构化数据区显示。摘要卡改为显示模板、页数、创建与确认时间等真实数据 |
 | 两端 | 原型中的示例单据、示例金额、示例计时与进度 | 演示数据 |
+
+## 7. 部署记录
+
+2026-11-09 负责人要求提交并部署到 38.60.156.234。按 FR-PLAT-005 走标准流程，没有在服务器上手工操作：
+
+- 提交 `326f66a`（local-test-development）、`7e3607f`（本 change 及 verify-template-custom-fields、line-mini-home-refresh）、`4fa028e`（`scripts/dev/*.sh` 可执行位）推送到 `chore/ai-workflow-v2`。
+- 首次 CI（`7e3607f`）`scripts` 任务失败：`executable-bits.test.sh` 要求 `scripts/dev/*.sh` 在 git 中可执行，`4fa028e` 修复后 CI 5 个任务全部通过（run 42590112742）。
+- 手动触发 Deploy（run 42590823976，`VPS_HOST` 为 38.60.156.234）：分支门禁、CI 门禁、镜像构建推送、拉取/迁移/重启、三站健康检查、5432 端口外部不可达全部通过。
+- 部署后只读复查：`saiflow-app`、`saiflow-admin`、`saiflow-line2` 三站 `/api/v1/health` 均为 `{"status":"ok","version":"4fa028e…","database":"ok"}`，首页 200；三站入口脚本中不含开发登录保留 token。
+- 未在线上做任何写操作；新界面的线上走查待负责人确认。
