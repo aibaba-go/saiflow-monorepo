@@ -2,6 +2,7 @@ import { Select } from "antd";
 
 import { useT } from "../i18n";
 import { LANGS, useLanguage, type Lang } from "../stores/language";
+import { Icon } from "./icons";
 
 /** en / th / zh switch, on every page including login and the register guide (FR-SYS-093). */
 export function LanguageSwitch() {
@@ -11,10 +12,13 @@ export function LanguageSwitch() {
   return (
     <Select<Lang>
       size="small"
+      variant="borderless"
+      className="pc-lang"
+      prefix={<Icon name="globe" />}
       aria-label={t("my.language")}
       value={lang}
       onChange={setLang}
-      style={{ width: 110 }}
+      popupMatchSelectWidth={false}
       options={LANGS.map((l) => ({ value: l, label: t(`lang.${l}`) }))}
     />
   );

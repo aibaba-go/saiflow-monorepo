@@ -10,6 +10,7 @@ import { listChanges } from "../../reviews/api";
 import { useCurrentTenant } from "../../tenants/useCurrentTenant";
 import { changeLabel } from "../changeLabel";
 import type { Group } from "../structured";
+import cl from "./ChangeLog.module.css";
 import { FormDialog, fd } from "./FormDialog";
 
 function show(value: unknown, empty: string): string {
@@ -19,7 +20,7 @@ function show(value: unknown, empty: string): string {
 
 /** "Change log" button and its list (FR-SYS-122): every saved change oldest first, with
  * before → after, who and when; a template switch as one line. Loaded when opened. */
-export function ChangeLog({ jobId, groups }: { jobId: string; groups: Group[] | null }) {
+export function ChangeLog({ jobId, groups, variant = "button" }: { jobId: string; groups: Group[] | null; variant?: "button" | "link" }) {
   const t = useT();
   const lang = useLanguage((s) => s.lang);
   const { tenant } = useCurrentTenant();
@@ -33,9 +34,21 @@ export function ChangeLog({ jobId, groups }: { jobId: string; groups: Group[] | 
   const generic = t("review.changes.generic");
   return (
     <>
-      <button type="button" className={`${fd["fd-btn"]} ${fd.secondary}`} onClick={() => setOpen(true)}>
-        {t("review.changes")}
-      </button>
+      {variant === "link" ? (
+        // prototype .link-row: a quiet row with the history mark at the end
+        <button type="button" className={cl["link-row"]} onClick={() => setOpen(true)}>
+          <span>{t("review.changes")}</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M3 12a9 9 0 1 0 3-6.7" />
+            <path d="M3 4v4h4" />
+            <path d="M12 8v4l3 2" />
+          </svg>
+        </button>
+      ) : (
+        <button type="button" className={`${fd["fd-btn"]} ${fd.secondary}`} onClick={() => setOpen(true)}>
+          {t("review.changes")}
+        </button>
+      )}
       {open && (
         <FormDialog title={t("review.changes")}>
           {changes.isPending ? (

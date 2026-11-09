@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import "@saiflow/ui/styles/fonts.css";
 import "@saiflow/ui/styles/tokens.css";
+import "@saiflow/ui/styles/brand.css";
 import "./styles/app.css";
 
 import { App } from "./App";

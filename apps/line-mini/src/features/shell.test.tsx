@@ -28,6 +28,7 @@ function boot(me: unknown, route = "/") {
     "GET /api/v1/me/tenants": () =>
       json(200, [{ tenant_id: 70, kind: "personal", name: null, is_owner: true, role: null, permissions: [] }]),
     "GET /api/v1/billing/usage": () => json(200, USAGE),
+    "GET /api/v1/me/notifications": () => json(200, { items: [], next_cursor: null, unread_count: 3 }),
   });
   return renderWithProviders(<Shell liff={fakeLiff()} search="" liffTimeoutMs={50} />, { route });
 }
@@ -64,6 +65,23 @@ describe("shell (FR-SYS-056)", () => {
     expect(screen.getByRole("button", { name: "Log in / Register" })).toBeInTheDocument();
     expect(screen.getByText("Language")).toBeInTheDocument();
     expect(screen.queryByText("Notifications")).not.toBeInTheDocument();
+  });
+
+  it("user My: profile hero, workspace card and settings rows with their values (FR-SYS-138)", async () => {
+    boot(USER, "/my");
+    expect(await screen.findByRole("heading", { name: "Somchai" })).toBeInTheDocument();
+    expect(screen.getByText("s@example.com")).toBeInTheDocument();
+    const workspace = screen.getByRole("button", { name: /Personal account/ });
+    expect(await within(workspace).findByText("Current workspace · Starter")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Account & services" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Plans Starter" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Notifications 3 unread" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Profile" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create organization" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Language" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Log out" })).toBeInTheDocument();
+    await userEvent.click(workspace);
+    expect(await screen.findByRole("listbox", { name: "Switch account" })).toBeInTheDocument();
   });
 
   it("switching to Chinese re-renders the tabs at once (004-02)", async () => {

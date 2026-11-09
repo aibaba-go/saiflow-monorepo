@@ -31,16 +31,19 @@ export function RegisterGuidePage() {
 
   const link = registerLink();
   return (
-    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#f5f7fa" }}>
+    <div className="pc-auth">
       <Card style={{ width: 520 }}>
         <Space direction="vertical" size="large" style={{ width: "100%" }}>
           <Space style={{ width: "100%", justifyContent: "flex-end" }}>
             <LanguageSwitch />
             <LogoutButton />
           </Space>
-          <Typography.Title level={3} style={{ margin: 0 }}>
-            {t("guide.title")}
-          </Typography.Title>
+          <div>
+            <p className="pc-auth__eyebrow">{t("eyebrow.account")}</p>
+            <Typography.Title level={3} className="pc-auth__title">
+              {t("guide.title")}
+            </Typography.Title>
+          </div>
           <Typography.Paragraph>{t("guide.body")}</Typography.Paragraph>
           <a href={link} target="_blank" rel="noreferrer">
             {t("guide.link")}

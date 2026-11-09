@@ -24,7 +24,7 @@ export function OrgApplicationsPage() {
     { title: t("col.createdAt"), key: "created", render: (_, r) => formatTime(r.created_at) },
     { title: t("col.decidedAt"), key: "decided", render: (_, r) => formatTime(r.decided_at) },
   ];
-  return <ApplicationQueue title="nav.organizationApplications" queue={organizationQueue} columns={columns} />;
+  return <ApplicationQueue title="nav.organizationApplications" page="organizationApplications" queue={organizationQueue} columns={columns} />;
 }
 
 /** Enterprise verification applications (FR-SYS-065). */
@@ -41,7 +41,7 @@ export function VerificationApplicationsPage() {
     { title: t("col.registeredAddress"), dataIndex: "registered_address" },
     { title: t("col.createdAt"), key: "created", render: (_, r) => formatTime(r.created_at) },
   ];
-  return <ApplicationQueue title="nav.verification" queue={verificationQueue} columns={columns} />;
+  return <ApplicationQueue title="nav.verification" page="verification" queue={verificationQueue} columns={columns} />;
 }
 
 /** Plan purchase and renewal applications (FR-SYS-067). */
@@ -56,5 +56,5 @@ export function PlanApplicationsPage() {
     { title: t("col.createdAt"), key: "created", render: (_, r) => formatTime(r.created_at) },
     { title: t("col.decidedAt"), key: "decided", render: (_, r) => formatTime(r.decided_at) },
   ];
-  return <ApplicationQueue title="nav.planApplications" queue={planQueue} columns={columns} approveWithDates />;
+  return <ApplicationQueue title="nav.planApplications" page="planApplications" queue={planQueue} columns={columns} approveWithDates />;
 }

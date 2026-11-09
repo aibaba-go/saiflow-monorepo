@@ -60,13 +60,17 @@ export function ReadonlyResult({ value, groups, lang, t }: { value: unknown; gro
           return (
             <Space key={g.key} direction="vertical" style={{ width: "100%" }}>
               {fields.length > 0 && (
-                <Descriptions size="small" bordered column={1} title={label(g, lang)}>
-                  {fields.map((f) => (
-                    <Descriptions.Item key={f.key} label={label(f, lang)}>
-                      {text(gv[f.key])}
-                    </Descriptions.Item>
-                  ))}
-                </Descriptions>
+                <section className="pc-readonly" aria-label={label(g, lang)}>
+                  <h3 className="pc-readonly__title">{label(g, lang)}</h3>
+                  <dl className="pc-readonly__grid">
+                    {fields.map((f) => (
+                      <div key={f.key} className="pc-readonly__field">
+                        <dt>{label(f, lang)}</dt>
+                        <dd>{text(gv[f.key]) || "\u00a0"}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
               )}
               {tables.map((tb) => (
                 <RowsTable

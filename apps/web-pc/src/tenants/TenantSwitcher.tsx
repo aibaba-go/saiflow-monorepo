@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { App, Button, Dropdown } from "antd";
 
 import { useT } from "../i18n";
+import { Icon } from "../layout/icons";
 import { useUnsaved } from "../ocr/unsaved";
 import { refreshTenants, useTenantChoice, type CurrentTenant } from "./useCurrentTenant";
 import { useTenant } from "./useTenant";
@@ -49,9 +50,23 @@ export function TenantSwitcher() {
         },
       }}
     >
-      <Button aria-label={t("tenant.switch")}>
-        {tenantLabel(tenant, t)}
+      <Button type="text" className="pc-tenant" aria-label={t("tenant.switch")}>
+        <span className="pc-tenant__icon" aria-hidden="true">
+          {tenantInitials(tenantLabel(tenant, t))}
+        </span>
+        <span className="pc-tenant__text">
+          <span className="pc-tenant__name">{tenantLabel(tenant, t)}</span>
+          {tenant.kind === "organization" && <span className="pc-tenant__kind">{t("layout.tenantOrg")}</span>}
+        </span>
+        <Icon name="down" className="pc-tenant__caret" />
       </Button>
     </Dropdown>
   );
+}
+
+/** Up to two letters of the tenant name for the chip (decorative). */
+function tenantInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const letters = words.length > 1 ? [words[0]!, words[1]!].map((w) => Array.from(w)[0]) : Array.from(words[0] ?? "").slice(0, 2);
+  return letters.join("").toUpperCase();
 }

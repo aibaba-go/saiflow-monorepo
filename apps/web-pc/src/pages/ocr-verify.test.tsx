@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { focusManager } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -267,6 +267,69 @@ describe("verify (FR-SYS-129)", () => {
   });
 });
 
+describe("verify: template extra fields (FR-SYS-129-06, 08, 09)", { timeout: 60_000 }, () => {
+  // the first render of a file can be slow on a loaded machine
+  const slow = (name: string) => screen.findByRole("textbox", { name }, { timeout: 20_000 });
+
+  it("a new field counts as unsaved; saved and reopened it stays editable; deleted it is gone", async () => {
+    const { api, state } = verifyApi();
+    const view = renderAt("/verify/A");
+    await slow("Invoice No.");
+    const card = screen.getByText("Document", { selector: ".ant-card-head-title" }).closest(".ant-card") as HTMLElement;
+    await userEvent.click(within(card).getByRole("button", { name: en("ocr.addField") }));
+    const add = await screen.findByRole("dialog", { name: en("ocr.addField") }, { timeout: 20_000 });
+    fireEvent.change(within(add).getByRole("textbox", { name: en("ocr.fieldName") }), { target: { value: " Remark " } });
+    await userEvent.click(within(add).getByRole("button", { name: en("ocr.add") }));
+    await userEvent.type(await slow("Remark"), "Pay next week");
+    // switching to B asks first; cancel keeps the new field and its value (129-09)
+    await userEvent.click(within(screen.getByTestId("verify-queue")).getByText("B.png"));
+    // the closing Add field dialog is still in the DOM, and antd gives every dialog the same
+    // aria-labelledby id under test, so find the leave dialog by its title text
+    const leave = (await screen.findByText(en("ocr.leaveTitle"), { selector: ".ant-modal-title" }, { timeout: 20_000 })).closest(
+      '[role="dialog"]',
+    ) as HTMLElement;
+    await userEvent.click(within(leave).getByRole("button", { name: en("common.cancel") }));
+    expect(((await slow("Remark")) as HTMLInputElement).value).toBe("Pay next week");
+
+    await userEvent.click(screen.getByRole("button", { name: en("ocr.saveDraft") }));
+    await waitFor(() => expect(api.count("PATCH /api/v1/ocr/jobs/A/result")).toBe(1));
+    const [saved] = (await api.bodies("PATCH /api/v1/ocr/jobs/A/result")) as { structured: Record<string, unknown> }[];
+    expect(saved!.structured).toEqual({ document: { ...doc("IV-A").document, Remark: "Pay next week" } });
+    view.unmount();
+
+    // reopened: Remark follows the template's fields and can still be edited (129-06)
+    const again = renderAt("/verify/A");
+    const remark = (await slow("Remark")) as HTMLInputElement;
+    expect(remark.value).toBe("Pay next week");
+    expect(remark).toBeEnabled();
+    const labels = within(screen.getByText("Document", { selector: ".ant-card-head-title" }).closest(".ant-card") as HTMLElement)
+      .getAllByRole("textbox")
+      .map((i) => i.getAttribute("aria-label"));
+    expect(labels).toEqual(["Invoice No.", "Invoice date", "Total", "Remark"]);
+    // only Remark can be deleted (129-08)
+    expect(screen.queryByRole("button", { name: `${en("ocr.deleteField")}: Invoice date` })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: `${en("ocr.deleteField")}: Remark` }));
+    await userEvent.click(screen.getByRole("button", { name: en("ocr.saveDraft") }));
+    await waitFor(() => expect(api.count("PATCH /api/v1/ocr/jobs/A/result")).toBe(2));
+    expect((state.results.A!.structured as { document: Record<string, unknown> }).document).toEqual(doc("IV-A").document);
+    again.unmount();
+
+    renderAt("/verify/A");
+    expect(((await slow("Invoice date")) as HTMLInputElement).value).toBe("2026-11-01");
+    expect(screen.queryByRole("textbox", { name: "Remark" })).toBeNull();
+  });
+
+  it("a confirmed result shows extra fields without add or delete", async () => {
+    const { state } = verifyApi();
+    state.results.A = result({ document: { ...doc("IV-A").document, Remark: "Pay next week" } }, { confirmed: true });
+    renderAt("/verify/A");
+    const remark = (await slow("Remark")) as HTMLInputElement;
+    expect(remark.value).toBe("Pay next week");
+    expect(remark).toBeDisabled();
+    expect(screen.queryByRole("button", { name: en("ocr.addField") })).toBeNull();
+    expect(screen.queryByRole("button", { name: new RegExp(`^${en("ocr.deleteField")}`) })).toBeNull();
+  });
+});
 
 describe("verify page fixes (minor-fixes-ui)", () => {
   it("saved values do not flash", async () => {

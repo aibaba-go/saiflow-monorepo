@@ -3,8 +3,8 @@ doc_id: STD-008
 title: "SaiFlow 界面设计规范"
 type: standard
 status: active
-version: 1.1.0
-updated: 2026-11-07
+version: 1.3.0
+updated: 2026-11-09
 owner: Product Engineering
 doc_source: manual
 ---
@@ -14,14 +14,19 @@ doc_source: manual
 本标准定义 SaiFlow 各前端的视觉与交互基础：颜色、字体、字号、间距、圆角、阴影、常用组件的样子与用法、状态的表达方式与可访问性要求。
 
 **适用范围**
-- LINE 小程序（`apps/line-mini`）与 web-pc 企业版（`apps/web-pc`）：用同一套品牌色与字体，只在圆角与密度上区分（§5、§6）。
-- admin 后台（`apps/web-admin`）：内部运营使用，保留 Ant Design，只把主色、字体与状态色按本规范设置（§11）。
+- LINE 小程序（`apps/line-mini`）与 web-pc 企业版（`apps/web-pc`）：用同一套客户品牌色（§2.1 客户品牌层）与字体，只在圆角与密度上区分（§5、§6）。
+- admin 后台（`apps/web-admin`）：内部运营使用，保留 Ant Design；与 web-pc 使用同一套客户品牌色、PC 密度与品牌外壳（§11.4，负责人 2026-11-09）。
 
 **负责人决定（2026-11-07）**
 - 颜色：方向 A，延续现有的亮蓝主色。
 - 字体：IBM Plex Sans + IBM Plex Sans Thai，中文用 Noto Sans SC。
 - 两端同一套品牌色，小程序偏亲和、web-pc 偏紧凑，差别只在圆角与密度。
 - 先只做浅色；深色模式的令牌位置保留（§12），暂不实现。
+
+**负责人决定（2026-11-09，变更 `enterprise-ui-redesign`）**
+- 两个客户端按 AIbaba / SaiFlow 客户品牌原型调整：主色 `#1A6FE8`、海军蓝 `#0A2540` 品牌区、青绿 `#00C9A7` 仅作装饰。
+- 字体不变（不引入 Inter）。
+- 走查后追加：两个客户端逐页按原型对齐版式（只用真实数据）；admin 也改用品牌色与 PC 品牌外壳（侧栏、顶栏、页头），页面内表格与表单不变。
 
 方向对比稿：<https://claude.ai/artifact/T5rnmuw3PPWP2ZaDAsXrEk>（只读参考，以本文为准）。
 
@@ -52,6 +57,21 @@ doc_source: manual
 | `--on-primary` | `#FFFFFF` | 主色上的文字与图标 |
 
 白字在 `--primary` 上的对比度约 4.6:1，满足正文 AA。
+
+**客户品牌层（web-pc 与小程序）。** `packages/ui/src/styles/brand.css` 在 `tokens.css` 之后引入，覆盖下列令牌并新增 `--brand-*`；值与 `src/tokens.ts` 的 `BRAND_COLORS` 一致（有测试）。admin 不引入。
+
+| 令牌 | 色值 | 用途 |
+|---|---|---|
+| `--primary` / `--brand-blue` | `#1A6FE8` | 客户端主按钮、链接、选中、进度；白字对比约 4.7:1 |
+| `--primary-hover` / `--brand-blue-hover` | `#1559C0` | 悬停；`--info-text` |
+| `--primary-pressed` | `#124A9E` | 按下；浅底上的主色文字 |
+| `--primary-soft` / `--info-bg` / `--brand-blue-soft` | `#EAF2FF` | 次要按钮底、选中底 |
+| `--border` / `--brand-border` | `#E2E8F0` | 边框 |
+| `--brand-navy` / `--brand-navy-2` | `#0A2540` / `#11335A` | PC 侧栏、小程序首页品牌头 |
+| `--brand-on-navy` / `--brand-on-navy-muted` | `#FFFFFF` / `#B9C6D8` | 海军蓝上的文字 |
+| `--brand-teal` | `#00C9A7` | 仅装饰（图形、强调线），不作浅底正文 |
+| `--brand-teal-ink` | `#007D6C` | 需要青绿色文字时使用（白底约 5:1） |
+| `--shadow-card` / `--shadow-raised` | 海军蓝调阴影 | 卡片、浮起卡片 |
 
 ### 2.2 中性色
 
@@ -302,19 +322,19 @@ shadcn/ui 组件读取以下变量。值取自 §2，写在各应用的全局样
 ### 11.3 web-pc（Ant Design）
 
 `ConfigProvider theme` 使用 `@saiflow/ui` 的 `pcTheme`（ADR-010 §2）：
-- 颜色：`colorPrimary #4A66F7`、`colorSuccess #1F9E6B`、`colorWarning #D98F1F`、`colorError #D6383E`、`colorInfo #4A66F7`；文字色 `colorSuccessText #18774F`、`colorWarningText #935D0E`、`colorErrorText #C4343A`（Typography 的成功、警告、错误文字用这三个，图形色对白底不足 4.5:1）；`colorBgLayout`、`colorBgContainer`、`colorBorder`、`colorText`、`colorTextSecondary`、`colorTextPlaceholder` 取 §2.2；
+- 颜色：`colorPrimary #1A6FE8`、`colorSuccess #1F9E6B`、`colorWarning #D98F1F`、`colorError #D6383E`、`colorInfo #1A6FE8`（客户品牌层，`CLIENT_COLORS`）；文字色 `colorSuccessText #18774F`、`colorWarningText #935D0E`、`colorErrorText #C4343A`（Typography 的成功、警告、错误文字用这三个，图形色对白底不足 4.5:1）；`colorBgLayout`、`colorBgContainer`、`colorBorder`、`colorText`、`colorTextSecondary`、`colorTextPlaceholder` 取 §2.2；
 - 尺寸：`borderRadius 8`、`borderRadiusLG 10`、`controlHeight 36`、`fontSize 14`、`lineHeight 22/14`、`fontFamily`（§3.1）；
 - 表格：`cellPaddingBlock 12`（行高约 44px）、表头底色 `--surface-muted`。
 
 单据阶段标签不用 antd `Tag` 的预设颜色，用 §2.4 的"底色 + 文字色"。
 
+布局（`enterprise-ui-redesign`，FR-SYS-135）：海军蓝固定侧栏（导航独立滚动，菜单顺序与权限过滤不变，底部 AIbaba 公司链接以 `noopener noreferrer` 新窗口打开）、白色 72px 顶栏与页面标题；首页只展示真实用量与任务。
+
 ### 11.4 admin 后台（Ant Design）
 
-`ConfigProvider theme` 使用 `adminTheme`：
-- `colorPrimary: #4A66F7`、`colorSuccess: #1F9E6B`、`colorWarning: #D98F1F`、`colorError: #D6383E`，以及与 §11.3 相同的三个文字色；
-- `borderRadius: 8`、`fontFamily`（§3.1）。
+`ConfigProvider theme` 使用 `adminTheme`，令牌与组件设置和 §11.3 的 `pcTheme` 相同（主色 `#1A6FE8`、状态色与文字色、8/10px 圆角、36px 控件、44px 表格行）。
 
-其余沿用 Ant Design 默认。
+布局：与 web-pc 相同的海军蓝固定侧栏、白色顶栏与页头（栏目标识、标题、说明）；菜单项、顺序与路由不变；侧栏底部可同样放 AIbaba 公司链接（新窗口，`noopener noreferrer`）。
 
 ---
 
@@ -332,6 +352,8 @@ shadcn/ui 组件读取以下变量。值取自 §2，写在各应用的全局样
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.3.0 | 2026-11-09 | Product Engineering | 变更 `enterprise-ui-redesign` 走查后：admin 改用客户品牌色、PC 密度与品牌外壳（§11.4 改写，范围说明同步）；客户端逐页对齐原型 |
+| 1.2.0 | 2026-11-09 | Product Engineering | 变更 `enterprise-ui-redesign`：新增 §2.1 客户品牌层（`brand.css`、`BRAND_COLORS`），web-pc 与小程序主色改为 `#1A6FE8` 并加入海军蓝、青绿令牌；§11.3 改为客户品牌色与品牌布局；admin（§11.4）保持 `#4A66F7` |
 | 1.1.0 | 2026-11-07 | Product Engineering | 变更 `ui-restyle` 实现后对齐：字体随应用打包（不用 Google Fonts），中文字体按需加载；§11.2 改为 Tailwind v4 主题与应用密度变量；新增 §11.3 web-pc 的 Ant Design 令牌（含成功、警告、错误的文字色），admin 改为 §11.4 |
 | 1.0.1 | 2026-11-07 | Product Engineering | 对比度修正：success/warning/review 文字色加深为 `#18774F`/`#935D0E`/`#A35400`，danger 改为 `#D6383E`，使标签文字与白字删除按钮达到 4.5:1（变更 `ui-restyle` FR-SYS-137）；说明白字只用于主色与 danger 实心底 |
 | 1.0.0 | 2026-11-07 | Product Engineering | 初始版：方向 A（亮蓝）、IBM Plex Sans + IBM Plex Sans Thai + Noto Sans SC、两端同一品牌色只区分圆角与密度、先只做浅色（负责人 2026-11-07） |

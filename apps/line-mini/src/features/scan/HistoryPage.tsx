@@ -5,10 +5,12 @@ import { useNavigate } from "react-router-dom";
 import { BrandLoading } from "../../components/BrandLoading";
 import { useT, type MessageKey } from "../../i18n";
 import { errorMessage } from "../../services/errors";
+import { formatBangkokDate } from "../../utils/format";
 import { useCurrentTenant } from "../tenants/useCurrentTenant";
 import { listJobs, type JobOut } from "./api";
 import { JobListItem } from "./components/JobListItem";
 import s from "./HistoryPage.module.css";
+import kit from "./kit.module.css";
 import theme from "./theme.module.css";
 
 export const PAGE_SIZE = 20;
@@ -57,6 +59,15 @@ export function HistoryPage() {
     enabled: tenant !== null,
   });
   const rows = jobs.data?.pages.flatMap((p) => p.items) ?? [];
+  const total = jobs.data?.pages[0]?.total ?? rows.length;
+  // prototype .list-heading: the rows under their Bangkok date, newest first
+  const groups: { date: string; rows: JobOut[] }[] = [];
+  for (const job of rows) {
+    const date = formatBangkokDate(job.created_at);
+    const last = groups[groups.length - 1];
+    if (last?.date === date) last.rows.push(job);
+    else groups.push({ date, rows: [job] });
+  }
   const sentinel = useRef<HTMLDivElement>(null);
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = jobs;
   useEffect(() => {
@@ -72,13 +83,19 @@ export function HistoryPage() {
   const tenantLabel = tenant?.kind === "organization" ? tenant.name || t("my.company") : t("home.workspacePersonal");
   return (
     <div className={`${theme.scan} ${s.history}`}>
-      <header className={s["history-header"]}>
-        <h1>{t("history.title")}</h1>
-        <div className={s["ws-pill"]}>{tenantLabel}</div>
+      <header className={kit["tab-top"]}>
+        <span className={kit["tab-eyebrow"]} aria-hidden="true">SAIFLOW</span>
+        <h1 className={kit["tab-title"]}>{t("history.title")}</h1>
+        <span className={kit["tab-end"]} />
       </header>
       <div className={s.content}>
+        <div className={s["title-block"]}>
+          <span className={kit.eyebrow}>{t("history.eyebrow")}</span>
+          <h2>{t("history.tagline")}</h2>
+          <p>{t("history.scope", { workspace: tenantLabel })}</p>
+        </div>
         <div className={s["search-card"]}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: "var(--icon)" }} strokeWidth="2" strokeLinecap="round">
+          <svg className={s["search-icon"]} aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
             <circle cx="11" cy="11" r="8" />
             <path d="M21 21l-4.3-4.3" />
           </svg>
@@ -110,11 +127,19 @@ export function HistoryPage() {
           <div className={s["status-line"]}>{t("history.empty")}</div>
         ) : (
           <>
-            <div className={s["task-list"]}>
-              {rows.map((job) => (
-                <JobListItem key={job.id} job={job} onOpen={(j) => navigate(jobTarget(j))} />
-              ))}
-            </div>
+            {groups.map((group, i) => (
+              <section key={group.date} className={s.group} aria-label={group.date}>
+                <div className={s["list-heading"]}>
+                  <span>{group.date}</span>
+                  {i === 0 && <span>{t("history.count", { n: total })}</span>}
+                </div>
+                <div className={s["task-list"]}>
+                  {group.rows.map((job) => (
+                    <JobListItem key={job.id} job={job} onOpen={(j) => navigate(jobTarget(j))} />
+                  ))}
+                </div>
+              </section>
+            ))}
             <div ref={sentinel} className={s["list-foot"]}>
               {hasNextPage ? (
                 isFetchingNextPage ? (

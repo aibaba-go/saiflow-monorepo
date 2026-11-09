@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEventLib from "@testing-library/user-event";
 import { Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -102,8 +102,30 @@ describe("review entry (FR-SYS-119)", () => {
     signedIn(USER, [REVIEWER]);
     useTenantChoice.getState().choose(REVIEWER.tenant_id);
     pages("/");
-    expect(await screen.findByText("To review")).toBeInTheDocument();
+    expect(await screen.findByText(/waiting for your review/)).toBeInTheDocument();
     expect(await screen.findByLabelText("2 to review")).toHaveTextContent("2");
+  });
+
+  it("prompt only while there is something to review, in each language", async () => {
+    const api = mockApi({ "GET /api/v1/reviews/summary": () => json(200, { l1: 0, l2: null }) });
+    signedIn(USER, [REVIEWER]);
+    useTenantChoice.getState().choose(REVIEWER.tenant_id);
+    pages("/");
+    await waitFor(() => expect(api.count("GET /api/v1/reviews/summary")).toBe(1));
+    await waitFor(() => expect(screen.queryByText(/waiting for your review/)).toBeNull());
+    expect(screen.queryByLabelText("0 to review")).toBeNull();
+  });
+
+  it("prompt reads naturally in Thai and Chinese", async () => {
+    mockApi({ "GET /api/v1/reviews/summary": () => json(200, { l1: 1, l2: 2 }) });
+    signedIn(USER, [REVIEWER]);
+    useTenantChoice.getState().choose(REVIEWER.tenant_id);
+    useLanguage.getState().setLang("zh");
+    pages("/");
+    const zhBtn = await screen.findByRole("button", { name: /份单据待你复核/ });
+    expect(zhBtn).toHaveTextContent("有 3 份单据待你复核");
+    act(() => useLanguage.getState().setLang("th"));
+    expect(await screen.findByRole("button", { name: /เอกสารรอให้คุณตรวจสอบ/ })).toHaveTextContent("3");
   });
 
   it("entry hidden without permission (119-02)", async () => {
@@ -112,6 +134,7 @@ describe("review entry (FR-SYS-119)", () => {
     useTenantChoice.getState().choose(ORG.tenant_id);
     pages("/");
     await waitFor(() => expect(screen.queryByText("To review")).toBeNull());
+    expect(screen.queryByText(/waiting for your review/)).toBeNull();
     expect(api.count("GET /api/v1/reviews/summary")).toBe(0);
   });
 });
@@ -187,6 +210,53 @@ describe("queue and detail (FR-SYS-120)", () => {
     expect(await screen.findByRole("tab", { name: "Level-1 review" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Level-2 review" })).toBeInTheDocument();
     expect(await screen.findByText("a.png")).toBeInTheDocument();
+  });
+
+  const EXTRA_GROUPS = [
+    {
+      key: "document",
+      name: "Document",
+      items: [
+        { kind: "field", key: "invoice_no", name: "Tax Invoice No.", type: "string", required: true },
+        { kind: "field", key: "date", name: "Date", type: "date" },
+      ],
+    },
+  ];
+  const withExtra = {
+    ...result,
+    structured: { document: { invoice_no: "IV1", date: "2026-11-01", Remark: "Call supplier" } },
+    template: { ...result.template, groups: EXTRA_GROUPS },
+  };
+
+  it.each([
+    [1, ["review_l1"]],
+    [2, ["review_l2"]],
+  ])("level-%s detail shows extra fields read-only, decisions unchanged (120-04)", async (level, permissions) => {
+    const api = detailApi();
+    api.set("GET /api/v1/reviews/j1", () => json(200, { ...detail(), level, required_level: 2, job: { ...job, review_level: level } }));
+    api.set("GET /api/v1/ocr/jobs/j1/result", () => json(200, withExtra));
+    signedIn(USER, [{ ...ORG, permissions }]);
+    useTenantChoice.getState().choose(ORG.tenant_id);
+    pages("/reviews/j1");
+    expect(await screen.findByLabelText("Remark")).toHaveTextContent("Call supplier");
+    const paths = [...document.querySelectorAll("dl [data-path]")].map((el) => el.getAttribute("data-path"));
+    expect(paths).toEqual(["document.invoice_no", "document.date", "document.Remark"]);
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Add field|Delete field/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Return" })).toBeInTheDocument();
+  });
+
+  it.each(["own_confirmation", "did_level1"])("blocked (%s): extra fields shown, still no decision (120-05)", async (block) => {
+    const api = detailApi(block);
+    api.set("GET /api/v1/ocr/jobs/j1/result", () => json(200, withExtra));
+    signedIn(USER, [OWNER]);
+    useTenantChoice.getState().choose(OWNER.tenant_id);
+    pages("/reviews/j1");
+    expect(await screen.findByLabelText("Remark")).toHaveTextContent("Call supplier");
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Return" })).toBeNull();
   });
 });
 

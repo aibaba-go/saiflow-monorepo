@@ -2,6 +2,7 @@
 @import "tailwindcss";
 @import "@saiflow/ui/styles/fonts.css";
 @import "@saiflow/ui/styles/tokens.css";
+@import "@saiflow/ui/styles/brand.css";
 @import "@saiflow/ui/styles/theme.css";
 
 /* mini app density (STD-008 §5, §6; FR-SYS-134) */
@@ -9,6 +10,9 @@
   --card-radius: 14px;
   --control-radius: 10px;
   --control-h: 44px;
+  /* bottom TabBar: 6 + 50 + 8 padding/tab + 1 border; pages reserve it plus the safe area */
+  --tabbar-h: 65px;
+  --tabbar-space: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 16px);
 }
 
 body {

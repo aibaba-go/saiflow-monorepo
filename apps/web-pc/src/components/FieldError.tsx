@@ -17,7 +17,7 @@ export function FieldError({ error, field }: { error: unknown; field: string }) 
   const text = fieldErrorText(error, field, t);
   if (!text) return null;
   return (
-    <div role="alert" style={{ color: "#ff4d4f" }}>
+    <div role="alert" style={{ color: "var(--danger-text)" }}>
       {text}
     </div>
   );

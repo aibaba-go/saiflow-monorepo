@@ -8,14 +8,24 @@
 /* A page root: the tokens plus main's page frame. Portals (the viewer) use .tokens. */
 .scan {
   composes: tokens;
-  min-height: 100%;
+  min-height: 100dvh;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-stack);
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  padding-bottom: 72px; /* the bottom navigation */
+  padding-bottom: var(--tabbar-space); /* the bottom navigation and the safe area */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  --page-x: 16px;
+}
+
+/* the 360px breakpoint of the prototype: a little less side room */
+@media (max-width: 360px) {
+  .scan {
+    --page-x: 15px;
+  }
 }
 
 .tokens *,

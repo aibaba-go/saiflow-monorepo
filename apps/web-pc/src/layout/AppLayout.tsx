@@ -1,4 +1,4 @@
-import { App, Layout, Menu, Space, Spin, Typography } from "antd";
+import { App, Menu, Spin, Typography } from "antd";
 import { useEffect } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 
@@ -10,6 +10,7 @@ import { can } from "../tenants/permissions";
 import { TenantSwitcher } from "../tenants/TenantSwitcher";
 import { useTenantChoice } from "../tenants/useCurrentTenant";
 import { useTenant } from "../tenants/useTenant";
+import { Icon, type IconName } from "./icons";
 import { LanguageSwitch } from "./LanguageSwitch";
 import { LogoutButton } from "./LogoutButton";
 
@@ -34,9 +35,47 @@ export const MENU: MenuItem[] = [
   { key: "profile", path: "/profile", label: "nav.profile" },
 ];
 
-function selected(pathname: string): string {
-  const match = MENU.filter((m) => m.path !== "/" && pathname.startsWith(m.path));
-  return match[0]?.key ?? "home";
+export function selected(pathname: string): string {
+  // a document detail is opened from the library, so the library stays selected (prototype)
+  if (pathname.startsWith("/documents/")) return "library";
+  const match = MENU.find((m) => m.path !== "/" && (pathname === m.path || pathname.startsWith(`${m.path}/`)));
+  return match?.key ?? "home";
+}
+
+/** The company behind SaiFlow, linked from the sidebar footer (FR-SYS-135). */
+export const AIBABA_URL = "https://www.aibaba.asia/";
+
+/** Menu keys under the "workspace" heading; the rest sit under "organization & settings". */
+const WORKSPACE = new Set(["home", "upload", "verify", "library", "reviews"]);
+
+const ICONS: Record<string, IconName> = {
+  home: "home",
+  upload: "upload",
+  verify: "verify",
+  library: "library",
+  reviews: "review",
+  reviewSettings: "settings",
+  org: "org",
+  roles: "users",
+  plans: "plan",
+  notifications: "bell",
+  profile: "user",
+};
+
+/** The topbar title of a page: its menu item, or "Document detail"; none for unknown paths. */
+export function pageTitle(pathname: string): MessageKey | null {
+  if (pathname === "/") return "nav.home";
+  if (pathname.startsWith("/documents/")) return "layout.documentDetail";
+  if (pathname === "/data") return "nav.library";
+  const match = MENU.find((m) => m.path !== "/" && (pathname === m.path || pathname.startsWith(`${m.path}/`)));
+  return match?.label ?? null;
+}
+
+/** Up to two letters of the display name for the avatar (decorative). */
+function initials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const letters = words.length > 1 ? [words[0]!, words[1]!].map((w) => Array.from(w)[0]) : Array.from(words[0] ?? "").slice(0, 2);
+  return letters.join("").toUpperCase();
 }
 
 /** Keep the tenant list in the tenant store and show its one-off notice (AC-096-03). */
@@ -78,36 +117,92 @@ export function AppLayout() {
     ...(org && (can(tenant, "review_l1") || can(tenant, "review_l2")) ? [] : ["reviews"]),
     ...(org && tenant.is_owner ? [] : ["reviewSettings"]),
   ];
+  // The same items, order and permission filter as before; only grouped under two headings.
+  const item = (m: MenuItem) => ({
+    key: m.key,
+    icon: <Icon name={ICONS[m.key] ?? "file"} />,
+    label: <Link to={m.path}>{t(m.label)}</Link>,
+  });
+  const visible = MENU.filter((m) => !hidden.includes(m.key));
+  const items = [
+    { type: "group" as const, key: "g-work", label: t("layout.navWorkspace"), children: visible.filter((m) => WORKSPACE.has(m.key)).map(item) },
+    { type: "group" as const, key: "g-manage", label: t("layout.navManage"), children: visible.filter((m) => !WORKSPACE.has(m.key)).map(item) },
+  ].filter((g) => g.children.length > 0);
+  const title = pageTitle(location.pathname);
+  const name = me.data?.display_name ?? "";
   return (
-    <Layout style={{ minHeight: "100vh", minWidth: 1280 }}>
-      <Layout.Sider width={220}>
-        <div style={{ color: "#fff", padding: 16, fontWeight: 600 }}>{t("app.title")}</div>
-        <Menu
-          theme="dark"
-          mode="inline"
-          selectedKeys={[selected(location.pathname)]}
-          items={MENU.filter((m) => !hidden.includes(m.key)).map((m) => ({
-            key: m.key,
-            label: <Link to={m.path}>{t(m.label)}</Link>,
-          }))}
-        />
-      </Layout.Sider>
-      <Layout>
-        <Layout.Header
-          style={{ background: "#fff", display: "flex", justifyContent: "flex-end", alignItems: "center", paddingInline: 16 }}
-        >
-          <Space size="middle">
+    <div className="pc-shell">
+      <aside className="pc-sidebar">
+        <div className="pc-sidebar__lockup">
+          <span className="pc-sidebar__mark">
+            <Icon name="file" />
+          </span>
+          <span className="pc-sidebar__product">
+            <strong>{t("app.title")}</strong>
+            <small>{t("layout.productSubtitle")}</small>
+          </span>
+        </div>
+        <nav className="pc-sidebar__nav" aria-label={t("layout.mainNav")}>
+          <Menu theme="dark" mode="inline" selectedKeys={[selected(location.pathname)]} items={items} />
+        </nav>
+        <div className="pc-sidebar__footer">
+          <p className="pc-sidebar__provider">{t("layout.provider")}</p>
+          <a
+            className="pc-company-link"
+            href={AIBABA_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={t("layout.companyLink")}
+          >
+            <span className="pc-company-link__mark">AIbaba</span>
+            <Icon name="arrow" className="pc-company-link__arrow" />
+          </a>
+          <p className="pc-sidebar__micro">{t("layout.companyTagline")}</p>
+        </div>
+      </aside>
+      <div className="pc-workspace">
+        <header className="pc-topbar">
+          <nav className="pc-breadcrumb" aria-label={t("layout.breadcrumb")}>
+            <span className="pc-breadcrumb__root">{t("app.title")}</span>
+            {title && (
+              <>
+                <Icon name="chevron" className="pc-breadcrumb__sep" />
+                <strong className="pc-breadcrumb__page" aria-current="page">
+                  {t(title)}
+                </strong>
+              </>
+            )}
+          </nav>
+          <div className="pc-topbar__tools">
             <TenantSwitcher />
-            <BellBadge />
+            <span className="pc-topbar__divider" aria-hidden="true" />
             <LanguageSwitch />
-            <Typography.Text strong>{me.data?.display_name}</Typography.Text>
+            <BellBadge />
+            <span className="pc-topbar__divider" aria-hidden="true" />
+            <span className="pc-topbar__user">
+              {name && (
+                <span className="pc-avatar" aria-hidden="true">
+                  {initials(name)}
+                </span>
+              )}
+              <Typography.Text strong className="pc-topbar__name">
+                {me.data?.display_name}
+              </Typography.Text>
+            </span>
             <LogoutButton />
-          </Space>
-        </Layout.Header>
-        <Layout.Content style={{ padding: 24 }}>
+          </div>
+        </header>
+        <main className="pc-content">
           {tenants.isError && !loaded ? <ErrorText error={tenants.error} /> : loaded ? <Outlet /> : <Spin />}
-        </Layout.Content>
-      </Layout>
-    </Layout>
+          <footer className="pc-footnote">
+            <span>
+              <Icon name="info" />
+              {t("layout.timeNote")}
+            </span>
+            <span>{t("layout.footer")}</span>
+          </footer>
+        </main>
+      </div>
+    </div>
   );
 }

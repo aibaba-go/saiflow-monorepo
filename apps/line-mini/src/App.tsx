@@ -33,7 +33,7 @@ import { ResultPage } from "./features/scan/ResultPage";
 import { useUsage } from "./features/billing/useUsage";
 import { showReportTab } from "./features/tenants/reportTab";
 import { useCurrentTenant } from "./features/tenants/useCurrentTenant";
-import { realLiff } from "./services/liff";
+import { appLiff } from "./services/liff";
 import type { Liff } from "./services/liffTypes";
 import { useLanguage } from "./stores/language";
 import { useSession } from "./stores/session";
@@ -176,7 +176,7 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <HashRouter>
-        <Shell liff={realLiff(liffId)} search={window.location.search} />
+        <Shell liff={appLiff(liffId)} search={window.location.search} />
       </HashRouter>
       <DialogHost />
       <AppToaster />

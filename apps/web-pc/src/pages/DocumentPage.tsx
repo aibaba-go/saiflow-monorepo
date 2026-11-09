@@ -1,4 +1,4 @@
-import { App, Button, Card, Col, Descriptions, Row, Space, Spin } from "antd";
+import { App, Button, Descriptions, Space, Spin } from "antd";
 import { useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 
@@ -6,7 +6,8 @@ import { useMe } from "../auth/session";
 import { ErrorText } from "../components/ErrorText";
 import { Page } from "../components/Page";
 import { formatBangkokDateTime } from "../format";
-import { useT } from "../i18n";
+import { isMessageKey, useT } from "../i18n";
+import { Icon } from "../layout/icons";
 import { useJob, useResult } from "../ocr/api";
 import { exportAndDownload } from "../ocr/download";
 import { canEditJob } from "../ocr/stage";
@@ -65,55 +66,100 @@ export function DocumentPage() {
     }
   }
 
+  const descKey = `document.desc.${j.stage}`;
+  const review = j.stage === "PENDING_REVIEW";
+  const confirmed = j.stage === "CONFIRMED";
   return (
     <Page
       name="document"
-      title={j.file_name}
+      title={t("layout.documentDetail")}
+      badge={<StageTag stage={j.stage} level={j.review_level} />}
+      description={isMessageKey(descKey) ? t(descKey) : t("layout.desc.document")}
       extra={
         <Space>
+          <Button icon={<Icon name="back" />} onClick={() => navigate("/library")}>
+            {t("detail.back")}
+          </Button>
           {canVerify && (
             <Button type="primary" onClick={() => navigate(`/verify/${j.id}`)}>
               {t("ocr.goVerify")}
             </Button>
           )}
-          {canExport && (
-            <Button type="primary" loading={exporting} onClick={() => void doExport()}>
-              {t("library.exportExcel")}
-            </Button>
-          )}
         </Space>
       }
     >
-      <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-        <Descriptions size="small" bordered column={4}>
-          <Descriptions.Item label={t("ocr.status")}>
-            <StageTag stage={j.stage} level={j.review_level} />
-          </Descriptions.Item>
-          <Descriptions.Item label={t("review.col.template")}>{data.template?.name ?? t("review.generic")}</Descriptions.Item>
-          <Descriptions.Item label={t("library.createdAt")}>{formatBangkokDateTime(j.created_at)}</Descriptions.Item>
-          <Descriptions.Item label={t("review.col.confirmedAt")}>
-            {j.confirmed_at ? formatBangkokDateTime(j.confirmed_at) : "-"}
-          </Descriptions.Item>
-        </Descriptions>
-        <Row gutter={16}>
-          <Col span={10}>
-            <Card size="small" title={t("review.original")}>
-              <OriginalPages fileId={j.file_id} fileName={j.file_name} pageCount={j.page_count} />
-            </Card>
-          </Col>
-          <Col span={14}>
-            <Card size="small" title={t("library.result")}>
-              <ReadonlyResult value={data.structured} groups={groups} lang={lang} t={t} />
-            </Card>
-          </Col>
-        </Row>
-        <Card size="small" title={t("review.records")}>
+      <div className="pc-document">
+        <OriginalPages fileId={j.file_id} fileName={j.file_name} pageCount={j.page_count} />
+        <section className="pc-editor">
+          <div className="pc-editor__top">
+            <strong>{t("editor.current")}</strong>
+            <span className="pc-ai-label">
+              <Icon name="spark" />
+              {t(confirmed ? "editor.aiConfirmed" : review ? "editor.aiReview" : "editor.aiPending")}
+            </span>
+          </div>
+          <div className="pc-editor__body">
+            <div className="pc-editor__template">
+              <span>
+                {t("table.template")} <strong>{data.template?.name ?? t("review.generic")}</strong>
+              </span>
+              <span className="pc-editor__readonly">
+                <Icon name="lock" />
+                {t("editor.readonly")}
+              </span>
+            </div>
+            <Descriptions size="small" column={2} className="pc-document__facts">
+              <Descriptions.Item label={t("review.col.file")}>{j.file_name}</Descriptions.Item>
+              <Descriptions.Item label={t("library.createdAt")}>{formatBangkokDateTime(j.created_at)}</Descriptions.Item>
+              <Descriptions.Item label={t("review.col.confirmedAt")}>
+                {j.confirmed_at ? formatBangkokDateTime(j.confirmed_at) : "-"}
+              </Descriptions.Item>
+            </Descriptions>
+            <ReadonlyResult value={data.structured} groups={groups} lang={lang} t={t} />
+            <p className={`pc-editor__notice${confirmed ? " pc-editor__notice--success" : ""}`}>
+              <Icon name={confirmed ? "check" : review ? "lock" : "info"} />
+              {t(confirmed ? "editor.noticeConfirmed" : review ? "editor.noticeReview" : "editor.noticeVerifying")}
+            </p>
+          </div>
+          <div className="pc-editor__actions">
+            <Button
+              type="link"
+              className="pc-ghost"
+              icon={<Icon name="history" />}
+              onClick={() => document.getElementById("pc-change-log")?.scrollIntoView?.({ behavior: "smooth", block: "start" })}
+            >
+              {t("review.changes")}
+            </Button>
+            <span className="pc-editor__primary">
+              {canExport && (
+                <Button type="primary" icon={<Icon name="download" />} loading={exporting} onClick={() => void doExport()}>
+                  {t("library.exportExcel")}
+                </Button>
+              )}
+              {review && (
+                <span className="pc-editor__waiting">
+                  <Icon name="lock" />
+                  {t("editor.waitingReview")}
+                </span>
+              )}
+            </span>
+          </div>
+        </section>
+      </div>
+      <section className="pc-panel">
+        <div className="pc-panel__heading">
+          <h2>{t("review.records")}</h2>
+        </div>
+        <div className="pc-panel__body">
           <ReviewRecordList records={data.review.records} t={t} />
-        </Card>
-        <Card size="small" title={t("review.changes")}>
-          <ChangeLogTable entries={changes.data ?? []} groups={groups} t={t} lang={lang} />
-        </Card>
-      </Space>
+        </div>
+      </section>
+      <section className="pc-panel" id="pc-change-log">
+        <div className="pc-panel__heading">
+          <h2>{t("review.changes")}</h2>
+        </div>
+        <ChangeLogTable entries={changes.data ?? []} groups={groups} t={t} lang={lang} />
+      </section>
     </Page>
   );
 }

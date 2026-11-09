@@ -36,7 +36,7 @@ export function PlansPage() {
   ];
 
   return (
-    <Page title={t("nav.plans")}>
+    <Page name="plans" title={t("nav.plans")}>
       <ErrorText error={list.error} />
       <Table<Plan>
         rowKey="code"

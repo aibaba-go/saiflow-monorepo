@@ -1,4 +1,5 @@
-/* main components/StructuredDataView.vue <style scoped>, copied verbatim. */
+/* main components/StructuredDataView.vue <style scoped>, restyled as the prototype's form
+ * cards (white card, muted labels, navy values, hairline rows); class names unchanged. */
 .structured,
 .structured-group {
   display: flex;
@@ -8,14 +9,16 @@
 
 .schema-name,
 .group-name {
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 700;
+  color: var(--brand-navy);
+  font-size: 15px;
+  line-height: 1.5;
+  font-weight: 600;
   white-space: pre-wrap;
 }
 
 .group-name {
-  font-size: 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 .template-view .table-title,
@@ -43,16 +46,18 @@
 
 .table-card {
   background: var(--surface);
-  border: 1px solid var(--border);
   border-radius: var(--card-radius);
+  box-shadow: var(--shadow-card);
   overflow: hidden;
 }
 
 .table-title {
-  padding: 11px 14px;
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
-  font-weight: 700;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--brand-border);
+  color: var(--brand-navy);
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 600;
   text-transform: capitalize;
 }
 
@@ -63,7 +68,7 @@
 .detail-row {
   display: grid;
   grid-template-columns: minmax(100px, 34%) minmax(0, 1fr);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--brand-border);
 }
 
 .detail-row.with-actions {
@@ -77,23 +82,25 @@
 .detail-row dt,
 .detail-row dd {
   margin: 0;
-  padding: 8px 12px;
-  font-size: 12px;
-  line-height: 1.5;
+  padding: 10px 12px 10px 16px;
+  font-size: 13px;
+  line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .detail-row dt {
-  border-right: 1px solid var(--border);
-  background: var(--primary-soft);
-  color: var(--primary-pressed);
-  font-weight: 700;
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 500;
   text-transform: capitalize;
 }
 
 .detail-row dd {
-  color: var(--text);
+  padding-left: 4px;
+  color: var(--brand-navy);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 
 .detail-row .row-delete {
@@ -109,15 +116,16 @@ table {
   width: 100%;
   min-width: max-content;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 th,
 td {
   max-width: 260px;
   padding: 0;
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--brand-border);
+  border-bottom: 1px solid var(--brand-border);
   text-align: left;
   vertical-align: top;
   white-space: pre-wrap;
@@ -126,9 +134,10 @@ td {
 
 th {
   padding: 10px 12px;
-  background: var(--primary-soft);
-  color: var(--primary-pressed);
-  font-weight: 700;
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
   text-transform: capitalize;
   white-space: nowrap;
 }
@@ -191,9 +200,9 @@ td.row-actions {
   border: 0;
   outline: none;
   background: transparent;
-  color: var(--text);
+  color: var(--brand-navy);
   font: inherit;
-  font-size: 12px;
+  font-size: 15px;
   line-height: 1.5;
 }
 
@@ -210,18 +219,18 @@ td.row-actions {
   display: flex;
   gap: 8px;
   padding: 9px 11px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--brand-border);
 }
 
 .add-btn {
   flex: 1;
   min-height: var(--control-h);
-  border: 1px dashed var(--border);
+  border: 1px dashed var(--border-strong);
   border-radius: var(--control-radius);
   background: transparent;
   color: var(--primary);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -243,12 +252,12 @@ td.row-actions {
   min-width: 0;
   min-height: var(--control-h);
   padding: 0 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--brand-border);
   border-radius: var(--control-radius);
   background: var(--surface);
   color: var(--text);
   font: inherit;
-  font-size: 12px;
+  font-size: 15px;
   outline: none;
 }
 
@@ -291,10 +300,11 @@ td.row-actions {
 
 .table-empty {
   padding: 36px 20px;
-  border: 1px dashed var(--border);
   border-radius: var(--card-radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 13px;
   text-align: center;
 }
 
@@ -316,4 +326,15 @@ td.row-actions {
   content: "";
   position: absolute;
   inset: -9px;
+}
+
+/* 36px form buttons, 44px tap area (FR-SYS-134) */
+.form-btn {
+  position: relative;
+}
+
+.form-btn::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
 }

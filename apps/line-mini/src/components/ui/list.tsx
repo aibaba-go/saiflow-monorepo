@@ -21,20 +21,28 @@ export function ListGroup({
   );
 }
 
-/** One row; with `onClick` it is a button with an arrow (antd-mobile `List.Item`). */
+/** One row; with `onClick` it is a button with an arrow (antd-mobile `List.Item`). `icon` is
+ * a decorative leading mark (prototype .settings-row), hidden from assistive technology. */
 export function ListItem({
   onClick,
   description,
   extra,
+  icon,
   children,
 }: {
   onClick?(): void;
   description?: ReactNode;
   extra?: ReactNode;
+  icon?: ReactNode;
   children: ReactNode;
 }) {
   const body = (
     <>
+      {icon && (
+        <span className="flex shrink-0 items-center text-icon" aria-hidden="true">
+          {icon}
+        </span>
+      )}
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="text-body text-text">{children}</span>
         {description && <span className="text-sm text-text-secondary">{description}</span>}
@@ -43,7 +51,7 @@ export function ListItem({
       {onClick && <ChevronRight size={18} strokeWidth={1.75} className="shrink-0 text-icon" aria-hidden="true" />}
     </>
   );
-  const row = "flex min-h-12 w-full items-center gap-3 px-4 py-3 text-left";
+  const row = "flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left";
   return onClick ? (
     <button type="button" onClick={onClick} className={cn(row, "bg-surface active:bg-surface-muted")}>
       {body}

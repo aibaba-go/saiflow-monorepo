@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { App, Button, Card, Col, Input, Modal, Row, Space, Spin, Typography } from "antd";
+import { App, Button, Input, Modal, Space, Spin, Typography } from "antd";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -7,6 +7,7 @@ import { ErrorText } from "../components/ErrorText";
 import { Page } from "../components/Page";
 import { formatBangkokDateTime } from "../format";
 import { useT } from "../i18n";
+import { Icon } from "../layout/icons";
 import { ChangeLogTable } from "../reviews/ChangeLogTable";
 import { OriginalPages } from "../reviews/OriginalPages";
 import { ReadonlyResult, type Group } from "../reviews/ReadonlyResult";
@@ -117,24 +118,44 @@ export function ReviewDetailPage() {
             {t(d.block_reason === "did_level1" ? "review.blocked.did_level1" : "review.blocked.own_confirmation")}
           </Typography.Text>
         )}
-        <Row gutter={16}>
-          <Col span={10}>
-            <Card size="small" title={t("review.original")}>
-              <OriginalPages fileId={d.job.file_id} fileName={d.job.file_name} pageCount={d.job.page_count} />
-            </Card>
-          </Col>
-          <Col span={14}>
-            <Card size="small" title={`${t("review.col.template")}: ${data.template?.name ?? t("review.generic")}`}>
+        <div className="pc-document">
+          <OriginalPages fileId={d.job.file_id} fileName={d.job.file_name} pageCount={d.job.page_count} />
+          <section className="pc-editor">
+            <div className="pc-editor__top">
+              <strong>{t("editor.current")}</strong>
+              <span className="pc-ai-label">
+                <Icon name="spark" />
+                {t("editor.aiReview")}
+              </span>
+            </div>
+            <div className="pc-editor__body">
+              <div className="pc-editor__template">
+                <span>
+                  {t("table.template")} <strong>{data.template?.name ?? t("review.generic")}</strong>
+                </span>
+                <span className="pc-editor__readonly">
+                  <Icon name="lock" />
+                  {t("editor.readonly")}
+                </span>
+              </div>
               <ReadonlyResult value={data.structured} groups={groups} lang={lang} t={t} />
-            </Card>
-          </Col>
-        </Row>
-        <Card size="small" title={t("review.records")}>
-          <ReviewRecordList records={data.review.records} t={t} />
-        </Card>
-        <Card size="small" title={t("review.changes")}>
+            </div>
+          </section>
+        </div>
+        <section className="pc-panel">
+          <div className="pc-panel__heading">
+            <h2>{t("review.records")}</h2>
+          </div>
+          <div className="pc-panel__body">
+            <ReviewRecordList records={data.review.records} t={t} />
+          </div>
+        </section>
+        <section className="pc-panel">
+          <div className="pc-panel__heading">
+            <h2>{t("review.changes")}</h2>
+          </div>
           <ChangeLogTable entries={changes.data ?? []} groups={groups} t={t} lang={lang} />
-        </Card>
+        </section>
       </Space>
       <Modal
         open={dialog !== null}

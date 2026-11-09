@@ -1,5 +1,5 @@
 import type { components } from "@saiflow/api-client";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { api, call } from "../services/api";
 import { useTenant } from "../tenants/useTenant";
@@ -53,6 +53,23 @@ export const applyTemplate = (jobId: string, versionId: number) =>
 export const chooseGeneric = (jobId: string) => call(api.POST("/api/v1/ocr/jobs/{job_id}/generic", job(jobId)));
 export const listPending = () => call(api.GET("/api/v1/files/pending"));
 export const deleteFile = (fileId: string) => call(api.DELETE("/api/v1/files/{file_id}", file(fileId)));
+
+/** How many visible tasks each stage holds (undefined: all stages): the `total` of a one-row
+ * page per stage, the same list call as the library (FR-SYS-130). Shares the cache of useJobs. */
+export function useStageCounts(stages: readonly (string | undefined)[]) {
+  const { tenant } = useTenant();
+  return useQueries({
+    queries: stages.map((stage) => {
+      const f: JobFilters = stage ? { page: 1, pageSize: 1, stage } : { page: 1, pageSize: 1 };
+      return {
+        queryKey: ["jobs", tenant?.tenant_id, f],
+        queryFn: () => listJobs(f),
+        enabled: tenant !== null,
+        select: (d: Awaited<ReturnType<typeof listJobs>>) => d.total,
+      };
+    }),
+  });
+}
 
 export function useJob(id: string, poll = false) {
   const { tenant } = useTenant();

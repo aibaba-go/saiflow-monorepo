@@ -59,6 +59,15 @@ async function pick(label: string, option: string) {
   await userEvent.click(opts[opts.length - 1]!);
 }
 
+/** The stage filter is a tab row with real counts (prototype library tabs). */
+async function pickStage(stage: "CONFIRMED") {
+  const tabs = screen.getByRole("tablist", { name: en("library.stage") });
+  await userEvent.click(within(tabs).getByRole("tab", { name: new RegExp(`^${en(`stage.${stage}`)}`) }));
+}
+
+/** The list calls of the table (20 a page), not the one-row stage counts of the tabs. */
+const listCalls = <T extends Record<string, string>>(seen: T[]) => seen.filter((q) => q.page_size === "20");
+
 beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
@@ -82,12 +91,12 @@ describe("library (FR-SYS-130)", () => {
     });
     renderAt("/library");
     await screen.findByTestId("page-library");
-    await pick(en("library.stage"), en("stage.CONFIRMED"));
+    await pickStage("CONFIRMED");
     await pick(en("library.template"), "Tax Invoice");
     expect(await screen.findByText("doc-20.png")).toBeInTheDocument();
     await userEvent.click(screen.getByTitle("2"));
     expect(await screen.findByText("doc-25.png")).toBeInTheDocument();
-    expect(seen.at(-1)).toMatchObject({ stage: "CONFIRMED", template: "7", page: "2", page_size: "20" });
+    expect(listCalls(seen).at(-1)).toMatchObject({ stage: "CONFIRMED", template: "7", page: "2", page_size: "20" });
   });
 
   it("open by stage (130-02)", async () => {
@@ -119,7 +128,7 @@ describe("library (FR-SYS-130)", () => {
     );
     renderAt("/library");
     expect(await screen.findByText("doc-mine.png")).toBeInTheDocument();
-    expect(Object.keys(seen[0]!).sort()).toEqual(["page", "page_size"]);
+    expect(Object.keys(listCalls(seen)[0]!).sort()).toEqual(["page", "page_size"]);
   });
 
   it("tenant switch resets filters (Review Focus 3)", async () => {
@@ -136,12 +145,13 @@ describe("library (FR-SYS-130)", () => {
     );
     renderAt("/library");
     await screen.findByTestId("page-library");
-    await pick(en("library.stage"), en("stage.CONFIRMED"));
-    await waitFor(() => expect(seen.at(-1)!.q.stage).toBe("CONFIRMED"));
+    await pickStage("CONFIRMED");
+    const lists = () => seen.filter((s) => s.q.page_size === "20");
+    await waitFor(() => expect(lists().at(-1)!.q.stage).toBe("CONFIRMED"));
     await userEvent.click(screen.getByRole("button", { name: en("tenant.switch") }));
     await userEvent.click(await screen.findByRole("menuitem", { name: "Siam Tools" }));
-    await waitFor(() => expect(seen.at(-1)!.tenant).toBe("5"));
-    expect(seen.at(-1)!.q.stage).toBeUndefined();
+    await waitFor(() => expect(lists().at(-1)!.tenant).toBe("5"));
+    expect(lists().at(-1)!.q.stage).toBeUndefined();
   });
 
   it("no verify permission opens detail (Review Focus 5)", async () => {

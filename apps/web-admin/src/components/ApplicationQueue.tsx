@@ -15,7 +15,7 @@ import {
 import { hasField } from "../services/errors";
 import { ConfirmButton } from "./ConfirmButton";
 import { ErrorText } from "./ErrorText";
-import { Page } from "./Page";
+import { Page, type PageName } from "./Page";
 import { PlanApproveDialog } from "./PlanApproveDialog";
 import { RejectDialog } from "./RejectDialog";
 
@@ -27,6 +27,8 @@ interface Row {
 
 export interface ApplicationQueueProps<A extends Row> {
   title: MessageKey;
+  /** Which page heading (eyebrow and description) it shows. */
+  page: PageName;
   queue: Queue<A>;
   columns: ColumnsType<A>;
   /** Approval opens a dialog for optional start and end (plan applications). */
@@ -38,6 +40,7 @@ export interface ApplicationQueueProps<A extends Row> {
  * application someone else decided shows its real state (073-02). */
 export function ApplicationQueue<A extends Row>({
   title,
+  page,
   queue,
   columns,
   approveWithDates,
@@ -103,26 +106,28 @@ export function ApplicationQueue<A extends Row>({
   ];
 
   return (
-    <Page title={t(title)}>
-      <Tabs
-        activeKey={status}
-        onChange={(key) => {
-          setError(null); // the old tab's message does not belong to the new one
-          setParams({ status: key });
-        }}
-        items={STATUSES.map((s) => ({ key: s, label: t(`app.status.${s}`) }))}
-      />
-      <Space direction="vertical" style={{ width: "100%" }}>
-        <ErrorText error={error ?? list.error} />
-        <Table<A>
-          rowKey="id"
-          loading={list.isPending}
-          dataSource={list.data ?? []}
-          columns={shown}
-          scroll={{ x: true }}
-          pagination={{ pageSize: 50, hideOnSinglePage: true }}
+    <Page name={page} title={t(title)}>
+      <div className="ad-panel ad-panel--tabs">
+        <Tabs
+          activeKey={status}
+          onChange={(key) => {
+            setError(null); // the old tab's message does not belong to the new one
+            setParams({ status: key });
+          }}
+          items={STATUSES.map((s) => ({ key: s, label: t(`app.status.${s}`) }))}
         />
-      </Space>
+        <Space direction="vertical" style={{ width: "100%" }}>
+          <ErrorText error={error ?? list.error} />
+          <Table<A>
+            rowKey="id"
+            loading={list.isPending}
+            dataSource={list.data ?? []}
+            columns={shown}
+            scroll={{ x: true }}
+            pagination={{ pageSize: 50, hideOnSinglePage: true }}
+          />
+        </Space>
+      </div>
       <RejectDialog
         key={`reject-${rejecting}`}
         open={rejecting !== null}

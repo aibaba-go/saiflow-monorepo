@@ -1,20 +1,32 @@
-/* main components/StatusChip.vue in the STD-008 status colours (§2.4, §7.3; FR-SYS-133). */
+/* main components/StatusChip.vue as the prototype .status: a small square-cornered tag with a
+ * leading dot, in the STD-008 status colours (§2.4, §7.3; FR-SYS-133). */
 .chip {
   display: inline-flex;
   align-items: center;
-  padding: 2px 10px;
-  border-radius: 999px;
+  gap: 5px;
+  padding: 2px 7px;
+  border-radius: 4px;
   font-size: 12px;
   line-height: 18px;
-  font-weight: 600;
-  text-align: center;
-  overflow-wrap: anywhere;
+  font-weight: 500;
+  text-align: left;
+  /* break-word, not anywhere: whole words stay together (a flex row cannot squeeze the chip
+   * into "Verifyin g"); only a word longer than the row itself is broken */
+  overflow-wrap: break-word;
 }
 
+.chip::before {
+  content: "";
+  flex-shrink: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
 .chips {
   display: inline-flex;
-  flex-direction: column;
-  align-items: flex-end;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 4px;
 }
 

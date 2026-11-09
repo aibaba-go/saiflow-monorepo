@@ -15,7 +15,7 @@ it("antd follows STD-008 (FR-SYS-132, FR-SYS-135)", () => {
     </AppConfig>,
   );
   const [primary, height, radius, font] = screen.getByText(/\|/).textContent!.split("|");
-  expect(primary?.toLowerCase()).toBe("#4a66f7");
+  expect(primary?.toLowerCase()).toBe("#1a6fe8"); // client brand primary (enterprise-ui-redesign, brand.css)
   expect(height).toBe("36");
   expect(radius).toBe("8");
   expect(font).toContain("IBM Plex Sans");

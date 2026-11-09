@@ -1,110 +1,164 @@
-/* main views/HistoryPage.vue <style scoped>, copied verbatim (FR-SYS-118). */
+/* main views/HistoryPage.vue in the prototype's history page: a title block, a 46px search
+ * box, a scrolling filter strip, and the jobs in one card (FR-SYS-118, 132). */
 .history {
   display: flex;
   flex-direction: column;
   flex: 1;
 }
 
-.history-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 20px 12px;
-}
-
-.history-header h1 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 800;
-}
-
-.ws-pill {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--icon);
-  max-width: 60%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .content {
-  padding: 0 20px 24px;
+  padding: 20px var(--page-x, 16px) 24px;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
+/* prototype .page-title-block */
+.title-block {
+  margin: 2px 0 4px;
+}
+
+.title-block h2 {
+  margin: 5px 0;
+  font-size: 24px;
+  line-height: 1.35;
+  font-weight: 600;
+  color: var(--brand-navy);
+}
+
+.title-block p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* prototype .list-heading: the date and the count above each card */
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.list-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* prototype .search-box */
 .search-card {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--card-radius);
-  padding: 0 14px;
-  height: 44px;
+  border: 1px solid var(--brand-border);
+  border-radius: var(--control-radius);
+  padding: 0 14px 0 13px;
+  min-height: 46px;
+  transition: border-color 0.16s ease-out;
+}
+
+.search-card:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.search-icon {
+  flex-shrink: 0;
+  color: var(--icon);
 }
 
 .search-input {
   flex: 1;
+  min-width: 0;
+  min-height: 44px;
   border: none;
   outline: none;
-  font-size: 12px;
+  font-size: 15px;
   background: transparent;
   color: var(--text);
 }
 
 .search-input::placeholder {
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
 }
 
+/* prototype .filter-strip: one line that scrolls sideways, bleeding to the page edges */
 .filter-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  margin: 0 calc(-1 * var(--page-x, 16px));
+  padding: 0 var(--page-x, 16px);
+}
+
+.filter-row::-webkit-scrollbar {
+  display: none;
 }
 
 .filter-chip {
+  flex-shrink: 0;
   white-space: nowrap;
   min-height: var(--control-h);
+  min-width: 44px; /* STD-008 §5 touch target, also for a short label like "All" */
   padding: 0 12px;
-  border-radius: 999px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--icon);
+  border-radius: var(--control-radius);
+  background: transparent;
+  border: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: background-color 0.16s ease-out, color 0.16s ease-out;
 }
 
 .filter-chip.active {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: var(--on-primary);
+  background: var(--brand-blue-soft);
+  color: var(--brand-blue-hover);
+  font-weight: 600;
+}
+
+.filter-chip:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
 }
 
 .status-line {
   text-align: center;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
-  padding: 24px 0;
+  padding: 32px 16px;
+  background: var(--surface);
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow-card);
 }
 
 .status-error {
   margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--control-radius);
+  background: var(--danger-bg);
   text-align: center;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--danger-text);
 }
 
+/* the rows share one card (prototype .card of .job rows) */
 .task-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--brand-border);
+  border-radius: var(--card-radius);
+  overflow: hidden;
 }
 
 .list-foot {
@@ -112,4 +166,20 @@
   text-align: center;
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+.list-foot button {
+  min-height: var(--control-h);
+  padding: 0 16px;
+  border-radius: var(--control-radius);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search-card,
+  .filter-chip {
+    transition: none;
+  }
 }

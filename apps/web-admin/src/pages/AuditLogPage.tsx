@@ -106,7 +106,7 @@ export function AuditLogPage() {
   ];
 
   return (
-    <Page title={t("nav.auditLog")}>
+    <Page name="auditLog" title={t("nav.auditLog")}>
       <Space direction="vertical" size="large" style={{ width: "100%" }}>
         <Card>
           <Form layout="vertical" onFinish={search}>

@@ -1,18 +1,24 @@
+import { ArrowRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { BrandLoading } from "../../components/BrandLoading";
 import { useT } from "../../i18n";
 import { errorMessage } from "../../services/errors";
-import { formatBangkokDateTime } from "../../utils/format";
+import { formatBangkokDateTime, formatCount } from "../../utils/format";
+import { DocThumb } from "../scan/components/JobListItem";
 import { PageHeader } from "../scan/components/PageHeader";
+import { StatusChip } from "../scan/components/StatusChip";
+import kit from "../scan/kit.module.css";
 import theme from "../scan/theme.module.css";
 import { useCurrentTenant } from "../tenants/useCurrentTenant";
-import { heldLevels, type Level, useReviewQueue } from "./api";
+import { heldLevels, type Level, useReviewQueue, useReviewSummary } from "./api";
 import s from "./reviews.module.css";
 
-/** The review queue (FR-SYS-120): one tab per level the user holds, newest first, more on
- * scrolling. Items the user may not decide say why and open read-only. */
+/** The review queue (FR-SYS-120) in the prototype layout (FR-SYS-138): the title block, one
+ * tab per level the user holds with its count from the summary, newest first, more on
+ * scrolling. Each card shows the confirmer and the stage; items the user may not decide say
+ * why and open read-only. */
 export function ReviewQueuePage() {
   const t = useT();
   const navigate = useNavigate();
@@ -32,6 +38,7 @@ export function ReviewQueuePage() {
   const [picked, setPicked] = useState<Level | null>(null);
   const level = picked && levels.includes(picked) ? picked : (levels[0] ?? 1);
   const queue = useReviewQueue(level);
+  const summary = useReviewSummary(levels.length > 0);
   // pages are offsets: items others cleared meanwhile can shift a row into the next page
   const rows = (queue.data?.pages.flatMap((p) => p.items) ?? []).filter(
     (item, i, all) => all.findIndex((x) => x.job_id === item.job_id) === i,
@@ -52,23 +59,32 @@ export function ReviewQueuePage() {
     <div className={`${theme.scan} ${s.page}`}>
       <PageHeader title={t("review.title")} onBack={() => navigate("/")} />
       <div className={s.content}>
+        <div className={kit["title-block"]}>
+          <span className={kit.eyebrow}>{t("review.eyebrow")}</span>
+          <h2>{t("review.tagline")}</h2>
+          <p>{t("review.scope")}</p>
+        </div>
         {levels.length === 0 ? (
           <div className={s["status-line"]}>{t("review.noPermission")}</div>
         ) : (
           <>
             <div className={s.tabs} role="tablist">
-              {levels.map((l) => (
-                <button
-                  key={l}
-                  type="button"
-                  role="tab"
-                  aria-selected={l === level}
-                  className={`${s.tab} ${l === level ? s.active : ""}`}
-                  onClick={() => setPicked(l)}
-                >
-                  {t(l === 2 ? "review.level2" : "review.level1")}
-                </button>
-              ))}
+              {levels.map((l) => {
+                const count = l === 2 ? summary.data?.l2 : summary.data?.l1;
+                return (
+                  <button
+                    key={l}
+                    type="button"
+                    role="tab"
+                    aria-selected={l === level}
+                    className={`${s.tab} ${l === level ? s.active : ""}`}
+                    onClick={() => setPicked(l)}
+                  >
+                    {t(l === 2 ? "review.level2" : "review.level1")}
+                    {count != null && ` ${formatCount(count)}`}
+                  </button>
+                );
+              })}
             </div>
             {queue.isPending ? (
               <BrandLoading variant="inline" label={t("common.loading")} />
@@ -85,11 +101,23 @@ export function ReviewQueuePage() {
                     className={s.item}
                     onClick={() => navigate(`/reviews/${item.job_id}`)}
                   >
-                    <span className={s["item-name"]}>{item.file_name}</span>
-                    <span className={s.meta}>{item.template_name ?? t("template.generic")}</span>
-                    <span className={s.meta}>
-                      {t("review.confirmedBy", { name: item.confirmed_by_name ?? "-" })}
-                      {item.confirmed_at ? ` · ${formatBangkokDateTime(item.confirmed_at)}` : ""}
+                    <span className={s["item-head"]}>
+                      <DocThumb name={item.file_name} />
+                      <span className={s["item-body"]}>
+                        <span className={s["item-name"]}>{item.file_name}</span>
+                        <span className={s.meta}>{item.template_name ?? t("template.generic")}</span>
+                      </span>
+                    </span>
+                    <span className={kit["detail-row"]}>
+                      <span>{t("review.confirmer")}</span>
+                      <strong>
+                        {item.confirmed_by_name ?? "-"}
+                        {item.confirmed_at ? ` · ${formatBangkokDateTime(item.confirmed_at)}` : ""}
+                      </strong>
+                    </span>
+                    <span className={kit["detail-row"]}>
+                      <span>{t("review.stageLabel")}</span>
+                      <StatusChip stage="PENDING_REVIEW" level={level} />
                     </span>
                     {item.block_reason && (
                       <span className={s.blocked}>
@@ -100,6 +128,10 @@ export function ReviewQueuePage() {
                         )}
                       </span>
                     )}
+                    <span className={`${kit.btn} ${kit.wide} ${item.block_reason ? "" : kit.soft} ${s["item-open"]}`}>
+                      {t(item.block_reason ? "review.openReadOnly" : "review.open")}
+                      <ArrowRight size={16} strokeWidth={1.75} aria-hidden="true" />
+                    </span>
                   </button>
                 ))}
                 <div ref={sentinel} className={s.foot}>

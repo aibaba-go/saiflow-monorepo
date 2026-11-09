@@ -188,4 +188,37 @@ describe("final result and export (FR-SYS-107)", () => {
     await userEvent.click(screen.getByRole("button", { name: "New scan" }));
     expect(await screen.findByText("home page")).toBeInTheDocument();
   });
+
+  it.each([
+    ["PENDING_REVIEW", "PENDING_L1"],
+    ["PENDING_REVIEW", "PENDING_L2"],
+    ["CONFIRMED", "CONFIRMED"],
+  ])("shows the confirmed version's extra fields read-only (107-04: %s %s)", async (stage, review) => {
+    testAuth(fakeLiff({ loggedIn: true, inClient: false }));
+    const structured = { document: { invoice_no: "IV1", invoice_date: "2026-10-01", Remark: "Pay next week" } };
+    const api = mockApi({
+      [`GET ${JOB}`]: () => json(200, job(stage)),
+      [`GET ${JOB}/result`]: () =>
+        json(200, { ...result(2, structured, true), review: { stage: review, required_level: null, records: [], last_return: null } }),
+      [`POST ${JOB}/exports`]: () => json(201, { id: "e1", expires_at: "2026-11-07T00:00:00Z" }),
+      "GET /api/v1/exports/e1/download": () => new Response(new Blob(["xlsx"]), { status: 200 }),
+    });
+    Object.assign(URL, { createObjectURL: () => "blob:x", revokeObjectURL: () => {} });
+    signedIn(USER, [PERSONAL]);
+    pages("/scan/jobs/j1/final");
+    expect(await screen.findByLabelText("Remark")).toHaveTextContent("Pay next week");
+    const paths = [...document.querySelectorAll("dl [data-path]")].map((el) => el.getAttribute("data-path"));
+    expect(paths).toEqual(["document.invoice_no", "document.invoice_date", "document.Remark"]);
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Add field|Delete field|Add row/ })).toBeNull();
+    // the page shows Remark, but exports keep the existing request (107-05: no new scope)
+    if (stage === "CONFIRMED") {
+      await userEvent.click(screen.getByRole("button", { name: "Export Excel" }));
+      await waitFor(() => expect(api.count(`POST ${JOB}/exports`)).toBe(1));
+      expect(await api.bodies(`POST ${JOB}/exports`)).toEqual([{ language: "en" }]);
+    } else {
+      expect(screen.queryByRole("button", { name: "Export Excel" })).toBeNull();
+    }
+    expect(api.calls.filter((c) => c.method === "PATCH")).toHaveLength(0);
+  });
 });

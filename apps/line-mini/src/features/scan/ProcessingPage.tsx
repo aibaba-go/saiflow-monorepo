@@ -104,50 +104,68 @@ export function ProcessingPage() {
       <PageHeader title={t("processing.title")} onBack={() => navigate("/")} />
       <div className={s.content}>
         {data ? (
-          <div className={s["status-card"]}>
-            {ocrRunning || matching ? (
-              <BrandLoading variant="inline" label={matching ? t("template.matching") : t("processing.recognizing")} />
-            ) : (
-              <>
-                <div className={cx("done-mark", failed && "failed")} />
-                <div className={s["status-title"]}>
-                  {failed
-                    ? status === "CANCELLED"
-                      ? t("result.cancelledTitle")
-                      : t("job.stage.OCR_FAILED")
+          <>
+            {/* prototype .proc-hero: a sheet being read, the eyebrow, the current state */}
+            <div className={s.hero}>
+              <div className={cx("doc-art", (ocrRunning || matching) && "scanning", failed && "failed")} aria-hidden>
+                <span className={s["doc-sheet"]}>
+                  <span className={s["doc-head"]} />
+                  <span className={s["doc-line"]} />
+                  <span className={s["doc-line"]} />
+                  <span className={cx("doc-line", "short")} />
+                  <span className={s["doc-scan"]} />
+                </span>
+              </div>
+              <div className={s.eyebrow}>{t("processing.eyebrow")}</div>
+              <h2 className={s["status-title"]} role={ocrRunning || matching ? "status" : undefined}>
+                {failed
+                  ? status === "CANCELLED"
+                    ? t("result.cancelledTitle")
+                    : t("processing.failedTitle")
+                  : matching
+                    ? t("template.matching")
                     : t("processing.recognizing")}
-                </div>
-              </>
-            )}
-            <div className={s["status-sub"]}>
-              {data.file_name} · {t("processing.pagesAll", { n: data.page_count })}
+              </h2>
+              <div className={s["status-sub"]}>
+                {data.file_name} · {t("processing.pagesAll", { n: data.page_count })}
+              </div>
             </div>
-            <div className={s.steps}>
+            <ol className={s.steps}>
               {steps.map((step, i) => (
-                <div key={step.key} className={s.step}>
-                  <div className={cx("step-dot", step.done && "done", step.active && "active", step.failed && "failed")}>
+                <li key={step.key} className={cx("step", step.active && "current")}>
+                  <span className={cx("step-dot", step.done && "done", step.active && "active", step.failed && "failed")}>
                     {step.done ? (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: "var(--on-primary)" }} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M20 6L9 17l-5-5" />
                       </svg>
                     ) : step.failed ? (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: "var(--on-primary)" }} strokeWidth="3" strokeLinecap="round">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                         <path d="M18 6L6 18M6 6l12 12" />
                       </svg>
                     ) : step.active ? (
                       <span className={s["step-pulse"]} />
-                    ) : null}
-                  </div>
+                    ) : (
+                      <span className="num">{i + 1}</span>
+                    )}
+                  </span>
                   <span className={cx("step-label", (step.done || step.active) && "on", step.failed && "failed")}>
                     {t(`processing.step.${step.key}`)}
                   </span>
-                  {i < steps.length - 1 && (
-                    <div className={cx("step-line", (steps[i + 1]!.done || steps[i + 1]!.active) && "done")} />
-                  )}
-                </div>
+                  <span className={cx("step-state", step.failed && "failed")}>
+                    {t(
+                      step.failed
+                        ? "processing.stateFailed"
+                        : step.done
+                          ? "processing.stateDone"
+                          : step.active
+                            ? "processing.stateActive"
+                            : "processing.stateWaiting",
+                    )}
+                  </span>
+                </li>
               ))}
-            </div>
-          </div>
+            </ol>
+          </>
         ) : job.isError ? (
           <div className={cx("info-box", "error")}>{errorMessage(job.error, t)}</div>
         ) : (

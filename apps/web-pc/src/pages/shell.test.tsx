@@ -33,6 +33,26 @@ async function openSwitcher() {
   await userEvent.click(await screen.findByRole("button", { name: en("tenant.switch") }));
 }
 
+describe("branded shell (enterprise-ui-redesign, FR-SYS-135, FR-SYS-138)", () => {
+  it("keeps the menu order, shows the page title and links AIbaba in a new window", async () => {
+    signedIn({ "GET /api/v1/billing/usage": usageFor });
+    renderAt("/upload");
+    const menu = await screen.findByRole("menu");
+    const labels = within(menu)
+      .getAllByRole("link")
+      .map((a) => a.textContent);
+    expect(labels).toEqual(
+      (["nav.home", "nav.upload", "nav.verify", "nav.library", "nav.org", "nav.plans", "nav.notifications", "nav.profile"] as const).map((k) => en(k)),
+    );
+    const banner = screen.getByRole("banner");
+    expect(within(banner).getByText(en("nav.upload"), { selector: "[aria-current=page]" })).toBeInTheDocument();
+    const company = screen.getByRole("link", { name: en("layout.companyLink") });
+    expect(company).toHaveAttribute("href", "https://www.aibaba.asia/");
+    expect(company).toHaveAttribute("target", "_blank");
+    expect(company).toHaveAttribute("rel", "noopener noreferrer");
+  });
+});
+
 describe("layout and home (FR-SYS-094)", () => {
   it("home shows the organization's plan, period, scans left and free quota (094-01)", async () => {
     localStorage.setItem("saiflow.pc.tenant.7", "5");
@@ -42,8 +62,12 @@ describe("layout and home (FR-SYS-094)", () => {
     const card = await screen.findByTestId("usage-card");
     expect(await within(card).findByText("Starter")).toBeInTheDocument();
     expect(within(card).getByText(en("usage.validUntil", { date: "2026-12-01" }))).toBeInTheDocument();
-    expect(within(card).getByText("4,880 / 5,000")).toBeInTheDocument();
-    expect(within(card).getByText(`${en("usage.free", { n: "40" })} · ${en("usage.freeExpires", { date: "2026-11-20" })}`)).toBeInTheDocument();
+    // The prototype's usage card: used / quota as the figure, what is left next to the meter.
+    expect(within(card).getByText(en("usage.ofQuota", { n: "5,000" })).parentElement).toHaveTextContent(/^120 /);
+    expect(within(card).getByText(en("usage.left", { n: "4,880" }))).toBeInTheDocument();
+    expect(within(card).getByRole("meter")).toHaveAttribute("aria-valuenow", "120");
+    expect(within(card).getByText(en("usage.free", { n: "40" }))).toBeInTheDocument();
+    expect(within(card).getByText(en("usage.freeExpires", { date: "2026-11-20" }))).toBeInTheDocument();
   });
 
   it("personal tenant: the org page asks to switch and the menu has no Roles (094-02)", async () => {
@@ -70,22 +94,22 @@ describe("tenant switching (FR-SYS-096)", () => {
   it("switching to Siam Tools sends its tenant id and is kept (096-01)", async () => {
     const api = signedIn({ "GET /api/v1/billing/usage": usageFor }, { tenants: [PERSONAL, ORG] });
     const first = renderAt("/");
-    await screen.findByText("1,000 / 1,000");
+    await screen.findByText(en("usage.left", { n: "1,000" }));
     await openSwitcher();
     await userEvent.click(await screen.findByRole("menuitem", { name: "Siam Tools" }));
-    expect(await screen.findByText("4,880 / 5,000")).toBeInTheDocument();
+    expect(await screen.findByText(en("usage.left", { n: "4,880" }))).toBeInTheDocument();
     expect(api.calls.at(-1)!.headers.get("X-Tenant-Id")).toBe("5");
     expect(localStorage.getItem("saiflow.pc.tenant.7")).toBe("5");
     first.unmount();
     useTenantChoice.getState().reset();
     renderAt("/");
-    expect(await screen.findByText("4,880 / 5,000")).toBeInTheDocument();
+    expect(await screen.findByText(en("usage.left", { n: "4,880" }))).toBeInTheDocument();
   });
 
   it("opening the switcher re-reads the tenants: a new org appears; a failed read keeps the list (096-02)", async () => {
     const api = signedIn({ "GET /api/v1/billing/usage": usageFor }, { tenants: [PERSONAL] });
     renderAt("/");
-    await screen.findByText("1,000 / 1,000");
+    await screen.findByText(en("usage.left", { n: "1,000" }));
     api.set("GET /api/v1/me/tenants", () => json(200, [PERSONAL, ORG]));
     await openSwitcher();
     expect(await screen.findByRole("menuitem", { name: "Siam Tools" })).toBeInTheDocument();
@@ -102,7 +126,7 @@ describe("tenant switching (FR-SYS-096)", () => {
     signedIn({ "GET /api/v1/billing/usage": usageFor }, { tenants: [PERSONAL] });
     renderAt("/");
     expect(await screen.findByText(en("tenant.gone"))).toBeInTheDocument();
-    expect(await screen.findByText("1,000 / 1,000")).toBeInTheDocument();
+    expect(await screen.findByText(en("usage.left", { n: "1,000" }))).toBeInTheDocument();
     expect(localStorage.getItem("saiflow.pc.tenant.7")).toBeNull();
   });
 });
@@ -117,14 +141,14 @@ describe("an organization that disappears mid-session (Review Focus 4)", () => {
       { tenants: [PERSONAL, ORG] },
     );
     renderAt("/");
-    expect(await screen.findByText("4,880 / 5,000")).toBeInTheDocument();
+    expect(await screen.findByText(en("usage.left", { n: "4,880" }))).toBeInTheDocument();
     gone = true;
     api.set("GET /api/v1/me/tenants", () => json(200, [PERSONAL]));
     // Leave home and come back: the usage is fetched again and now answers 404.
     await userEvent.click(screen.getByRole("link", { name: en("nav.notifications") }));
     await userEvent.click(await screen.findByRole("link", { name: en("nav.home") }));
     expect(await screen.findByText(en("tenant.gone"))).toBeInTheDocument();
-    expect(await screen.findByText("1,000 / 1,000")).toBeInTheDocument();
+    expect(await screen.findByText(en("usage.left", { n: "1,000" }))).toBeInTheDocument();
     expect(screen.queryByText(en("err.not_found"))).not.toBeInTheDocument();
   });
 });
@@ -192,5 +216,16 @@ describe("profile (FR-SYS-095)", () => {
     await userEvent.click(screen.getByRole("button", { name: en("common.save") }));
     expect(await screen.findByText(en("field.phone"))).toBeInTheDocument();
     expect(phone).toHaveValue("12ab");
+  });
+});
+
+describe("selected menu item", () => {
+  it("keeps the library selected on a document detail and matches whole path segments", async () => {
+    const { selected } = await import("../layout/AppLayout");
+    expect(selected("/documents/j3")).toBe("library");
+    expect(selected("/verify/j1")).toBe("verify");
+    expect(selected("/review-settings")).toBe("reviewSettings");
+    expect(selected("/reviews/9")).toBe("reviews");
+    expect(selected("/")).toBe("home");
   });
 });

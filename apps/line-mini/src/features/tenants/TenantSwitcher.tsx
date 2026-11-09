@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { useT } from "../../i18n";
 import { refreshTenants } from "../auth/session";
@@ -11,8 +11,14 @@ export function tenantLabel(tenant: CurrentTenant, t: ReturnType<typeof useT>): 
   return tenant.kind === "organization" ? (tenant.name ?? "") : t("tenant.personal");
 }
 
-/** Switch between the personal tenant and the user's organizations (FR-SYS-046). */
-export function TenantSwitcher() {
+/** Switch between the personal tenant and the user's organizations (FR-SYS-046). `trigger`
+ * draws the opener instead of the default small button (the My page's workspace card); it
+ * gets the click handler and the current tenant's label. */
+export function TenantSwitcher({
+  trigger,
+}: {
+  trigger?: (props: { onClick(): void; label: string; tenant: CurrentTenant }) => ReactNode;
+} = {}) {
   const t = useT();
   const me = useSession((s) => s.me);
   const tenants = useSession((s) => s.tenants);
@@ -24,18 +30,21 @@ export function TenantSwitcher() {
     setTenant(kind === "organization" ? id : null);
     setOpen(false);
   };
+  const openSheet = () => {
+    setOpen(true);
+    void refreshTenants();
+  };
+  const label = t("tenant.current", { name: tenantLabel(tenant, t) });
 
   return (
     <>
-      <Button
-        size="sm"
-        onClick={() => {
-          setOpen(true);
-          void refreshTenants();
-        }}
-      >
-        {t("tenant.current", { name: tenantLabel(tenant, t) })}
-      </Button>
+      {trigger ? (
+        trigger({ onClick: openSheet, label, tenant })
+      ) : (
+        <Button size="sm" onClick={openSheet}>
+          {label}
+        </Button>
+      )}
       <BottomSheet open={open} onClose={() => setOpen(false)} label={t("tenant.switch")}>
         <div className="section__label">{t("tenant.switch")}</div>
         <div role="listbox" aria-label={t("tenant.switch")} className="choice-list">

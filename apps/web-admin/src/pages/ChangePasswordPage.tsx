@@ -54,7 +54,7 @@ export function ChangePasswordPage() {
   const confirmItem = mismatch ? { validateStatus: "error" as const, help: t("password.mismatch") } : item("confirm");
 
   return (
-    <Page title={t("nav.changePassword")}>
+    <Page name="password" title={t("nav.changePassword")}>
       <Card style={{ maxWidth: 480 }}>
         <Form layout="vertical" onFinish={submit}>
           <Form.Item label={t("password.current")} htmlFor="pw-current" {...item("current_password")}>

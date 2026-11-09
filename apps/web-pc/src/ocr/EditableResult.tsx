@@ -1,5 +1,5 @@
 import { Button, Card, Input, Modal, Space, Table, Typography } from "antd";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 import { useT } from "../i18n";
 import { useLanguage } from "../stores/language";
@@ -167,6 +167,10 @@ function RowsEditor({
   );
 }
 
+/** A header field with its delete button: the input takes the full row, like the template's
+ * own fields, and the button sits on the input's baseline. */
+const FIELD_ROW = { display: "flex", alignItems: "flex-end", gap: 8 } as const;
+
 function AddField({ existing, onAdd }: { existing: string[]; onAdd: (name: string) => void }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -208,7 +212,11 @@ function AddField({ existing, onAdd }: { existing: string[]; onAdd: (name: strin
 
 /** The editable result (FR-SYS-129): a template result by its groups and field order with
  * line-item tables (add and delete rows); a generic result by its saved groups, where
- * header fields can be added (name required, unique in the group) and deleted. Missing
+ * header fields can be added (name required, unique in the group) and deleted. In a
+ * template group with header fields, extra fields the template does not define can be
+ * added (name trimmed, not a template key or a key already in the group), edited and
+ * deleted; they follow the template's fields under their entered names, and template
+ * fields cannot be deleted. Missing
  * required fields, values that do not fit the type and amounts that do not add up are
  * marked. Numbers stay decimal text (ported rules from apps/line-mini). */
 export function EditableResult({
@@ -238,28 +246,64 @@ export function EditableResult({
     return (
       <Space direction="vertical" style={{ width: "100%" }}>
         {groups.map((g) => {
-          const gv = isObj(root[g.key as never]) ? (root as Obj)[g.key] : {};
+          const gv = (isObj(root[g.key as never]) ? (root as Obj)[g.key] : {}) as Obj;
+          const defined = g.items.map((i) => i.key);
+          // Extra header fields (FR-SYS-129): saved or drafted in this group but not defined by
+          // the template, shown with their entered names after the template's fields.
+          const extras = Object.keys(gv).filter((k) => !defined.includes(k) && !isTable(gv[k]));
+          const lastField = g.items.reduce((at, item, i) => (item.kind === "field" ? i : at), -1);
+          const ordinary = lastField >= 0 || extras.length > 0;
+          const extraFields = extras.map((k) => (
+            <div key={`extra-${k}`} style={FIELD_ROW} data-extra-field={k}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <FieldInput path={[g.key, k]} name={k} value={gv[k] ?? null} marks={marks} editable={editable} onSet={set} />
+              </div>
+              {editable && (
+                <Button
+                  size="small"
+                  danger
+                  aria-label={`${t("ocr.deleteField")}: ${k}`}
+                  style={{ marginBottom: 8 }}
+                  onClick={() => onChange(removeAt(root, [g.key, k]))}
+                >
+                  ×
+                </Button>
+              )}
+            </div>
+          ));
           return (
-            <Card key={g.key} size="small" title={label(g, lang)}>
-              {g.items.map((item) =>
+            <Card
+              key={g.key}
+              size="small"
+              title={label(g, lang)}
+              extra={
+                editable && ordinary ? (
+                  <AddField existing={[...new Set([...defined, ...Object.keys(gv)])]} onAdd={(n) => set([g.key, n], "")} />
+                ) : null
+              }
+            >
+              {lastField < 0 && extraFields}
+              {g.items.map((item, idx) =>
                 item.kind === "field" ? (
-                  <FieldInput
-                    key={item.key}
-                    path={[g.key, item.key]}
-                    name={label(item, lang)}
-                    type={item.type}
-                    value={getAt(root, [g.key, item.key])}
-                    marks={marks}
-                    editable={editable}
-                    onSet={set}
-                  />
+                  <Fragment key={item.key}>
+                    <FieldInput
+                      path={[g.key, item.key]}
+                      name={label(item, lang)}
+                      type={item.type}
+                      value={getAt(root, [g.key, item.key])}
+                      marks={marks}
+                      editable={editable}
+                      onSet={set}
+                    />
+                    {idx === lastField && extraFields}
+                  </Fragment>
                 ) : (
                   <RowsEditor
                     key={item.key}
                     path={[g.key, item.key]}
                     title={label(item, lang)}
                     columns={item.columns ?? []}
-                    rows={isTable((gv as Obj)[item.key]) ? ((gv as Obj)[item.key] as Obj[]) : []}
+                    rows={isTable(gv[item.key]) ? (gv[item.key] as Obj[]) : []}
                     marks={marks}
                     editable={editable}
                     onSet={set}
@@ -296,8 +340,8 @@ export function EditableResult({
             extra={editable ? <AddField existing={Object.keys(gv)} onAdd={(n) => set([gk, n], "")} /> : null}
           >
             {fieldKeys.map((k) => (
-              <Space key={k} align="end" style={{ width: "100%" }}>
-                <div style={{ flex: 1 }}>
+              <div key={k} style={FIELD_ROW}>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <FieldInput path={[gk, k]} name={k} value={gv[k] ?? null} marks={marks} editable={editable} onSet={set} />
                 </div>
                 {editable && (
@@ -311,7 +355,7 @@ export function EditableResult({
                     ×
                   </Button>
                 )}
-              </Space>
+              </div>
             ))}
             {tableKeys.map((k) => {
               const rows = gv[k] as Obj[];

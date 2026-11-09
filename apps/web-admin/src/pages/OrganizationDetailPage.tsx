@@ -44,6 +44,7 @@ function Detail({ id }: { id: number }) {
 
   return (
     <Page
+      name="organization"
       title={o.name}
       extra={<Link to={`/tenants/${o.tenant_id}/billing?kind=organization`}>{t("org.billing")}</Link>}
     >

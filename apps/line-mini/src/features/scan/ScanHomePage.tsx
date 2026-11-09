@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { ArrowRight, Bell, Building2, Camera, Check, ChevronDown, ChevronRight, FolderOpen, Link2, RefreshCw, Trash2 } from "lucide-react";
+import { useId, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { BrandLoading } from "../../components/BrandLoading";
@@ -15,11 +16,13 @@ import { can } from "../tenants/permissions";
 import { useCurrentTenant } from "../tenants/useCurrentTenant";
 import { deleteFile, importUrl, listJobs, type FileOut } from "./api";
 import { JobListItem } from "./components/JobListItem";
-import { usePending } from "./jobs";
+import { pendingKey, usePending } from "./jobs";
+import { heldLevels } from "../reviews/api";
 import { ReviewEntry } from "../reviews/ReviewEntry";
 import s from "./ScanHomePage.module.css";
 import theme from "./theme.module.css";
 import { formatSize, useUploadQueue, type UploadItem } from "./uploadQueue";
+import { recentKey, useHomeRefresh } from "./useHomeRefresh";
 
 const cx = (...names: (string | false | null | undefined)[]) => names.filter(Boolean).map((n) => s[n as string] ?? n).join(" ");
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -49,7 +52,8 @@ export function ScanHomePage() {
 
 function ScanHome() {
   const t = useT();
-  const [now] = useState(() => Date.now());
+  const uid = useId();
+  const [now, setNow] = useState(() => Date.now());
   const navigate = useNavigate();
   const client = useQueryClient();
   const me = useSession((st) => st.me);
@@ -59,7 +63,7 @@ function ScanHome() {
   const unread = useUnreadCount();
   const pending = usePending();
   const recent = useQuery({
-    queryKey: ["jobs", tenant?.tenant_id, "recent"],
+    queryKey: recentKey(tenant?.tenant_id),
     queryFn: () => listJobs({ page: 1, pageSize: 10 }),
     enabled: tenant !== null,
   });
@@ -81,6 +85,25 @@ function ScanHome() {
   const inputBusy = queue.busy || urlBusy;
   const isUser = me?.kind === "user";
   const mayUpload = can(tenant, "upload_ocr");
+  // Manual refresh (FR-SYS-109): reads only; the batch, URL input and workspace stay as they are.
+  const home = useHomeRefresh({
+    tenantId: tenant?.tenant_id ?? null,
+    isUser,
+    review: heldLevels(tenant).length > 0, // exactly when ReviewEntry is shown
+    onSettled(fresh) {
+      setNow(Date.now()); // the plan's days-left reference
+      if (!fresh.has("pending")) return; // the read failed: the old list and choices stay
+      const still = new Set((client.getQueryData<FileOut[]>(pendingKey(tenant?.tenant_id)) ?? []).map((f) => f.id));
+      setSelected((list) => list.filter((id) => still.has(id)));
+    },
+  });
+  const refreshNote = home.refreshing
+    ? t("home.refreshing")
+    : home.outcome === "done"
+      ? t("home.refreshDone")
+      : home.outcome === "partial"
+        ? t("home.refreshPartial")
+        : "";
 
   const pendingFiles = pending.data ?? [];
   const selectedPending = pendingFiles.filter((f) => selected.includes(f.id));
@@ -195,71 +218,96 @@ function ScanHome() {
   return (
     <div className={`${theme.scan} ${s.home}`}>
       <header className={s["home-header"]}>
-        <div className={s["logo-chip"]}>
-          <svg width="26" height="26" viewBox="0 0 40 40" fill="none">
-            <path d="M12 27V13h11" stroke="currentColor" style={{ color: "var(--primary)" }} strokeWidth="3.4" strokeLinecap="round" />
-            <path d="M12 20h8" stroke="currentColor" style={{ color: "var(--primary)" }} strokeWidth="3.4" strokeLinecap="round" />
-            <circle cx="27.5" cy="26.5" r="2.5" fill="currentColor" style={{ color: "var(--primary)" }} />
-          </svg>
+        <div className={s.brandmark}>
+          <span className={s.wordmark} role="img" aria-label="AIbaba">
+            <span className={s["wordmark-ai"]} aria-hidden="true">AI</span>
+            <span aria-hidden="true">baba</span>
+          </span>
+          <span className={s["product-divider"]} aria-hidden="true" />
+          <span className={s.product}>
+            <span className={s["product-name"]}>SaiFlow</span>
+            <span className={s["product-sub"]}>{t("home.productSub")}</span>
+          </span>
         </div>
-        <div className={s.brand}>saiflow</div>
-        {isUser && (
-          <button type="button" className={s.bell} aria-label={t("notify.title")} onClick={() => navigate("/notifications")}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: "var(--icon)" }} strokeWidth="2" strokeLinecap="round">
-              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.7 21a2 2 0 0 1-3.4 0" />
-            </svg>
-            {(unread.data ?? 0) > 0 && <span className={s["bell-dot"]} aria-label={t("notify.hasUnread")} />}
+        <div className={s["header-actions"]}>
+          <button
+            type="button"
+            className={s["refresh-btn"]}
+            aria-label={home.refreshing ? t("home.refreshing") : t("home.refresh")}
+            aria-busy={home.refreshing}
+            aria-disabled={home.refreshing || !tenant}
+            onClick={() => void home.refresh()}
+          >
+            <RefreshCw className={s["refresh-icon"]} size={19} strokeWidth={1.9} aria-hidden="true" />
           </button>
-        )}
+          {isUser && (
+            <button type="button" className={s.bell} aria-label={t("notify.title")} onClick={() => navigate("/notifications")}>
+              <Bell size={21} strokeWidth={1.8} aria-hidden="true" />
+              {(unread.data ?? 0) > 0 && <span className={s["bell-dot"]} aria-label={t("notify.hasUnread")} />}
+            </button>
+          )}
+        </div>
       </header>
 
       <div className={s.content}>
-        {isUser && (
-          <div className={s["ws-row"]}>
-            <div className={s["ws-switch"]}>
-              <button
-                type="button"
-                className={s["ws-pill"]}
-                disabled={inputBusy}
-                aria-expanded={wsOpen}
-                onClick={() => !inputBusy && setWsOpen(!wsOpen)}
-              >
-                <span className={s["ws-dot"]} />
-                <span>{tenantName(currentOrg)}</span>
-                <svg className={cx("ws-chevron", wsOpen && "open")} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-                  <path d="M6 9l6 6 6-6" />
-                </svg>
-              </button>
-              {wsOpen && <div className={s["ws-menu-backdrop"]} onClick={() => setWsOpen(false)} />}
-              {wsOpen && (
-                <div className={s["ws-menu"]} role="menu">
-                  {[null, ...orgs.map((o) => o.tenant_id)].map((id) => (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      key={id ?? "personal"}
-                      className={cx("ws-menu-item", id === currentOrg && "current")}
-                      disabled={inputBusy}
-                      onClick={() => {
-                        setTenant(id);
-                        setWsOpen(false);
-                      }}
-                    >
-                      <span className={s["ws-menu-name"]}>{tenantName(id)}</span>
-                      {id !== null && <em>{orgs.find((o) => o.tenant_id === id)?.role?.name ?? ""}</em>}
-                      {id === currentOrg && (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: "var(--success)" }} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M20 6L9 17l-5-5" />
-                        </svg>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
+        <div className={s.welcome}>
+          {isUser && (
+            <div className={s["ws-row"]}>
+              <div className={s["ws-switch"]}>
+                <button
+                  type="button"
+                  className={s["ws-pill"]}
+                  disabled={inputBusy}
+                  aria-expanded={wsOpen}
+                  onClick={() => !inputBusy && setWsOpen(!wsOpen)}
+                >
+                  <Building2 className={s["ws-icon"]} size={15} strokeWidth={1.8} aria-hidden="true" />
+                  <span>{tenantName(currentOrg)}</span>
+                  <ChevronDown className={cx("ws-chevron", wsOpen && "open")} size={14} strokeWidth={2} aria-hidden="true" />
+                </button>
+                {wsOpen && <div className={s["ws-menu-backdrop"]} onClick={() => setWsOpen(false)} />}
+                {wsOpen && (
+                  <div className={s["ws-menu"]} role="menu">
+                    {[null, ...orgs.map((o) => o.tenant_id)].map((id) => (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        key={id ?? "personal"}
+                        className={cx("ws-menu-item", id === currentOrg && "current")}
+                        disabled={inputBusy}
+                        onClick={() => {
+                          setTenant(id);
+                          setWsOpen(false);
+                        }}
+                      >
+                        <span className={s["ws-menu-name"]}>{tenantName(id)}</span>
+                        {id !== null && <em>{orgs.find((o) => o.tenant_id === id)?.role?.name ?? ""}</em>}
+                        {id === currentOrg && <Check className={s["ws-check"]} size={14} strokeWidth={3} aria-hidden="true" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+          <h1 className={s.tagline}>
+            {t("home.taglineLead")}
+            <span className={s["tagline-accent"]}>{t("home.taglineAccent")}</span>
+          </h1>
+          <p className={s["tagline-sub"]}>{t("home.taglineSub")}</p>
+          <span className={s["welcome-label"]} aria-hidden="true">
+            {t("home.documentAi")}
+          </span>
+          {refreshNote && (
+            <p
+              className={cx("status-line", home.outcome === "partial" && "error")}
+              role={home.outcome === "partial" ? "alert" : "status"}
+              data-refresh-note=""
+            >
+              {refreshNote}
+            </p>
+          )}
+        </div>
 
         {expired && isUser && (
           <div className={s["expired-card"]} role="alert">
@@ -276,84 +324,104 @@ function ScanHome() {
 
         {u && isUser && (
           <div className={s["quota-card"]}>
-            <div className={s["quota-icon"]}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: "var(--primary)" }} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                <path d="M13 2v7h7" />
-              </svg>
+            {/* one sentence for screen readers; the visual pieces below repeat it */}
+            <span className={s["sr-only"]}>
+              {t("home.quotaPages", {
+                plan: planLabel,
+                left: formatCount(u.month.remaining),
+                total: formatCount(u.month.quota),
+              })}
+            </span>
+            <div className={s["quota-top"]} aria-hidden="true">
+              <span className={s["quota-label"]}>{t("home.quotaLabel")}</span>
+              <span className={s["plan-tag"]}>{planLabel}</span>
             </div>
-            <div className={s["quota-body"]}>
-              <div className={s["quota-text"]}>
-                {t("home.quotaPages", {
-                  plan: planLabel,
-                  left: formatCount(u.month.remaining),
-                  total: formatCount(u.month.quota),
-                })}
+            <div className={s["quota-row"]}>
+              <div className={s["quota-value"]} aria-hidden="true">
+                {formatCount(u.month.remaining)}
+                <small>{t("home.quotaTotal", { total: formatCount(u.month.quota) })}</small>
               </div>
-              <div className={s["quota-track"]}>
-                <div className={s["quota-fill"]} style={{ width: `${quotaPct}%` }} />
-              </div>
-              {u.plan && (
-                <div className={cx("quota-expiry", expiringSoon && "warn", expired && "danger")}>
-                  <span>{t("sub.validUntil", { date: formatBangkokDate(u.plan.ends_at) })}</span>
-                  {daysLeft !== null && (
-                    <span className={s["quota-days"]}>
-                      {" · "}
-                      {daysLeft <= 0 ? t("sub.lastDay") : t("sub.daysLeft", { n: daysLeft })}
-                    </span>
-                  )}
-                  {expiringSoon && <span className={s["quota-soon"]}>{t("sub.expiringSoon")}</span>}
-                </div>
-              )}
-              {u.free.remaining > 0 && (
-                <div className={s["quota-expiry"]}>{t("usage.free", { n: formatCount(u.free.remaining) })}</div>
-              )}
+              <button type="button" className={s["quota-plans"]} onClick={() => navigate("/plans")}>
+                {t("home.plansLink")}
+              </button>
             </div>
-            <button type="button" className={s["quota-plans"]} onClick={() => navigate("/plans")}>
-              {t("home.plansLink")}
-            </button>
+            <div className={s["quota-track"]}>
+              <div className={s["quota-fill"]} style={{ width: `${quotaPct}%` }} />
+            </div>
+            {(u.plan || u.free.remaining > 0) && (
+              <div className={s["quota-bottom"]}>
+                {u.free.remaining > 0 && (
+                  <div className={s["quota-free"]}>
+                    <span>{t("usage.free", { n: formatCount(u.free.remaining) })}</span>
+                    {u.free.expires_at && (
+                      <span className={s["quota-days"]}>
+                        {" · "}
+                        {t("usage.freeExpires", { date: formatBangkokDate(u.free.expires_at) })}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {u.plan && (
+                  <div className={cx("quota-expiry", expiringSoon && "warn", expired && "danger")}>
+                    <span>{t("sub.validUntil", { date: formatBangkokDate(u.plan.ends_at) })}</span>
+                    {daysLeft !== null && (
+                      <span className={s["quota-days"]}>
+                        {" · "}
+                        {daysLeft <= 0 ? t("sub.lastDay") : t("sub.daysLeft", { n: daysLeft })}
+                      </span>
+                    )}
+                    {expiringSoon && <span className={s["quota-soon"]}>{t("sub.expiringSoon")}</span>}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
-        <ReviewEntry />
-
         {mayUpload && (
           <>
-            <div className={s["entry-grid"]}>
-              <button type="button" className={s["entry-card"]} disabled={inputBusy} onClick={() => camera.current?.click()}>
-                <div className={s["entry-icon"]}>
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: "var(--primary)" }} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                    <circle cx="12" cy="13" r="4" />
-                  </svg>
-                </div>
-                <span>{t("home.camera")}</span>
-              </button>
-              <button type="button" className={s["entry-card"]} disabled={inputBusy} onClick={() => files.current?.click()}>
-                <div className={s["entry-icon"]}>
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: "var(--primary)" }} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                    <path d="M13 2v7h7" />
-                  </svg>
-                </div>
-                <span>{t("home.files")}</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              className={s["entry-card"]}
+              disabled={inputBusy}
+              aria-labelledby={`${uid}-scan`}
+              aria-describedby={`${uid}-scan-sub`}
+              onClick={() => camera.current?.click()}
+            >
+              <span className={s["entry-icon"]} aria-hidden="true">
+                <Camera size={25} strokeWidth={1.7} />
+              </span>
+              <span className={s["scan-text"]}>
+                <span id={`${uid}-scan`} className={s["scan-title"]}>
+                  {t("home.scanTitle")}
+                </span>
+                <span id={`${uid}-scan-sub`} className={s["scan-sub"]}>
+                  {t("home.cameraSub")}
+                </span>
+              </span>
+              <ArrowRight className={s["scan-arrow"]} size={20} strokeWidth={1.9} aria-hidden="true" />
+            </button>
             <input ref={camera} data-testid="scan-camera" type="file" accept="image/jpeg,image/png" capture="environment" disabled={inputBusy} hidden onChange={(e) => picked(e.currentTarget)} />
             <input ref={files} data-testid="scan-files" type="file" multiple disabled={inputBusy} hidden onChange={(e) => picked(e.currentTarget)} />
 
-            {!urlMode ? (
-              <button type="button" className={s["url-row"]} disabled={inputBusy} onClick={() => setUrlMode(true)}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: "var(--primary)" }} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />
-                  <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
-                </svg>
-                <span>{t("home.importUrl")}</span>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: "var(--icon)" }} strokeWidth="2.2" strokeLinecap="round">
-                  <path d="M9 18l6-6-6-6" />
-                </svg>
+            <div className={s["scan-methods"]}>
+              <button type="button" className={s.method} disabled={inputBusy} onClick={() => files.current?.click()}>
+                <FolderOpen size={17} strokeWidth={1.8} aria-hidden="true" />
+                <span>{t("home.files")}</span>
               </button>
-            ) : (
+              <button
+                type="button"
+                className={cx("method", urlMode && "active")}
+                disabled={inputBusy}
+                aria-expanded={urlMode}
+                onClick={() => setUrlMode(true)}
+              >
+                <Link2 size={17} strokeWidth={1.8} aria-hidden="true" />
+                <span>{t("home.importUrl")}</span>
+              </button>
+            </div>
+
+            {urlMode && (
               <div className={s["url-editor"]}>
                 <input
                   className={s["url-input"]}
@@ -371,6 +439,8 @@ function ScanHome() {
             )}
           </>
         )}
+
+        <ReviewEntry />
 
         {showUploadBox && (
           <section className={s["upload-box"]} aria-label={queue.busy ? t("home.batch.title") : t("home.batch.finished")}>
@@ -559,16 +629,8 @@ function ScanHome() {
               {t("home.pending.title")}
               <span className={s["count-badge"]}>{pendingFiles.length}</span>
             </h2>
-            <button
-              type="button"
-              className={s["select-all"]}
-              disabled={!pendingFiles.length || deleting}
-              onClick={() => setSelected(allSelected ? [] : pendingFiles.map((f) => f.id))}
-            >
-              {allSelected ? t("home.pending.deselectAll") : t("home.pending.selectAll")}
-            </button>
+            <span className={s["section-hint"]}>{t("home.pending.hint")}</span>
           </div>
-          <p className={s["section-desc"]}>{t("home.pending.desc")}</p>
           {deleteTargets.length > 0 && (
             <div className={cx("inline-confirm", "delete-confirm")} role="alertdialog" aria-label={t("home.pending.deleteTitleOne")}>
               <p className={s["confirm-title"]}>
@@ -606,7 +668,7 @@ function ScanHome() {
               <div className={s["pending-state"]}>
                 <BrandLoading variant="inline" label={t("common.loading")} />
               </div>
-            ) : pending.isError ? (
+            ) : pending.isError && pending.data === undefined ? (
               <p className={cx("pending-state", "status-line", "error")}>{errorMessage(pending.error, t)}</p>
             ) : !pendingFiles.length ? (
               <div className={cx("pending-state", "pending-empty")}>
@@ -617,42 +679,57 @@ function ScanHome() {
             ) : (
               <>
                 {pendingFiles.map((file) => (
-                  <div key={file.id} className={cx("pending-row", selected.includes(file.id) && "chosen")} data-pending={file.original_name}>
-                    <label className={s.check}>
-                      <input
-                        type="checkbox"
-                        checked={selected.includes(file.id)}
-                        aria-label={t("home.pending.select", { name: file.original_name })}
-                        onChange={() =>
-                          setSelected((list) => (list.includes(file.id) ? list.filter((id) => id !== file.id) : [...list, file.id]))
-                        }
-                      />
-                    </label>
-                    <div className={s["file-icon"]} aria-hidden="true">
-                      {/* A thumbnail where main shows a file icon (FR-SYS-058, 111). */}
-                      <PageImage className={s.thumb} fileId={file.id} alt={file.original_name} />
-                    </div>
-                    <div className={s["file-body"]}>
-                      <div className={s["file-name"]} title={file.original_name}>
-                        {file.original_name}
+                  <div key={file.id} className={cx("pending-card", selected.includes(file.id) && "chosen")} data-pending={file.original_name}>
+                    <div className={s["pending-main"]}>
+                      <label className={s.check}>
+                        <input
+                          type="checkbox"
+                          checked={selected.includes(file.id)}
+                          aria-label={t("home.pending.select", { name: file.original_name })}
+                          onChange={() =>
+                            setSelected((list) => (list.includes(file.id) ? list.filter((id) => id !== file.id) : [...list, file.id]))
+                          }
+                        />
+                      </label>
+                      <div className={s["pending-thumb"]} aria-hidden="true">
+                        {/* A thumbnail where main shows a file icon (FR-SYS-058, 111). */}
+                        <PageImage className={s.thumb} fileId={file.id} alt={file.original_name} />
                       </div>
-                      <div className={s["file-meta"]}>
-                        <span>{pagesText(file)}</span>
-                        <span className={s["pending-badge"]}>{t("home.pending.badge")}</span>
+                      <div className={s["file-body"]}>
+                        <div className={s["pending-name"]} title={file.original_name}>
+                          {file.original_name}
+                        </div>
+                        <div className={s["pending-meta"]}>
+                          <span>{pagesText(file)}</span>
+                          {file.size_bytes ? <span>{formatSize(file.size_bytes)}</span> : null}
+                          <span className={s["pending-badge"]}>{t("home.pending.badge")}</span>
+                        </div>
                       </div>
                     </div>
-                    <button type="button" className={s["process-btn"]} disabled={deleting} aria-label={t("home.pending.processName", { name: file.original_name })} onClick={() => processFiles([file.id])}>
-                      {t("home.pending.process")}
-                    </button>
-                    <button type="button" className={s["trash-btn"]} disabled={deleting} aria-label={t("home.pending.deleteName", { name: file.original_name })} onClick={() => askDelete([file.id])}>
-                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7" />
-                      </svg>
-                    </button>
+                    <div className={s["pending-actions"]}>
+                      <button type="button" className={s["trash-btn"]} disabled={deleting} aria-label={t("home.pending.deleteName", { name: file.original_name })} onClick={() => askDelete([file.id])}>
+                        <Trash2 size={15} strokeWidth={1.9} aria-hidden="true" />
+                        <span aria-hidden="true">{t("common.delete")}</span>
+                      </button>
+                      <button type="button" className={s["process-btn"]} disabled={deleting} aria-label={t("home.pending.processName", { name: file.original_name })} onClick={() => processFiles([file.id])}>
+                        <span aria-hidden="true">{t("home.pending.preview")}</span>
+                        <ChevronRight size={15} strokeWidth={2} aria-hidden="true" />
+                      </button>
+                    </div>
                   </div>
                 ))}
                 <div className={s["batch-bar"]}>
-                  <span className={s["batch-selected"]}>{t("home.pending.selected", { n: selectedPending.length })}</span>
+                  <div className={s["batch-top"]}>
+                    <span className={s["batch-selected"]}>{t("home.pending.selected", { n: selectedPending.length })}</span>
+                    <button
+                      type="button"
+                      className={s["select-all"]}
+                      disabled={!pendingFiles.length || deleting}
+                      onClick={() => setSelected(allSelected ? [] : pendingFiles.map((f) => f.id))}
+                    >
+                      {allSelected ? t("home.pending.deselectAll") : t("home.pending.selectAll")}
+                    </button>
+                  </div>
                   <div className={s["batch-actions"]}>
                     <button type="button" className={s["bulk-delete"]} disabled={!selectedPending.length || deleting} onClick={() => askDelete(selected)}>
                       {selectedPending.length ? t("home.pending.deleteN", { n: selectedPending.length }) : t("home.pending.deleteSelected")}
@@ -667,7 +744,12 @@ function ScanHome() {
           </div>
         </section>
 
-        <div className={s["section-title"]}>{t("home.recent")}</div>
+        <div className={cx("section-head", "recent-head")}>
+          <h2 className={s["section-title"]}>{t("home.recent")}</h2>
+          <button type="button" className={s["section-link"]} onClick={() => navigate("/history")}>
+            {t("home.recentAll")}
+          </button>
+        </div>
         {recent.isPending ? (
           <div className={s["status-line"]}>
             <BrandLoading variant="inline" label={t("common.loading")} />

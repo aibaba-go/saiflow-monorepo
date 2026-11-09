@@ -1,0 +1,29 @@
+/* AIbaba / SaiFlow customer brand (enterprise-ui-redesign, FR-SYS-132; STD-008 §2.1).
+ * web-pc, the LINE mini app and admin (owner 2026-11-09) import this after tokens.css.
+ * Values equal BRAND_COLORS in src/tokens.ts (tested). */
+:root {
+  --primary: #1A6FE8;
+  --primary-hover: #1559C0;
+  --primary-pressed: #124A9E;
+  --primary-soft: #EAF2FF;
+  --info: #1A6FE8;
+  --info-bg: #EAF2FF;
+  --info-text: #1559C0;
+  --border: #E2E8F0;
+  --bg: #F5F7FA;
+
+  --brand-navy: #0A2540;
+  --brand-navy-2: #11335A;
+  --brand-blue: #1A6FE8;
+  --brand-blue-hover: #1559C0;
+  --brand-blue-soft: #EAF2FF;
+  --brand-teal: #00C9A7;
+  --brand-teal-ink: #007D6C;
+  --brand-border: #E2E8F0;
+  --brand-bg: #F5F7FA;
+  --brand-on-navy: #FFFFFF;
+  --brand-on-navy-muted: #B9C6D8;
+
+  --shadow-card: 0 1px 2px rgb(10 37 64 / 0.05), 0 4px 16px rgb(10 37 64 / 0.06);
+  --shadow-raised: 0 10px 30px rgb(10 37 64 / 0.14);
+}

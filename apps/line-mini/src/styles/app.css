@@ -2,10 +2,15 @@ body {
   margin: 0;
 }
 .page {
-  padding: 16px 16px 72px;
+  padding: 20px 16px var(--tabbar-space);
+  padding-top: max(20px, env(safe-area-inset-top));
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 100dvh;
+  background: var(--bg);
 }
 .page--center {
   min-height: 70vh;
@@ -13,9 +18,12 @@ body {
   justify-content: center;
   text-align: center;
 }
+/* prototype .page-title-block h2 */
 .page__title {
-  font-size: 20px;
-  margin: 0 0 4px;
+  font-size: 24px;
+  line-height: 1.4;
+  margin: 2px 0 8px;
+  color: var(--brand-navy);
 }
 .section__label {
   font-size: 13px;

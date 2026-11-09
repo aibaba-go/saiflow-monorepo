@@ -14,6 +14,12 @@ import s from "./ConfirmPage.module.css";
 import { useCreateJobs } from "./jobs";
 import theme from "./theme.module.css";
 
+/** "PDF", "PNG"…: the extension under the file mark (prototype .file-icon). */
+function ext(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot > 0 ? name.slice(dot + 1, dot + 5).toUpperCase() : "";
+}
+
 /** main `ConfirmPage.vue` (FR-SYS-058, 112): preview the chosen Pending files one by one,
  * then start them in order with one tap. A second tap after a failure starts only the rest
  * (the same idempotency keys, AC-058-03). Quota and plan failures keep our wording and the
@@ -73,6 +79,9 @@ export function ConfirmPage() {
       ? t("confirm.startOne")
       : t("confirm.startMany", { n: remaining.length });
   const startedCount = ids.length - remaining.length;
+  const pagesText = (n: number) => (n === 1 ? t("home.pending.pageOne") : t("home.pending.pageMany", { n }));
+  // the pages this tap will start (the quota it uses), from the files themselves
+  const totalPages = files.reduce((sum, q) => (q.data && !started[q.data.id] ? sum + (q.data.page_count || 1) : sum), 0);
   const quota = error?.code === "quota_exceeded";
   const expired = error?.code === "plan_expired";
 
@@ -102,19 +111,29 @@ export function ConfirmPage() {
             {t("scan.toPlans")}
           </button>
         )}
-        {multiple && (
-          <div className={s["file-switch"]}>
-            <button type="button" className={s["switch-btn"]} aria-label={t("confirm.prevFile")} disabled={create.pending || index === 0} onClick={() => setIndex(index - 1)}>
-              ‹
-            </button>
-            <span className={s["switch-position"]}>{t("confirm.filePosition", { n: index + 1, total: ids.length })}</span>
-            <button type="button" className={s["switch-btn"]} aria-label={t("confirm.nextFile")} disabled={create.pending || index >= ids.length - 1} onClick={() => setIndex(index + 1)}>
-              ›
-            </button>
-          </div>
-        )}
         {current ? (
           <>
+            {/* prototype .file-card: the file, where it sits in the selection, its pages */}
+            <div className={s["file-summary"]}>
+              <span className={s["file-icon"]} aria-hidden>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+                  <path d="M14 3v5h5M9 13h6M9 17h4" />
+                </svg>
+                <span className={s["file-ext"]}>{ext(current.original_name)}</span>
+              </span>
+              <div className={s["file-text"]}>
+                <div className={s["file-name"]}>{current.original_name}</div>
+                <div className={s["file-meta"]}>
+                  {t("confirm.fileInfo", { n: index + 1, total: ids.length, pages: pagesText(current.page_count || 1) })}
+                </div>
+              </div>
+              {multiple && (
+                <div className={[s["file-state"], started[current.id] && s.started].filter(Boolean).join(" ")}>
+                  {started[current.id] ? t("confirm.started") : t("confirm.notStarted")}
+                </div>
+              )}
+            </div>
             <button type="button" className={s["preview-wrap"]} aria-label={t("result.tapZoom")} onClick={() => setViewer(true)}>
               {preview ? <img className={s.preview} src={preview} alt={current.original_name} /> : <span className={s.preview} />}
               <div className={s["page-badge"]}>{t("confirm.pageOf", { n: 1, total: current.page_count || 1 })}</div>
@@ -128,29 +147,31 @@ export function ConfirmPage() {
             {viewer && (
               <ImageViewer fileId={current.id} pages={current.page_count || 1} alt={current.original_name} onClose={() => setViewer(false)} />
             )}
-            <div className={s["file-summary"]}>
-              <div className={s["file-name"]}>{current.original_name}</div>
-              <div className={s["file-meta"]}>
-                {(current.page_count || 1) === 1
-                  ? t("home.pending.pageOne")
-                  : t("home.pending.pageMany", { n: current.page_count || 1 })}
-              </div>
-              {multiple && (
-                <div className={[s["file-state"], started[current.id] && s.started].filter(Boolean).join(" ")}>
-                  {started[current.id] ? t("confirm.started") : t("confirm.notStarted")}
-                </div>
-              )}
-            </div>
+            <p className={s.notice}>{t("confirm.notice")}</p>
           </>
         ) : (
           loading && <BrandLoading variant="page" label={t("common.loading")} />
+        )}
+        {multiple && (
+          <div className={s["file-switch"]}>
+            <button type="button" className={s["switch-btn"]} aria-label={t("confirm.prevFile")} disabled={create.pending || index === 0} onClick={() => setIndex(index - 1)}>
+              ‹
+            </button>
+            <span className={s["switch-position"]}>{t("confirm.filePosition", { n: index + 1, total: ids.length })}</span>
+            <button type="button" className={s["switch-btn"]} aria-label={t("confirm.nextFile")} disabled={create.pending || index >= ids.length - 1} onClick={() => setIndex(index + 1)}>
+              ›
+            </button>
+          </div>
         )}
         {unavailable && (
           <p className={s["status-error"]} role="alert">
             {t("confirm.unavailable")}
           </p>
         )}
-        {ids.length > 0 && (
+      </div>
+      {ids.length > 0 && (
+        <div className={s["action-bar"]}>
+          {totalPages > 0 && <p className={s["bar-caption"]}>{t("confirm.pagesCaption", { pages: pagesText(totalPages) })}</p>}
           <button
             type="button"
             className={s["primary-btn"]}
@@ -159,8 +180,8 @@ export function ConfirmPage() {
           >
             {create.pending ? <BrandLoading variant="inline" label={t("common.loading")} /> : startLabel}
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

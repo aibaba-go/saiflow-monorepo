@@ -1,0 +1,18 @@
+/* prototype .link-row (FR-SYS-118): the change log as a quiet row under the data */
+.link-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 2px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+}
+
+.link-row:active {
+  color: var(--brand-navy);
+}

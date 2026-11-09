@@ -57,7 +57,8 @@ describe("shared scan parts (main's components)", () => {
     const open = vi.fn();
     render(<JobListItem job={job} onOpen={open} />);
     expect(screen.getByText("invoice.pdf")).toBeInTheDocument();
-    expect(screen.getByText(/3 pages · 08:05/)).toBeInTheDocument();
+    expect(screen.getByText("3 pages")).toBeInTheDocument();
+    expect(screen.getByText("08:05")).toBeInTheDocument();
     expect(screen.getByText("Tax Invoice")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button"));
     expect(open).toHaveBeenCalledWith(job);

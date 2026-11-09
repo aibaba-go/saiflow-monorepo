@@ -1,14 +1,25 @@
-/* Stage tags in the STD-008 colours (§2.4, §7.3): soft background, readable text. */
+/* Stage tags in the STD-008 colours (§2.4, §7.3): the prototype's pill — soft background,
+ * readable text and a small dot in the text colour. */
 .stage-tag {
   display: inline-flex;
   align-items: center;
-  padding: 0 10px;
-  border-radius: 999px;
-  font-size: 13px;
-  line-height: 22px;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  line-height: 14px;
   font-weight: 500;
   white-space: nowrap;
-  margin-inline-end: 8px;
+  margin-inline-end: 6px;
+  vertical-align: middle;
+}
+.stage-tag::before {
+  content: "";
+  flex-shrink: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
 }
 .stage-tag--warning { background: var(--warning-bg); color: var(--warning-text); }
 .stage-tag--danger { background: var(--danger-bg); color: var(--danger-text); }

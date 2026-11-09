@@ -38,6 +38,39 @@ export const COLORS = {
 
 export type ColorToken = keyof typeof COLORS;
 
+/**
+ * AIbaba / SaiFlow customer brand (enterprise-ui-redesign, FR-SYS-132): web-pc and the LINE
+ * mini app use these instead of the COLORS of the same name; admin keeps COLORS.
+ * `styles/brand.css` repeats them as CSS variables; a test keeps the two equal.
+ */
+export const BRAND_COLORS = {
+  primary: "#1A6FE8",
+  "primary-hover": "#1559C0",
+  "primary-pressed": "#124A9E",
+  "primary-soft": "#EAF2FF",
+  info: "#1A6FE8",
+  "info-bg": "#EAF2FF",
+  "info-text": "#1559C0",
+  border: "#E2E8F0",
+  bg: "#F5F7FA",
+  "brand-navy": "#0A2540",
+  "brand-navy-2": "#11335A",
+  "brand-blue": "#1A6FE8",
+  "brand-blue-hover": "#1559C0",
+  "brand-blue-soft": "#EAF2FF",
+  "brand-teal": "#00C9A7",
+  "brand-teal-ink": "#007D6C",
+  "brand-border": "#E2E8F0",
+  "brand-bg": "#F5F7FA",
+  "brand-on-navy": "#FFFFFF",
+  "brand-on-navy-muted": "#B9C6D8",
+} as const;
+
+export type BrandColorToken = keyof typeof BRAND_COLORS;
+
+/** The customer palette: COLORS with the brand values in place (web-pc, line-mini). */
+export const CLIENT_COLORS = { ...COLORS, ...BRAND_COLORS } as const;
+
 export const FONT_STACK =
   '"IBM Plex Sans", "IBM Plex Sans Thai", "Noto Sans SC", -apple-system, "Segoe UI", sans-serif';
 

@@ -19,10 +19,14 @@ export function HealthPage() {
   const { data, isError } = useQuery({ queryKey: ["backend-health"], queryFn: fetchBackendHealth });
   const status = isError ? "error" : data ? STATUS[data.state] : "info";
   return (
-    <Result
-      status={status}
-      title={<Typography.Title level={2}>{"SaiFlow Admin"}</Typography.Title>}
-      subTitle={<Typography.Text>{label(data, isError)}</Typography.Text>}
-    />
+    <div className="ad-standalone">
+      <div className="ad-standalone__card">
+        <Result
+          status={status}
+          title={<Typography.Title level={2}>{"SaiFlow Admin"}</Typography.Title>}
+          subTitle={<Typography.Text>{label(data, isError)}</Typography.Text>}
+        />
+      </div>
+    </div>
   );
 }

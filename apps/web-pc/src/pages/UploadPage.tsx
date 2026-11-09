@@ -3,9 +3,11 @@ import { Alert, App, Button, Card, Progress, Space, Table, Typography, Upload } 
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
+import { FileName } from "../components/FileName";
 import { Page } from "../components/Page";
 import { formatBangkokDateTime } from "../format";
 import { isMessageKey, useT } from "../i18n";
+import { Icon } from "../layout/icons";
 import { cancelJob, createJob, deleteFile, getJob, type JobOut, listJobs, listPending, rerunJob } from "../ocr/api";
 import { MAX_FILES } from "../ocr/upload";
 import { StageTag } from "../ocr/StageTag";
@@ -15,6 +17,15 @@ import { can } from "../tenants/permissions";
 import { useTenant } from "../tenants/useTenant";
 
 const UNFINISHED = ["OCR_PROCESSING", "TEMPLATE_MATCHING"];
+
+/** What happens to an upload, as three steps; product description only (enterprise-ui-redesign). */
+const STEPS = [
+  { code: "brand.step1Code", title: "brand.step1", body: "brand.step1Body" },
+  { code: "brand.step2Code", title: "brand.step2", body: "brand.step2Body" },
+  { code: "brand.step3Code", title: "brand.step3", body: "brand.step3Body" },
+] as const;
+
+const pad = (n: number) => String(n).padStart(2, "0");
 
 function failureText(code: string | null | undefined, t: ReturnType<typeof useT>): string {
   const key = `ocrerr.${code ?? ""}`;
@@ -180,11 +191,14 @@ function UploadContent() {
   const quota = startError instanceof ApiError && startError.code === "quota_exceeded";
   const expired = startError instanceof ApiError && startError.code === "plan_expired";
   const available = quota ? Number((startError as ApiError).details?.available ?? 0) : 0;
+  // real count of the rows still recognising or matching
+  const running = (recognition.data?.rows ?? []).filter((j) => UNFINISHED.includes(j.stage)).length;
 
   return (
-    <Page name="upload" title={t("nav.upload")}>
+    <Page name="upload" title={t("nav.upload")} description={t("layout.desc.upload")}>
       <Space direction="vertical" size="large" style={{ width: "100%" }}>
         <Upload.Dragger
+          className="pc-dropzone"
           multiple
           showUploadList={false}
           beforeUpload={(file, list) => {
@@ -197,13 +211,32 @@ function UploadContent() {
             return false;
           }}
         >
-          <Typography.Title level={5}>{t("ocr.dropTitle")}</Typography.Title>
-          <Typography.Text type="secondary">{t("ocr.dropHint")}</Typography.Text>
+          <span className="pc-dropzone__art">
+            <Icon name="upload" />
+          </span>
+          <h2 className="pc-dropzone__title">{t("upload.title")}</h2>
+          <p className="pc-dropzone__text">{t("ocr.dropTitle")}</p>
+          <span className="pc-dropzone__button" aria-hidden="true">
+            <Icon name="plus" />
+            {t("upload.choose")}
+          </span>
+          <small className="pc-dropzone__hint">{t("ocr.dropHint")}</small>
         </Upload.Dragger>
+
+        <ol className="pc-steps" aria-label={t("brand.flowTitle")}>
+          {STEPS.map((s) => (
+            <li key={s.title} className="pc-steps__item">
+              <strong className="pc-steps__code">{t(s.code)}</strong>
+              <h3>{t(s.title)}</h3>
+              <p>{t(s.body)}</p>
+            </li>
+          ))}
+        </ol>
 
         {queue.items.length > 0 && (
           <Card
             size="small"
+            className="pc-panel"
             title={t("ocr.queue")}
             extra={
               queue.busy ? (
@@ -272,7 +305,13 @@ function UploadContent() {
 
         <Card
           size="small"
-          title={t("ocr.pending")}
+          className="pc-panel"
+          title={
+            <span className="pc-panel__title">
+              {t("ocr.pending")}
+              <span className="pc-count num">{pad(files.length)}</span>
+            </span>
+          }
           extra={
             <Space>
               <Button danger disabled={!chosen.length} onClick={removeSelected}>
@@ -306,14 +345,23 @@ function UploadContent() {
             dataSource={files}
             rowSelection={{ selectedRowKeys: chosen, onChange: (keys) => setSelected(keys as string[]) }}
             columns={[
-              { key: "name", title: t("review.col.file"), render: (_, f) => f.original_name },
+              { key: "name", title: t("review.col.file"), render: (_, f) => <FileName name={f.original_name} /> },
               { key: "pages", title: t("review.col.pages"), align: "right", className: "num", render: (_, f) => f.page_count ?? "-" },
               { key: "at", title: t("ocr.uploadedAt"), render: (_, f) => formatBangkokDateTime(f.created_at) },
             ]}
           />
         </Card>
 
-        <Card size="small" title={t("ocr.recognitionStatus")}>
+        <Card
+          size="small"
+          className="pc-panel"
+          title={t("ocr.recognitionStatus")}
+          extra={
+            running > 0 && (
+              <span className="stage-tag stage-tag--info pc-pill">{t("upload.processing", { n: running })}</span>
+            )
+          }
+        >
           {(recognition.data?.finished ?? []).map((f) => (
             <Alert
               key={f.id}
@@ -334,17 +382,20 @@ function UploadContent() {
             dataSource={recognition.data?.rows ?? []}
             rowClassName={(j) => (j.id === focus ? "ant-table-row-selected" : "")}
             columns={[
-              { key: "name", title: t("review.col.file"), render: (_, j) => j.file_name },
+              { key: "name", title: t("review.col.file"), render: (_, j) => <FileName name={j.file_name} /> },
               { key: "stage", title: t("ocr.status"), render: (_, j) => <StageTag stage={j.stage} /> },
               {
                 key: "step",
                 title: t("ocr.progress"),
                 render: (_, j) =>
                   j.stage === "OCR_FAILED" ? null : (
-                    <Space size={4} wrap>
-                      <Typography.Text>{isMessageKey(`ocr.step.${j.status}`) ? t(`ocr.step.${j.status}` as never) : j.status}</Typography.Text>
-                      <Typography.Text type="secondary">{t("ocr.pages", { n: j.page_count })}</Typography.Text>
-                    </Space>
+                    <span className="pc-track">
+                      <span className="pc-track__current">
+                        {isMessageKey(`ocr.step.${j.status}`) ? t(`ocr.step.${j.status}` as never) : j.status}
+                      </span>
+                      <i aria-hidden="true" />
+                      <span className="pc-track__pages">{t("ocr.pages", { n: j.page_count })}</span>
+                    </span>
                   ),
               },
               {

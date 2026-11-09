@@ -1,40 +1,61 @@
-/* main components/FormDialog.vue <style> (fd- classes for the dialogs' content), copied verbatim. */
+/* main components/FormDialog.vue <style> (fd- classes for the dialogs' content), shown as a
+ * bottom sheet as STD-008 §7.6 prefers in the mini app; the safe area stays below. */
 .fd-mask {
   position: fixed;
   inset: 0;
   z-index: 50;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  padding: 20px;
-  background: rgba(17, 24, 39, 0.45);
+  padding: 20px 0 0;
+  background: var(--overlay);
+  animation: fd-fade 0.18s ease-out;
 }
 
 .fd-card {
   width: 100%;
   min-width: 0;
-  max-width: 360px;
+  max-width: 480px;
   max-height: calc(100dvh - 40px);
   overflow-y: auto;
   background: var(--surface);
   color: var(--text);
-  border-radius: 18px;
-  padding: 22px 18px 16px;
+  border-radius: 18px 18px 0 0;
+  box-shadow: var(--shadow-raised);
+  padding: 22px max(18px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
   display: flex;
   flex-direction: column;
   gap: 12px;
+  animation: fd-rise 0.2s ease-out;
+}
+
+@keyframes fd-fade {
+  from { opacity: 0; }
+}
+
+@keyframes fd-rise {
+  from { transform: translateY(24px); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fd-mask,
+  .fd-card {
+    animation: none;
+  }
 }
 
 .fd-title {
-  font-size: 16px;
-  font-weight: 800;
+  font-size: 17px;
+  line-height: 1.5;
+  font-weight: 600;
+  color: var(--brand-navy);
   text-align: center;
 }
 
 .fd-subtitle {
   margin: -6px 0 0;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.6;
   color: var(--text-secondary);
   text-align: center;
 }
@@ -47,8 +68,8 @@
 
 .fd-label {
   font-size: 12px;
-  font-weight: 700;
-  color: var(--icon);
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 
 .fd-label .fd-required {
@@ -57,11 +78,11 @@
 }
 
 .fd-input {
-  min-height: var(--control-h);
+  min-height: 46px;
   border-radius: var(--control-radius);
-  border: 1px solid var(--border);
+  border: 1px solid var(--brand-border);
   padding: 0 12px;
-  font-size: 13px;
+  font-size: 15px;
   font-family: inherit;
   color: var(--text);
   background: var(--surface);
@@ -71,6 +92,7 @@
 
 .fd-input:focus {
   border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
 }
 
 .fd-input[readonly] {
@@ -120,9 +142,9 @@
   min-width: 0;
   min-height: 46px;
   padding: 4px 6px;
-  border-radius: var(--card-radius);
-  font-size: 13px;
-  font-weight: 700;
+  border-radius: var(--control-radius);
+  font-size: 14px;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 
@@ -132,8 +154,9 @@
 }
 
 .fd-btn.secondary {
-  background: var(--track);
-  color: var(--text);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--brand-border);
+  color: var(--brand-navy);
 }
 
 .fd-btn.danger {
@@ -151,12 +174,12 @@
   flex-shrink: 0;
   min-width: 0;
   max-width: 58%;
-  min-height: 42px;
-  padding: 4px 6px;
+  min-height: var(--control-h);
+  padding: 4px 8px;
   border-radius: var(--control-radius);
-  background: var(--primary-soft);
+  background: var(--brand-blue-soft);
   color: var(--primary-pressed);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }

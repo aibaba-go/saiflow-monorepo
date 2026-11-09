@@ -7,8 +7,12 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
-    // Same-origin /api in development, like Caddy in deployment.
-    proxy: { "/api": "http://localhost:8000" },
+    // Same-origin /api in development, like Caddy in deployment. SAIFLOW_API_PROXY points it
+    // at another local API (scripts/dev: 127.0.0.1:8010, since 8000 may be taken). The browser's
+    // Host is kept, as Caddy does, so the dev login can tell this machine from the LAN (NFR-DEV-002).
+    proxy: {
+      "/api": { target: process.env.SAIFLOW_API_PROXY ?? "http://localhost:8000", changeOrigin: false },
+    },
   },
   test: {
     environment: "jsdom",

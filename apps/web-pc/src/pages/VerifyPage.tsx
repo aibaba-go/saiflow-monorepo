@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Alert, App, Button, Card, Col, Drawer, Empty, List, Modal, Row, Space, Spin, Typography } from "antd";
+import { Alert, App, Button, Drawer, Empty, List, Modal, Space, Spin, Typography } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useBlocker, useNavigate, useParams } from "react-router-dom";
 
@@ -20,7 +20,8 @@ import { OriginalPages } from "../reviews/OriginalPages";
 import { ApiError } from "../services/errors";
 import { useLanguage } from "../stores/language";
 import { can } from "../tenants/permissions";
-import { ReturnedTag } from "../ocr/StageTag";
+import { ReturnedTag, StageTag } from "../ocr/StageTag";
+import { Icon } from "../layout/icons";
 import { useTenant } from "../tenants/useTenant";
 
 type Draft = { jobId: string; base: number; value: Json };
@@ -179,77 +180,96 @@ function Workspace({ job, queue }: { job: JobOut; queue: JobOut[] }) {
   const editable = !data.confirmed && !busy && !converting;
 
   return (
-    <Space direction="vertical" style={{ width: "100%" }}>
-      {back && (
-        <Alert
-          data-testid="return-banner"
-          type="warning"
-          showIcon
-          message={t("review.lastReturn", {
-            level: t(back.level === 2 ? "review.level2" : "review.level1"),
-            name: back.reviewer_name ?? "-",
-            time: formatBangkokDateTime(back.created_at),
-          })}
-          description={back.comment}
-        />
-      )}
-      {converting && <Alert type="info" showIcon message={t("ocr.converting")} />}
-      {mapping?.status === "FAILED" && (
-        <Alert
-          type="error"
-          showIcon
-          message={`${t("ocr.conversionFailed")} ${failureText(mapping.error, t)}`}
-          action={
-            <Space>
-              {retryTarget && (
-                <Button size="small" onClick={() => void switchTo(retryTarget)}>
-                  {t("common.retry")}
+    <div className="pc-editor">
+      <div className="pc-editor__top">
+        <strong>{t("editor.title")}</strong>
+        <span className="pc-ai-label">
+          <Icon name="spark" />
+          {t("editor.aiPending")}
+        </span>
+      </div>
+      <div className="pc-editor__body">
+        <div className="pc-editor__template">
+          <span>
+            {t("table.template")} <strong>{data.template?.name ?? t("review.generic")}</strong>
+          </span>
+          <Button size="small" disabled={!editable} onClick={() => setSwitching(true)}>
+            {t("ocr.changeTemplate")}
+          </Button>
+        </div>
+        {back && (
+          <Alert
+            data-testid="return-banner"
+            type="warning"
+            showIcon
+            message={t("review.lastReturn", {
+              level: t(back.level === 2 ? "review.level2" : "review.level1"),
+              name: back.reviewer_name ?? "-",
+              time: formatBangkokDateTime(back.created_at),
+            })}
+            description={back.comment}
+          />
+        )}
+        {converting && <Alert type="info" showIcon message={t("ocr.converting")} />}
+        {mapping?.status === "FAILED" && (
+          <Alert
+            type="error"
+            showIcon
+            message={`${t("ocr.conversionFailed")} ${failureText(mapping.error, t)}`}
+            action={
+              <Space>
+                {retryTarget && (
+                  <Button size="small" onClick={() => void switchTo(retryTarget)}>
+                    {t("common.retry")}
+                  </Button>
+                )}
+                <Button size="small" onClick={() => setSwitching(true)}>
+                  {t("ocr.changeTemplate")}
                 </Button>
-              )}
-              <Button size="small" onClick={() => setSwitching(true)}>
-                {t("ocr.changeTemplate")}
-              </Button>
-            </Space>
+              </Space>
+            }
+          />
+        )}
+        {(data.warnings ?? []).length > 0 && <Alert type="warning" showIcon message={t("ocr.typeWarnings")} />}
+        {(data.amount_issues ?? []).length > 0 && (
+          <Alert type="warning" showIcon message={t("ocr.amountIssues", { n: data.amount_issues!.length })} />
+        )}
+        {expired && (
+          <Alert type="error" showIcon message={t("err.plan_expired")} action={<Link to="/plans">{t("nav.plans")}</Link>} />
+        )}
+        <ErrorText error={error} />
+        <EditableResult
+          value={value}
+          groups={groups}
+          missing={
+            new Set([
+              ...data.missing_required.filter((p) => stillMissing(p, (data.structured ?? null) as Json)),
+              ...missing.paths.filter((p) => stillMissing(p, missing.at)),
+            ])
           }
+          warnings={new Set((data.warnings ?? []).map((w) => w.path))}
+          amountIssues={new Map((data.amount_issues ?? []).map((a) => [a.path, a.computed]))}
+          editable={editable}
+          onChange={(next) => setDraft({ jobId: job.id, base: data.version, value: next })}
         />
-      )}
-      {(data.warnings ?? []).length > 0 && <Alert type="warning" showIcon message={t("ocr.typeWarnings")} />}
-      {(data.amount_issues ?? []).length > 0 && (
-        <Alert type="warning" showIcon message={t("ocr.amountIssues", { n: data.amount_issues!.length })} />
-      )}
-      {expired && (
-        <Alert type="error" showIcon message={t("err.plan_expired")} action={<Link to="/plans">{t("nav.plans")}</Link>} />
-      )}
-      <ErrorText error={error} />
-      <Typography.Text type="secondary">
-        {t("review.col.template")}: {data.template?.name ?? t("review.generic")}
-      </Typography.Text>
-      <EditableResult
-        value={value}
-        groups={groups}
-        missing={
-          new Set([
-            ...data.missing_required.filter((p) => stillMissing(p, (data.structured ?? null) as Json)),
-            ...missing.paths.filter((p) => stillMissing(p, missing.at)),
-          ])
-        }
-        warnings={new Set((data.warnings ?? []).map((w) => w.path))}
-        amountIssues={new Map((data.amount_issues ?? []).map((a) => [a.path, a.computed]))}
-        editable={editable}
-        onChange={(next) => setDraft({ jobId: job.id, base: data.version, value: next })}
-      />
-      <Space wrap>
-        <Button disabled={!editable || !dirty} loading={busy} onClick={() => void save(false)}>
-          {t("ocr.saveDraft")}
+        <p className="pc-editor__notice">
+          <Icon name="info" />
+          {t("editor.noticeVerify")}
+        </p>
+      </div>
+      <div className="pc-editor__actions">
+        <Button type="link" className="pc-ghost" icon={<Icon name="history" />} onClick={() => setLogOpen(true)}>
+          {t("review.changes")}
         </Button>
-        <Button disabled={!editable} onClick={() => setSwitching(true)}>
-          {t("ocr.changeTemplate")}
-        </Button>
-        <Button onClick={() => setLogOpen(true)}>{t("review.changes")}</Button>
-        <Button type="primary" disabled={!editable} loading={busy} onClick={() => void confirm()}>
-          {t("ocr.confirm")}
-        </Button>
-      </Space>
+        <span className="pc-editor__primary">
+          <Button disabled={!editable || !dirty} loading={busy} onClick={() => void save(false)}>
+            {t("ocr.saveDraft")}
+          </Button>
+          <Button type="primary" icon={<Icon name="check" />} disabled={!editable} loading={busy} onClick={() => void confirm()}>
+            {t("ocr.confirm")}
+          </Button>
+        </span>
+      </div>
       <TemplateSwitch jobId={job.id} open={switching} onClose={() => setSwitching(false)} onChoose={(o) => void switchTo(o)} />
       <Drawer open={logOpen} title={t("review.changes")} width={720} onClose={() => setLogOpen(false)}>
         <ChangeLogTable entries={changes.data ?? []} groups={groups as never} t={t} lang={lang} />
@@ -265,7 +285,7 @@ function Workspace({ job, queue }: { job: JobOut; queue: JobOut[] }) {
       >
         {t("ocr.leaveBody")}
       </Modal>
-    </Space>
+    </div>
   );
 }
 
@@ -305,47 +325,72 @@ export function VerifyPage() {
 
   const job = id ? (current.data ?? items.find((j) => j.id === id)) : undefined;
   return (
-    <Page name="verify" title={t("nav.verify")}>
-      <Row gutter={16}>
-        <Col span={5}>
-          <Card size="small" title={t("ocr.toVerify", { n: items.length })}>
-            <List<JobOut>
-              data-testid="verify-queue"
-              size="small"
-              loading={queue.isPending}
-              locale={{ emptyText: t("ocr.noneToVerify") }}
-              dataSource={items}
-              renderItem={(j) => (
-                <List.Item
-                  style={{ cursor: "pointer", background: j.id === id ? "#e6f4ff" : undefined }}
-                  onClick={() => j.id !== id && navigate(`/verify/${j.id}`)}
-                >
-                  <Space direction="vertical" size={0}>
-                    <Typography.Text strong>{j.file_name}</Typography.Text>
-                    <Typography.Text type="secondary">{j.template_name ?? t("review.generic")}</Typography.Text>
-                    <Typography.Text type="secondary">{formatBangkokDateTime(j.created_at)}</Typography.Text>
-                    {j.returned && <ReturnedTag />}
-                  </Space>
-                </List.Item>
-              )}
-            />
-          </Card>
-        </Col>
+    <Page
+      name="verify"
+      title={t("nav.verify")}
+      description={t("layout.desc.verify")}
+      badge={job && <StageTag stage={job.stage} level={job.review_level} />}
+      extra={
+        <Button icon={<Icon name="back" />} onClick={() => navigate("/library")}>
+          {t("detail.back")}
+        </Button>
+      }
+    >
+      <div className="pc-verify">
+        <aside className="pc-verify__queue pc-queue">
+          <div className="pc-queue__header">
+            <span>{t("wb.queue")}</span>
+            <span className="num">{String(items.length).padStart(2, "0")}</span>
+          </div>
+          <List<JobOut>
+            data-testid="verify-queue"
+            size="small"
+            loading={queue.isPending}
+            locale={{ emptyText: t("ocr.noneToVerify") }}
+            dataSource={items}
+            renderItem={(j) => (
+              <List.Item
+                className={`pc-queue__item${j.id === id ? " is-selected" : ""}`}
+                aria-current={j.id === id ? "true" : undefined}
+                onClick={() => j.id !== id && navigate(`/verify/${j.id}`)}
+              >
+                <span className="pc-queue__type">
+                  <span>{j.template_name ?? t("review.generic")}</span>
+                  <Icon name="file" />
+                </span>
+                <strong className="pc-queue__name">{j.file_name}</strong>
+                <span className="pc-queue__time num">{formatBangkokDateTime(j.created_at)}</span>
+                <span className="pc-queue__tags">
+                  <StageTag stage={j.stage} level={j.review_level} />
+                  {j.returned && <ReturnedTag />}
+                </span>
+              </List.Item>
+            )}
+          />
+          <p className="pc-queue__note">{t("wb.queueNote")}</p>
+        </aside>
         {job ? (
           <>
-            <Col span={9}>
-              <Card size="small" title={job.file_name}>
-                <OriginalPages key={job.id} fileId={job.file_id} fileName={job.file_name} pageCount={job.page_count} />
-              </Card>
-            </Col>
-            <Col span={10}>
+            <div className="pc-verify__original">
+              <OriginalPages key={job.id} fileId={job.file_id} fileName={job.file_name} pageCount={job.page_count} />
+            </div>
+            <section className="pc-verify__editor">
               <Workspace key={job.id} job={job} queue={items} />
-            </Col>
+            </section>
           </>
         ) : (
-          <Col span={19}>{queue.isPending ? <Spin /> : <Empty description={t("ocr.noneToVerify")} />}</Col>
+          <div className="pc-verify__empty pc-panel">
+            {queue.isPending ? (
+              <Spin />
+            ) : (
+              <Empty image={<Icon name="check" className="pc-empty__icon" />} description={t("ocr.noneToVerify")}>
+                <p className="pc-empty__body">{t("wb.emptyBody")}</p>
+                <Button onClick={() => navigate("/library")}>{t("wb.toLibrary")}</Button>
+              </Empty>
+            )}
+          </div>
         )}
-      </Row>
+      </div>
     </Page>
   );
 }

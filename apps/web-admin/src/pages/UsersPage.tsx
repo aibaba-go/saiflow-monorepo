@@ -63,19 +63,21 @@ export function UsersPage() {
   ];
 
   return (
-    <Page title={t("nav.users")}>
-      <Space direction="vertical" style={{ width: "100%" }}>
-        <Input.Search
-          placeholder={t("users.placeholder")}
-          enterButton={t("users.search")}
-          value={text}
-          maxLength={200}
-          onChange={(e) => setText(e.target.value)}
-          onSearch={submit}
-          style={{ maxWidth: 420 }}
-        />
-        {tooShort && <Typography.Text type="warning">{t("users.tooShort")}</Typography.Text>}
-        <ErrorText error={result.error} />
+    <Page name="users" title={t("nav.users")}>
+      <div className="ad-panel">
+        <div className="ad-panel__toolbar">
+          <Input.Search
+            placeholder={t("users.placeholder")}
+            enterButton={t("users.search")}
+            value={text}
+            maxLength={200}
+            onChange={(e) => setText(e.target.value)}
+            onSearch={submit}
+            style={{ maxWidth: 420 }}
+          />
+          {tooShort && <Typography.Text type="warning">{t("users.tooShort")}</Typography.Text>}
+          <ErrorText error={result.error} />
+        </div>
         {search && (
           <>
             <Table<AdminUser>
@@ -86,17 +88,19 @@ export function UsersPage() {
               pagination={false}
               scroll={{ x: true }}
             />
-            <Space>
-              <Button disabled={search.page <= 1} onClick={() => setSearch({ ...search, page: search.page - 1 })}>
-                {t("common.prev")}
-              </Button>
-              <Button disabled={!result.data?.has_more} onClick={() => setSearch({ ...search, page: search.page + 1 })}>
-                {t("common.next")}
-              </Button>
-            </Space>
+            <div className="ad-panel__footer">
+              <Space>
+                <Button disabled={search.page <= 1} onClick={() => setSearch({ ...search, page: search.page - 1 })}>
+                  {t("common.prev")}
+                </Button>
+                <Button disabled={!result.data?.has_more} onClick={() => setSearch({ ...search, page: search.page + 1 })}>
+                  {t("common.next")}
+                </Button>
+              </Space>
+            </div>
           </>
         )}
-      </Space>
+      </div>
     </Page>
   );
 }

@@ -16,7 +16,7 @@ export function OcrSettingsPage() {
   const t = useT();
   const current = useQuery({ queryKey: catalogKeys.ocr, queryFn: catalog.ocr });
   return (
-    <Page title={t("nav.ocr")}>
+    <Page name="ocr" title={t("nav.ocr")}>
       {current.isPending ? (
         <Spin />
       ) : current.isError ? (

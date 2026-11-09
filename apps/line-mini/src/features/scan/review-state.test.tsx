@@ -172,7 +172,10 @@ describe("review state on the result pages (FR-SYS-105-108)", () => {
     signedIn(USER, [PERSONAL]);
     pages("/scan/jobs/j1/result");
     await userEvent.click(await screen.findByRole("button", { name: "Continue" }));
-    expect(await screen.findByText("Submitted for review")).toBeInTheDocument();
+    // the toast (role=status); the final page hero may show the same words as its title
+    await waitFor(() =>
+      expect(screen.getAllByText("Submitted for review").some((el) => el.getAttribute("role") === "status")).toBe(true),
+    );
     await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/scan/jobs/j1/final"));
     expect(await screen.findAllByText("Waiting for level-1 review")).not.toHaveLength(0);
   });

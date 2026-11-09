@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Input, Space, Table } from "antd";
+import { Input, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -31,16 +31,18 @@ export function OrganizationsPage() {
   ];
 
   return (
-    <Page title={t("nav.organizations")}>
-      <Space direction="vertical" style={{ width: "100%" }}>
-        <Input.Search
-          allowClear
-          placeholder={t("org.search")}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          style={{ maxWidth: 320 }}
-        />
-        <ErrorText error={list.error} />
+    <Page name="organizations" title={t("nav.organizations")}>
+      <div className="ad-panel">
+        <div className="ad-panel__toolbar">
+          <Input.Search
+            allowClear
+            placeholder={t("org.search")}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            style={{ maxWidth: 360 }}
+          />
+          <ErrorText error={list.error} />
+        </div>
         <Table<Organization>
           rowKey="tenant_id"
           loading={list.isPending}
@@ -49,7 +51,7 @@ export function OrganizationsPage() {
           scroll={{ x: true }}
           pagination={{ pageSize: 50, hideOnSinglePage: true }}
         />
-      </Space>
+      </div>
     </Page>
   );
 }

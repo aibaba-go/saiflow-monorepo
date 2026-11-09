@@ -9,6 +9,7 @@ import { api, call } from "../../services/api";
 import { ApiError, errorMessage } from "../../services/errors";
 import { useSession } from "../../stores/session";
 import { formatBangkokDateTime } from "../../utils/format";
+import { can } from "../tenants/permissions";
 import { useCurrentTenant } from "../tenants/useCurrentTenant";
 import { applyTemplate, chooseGeneric, rerunJob, saveResult } from "./api";
 import { ChangeLog } from "./components/ChangeLog";
@@ -61,6 +62,7 @@ export function ResultPage() {
   const job = useJob(id, false);
   const result = useResult(id);
   const me = useSession((st) => st.me);
+  const { tenant } = useCurrentTenant();
   const [draft, setDraft] = useState<{ base: number; value: Json } | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -201,6 +203,11 @@ export function ResultPage() {
 
   const failed = job.data?.stage === "OCR_FAILED";
   const isGuest = me?.kind !== "user";
+  // Changing a result needs verify_own for one's own job and verify_others for anyone else's
+  // (FR-VERIFY-015, FR-SYS-002); without it the fields are read-only (AC-FR-SYS-105-09).
+  // Until the job is known, nothing is editable.
+  const ownJob = job.data ? job.data.created_by_user_id == null || job.data.created_by_user_id === me?.user_id : null;
+  const mayEdit = ownJob !== null && can(tenant, ownJob ? "verify_own" : "verify_others");
   const current: SwitchTarget = data?.template?.template_version_id ?? "generic";
   const manualFailure = mapping?.status === "FAILED";
   const allMissing = [...new Set([...(data?.missing_required ?? []), ...missing])];
@@ -212,7 +219,7 @@ export function ResultPage() {
 
   return (
     <div className={`${theme.scan} ${s.result}`}>
-      <PageHeader title={job.data?.file_name || "…"} onBack={() => navigate("/history")} />
+      <PageHeader title={t("result.title")} onBack={() => navigate("/history")} />
 
       {failed ? (
         <div className={s.failure}>
@@ -245,20 +252,29 @@ export function ResultPage() {
         </div>
       ) : data ? (
         <>
+          {/* prototype .verify-head: the file, its facts and its state */}
           <div className={s.summary}>
-            <div className={s.chips}>
-              {job.data && <StatusChip stage={job.data.stage} level={job.data.review_level} returned={job.data.returned} />}
-              <span className={cx("review-chip", locked && "confirmed", !locked && data.version > 1 && "edited")}>
-                {t(reviewKey)}
-              </span>
-            </div>
-            <div className={s.meta}>
-              {t("result.meta", { pages: job.data?.page_count ?? 1, tables: tableCount(value) })}
-              {job.data?.engine && ` · ${job.data.engine}`}
+            <div className={s["summary-row"]}>
+              <div className={s["summary-text"]}>
+                <div className={s["summary-name"]}>{job.data?.file_name ?? ""}</div>
+                <div className={s.meta}>
+                  {t("result.meta", { pages: job.data?.page_count ?? 1, tables: tableCount(value) })}
+                  {job.data?.engine && ` · ${job.data.engine}`}
+                </div>
+              </div>
+              <div className={s.chips}>
+                {job.data && <StatusChip stage={job.data.stage} level={job.data.review_level} returned={job.data.returned} />}
+                <span className={cx("review-chip", locked && "confirmed", !locked && data.version > 1 && "edited")}>
+                  {t(reviewKey)}
+                </span>
+              </div>
             </div>
           </div>
 
           <div className={s.content}>
+            {job.data && (
+              <OriginalPreview fileId={job.data.file_id} fileName={job.data.file_name} pageCount={job.data.page_count || 1} />
+            )}
             <button type="button" className={s["template-select"]} disabled={locked || saving} onClick={() => setSelecting(true)}>
               <span className={s["template-caption"]}>{t("template.label")}</span>
               <span>{data.template?.name ?? t("template.generic")}</span>
@@ -313,12 +329,6 @@ export function ResultPage() {
               </div>
             )}
 
-            {job.data && (
-              <OriginalPreview fileId={job.data.file_id} fileName={job.data.file_name} pageCount={job.data.page_count || 1} />
-            )}
-
-            <div className={s["edit-hint"]}>{locked ? t("result.lockedHint") : t("result.editHint")}</div>
-            <ChangeLog jobId={id} groups={(data.template?.groups ?? null) as Group[] | null} />
             <div className={s["view-tabs"]} role="tablist">
               {(["table", "json"] as const).map((k) => (
                 <button
@@ -343,7 +353,7 @@ export function ResultPage() {
                   missing={new Set(allMissing)}
                   warnings={new Set((data.warnings ?? []).map((w) => w.path))}
                   amountIssues={new Map((data.amount_issues ?? []).map((a) => [a.path, a.computed]))}
-                  editable={!locked && !busy}
+                  editable={!locked && !busy && mayEdit}
                   onChange={(next) => setDraft({ base: data.version, value: next })}
                 />
               ) : (
@@ -382,6 +392,9 @@ export function ResultPage() {
               )}
             </div>
 
+            <div className={s["edit-hint"]}>{locked ? t("result.lockedHint") : t("result.editHint")}</div>
+            <ChangeLog jobId={id} groups={(data.template?.groups ?? null) as Group[] | null} variant="link" />
+
             {Boolean(error) && (
               <p className={s["status-error"]} role="alert">
                 {errorMessage(error, t)}
@@ -396,6 +409,7 @@ export function ResultPage() {
 
           <div className={s["action-bar"]}>
             {isGuest && <p className={s["guest-hint"]}>{t("result.guestHint")}</p>}
+            {!isGuest && !locked && <p className={s["bar-caption"]}>{t("result.aiCaption")}</p>}
             {locked ? (
               <div className={s["action-buttons"]}>
                 <button type="button" className={s["primary-btn"]} onClick={() => navigate(`/scan/jobs/${id}/final`)}>

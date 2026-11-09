@@ -19,7 +19,7 @@ const SETTINGS: { path: SettingPath; label: MessageKey }[] = [
 export function SettingsPage() {
   const t = useT();
   return (
-    <Page title={t("nav.settings")}>
+    <Page name="settings" title={t("nav.settings")}>
       <Space direction="vertical" size="large" style={{ width: "100%", maxWidth: 520 }}>
         <Alert type="info" showIcon message={t("settings.freeNote")} />
         {SETTINGS.map((s) => (

@@ -59,11 +59,22 @@ function columnsOf(rows: Json[]): Column[] {
   return keys.map((key) => ({ key, name: key }));
 }
 
-function templateView(groups: Group[], lang: ReturnType<typeof useLanguage.getState>["lang"]): GroupView[] {
+/** The template's groups in its order. Extra header fields saved in a group but not defined by
+ * the template follow the template's fields under their entered names, without a type or
+ * required rule; they are `owned` so the template view offers no add or delete for them,
+ * while their values follow `editable` like any field (FR-SYS-105, 107, 120). */
+function templateView(groups: Group[], value: Json, lang: ReturnType<typeof useLanguage.getState>["lang"]): GroupView[] {
+  const root = isObj(value) ? value : {};
   return groups.map((group) => {
+    const saved = isObj(root[group.key]) ? (root[group.key] as Record<string, Json>) : {};
+    const defined = new Set(group.items.map((i) => i.key));
+    const extras: Row[] = Object.keys(saved)
+      .filter((k) => !defined.has(k) && !isTable(saved[k]))
+      .map((k) => ({ key: k, name: k, path: [group.key, k], owned: true }));
     const rows: Row[] = group.items
       .filter((i) => i.kind === "field")
-      .map((i) => ({ key: i.key, name: label(i, lang), path: [group.key, i.key], type: i.type, required: i.required, owned: true }));
+      .map((i): Row => ({ key: i.key, name: label(i, lang), path: [group.key, i.key], type: i.type, required: i.required, owned: true }))
+      .concat(extras);
     const tables: TableSection[] = group.items
       .filter((i) => i.kind === "table")
       .map((i) => ({ kind: "table", path: [group.key, i.key], title: label(i, lang), columns: i.columns ?? [] }));
@@ -124,7 +135,7 @@ export function StructuredDataView({ value, groups, schemaName, missing, warning
   const t = useT();
   const lang = useLanguage((st) => st.lang);
   const [adding, setAdding] = useState<Record<string, { name: string; value: string; tried: boolean }>>({});
-  const views = groups ? templateView(groups, lang) : genericView(value, t("result.documentInfo"));
+  const views = groups ? templateView(groups, value, lang) : genericView(value, t("result.documentInfo"));
   const cls = (...n: (string | false | undefined)[]) => n.filter(Boolean).map((k) => s[k as string] ?? k).join(" ");
 
   const marks = (path: Path) => {

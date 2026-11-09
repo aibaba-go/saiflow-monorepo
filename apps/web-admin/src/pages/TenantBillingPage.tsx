@@ -30,6 +30,7 @@ export function TenantBillingPage() {
   if (id === null) return <Result status="404" title={t("common.notFound")} />;
   return (
     <Page
+      name="billing"
       title={t("billing.title", { id })}
       extra={
         kind === "organization" ? (

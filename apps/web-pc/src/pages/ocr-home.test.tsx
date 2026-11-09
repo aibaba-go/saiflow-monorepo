@@ -100,6 +100,68 @@ describe("home (FR-SYS-094)", () => {
   });
 });
 
+describe("home metric strip (enterprise-ui-redesign)", () => {
+  it("shows the real per-stage totals and opens the library on that stage", async () => {
+    const all = [job(1, "VERIFYING"), job(2, "VERIFYING"), job(3, "PENDING_REVIEW"), job(4), job(5), job(6, "OCR_PROCESSING")];
+    const seen: Record<string, string>[] = [];
+    const api = jobsApi(all);
+    signedIn({
+      "GET /api/v1/billing/usage": () => json(200, USAGE),
+      "GET /api/v1/ocr/jobs": (r) => {
+        seen.push(Object.fromEntries(new URL(r.url).searchParams));
+        return api(r);
+      },
+    });
+    renderAt("/");
+    const strip = await screen.findByTestId("metric-strip");
+    const links = within(strip).getAllByRole("link");
+    expect(links.map((l) => l.getAttribute("href"))).toEqual([
+      "/library?stage=VERIFYING",
+      "/library?stage=OCR_PROCESSING",
+      "/library?stage=PENDING_REVIEW",
+      "/library?stage=CONFIRMED",
+    ]);
+    expect(links.map((l) => l.textContent)).toEqual([
+      `2${en("home.metric.VERIFYING")}`,
+      `1${en("home.metric.OCR_PROCESSING")}`,
+      `1${en("home.metric.PENDING_REVIEW")}`,
+      `2${en("home.metric.CONFIRMED")}`,
+    ]);
+    // the counts are the totals of the existing list endpoint, read one row per stage
+    for (const stage of ["VERIFYING", "OCR_PROCESSING", "PENDING_REVIEW", "CONFIRMED"]) {
+      expect(seen).toContainEqual(expect.objectContaining({ stage, page_size: "1" }));
+    }
+    seen.length = 0;
+    await userEvent.click(links[2]!);
+    expect(await screen.findByTestId("page-library")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(seen.filter((q) => q.page_size === "20").at(-1)).toMatchObject({ stage: "PENDING_REVIEW", page: "1" }),
+    );
+    const tab = within(screen.getByRole("tablist")).getByRole("tab", { name: new RegExp(`^${en("stage.PENDING_REVIEW")}`) });
+    expect(tab).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("is left out when the counts cannot be read", async () => {
+    const api = jobsApi([job(1), job(2)]);
+    let failed = 0;
+    signedIn({
+      "GET /api/v1/billing/usage": () => json(200, USAGE),
+      "GET /api/v1/ocr/jobs": (r) => {
+        if (new URL(r.url).searchParams.get("page_size") !== "1") return api(r);
+        failed += 1;
+        return json(500, { code: "internal" });
+      },
+    });
+    renderAt("/");
+    const recent = await screen.findByTestId("recent-tasks");
+    await waitFor(() => expect(within(recent).getAllByRole("row").filter((r) => r.closest("tbody"))).toHaveLength(2));
+    await waitFor(() => expect(failed).toBe(4));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByTestId("metric-strip")).not.toBeInTheDocument();
+    // no metric links (the recent table may show the same words as status chips)
+    expect(document.querySelector('a[href^="/library?stage="]')).toBeNull();
+  });
+});
 
 describe("home to-verify (minor-fixes-ui)", () => {
   it("to-verify hidden without permission", async () => {

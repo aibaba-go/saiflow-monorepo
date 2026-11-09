@@ -1,5 +1,7 @@
 import liff from "@line/liff";
 
+import { devLoginEnabled } from "../config";
+import { localDevLiff } from "./devLiff";
 import { ApiError } from "./errors";
 import type { Liff } from "./liffTypes";
 
@@ -18,6 +20,14 @@ export function realLiff(liffId: string): Liff {
     shareTargetPicker: (messages) => liff.shareTargetPicker(messages),
     openWindow: (params) => liff.openWindow(params),
   };
+}
+
+/** The LIFF the app runs with: the real SDK, or the restricted local dev adapter only on a
+ * Vite dev server with VITE_DEV_LOGIN=1 on a loopback host and same-origin API
+ * (NFR-DEV-002). The DEV guard lets production builds drop the adapter. */
+export function appLiff(liffId: string): Liff {
+  if (import.meta.env.DEV && devLoginEnabled()) return localDevLiff();
+  return realLiff(liffId);
 }
 
 /** LIFF init, failing with liff_timeout after `ms` (FR-SYS-040: 20 s). */

@@ -81,7 +81,7 @@ export function NotificationsPage() {
               <List.Item
                 style={{
                   cursor: n.read && n.type !== "review_pending" ? "default" : "pointer",
-                  background: n.read ? undefined : "#f0f7ff",
+                  background: n.read ? undefined : "var(--brand-blue-soft)",
                 }}
                 role={n.read && n.type !== "review_pending" ? undefined : "button"}
                 aria-label={n.read ? undefined : t("notif.unreadItem", { title })}
