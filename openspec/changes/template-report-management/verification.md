@@ -72,6 +72,20 @@ web-pc（5174）：列表区分系统/个人/组织并可见 `tax_invoice`、`bi
 - 本机无 shellcheck，`remote-deploy.sh` 仅由 `scripts/tests/remote-deploy.test.sh` 验证。
 - 报表全部功能：暂停，未验证。
 
-## 部署记录
+## CI 与部署记录
 
-（待填写：提交、CI、Deploy 运行、备份、迁移、线上 smoke 与 UI 回归结果。）
+| 步骤 | 证据 | 结果 |
+|---|---|---|
+| 提交 | `8ccff95`（模板功能，96 文件）、`14ae4e9`（测试脚本 shellcheck SC2016 抑制） | 已推送 `chore/ai-workflow-v2` |
+| CI `8ccff95`（run 42759793076） | backend（ruff + 全量 pytest，含 PG18 集成）、frontend（`pnpm -r lint/test/build`）、contract（api-client 与后端一致）、stack 均 success；scripts 因 `remote-deploy.test.sh` 一处 shellcheck SC2016 info 失败 | 修复后重推 |
+| CI `14ae4e9`（run 42760665348） | backend、frontend、contract、scripts、stack | **全部 success** |
+| Deploy（run 42761578005，2026-11-10 05:25Z） | 分支与 CI 门禁通过；镜像推 GHCR；`remote-deploy.sh` 迁移前备份 `saiflow-20261110T052511Z.dump`（220,251 字节，本机 + `gs://saiflow-db-backup/`）；`alembic` 0013→0014→0015；重启；三站健康；数据库端口外部不可连 | **success** |
+| 部署后只读复查 | `saiflow-app`、`saiflow-admin`、`saiflow-line2` 三站 `/api/v1/health` | `{"status":"ok","version":"14ae4e93…","database":"ok"}` |
+
+回滚路径：`remote-deploy.sh` 本次起把上一 tag 写入服务器 `.env` 的 `PREVIOUS_IMAGE_TAG`（上一线上版本为 `4fa028e…`；未登录服务器核对该行）；0014/0015 只新增表与列（新增 schema 对旧应用前向兼容），应用回滚按旧 tag 重新部署即可，不执行生产 downgrade。
+
+本机负载说明：本机 CPU 长时间 100%（其他程序占用）时，前端 vitest 在 line-mini、web-admin、web-pc 中各出现若干与模板无关的等待超时；单独重跑通过，CI 干净环境全部通过，判定为负载导致，不是回归。
+
+## 线上功能回归（阻塞）
+
+生产 admin 仅支持平台管理员用户名/密码登录，客户端 PC 仅支持 LINE 登录；本会话没有可用的管理员凭据，也不使用负责人本人的 LINE 账号测试（读取凭据文件已被工具权限拒绝，不绕过）。因此线上模板全流程（含真实 OCR/LLM 样例生成与计量）**尚未执行**，需负责人在浏览器中登录管理员与测试 LINE 账号后继续。
