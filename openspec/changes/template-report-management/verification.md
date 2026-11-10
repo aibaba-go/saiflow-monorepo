@@ -130,3 +130,13 @@ web-pc（5174）：列表区分系统/个人/组织并可见 `tax_invoice`、`bi
 | 线上 web-pc 前端包 | 含“全部接受/全部拒绝”及其确认文案、`sample-original`（固定原件）；`tpl.importJson` 已移除 | 符合 |
 
 **未执行（阻塞）：** 线上 admin 只能用平台管理员密码登录，web-pc 只能用 LINE 登录，本会话没有这两种凭据，所以没有在线上登录后操作。包括：真实 OCR/LLM 下样例到 READY、原件滚动时始终可见、批量接受/拒绝、admin 保存为系统/租户草稿、客户配额不变。这些项目只有本地 RTL/集成测试证据，需负责人登录管理员与测试 LINE 账号后补测。回滚：上一线上 tag `14ae4e9…`；0016 新增 `created_by_admin_id` 列、索引与两条检查约束，并把 `template_samples.tenant_id` 放宽为可空（只有 admin 样例为空）；旧应用不写 admin 样例，按旧 tag 重新部署即可，不执行生产 downgrade（downgrade 会删除 admin 样例行）。
+
+## 后续小修：复核列表显式入口（2026-11-10）
+
+负责人提供复核列表截图并要求修复入口，随后明确授权“提交并部署”。本小修映射 FR-SYS-123/124、FR-VERIFY-012：为既有详情导航增加固定右侧“复核”按钮；本人确认或本人已做一级复核时显示“查看详情”，中英泰文案明确需其他人复核，不改变自审限制、接口或数据库结构。
+
+- 本地：新增入口键盘导航、本人确认及一级复核冲突三项回归；`reviews.test.tsx` 13/13、web-pc 全量 184/184 通过；eslint、tsc、Vite build、`git diff --check` 通过。浏览器截图因内置浏览器无可见视口未完成，RTL 不是线上账号验收。
+- 提交 `16d0882`；[CI 42796782514](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/42796782514) 五项检查全部 success；[Deploy 42797734145](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/42797734145) success，目标 `38.60.156.234`。
+- 部署前备份 `saiflow-20261110T102027Z.dump`（265,286 字节），服务器与 `gs://saiflow-db-backup/` 均完成；本次无新迁移。
+- 部署后只读核验：三站健康均 `status=ok database=ok version=16d0882b3a769d40a132b631a0e9f557472638fe`；线上 PC bundle 含 `review.open`、“本人确认，需其他人复核”及对应英文、`action.viewDetail`。
+- 线上登录后的点击与复核提交未执行（没有可用测试 LINE 会话）；没有修改业务数据。回滚应用可回到前一线上 `5be7f4c`，不执行数据库 downgrade。
