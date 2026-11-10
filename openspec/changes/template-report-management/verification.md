@@ -129,4 +129,4 @@ web-pc（5174）：列表区分系统/个人/组织并可见 `tax_invoice`、`bi
 | 线上 admin 前端包 | 含“从样例导入”、`ad-sample-viewer`（固定原件）、`storage_unavailable` 提示；不含“导入 JSON” | 符合 |
 | 线上 web-pc 前端包 | 含“全部接受/全部拒绝”及其确认文案、`sample-original`（固定原件）；`tpl.importJson` 已移除 | 符合 |
 
-**未执行（阻塞）：** 线上 admin 只能用平台管理员密码登录，web-pc 只能用 LINE 登录，本会话没有这两种凭据，所以没有在线上登录后操作。包括：真实 OCR/LLM 下样例到 READY、原件滚动时始终可见、批量接受/拒绝、admin 保存为系统/租户草稿、客户配额不变。这些项目只有本地 RTL/集成测试证据，需负责人登录管理员与测试 LINE 账号后补测。回滚：上一线上 tag `14ae4e9…`；0016 只新增列与约束（对旧应用前向兼容），按旧 tag 重新部署即可。
+**未执行（阻塞）：** 线上 admin 只能用平台管理员密码登录，web-pc 只能用 LINE 登录，本会话没有这两种凭据，所以没有在线上登录后操作。包括：真实 OCR/LLM 下样例到 READY、原件滚动时始终可见、批量接受/拒绝、admin 保存为系统/租户草稿、客户配额不变。这些项目只有本地 RTL/集成测试证据，需负责人登录管理员与测试 LINE 账号后补测。回滚：上一线上 tag `14ae4e9…`；0016 新增 `created_by_admin_id` 列、索引与两条检查约束，并把 `template_samples.tenant_id` 放宽为可空（只有 admin 样例为空）；旧应用不写 admin 样例，按旧 tag 重新部署即可，不执行生产 downgrade（downgrade 会删除 admin 样例行）。
