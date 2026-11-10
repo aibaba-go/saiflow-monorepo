@@ -116,3 +116,17 @@ web-pc（5174）：列表区分系统/个人/组织并可见 `tax_invoice`、`bi
 | web-admin vitest | `templates.test.tsx` 8 passed（新增：列表无 JSON 导入且列出本人样例；上传→样例页→保存为系统草稿的请求体）；并发全量时 6 个无关文件 11 项 15 s 超时，`--maxWorkers=2` 重跑 49/49 通过（本机 CPU 负载） |
 | `pnpm -r lint`、web-pc/web-admin `tsc --noEmit` | 通过 |
 | 本地浏览器 admin（5175，API 8010 已迁到 0016） | 列表只有“从样例导入”“新建模板”；对话框显示目标、文件与“平台承担、仅本人可见、7 天删除”说明；本地未配置 GCS，上传返回 503 `storage_unavailable` → 补充专门提示。READY 后的对照与保存在线上验证 |
+
+### 第二轮部署与线上验证
+
+| 步骤 | 证据 | 结果 |
+|---|---|---|
+| 提交 | `5be7f4c`（已推送 `chore/ai-workflow-v2`） | — |
+| CI（run 42777000359） | backend、frontend、contract、scripts、stack | **全部 success** |
+| Deploy（run 42777828784，2026-11-10 07:50Z） | 迁移前备份 `saiflow-20261110T075208Z.dump`（259,272 字节，本机 + `gs://saiflow-db-backup/`）；`alembic` 0015→0016 | **success** |
+| 健康检查 | `saiflow-app`、`saiflow-admin`、`saiflow-line2` 三站 `/api/v1/health` | `{"status":"ok","version":"5be7f4c3…","database":"ok"}` |
+| 新路由已注册（未登录只读探测） | `GET /api/v1/admin/template-samples`、`…/1` | 401（不是 404） |
+| 线上 admin 前端包 | 含“从样例导入”、`ad-sample-viewer`（固定原件）、`storage_unavailable` 提示；不含“导入 JSON” | 符合 |
+| 线上 web-pc 前端包 | 含“全部接受/全部拒绝”及其确认文案、`sample-original`（固定原件）；`tpl.importJson` 已移除 | 符合 |
+
+**未执行（阻塞）：** 线上 admin 只能用平台管理员密码登录，web-pc 只能用 LINE 登录，本会话没有这两种凭据，所以没有在线上登录后操作。包括：真实 OCR/LLM 下样例到 READY、原件滚动时始终可见、批量接受/拒绝、admin 保存为系统/租户草稿、客户配额不变。这些项目只有本地 RTL/集成测试证据，需负责人登录管理员与测试 LINE 账号后补测。回滚：上一线上 tag `14ae4e9…`；0016 只新增列与约束（对旧应用前向兼容），按旧 tag 重新部署即可。
