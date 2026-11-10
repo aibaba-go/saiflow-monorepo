@@ -12,6 +12,7 @@ setup() {
   cp "$here/../deploy/db-roles.sh" "$here/../deploy/db-roles.sql" "$here/../deploy/secrets-perms.sh" \
     "$here/../deploy/secrets-fix.sh" "$work/" 2>/dev/null || true
   # backup.sh has its own test; here a stand-in records the call (and can fail)
+  # shellcheck disable=SC2016  # $FAKE_LOG and $FAKE_BACKUP_FAIL expand when the stand-in runs
   printf '#!/usr/bin/env bash\necho "backup.sh" >>"$FAKE_LOG"\n[ -z "${FAKE_BACKUP_FAIL:-}" ]\n' \
     >"$work/backup.sh"
   export DEPLOY_DIR="$work" FAKE_LOG="$work/calls.log" PATH="$here/fakes:$PATH"
