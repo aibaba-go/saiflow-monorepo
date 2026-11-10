@@ -143,6 +143,55 @@ function sampleText(v: unknown): string | null {
   return String(v);
 }
 
+const ENTRY_PATH = /^groups\[(\d+)\]\.items\[(\d+)\](?:\.columns\[(\d+)\])?$/;
+
+/**
+ * Content after deciding every pending suggestion the same way, with the rules of the single
+ * accept/reject buttons: accept sets a valid suggested value; reject clears a value that still
+ * equals the suggestion. Paths that no longer exist are left alone (they are still decided).
+ */
+export function decideAllPending(
+  content: TemplateContent,
+  pending: readonly PendingConfirmation[],
+  accept: boolean,
+): TemplateContent {
+  const groups = (content.groups ?? []).map((g) => ({
+    ...g,
+    items: (g.items ?? []).map((it) => (it.kind === "table" ? { ...it, columns: [...(it.columns ?? [])] } : { ...it })),
+  }));
+  for (const p of pending) {
+    const m = ENTRY_PATH.exec(p.path);
+    if (!m) continue;
+    const attr = p.attr as ConfirmAttr;
+    if (attr !== "required" && attr !== "primary" && attr !== "role") continue;
+    const items = groups[Number(m[1])]?.items;
+    const ii = Number(m[2]);
+    const item = items?.[ii];
+    if (!items || !item) continue;
+    const isColumn = m[3] !== undefined;
+    if (isColumn && item.kind !== "table") continue;
+    if (!isColumn && item.kind !== "field") continue;
+    if (isColumn && attr === "primary") continue;
+    const roles: readonly string[] = isColumn ? COLUMN_ROLES : FIELD_ROLES;
+    const columns = item.kind === "table" ? (item.columns ?? []) : [];
+    const ci = Number(m[3]);
+    const entry = (isColumn ? columns[ci] : item) as unknown as Record<string, unknown> | undefined;
+    if (!entry) continue;
+    let next: unknown = entry[attr];
+    if (accept) {
+      const ok = attr === "role" ? p.value === null || roles.includes(String(p.value)) : typeof p.value === "boolean";
+      if (ok) next = p.value;
+    } else if (sameValue(entry[attr], p.value)) {
+      next = attr === "role" ? null : false;
+    }
+    if (sameValue(entry[attr], next)) continue;
+    const patched = applyPatch(entry, { [attr]: next });
+    if (isColumn && item.kind === "table") columns[ci] = patched as unknown as TemplateColumn;
+    else items[ii] = patched as unknown as TemplateItem;
+  }
+  return { ...content, groups };
+}
+
 // ---------- shared context passed down as props ----------
 
 interface Shared {
@@ -798,6 +847,12 @@ export function TemplateEditor({
   };
 
   const limitHint = (on: boolean) => (on ? labels.limitReached : undefined);
+  const decideAll = (accept: boolean) => {
+    const list = [...pendingConfirmations];
+    const next = decideAllPending(value, list, accept);
+    if (JSON.stringify(next) !== JSON.stringify(value)) emit(next);
+    for (const p of list) onConfirm?.(p.path, p.attr, accept);
+  };
   const rootResidual = errors.filter((e) => e.path === "groups" || e.path === "$" || !/^(groups\[|code$|name$|description$|names)/.test(e.path));
 
   return (
@@ -848,6 +903,30 @@ export function TemplateEditor({
           showIcon
           className="sf-te-summary"
           message={labels.pendingSummary(pendingConfirmations.length)}
+          action={
+            readOnly || !onConfirm ? undefined : (
+              <span className="sf-te-summary__actions">
+                <Popconfirm
+                  title={labels.acceptAllConfirm(pendingConfirmations.length)}
+                  okText={labels.acceptAll}
+                  cancelText={labels.cancel}
+                  onConfirm={() => decideAll(true)}
+                >
+                  <Button size="small" type="primary">
+                    {labels.acceptAll}
+                  </Button>
+                </Popconfirm>
+                <Popconfirm
+                  title={labels.rejectAllConfirm(pendingConfirmations.length)}
+                  okText={labels.rejectAll}
+                  cancelText={labels.cancel}
+                  onConfirm={() => decideAll(false)}
+                >
+                  <Button size="small">{labels.rejectAll}</Button>
+                </Popconfirm>
+              </span>
+            )
+          }
           description={
             <ul className="sf-te-summary__list">
               {pendingConfirmations.map((p, i) => (

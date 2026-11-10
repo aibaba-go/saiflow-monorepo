@@ -288,3 +288,13 @@ def test_object_names_cover_every_copy():
     assert all(n.startswith("samples/7/abc/") for n in names)
     assert {"samples/7/abc/ocr.json", "samples/7/abc/candidate.json"} <= names
     assert {f"samples/7/abc/original.{k}" for k in ("jpg", "png", "pdf")} <= names
+
+
+def test_admin_sample_objects_live_under_admin():  # FR-SYS-142
+    assert svc.object_name(None, "abc", "ocr") == "samples/admin/abc/ocr.json"
+
+    class S:
+        tenant_id, id = None, "abc"
+        original_key = ocr_key = candidate_key = None
+
+    assert all(n.startswith("samples/admin/abc/") for n in svc.all_object_names(S()))

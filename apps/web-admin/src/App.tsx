@@ -24,6 +24,7 @@ import { OrganizationsPage } from "./pages/OrganizationsPage";
 import { PlansPage } from "./pages/PlansPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TemplateDetailPage, TemplateNewPage } from "./pages/TemplateEditPage";
+import { TemplateSamplePage } from "./pages/TemplateSamplePage";
 import { TemplatesPage } from "./pages/TemplatesPage";
 import { TenantBillingPage } from "./pages/TenantBillingPage";
 import { UsersPage } from "./pages/UsersPage";
@@ -79,6 +80,7 @@ export function AppRoutes() {
             <Route path="/ocr" element={<OcrSettingsPage />} />
             <Route path="/templates" element={<TemplatesPage />} />
             <Route path="/templates/new" element={<TemplateNewPage />} />
+            <Route path="/templates/samples/:id" element={<TemplateSamplePage />} />
             <Route path="/templates/:id" element={<TemplateDetailPage />} />
             <Route path="/password" element={<ChangePasswordPage />} />
             <Route path="*" element={<NotFound />} />

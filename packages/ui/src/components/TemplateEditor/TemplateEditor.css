@@ -18,6 +18,11 @@
   max-height: 220px;
   overflow: auto;
 }
+.sf-te-summary__actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .sf-te-summary__link.ant-btn {
   height: auto;
   padding: 0;

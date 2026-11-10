@@ -279,7 +279,39 @@ describe("TemplateEditor confirmations", () => {
     await user.click(within(screen.getByRole("group", { name: "Number" })).getByRole("checkbox", { name: "Required" }));
     expect(onConfirm).toHaveBeenLastCalledWith("groups[0].items[0]", "required", true);
   });
+
+  it("accepts every suggestion at once after asking", async () => {
+    const onConfirm = vi.fn();
+    const { user, last } = setup({ pendingConfirmations: pending, onConfirm });
+    await user.click(screen.getByRole("button", { name: "Accept all" }));
+    await user.click(lastPopconfirmOk());
+    expect(last().groups[0]!.items[0]).toMatchObject({ required: true });
+    expect((last().groups[0]!.items[2] as TemplateTable).columns[0]!.role).toBe("quantity");
+    expect(onConfirm).toHaveBeenCalledTimes(2);
+    expect(onConfirm).toHaveBeenCalledWith("groups[0].items[0]", "required", true);
+    expect(onConfirm).toHaveBeenCalledWith("groups[0].items[2].columns[0]", "role", true);
+  });
+
+  it("rejects every suggestion at once, clearing values still as suggested", async () => {
+    const onConfirm = vi.fn();
+    const initial = base();
+    initial.groups[0]!.items[0] = field("number", "Number", { required: true });
+    (initial.groups[0]!.items[2] as TemplateTable).columns[0]!.role = "quantity";
+    const { user, last } = setup({ initial, pendingConfirmations: pending, onConfirm });
+    await user.click(screen.getByRole("button", { name: "Reject all" }));
+    await user.click(lastPopconfirmOk());
+    expect(last().groups[0]!.items[0]).toMatchObject({ required: false });
+    expect((last().groups[0]!.items[2] as TemplateTable).columns[0]!.role).toBeNull();
+    expect(onConfirm).toHaveBeenCalledWith("groups[0].items[0]", "required", false);
+    expect(onConfirm).toHaveBeenCalledWith("groups[0].items[2].columns[0]", "role", false);
+  });
 });
+
+function lastPopconfirmOk(): HTMLElement {
+  const pops = document.querySelectorAll<HTMLElement>(".ant-popconfirm");
+  const pop = pops[pops.length - 1]!;
+  return pop.querySelector<HTMLElement>(".ant-btn-primary")!;
+}
 
 describe("TemplateEditor readOnly", () => {
   it("shows the structure without editing controls", () => {

@@ -129,7 +129,10 @@ class AdminCreateTemplateIn(_In):
     scope: Literal["system", "tenant"]
     tenant_id: int | None = Field(default=None, gt=0, le=2**63 - 1)
     content: dict[str, Any]
-    source: Literal["manual", "import"] = "manual"
+    source: Literal["manual", "import", "sample"] = "manual"
+    # only for source "sample": the admin's own READY sample and its unconfirmed suggestions
+    sample_id: str | None = None
+    pending_confirmations: list[PendingConfirmation] | None = None
 
 
 class SaveDraftIn(_In):

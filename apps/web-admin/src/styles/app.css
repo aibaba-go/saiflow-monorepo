@@ -635,6 +635,60 @@ body {
   box-shadow: var(--shadow-card);
 }
 
+/* ---------- template sample: the original stays on screen beside the editor ---------- */
+.ad-sample-original {
+  position: sticky;
+  top: 88px;
+  z-index: 1;
+}
+.ad-sample-viewer {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 104px);
+  height: calc(100dvh - 104px);
+  min-height: 360px;
+  background: var(--surface);
+  border: 1px solid var(--brand-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.ad-sample-viewer__head,
+.ad-sample-viewer__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 16px;
+}
+.ad-sample-viewer__head {
+  border-bottom: 1px solid var(--brand-border);
+  font-weight: 600;
+}
+.ad-sample-viewer__foot {
+  border-top: 1px solid var(--brand-border);
+}
+.ad-sample-viewer__paper {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  background: var(--brand-bg);
+}
+.ad-sample-viewer__paper img,
+.ad-sample-viewer__paper iframe {
+  display: block;
+  width: 100%;
+}
+@media (max-width: 991px) {
+  .ad-sample-original {
+    position: static;
+  }
+  .ad-sample-viewer {
+    height: auto;
+    max-height: 70vh;
+  }
+}
+
 @media (max-width: 1360px) {
   .ad-shell {
     grid-template-columns: 208px minmax(0, 1fr);

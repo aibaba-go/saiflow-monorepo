@@ -1,29 +1,35 @@
-import { useQuery } from "@tanstack/react-query";
-import { Alert, Button, Form, Input, Modal, Radio, Space, Table, Tag } from "antd";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Alert, App, Button, Card, Form, Input, Modal, Radio, Space, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import { ConfirmButton } from "../components/ConfirmButton";
 import { ErrorText } from "../components/ErrorText";
 import { Page } from "../components/Page";
 import { RemoteSingleSelect } from "../components/RemoteSelect";
 import { formatTime } from "../format";
+import { useSubmit } from "../hooks/useSubmit";
 import { useT, type T } from "../i18n";
+import { errorMessage } from "../services/errors";
 import {
   grantSummary,
-  importedContent,
   ownerLabel,
+  SAMPLE_RUNNING,
+  sampleKeys,
+  samples,
   templateKeys,
   templates,
   type ListFilter,
   type Owner,
+  type Sample,
   type TemplateSummary,
 } from "../services/templates";
 
-/** State handed to /templates/new: an imported structure and the chosen owner's label. */
+/** State handed to /templates/new and /templates/samples/:id: the chosen target and the
+ * owner's label (the sample page lets the admin change the target before saving). */
 export interface NewTemplateState {
-  content?: unknown;
-  source?: "manual" | "import";
+  scope?: "system" | "tenant";
   owner?: Owner | null;
 }
 
@@ -75,6 +81,75 @@ function GrantCell({ id }: { id: number }) {
   return <span>{grantSummary(detail.data.grant, t)}</span>;
 }
 
+const SAMPLE_COLOR: Record<Sample["status"], string> = {
+  QUEUED: "default",
+  OCR_RUNNING: "processing",
+  GENERATING: "processing",
+  READY: "green",
+  FAILED: "red",
+  CANCELED: "default",
+};
+
+export function SampleStatusTag({ status }: { status: Sample["status"] }) {
+  const t = useT();
+  return <Tag color={SAMPLE_COLOR[status]}>{t(`sample.status.${status}`)}</Tag>;
+}
+
+/** The admin's own samples of the last seven days; a running one is read again every 5 s. */
+function SamplesCard() {
+  const t = useT();
+  const { message } = App.useApp();
+  const queryClient = useQueryClient();
+  const list = useQuery({
+    queryKey: sampleKeys.list,
+    queryFn: samples.list,
+    refetchInterval: (q) => (q.state.data?.items.some((s) => SAMPLE_RUNNING.includes(s.status)) ? 5000 : false),
+  });
+  const items = list.data?.items ?? [];
+  if (list.isError) return <ErrorText error={list.error} />;
+  if (!items.length) return null;
+  const columns: ColumnsType<Sample> = [
+    { title: t("sample.col.created"), key: "created", render: (_, r) => formatTime(r.created_at) },
+    {
+      title: t("sample.col.file"),
+      key: "file",
+      render: (_, r) => `${(r.file_kind ?? "").toUpperCase()} · ${t("sample.pages", { n: r.pages ?? 1 })}`,
+    },
+    { title: t("col.status"), key: "status", render: (_, r) => <SampleStatusTag status={r.status} /> },
+    { title: t("sample.col.expires"), key: "expires", render: (_, r) => formatTime(r.expires_at) },
+    {
+      title: t("col.actions"),
+      key: "actions",
+      render: (_, r) => (
+        <Space>
+          <Link to={`/templates/samples/${r.id}`}>{t("sample.open")}</Link>
+          {!SAMPLE_RUNNING.includes(r.status) && (
+            <ConfirmButton
+              danger
+              label={t("sample.delete")}
+              title={t("sample.deleteTitle")}
+              onConfirm={async () => {
+                try {
+                  await samples.remove(r.id);
+                  void message.success(t("sample.deleted"));
+                } catch (e) {
+                  void message.error(errorMessage(e, t));
+                }
+                await queryClient.invalidateQueries({ queryKey: sampleKeys.list });
+              }}
+            />
+          )}
+        </Space>
+      ),
+    },
+  ];
+  return (
+    <Card title={t("sample.listTitle")} size="small" data-testid="samples-card">
+      <Table rowKey="id" size="small" columns={columns} dataSource={items} pagination={false} />
+    </Card>
+  );
+}
+
 /** System, personal and organization templates (FR-SYS-142). */
 export function TemplatesPage() {
   const t = useT();
@@ -82,7 +157,7 @@ export function TemplatesPage() {
   const [owner, setOwner] = useState<Owner | null>(null);
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
-  const [dialog, setDialog] = useState<"new" | "import" | null>(null);
+  const [dialog, setDialog] = useState<"new" | "sample" | null>(null);
   const filter: ListFilter = { scope, tenantId: scope === "tenant" ? (owner?.tenant_id ?? null) : null, q };
   const list = useQuery({ queryKey: templateKeys.list(filter), queryFn: () => templates.list(filter) });
 
@@ -126,7 +201,7 @@ export function TemplatesPage() {
       title={t("nav.templates")}
       extra={
         <Space>
-          <Button onClick={() => setDialog("import")}>{t("tpl.import")}</Button>
+          <Button onClick={() => setDialog("sample")}>{t("tpl.fromSample")}</Button>
           <Button type="primary" onClick={() => setDialog("new")}>
             {t("tpl.new")}
           </Button>
@@ -175,44 +250,56 @@ export function TemplatesPage() {
             pagination={{ pageSize: 50, hideOnSinglePage: true }}
           />
         )}
+        <SamplesCard />
       </Space>
       {dialog && <TargetDialog mode={dialog} onClose={() => setDialog(null)} />}
     </Page>
   );
 }
 
-/** Where a new or imported template belongs: the system, or one customer tenant. */
-function TargetDialog({ mode, onClose }: { mode: "new" | "import"; onClose: () => void }) {
+/** Where a new template belongs: the system, or one customer tenant. From a sample, the file
+ * is uploaded here and its page opens (the target can still be changed there before saving). */
+function TargetDialog({ mode, onClose }: { mode: "new" | "sample"; onClose: () => void }) {
   const t = useT();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [scope, setScope] = useState<"system" | "tenant">("system");
   const [owner, setOwner] = useState<Owner | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
 
-  async function go() {
+  const go = useSubmit(async () => {
     setProblem(null);
+    setError(null);
     if (scope === "tenant" && !owner) return setProblem(t("field.tenant_id"));
-    const state: NewTemplateState = { source: mode === "import" ? "import" : "manual", owner };
-    if (mode === "import") {
-      if (!file) return setProblem(t("tpl.import.pickFile"));
-      const content = importedContent(await file.text());
-      if (!content) return setProblem(t("tpl.import.invalid"));
-      state.content = content;
+    const state: NewTemplateState = { scope, owner };
+    if (mode === "sample") {
+      if (!file) return setProblem(t("sample.pickFile"));
+      try {
+        const sample = await samples.upload(file);
+        queryClient.setQueryData(sampleKeys.one(sample.id), sample);
+        void queryClient.invalidateQueries({ queryKey: sampleKeys.list });
+        navigate(`/templates/samples/${sample.id}`, { state });
+      } catch (e) {
+        setError(e);
+      }
+      return;
     }
     const query = scope === "system" ? "scope=system" : `scope=tenant&tenant_id=${owner!.tenant_id}`;
     navigate(`/templates/new?${query}`, { state });
-  }
+  });
 
   return (
     <Modal
       open
-      title={t(mode === "import" ? "tpl.target.importTitle" : "tpl.target.title")}
-      okText={t("tpl.target.continue")}
+      title={t(mode === "sample" ? "sample.dialogTitle" : "tpl.target.title")}
+      okText={t(mode === "sample" ? "sample.start" : "tpl.target.continue")}
       cancelText={t("common.cancel")}
-      onOk={() => void go()}
+      okButtonProps={{ loading: go.pending }}
+      onOk={() => void go.run()}
       onCancel={onClose}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form layout="vertical">
         <Form.Item>
@@ -228,17 +315,19 @@ function TargetDialog({ mode, onClose }: { mode: "new" | "import"; onClose: () =
             <OwnerSelect id="tpl-owner" value={owner} onChange={setOwner} />
           </Form.Item>
         )}
-        {mode === "import" && (
-          <Form.Item label={t("tpl.import.file")} htmlFor="tpl-file" extra={t("tpl.import.note")}>
+        {mode === "sample" && (
+          <Form.Item label={t("sample.file")} htmlFor="tpl-sample-file" extra={t("sample.uploadHint")}>
             <input
-              id="tpl-file"
+              id="tpl-sample-file"
               type="file"
-              accept=".json,application/json"
+              accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
           </Form.Item>
         )}
+        {mode === "sample" && <Alert type="info" showIcon message={t("sample.platformNote")} />}
         {problem && <Alert role="alert" type="error" showIcon message={problem} />}
+        <ErrorText error={error} />
       </Form>
     </Modal>
   );

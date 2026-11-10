@@ -1691,6 +1691,21 @@ tr:hover .pc-file__name {
   font-size: 11px;
   color: var(--pc-ink-2);
 }
+/* A sample's original stays in view beside the long candidate editor (below the 72px topbar);
+ * the page scrolls inside the viewer instead of with the editor. */
+.pc-sample-original {
+  position: sticky;
+  top: 88px;
+  z-index: 1;
+}
+.pc-sample-original .pc-viewer {
+  height: calc(100vh - 104px);
+  height: calc(100dvh - 104px);
+  min-height: 360px;
+}
+.pc-sample-original .pc-viewer__paper {
+  min-height: 0;
+}
 
 .pc-editor {
   display: flex;

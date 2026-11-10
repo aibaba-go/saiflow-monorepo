@@ -16,6 +16,8 @@ export type GrantUser = Schemas["GrantUser"];
 export type GrantOrganization = Schemas["GrantOrganization"];
 export type Owner = Schemas["OwnerItem"];
 export type PlanCode = NonNullable<Schemas["GrantsIn"]["plans"]>[number];
+export type Sample = Schemas["SampleOut"];
+export type SampleStatus = Sample["status"];
 
 /** The grantable plans, in tier order; a grant names each one exactly (FR-TEMPLATE-009). */
 export const GRANT_PLANS: readonly PlanCode[] = ["kinder", "starter", "intermediate", "advance"];
@@ -39,11 +41,33 @@ export const templateKeys = {
   organizations: (q: string) => ["admin-templates", "grant-organizations", q] as const,
 };
 
+export const sampleKeys = {
+  list: ["admin-template-samples", "list"] as const,
+  one: (id: string) => ["admin-template-samples", "one", id] as const,
+  page: (id: string, page: number) => ["admin-template-samples", "page", id, page] as const,
+};
+
+/** A sample still being worked on: its page reads it again until it settles. */
+export const SAMPLE_RUNNING: readonly SampleStatus[] = ["QUEUED", "OCR_RUNNING", "GENERATING"];
+
 const one = (id: number) => ({ path: { template_id: id } });
 const CONFIRM_ATTRS: readonly string[] = ["required", "primary", "role"];
 
+/** What is still unconfirmed, in the server's shape (the server only ever removes entries). */
+function pendingBody(pending: readonly PendingConfirmation[]): Schemas["PendingConfirmation"][] {
+  return pending
+    .filter((p) => CONFIRM_ATTRS.includes(p.attr))
+    .map((p) => ({ path: p.path, attr: p.attr as Schemas["PendingConfirmation"]["attr"], value: p.value }));
+}
+
+/** Where a template saved from a sample came from, and what it still has to confirm. */
+export interface FromSample {
+  sampleId: string;
+  pending: readonly PendingConfirmation[];
+}
+
 /** Platform-admin template configuration (FR-SYS-142): configuration only, never customer
- * originals, OCR payloads, samples or results. */
+ * originals, OCR payloads, samples or results (the admin's own samples are below). */
 export const templates = {
   list: (filter: ListFilter) =>
     call(
@@ -57,14 +81,17 @@ export const templates = {
         },
       }),
     ),
-  create: (target: TemplateTarget, content: TemplateContent, source: "manual" | "import") =>
+  /** A new draft, written by hand or from the admin's own READY sample (FR-TEMPLATE-008). */
+  create: (target: TemplateTarget, content: TemplateContent, sample?: FromSample) =>
     call(
       api.POST("/api/v1/admin/templates", {
         body: {
           scope: target.scope,
           tenant_id: target.scope === "tenant" ? target.tenantId : undefined,
           content: content as unknown as Record<string, unknown>,
-          source,
+          ...(sample
+            ? { source: "sample" as const, sample_id: sample.sampleId, pending_confirmations: pendingBody(sample.pending) }
+            : { source: "manual" as const }),
         },
       }),
     ),
@@ -77,9 +104,7 @@ export const templates = {
           revision,
           content: content as unknown as Record<string, unknown>,
           // what is still unconfirmed; the server only ever removes entries (FR-TEMPLATE-008)
-          pending_confirmations: pending
-            .filter((p) => CONFIRM_ATTRS.includes(p.attr))
-            .map((p) => ({ path: p.path, attr: p.attr as Schemas["PendingConfirmation"]["attr"], value: p.value })),
+          pending_confirmations: pendingBody(pending),
         },
       }),
     ),
@@ -117,32 +142,48 @@ export const templates = {
     call(api.GET("/api/v1/admin/templates/grant-candidates/organizations", { params: { query: { q } } })),
 };
 
+const smp = (id: string) => ({ params: { path: { sample_id: id } } });
+
+/** The admin's own template samples (FR-SYS-142): an uploaded PDF/JPG/PNG, read by the
+ * platform without any customer quota; visible to this admin account alone. */
+export const samples = {
+  list: () => call(api.GET("/api/v1/admin/template-samples")),
+  get: (id: string) => call(api.GET("/api/v1/admin/template-samples/{sample_id}", smp(id))),
+  /** The raw bytes (the backend sniffs the type itself). */
+  upload: async (file: File) =>
+    call(
+      api.POST("/api/v1/admin/template-samples", {
+        body: new Uint8Array(await file.arrayBuffer()) as never,
+        bodySerializer: (b: unknown) => b as BodyInit,
+        headers: { "Content-Type": "application/octet-stream" },
+      }),
+    ),
+  retry: (id: string) => call(api.POST("/api/v1/admin/template-samples/{sample_id}/retry", smp(id))),
+  cancel: (id: string) => call(api.POST("/api/v1/admin/template-samples/{sample_id}/cancel", smp(id))),
+  remove: (id: string) => call(api.DELETE("/api/v1/admin/template-samples/{sample_id}", smp(id))),
+  page: (id: string, page: number) =>
+    call(
+      api.GET("/api/v1/admin/template-samples/{sample_id}/pages/{page}", {
+        params: { path: { sample_id: id, page } },
+        parseAs: "blob",
+      }),
+    ) as Promise<Blob>,
+};
+
+/** The content keys of a template; anything else (owner, grant, status) is dropped. */
+export function pickContent(raw: Record<string, unknown>): TemplateContent {
+  return {
+    code: typeof raw.code === "string" ? raw.code : "",
+    name: typeof raw.name === "string" ? raw.name : "",
+    ...(raw.names && typeof raw.names === "object" ? { names: raw.names as TemplateContent["names"] } : {}),
+    description: typeof raw.description === "string" ? raw.description : "",
+    groups: Array.isArray(raw.groups) ? (raw.groups as TemplateContent["groups"]) : [],
+  };
+}
+
 /** A blank template to start from. */
 export function emptyContent(): TemplateContent {
   return { code: "", name: "", description: "", groups: [] };
-}
-
-const CONTENT_KEYS = ["code", "name", "names", "description", "groups"] as const;
-
-/** Only the structure of an imported file (FR-TEMPLATE-011): owner, grant, status, version or
- * any other key is dropped here and ignored by the server too. Null when not a JSON object. */
-export function importedContent(text: string): TemplateContent | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    return null;
-  }
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
-  const source = parsed as Record<string, unknown>;
-  const out: Record<string, unknown> = {};
-  for (const k of CONTENT_KEYS) if (k in source) out[k] = source[k];
-  return {
-    ...emptyContent(),
-    ...out,
-    code: typeof out.code === "string" ? out.code : "",
-    groups: Array.isArray(out.groups) ? (out.groups as TemplateContent["groups"]) : [],
-  } as TemplateContent;
 }
 
 /** What the editor starts from: the saved draft, else the active version, else blank. */

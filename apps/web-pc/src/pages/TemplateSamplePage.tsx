@@ -82,7 +82,9 @@ function Candidate({ sample }: { sample: Sample & { candidate: NonNullable<Sampl
       </Space>
       <Row gutter={16}>
         <Col xs={24} lg={10}>
-          <SamplePages sampleId={sample.id} pageCount={sample.pages} />
+          <div className="pc-sample-original">
+            <SamplePages sampleId={sample.id} pageCount={sample.pages} />
+          </div>
         </Col>
         <Col xs={24} lg={14}>
           <section className="pc-panel" aria-label={t("sample.pageTitle")}>

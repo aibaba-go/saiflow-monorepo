@@ -1,6 +1,7 @@
 """Platform admin template configuration (template-report-management: FR-TEMPLATE-009/011,
 FR-SYS-142; contract §3). An explicit scope (system or a tenant) instead of a TenantContext;
-configuration only: no OCR original, payload, sample or business result is read here."""
+configuration only: no customer OCR original, payload, sample or business result is read here
+(the admin's own samples live in admin_template_samples)."""
 
 from typing import Annotated, Literal
 
@@ -34,6 +35,7 @@ from app.schemas.template_management import (
     VersionDetail,
 )
 from app.services import template_management_service as svc
+from app.services import template_sample_service as sample_svc
 from app.services.tenant_access import not_found
 
 router = APIRouter(
@@ -111,7 +113,11 @@ async def create(req: AdminCreateTemplateIn, db: Db, admin: Admin) -> TemplateDe
 
     async def run():
         owner = await svc.admin_scope(db, req.scope, req.tenant_id)
-        tpl = await svc.create(db, actor, owner, req.content)
+        pending = None
+        if req.source == "sample":
+            await sample_svc.admin_ready_sample(db, admin.account.id, req.sample_id)
+            pending = req.pending_confirmations
+        tpl = await svc.create(db, actor, owner, req.content, pending=pending)
         await db.commit()
         return tpl.id
 

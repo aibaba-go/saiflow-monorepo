@@ -52,6 +52,29 @@ function detail(over: Record<string, unknown> = {}) {
   };
 }
 
+function sample(over: Record<string, unknown> = {}) {
+  return {
+    id: "s1",
+    source: "UPLOAD",
+    source_job_id: null,
+    status: "READY",
+    failed_stage: null,
+    error_code: null,
+    file_kind: "jpg",
+    pages: 1,
+    created_at: "2026-11-10T03:00:00Z",
+    expires_at: "2026-11-17T03:00:00Z",
+    ready_at: "2026-11-10T03:01:00Z",
+    charged_pages: 0,
+    candidate: {
+      content: validContent(),
+      suggestions: [{ path: "groups[0].items[0]", attr: "required", value: true }],
+      values: { "header.number": "INV-001" },
+    },
+    ...over,
+  };
+}
+
 const nameInput = () =>
   within(screen.getByRole("region", { name: "模板" })).getAllByRole("textbox", { name: "名称" })[0]!;
 const codeInput = () => within(screen.getByRole("region", { name: "模板" })).getByRole("textbox", { name: "编码" });
@@ -167,6 +190,62 @@ describe("admin templates (FR-SYS-142)", () => {
     expect(await screen.findByText(zh("tpl.conflict", { revision: 3 }))).toBeInTheDocument();
     expect(screen.getByRole("button", { name: zh("tpl.reload") })).toBeInTheDocument();
     expect(nameInput()).toHaveValue("Invoice B");
+  });
+
+  it("offers import from a sample instead of JSON import and lists the admin's own samples", async () => {
+    signedIn({
+      "GET /api/v1/admin/templates": () => json(200, { items: [] }),
+      "GET /api/v1/admin/template-samples": () =>
+        json(200, { items: [sample({ id: "s1", status: "OCR_RUNNING", candidate: null }), sample({ id: "s2" })] }),
+    });
+    renderAt("/templates");
+    expect(await screen.findByRole("button", { name: zh("tpl.fromSample") })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /JSON/ })).not.toBeInTheDocument();
+    const card = await screen.findByTestId("samples-card");
+    const rows = within(card).getAllByRole("link", { name: zh("sample.open") });
+    expect(rows.map((a) => a.getAttribute("href"))).toEqual(["/templates/samples/s1", "/templates/samples/s2"]);
+    // a running sample cannot be deleted; a settled one can
+    expect(within(card).getAllByRole("button", { name: zh("sample.delete") })).toHaveLength(1);
+    expect(within(card).getByText(zh("sample.status.OCR_RUNNING"))).toBeInTheDocument();
+  });
+
+  it("uploads a sample, then saves its candidate as a system draft with the suggestions to confirm", async () => {
+    const api = signedIn({
+      "GET /api/v1/admin/templates": () => json(200, { items: [] }),
+      "GET /api/v1/admin/template-samples": () => json(200, { items: [] }),
+      "POST /api/v1/admin/template-samples": () => json(202, sample({ id: "s9" })),
+      "GET /api/v1/admin/template-samples/s9": () => json(200, sample({ id: "s9" })),
+      "POST /api/v1/admin/templates": () => json(201, detail({ id: 5 })),
+      "GET /api/v1/admin/templates/5": () => json(200, detail({ id: 5 })),
+    });
+    renderAt("/templates");
+    await userEvent.click(await screen.findByRole("button", { name: zh("tpl.fromSample") }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(zh("sample.platformNote"))).toBeInTheDocument();
+    // no file yet: asks for one
+    await userEvent.click(within(dialog).getByRole("button", { name: zh("sample.start") }));
+    expect(await within(dialog).findByText(zh("sample.pickFile"))).toBeInTheDocument();
+    const file = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], "invoice.jpg", { type: "image/jpeg" });
+    await userEvent.upload(within(dialog).getByLabelText(zh("sample.file")), file);
+    // the loading icon may still be leaving: match the label inside the name
+    await userEvent.click(within(dialog).getByRole("button", { name: new RegExp(zh("sample.start")) }));
+
+    expect(await screen.findByText(zh("sample.readyNote"), {}, { timeout: 15_000 })).toBeInTheDocument();
+    expect(api.count("POST /api/v1/admin/template-samples")).toBe(1);
+    expect(screen.getByLabelText(zh("sample.original"))).toBeInTheDocument();
+    expect(codeInput()).toHaveValue("invoice");
+
+    await userEvent.click(screen.getByRole("button", { name: zh("tpl.saveDraft") }));
+    expect(await screen.findByRole("heading", { name: "Invoice" }, { timeout: 15_000 })).toBeInTheDocument();
+    expect(await api.bodies("POST /api/v1/admin/templates")).toEqual([
+      {
+        scope: "system",
+        content: validContent(),
+        source: "sample",
+        sample_id: "s9",
+        pending_confirmations: [{ path: "groups[0].items[0]", attr: "required", value: true }],
+      },
+    ]);
   });
 
   it("a code conflict on create keeps the input and asks for a new code", async () => {

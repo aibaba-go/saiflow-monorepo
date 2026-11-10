@@ -45,10 +45,12 @@ RUNNING = ("QUEUED", "OCR_RUNNING", "GENERATING")
 PREFIX = "samples"
 
 
-def object_name(tenant_id: int, sample_id: str, part: str) -> str:
-    """`original.<kind>`, `ocr` (raw OCR payload) or `candidate` (structure + values)."""
+def object_name(tenant_id: int | None, sample_id: str, part: str) -> str:
+    """`original.<kind>`, `ocr` (raw OCR payload) or `candidate` (structure + values); an
+    admin's sample (no tenant) lives under `samples/admin/<id>/`."""
     leaf = {"ocr": "ocr.json", "candidate": "candidate.json"}.get(part, part)
-    return f"{PREFIX}/{tenant_id}/{sample_id}/{leaf}"
+    owner = "admin" if tenant_id is None else str(tenant_id)
+    return f"{PREFIX}/{owner}/{sample_id}/{leaf}"
 
 
 def all_object_names(sample: TemplateSample) -> set[str]:
@@ -396,6 +398,29 @@ async def _job_file(db: AsyncSession, ctx: TenantContext, sample: TemplateSample
     return file
 
 
+async def _uploaded(store: ObjectStore, sample: TemplateSample) -> tuple[bytes, str]:
+    try:
+        data = await store.get(sample.original_key or "")
+    except ObjectMissing:
+        raise not_found() from None
+    return data, inspect.MIME.get(sample.file_kind or "", "application/octet-stream")
+
+
+async def _uploaded_page(
+    store: ObjectStore, sample: TemplateSample, page: int
+) -> tuple[bytes, str]:
+    if page < 1 or page > (sample.pages or 1):
+        raise not_found()
+    data, mime = await _uploaded(store, sample)
+    if sample.file_kind != "pdf":
+        return data, mime
+    try:
+        png = await asyncio.to_thread(inspect.render_page_png, data, page)
+    except (inspect.PageOutOfRange, inspect.FileCorrupt):
+        raise not_found() from None
+    return png, "image/png"
+
+
 async def original(
     db: AsyncSession, store: ObjectStore, ctx: TenantContext, sample_id: str
 ) -> tuple[bytes, str]:
@@ -408,11 +433,7 @@ async def original(
             await upload_service.read_original(store, file),
             file.mime_type or "application/octet-stream",
         )
-    try:
-        data = await store.get(sample.original_key or "")
-    except ObjectMissing:
-        raise not_found() from None
-    return data, inspect.MIME.get(sample.file_kind or "", "application/octet-stream")
+    return await _uploaded(store, sample)
 
 
 async def page_image(
@@ -425,20 +446,32 @@ async def page_image(
         from app.services import upload_service
 
         return await upload_service.page_preview(store, await _job_file(db, ctx, sample), page)
-    if page < 1 or page > (sample.pages or 1):
-        raise not_found()
-    data, mime = await original(db, store, ctx, sample_id)
-    if sample.file_kind != "pdf":
-        return data, mime
-    try:
-        png = await asyncio.to_thread(inspect.render_page_png, data, page)
-    except (inspect.PageOutOfRange, inspect.FileCorrupt):
-        raise not_found() from None
-    return png, "image/png"
+    return await _uploaded_page(store, sample, page)
 
 
 # ---------------------------------------------------------------------------------------
 # changing
+
+
+def _retry_kind(sample: TemplateSample) -> bool:
+    """True = generate again with the stored OCR; False = OCR again; else 409."""
+    ocr_done = sample.ocr_key is not None and sample.ocr_done_at is not None
+    if sample.status == "FAILED" and sample.failed_stage == "GENERATE" and ocr_done:
+        return True
+    if sample.status == "CANCELED" and ocr_done:
+        return True
+    if sample.status in ("FAILED", "CANCELED") and sample.source == "UPLOAD" and not ocr_done:
+        if not sample.original_key:
+            raise AppError(409, "sample_not_retryable", "error.sample_not_retryable")
+        return False
+    raise AppError(409, "sample_not_retryable", "error.sample_not_retryable")
+
+
+def _requeue(sample: TemplateSample, regenerate: bool) -> None:
+    sample.status = "GENERATING" if regenerate else "QUEUED"
+    sample.failed_stage = sample.error_code = None
+    sample.claimed_at = sample.cancel_requested_at = None
+    sample.updated_at = utcnow()
 
 
 async def retry(
@@ -447,30 +480,28 @@ async def retry(
     """FAILED at GENERATE (or cancelled after OCR): generate again with the stored OCR, no
     new charge. FAILED at OCR (or cancelled before it): OCR again with a new reservation."""
     sample = await own_sample(db, ctx, sample_id, for_update=True)
-    ocr_done = sample.ocr_key is not None and sample.ocr_done_at is not None
-    if sample.status == "FAILED" and sample.failed_stage == "GENERATE" and ocr_done:
-        regenerate = True
-    elif sample.status == "CANCELED" and ocr_done:
-        regenerate = True
-    elif sample.status in ("FAILED", "CANCELED") and sample.source == "UPLOAD" and not ocr_done:
-        regenerate = False
-    else:
-        raise AppError(409, "sample_not_retryable", "error.sample_not_retryable")
-    now = utcnow()
-    if regenerate:
-        sample.status = "GENERATING"
-    else:
+    regenerate = _retry_kind(sample)
+    if not regenerate:
         require(ctx, Permission.UPLOAD_OCR)
-        if not sample.original_key:
-            raise AppError(409, "sample_not_retryable", "error.sample_not_retryable")
         await _reserve(db, sample)  # a new OCR task: a new reservation (quota checked)
-        sample.status = "QUEUED"
-    sample.failed_stage = sample.error_code = None
-    sample.claimed_at = sample.cancel_requested_at = None
-    sample.updated_at = now
+    _requeue(sample, regenerate)
     await db.flush()
     await audit(db, principal, "template_sample.retry", sample.id)
     return sample
+
+
+async def _cancel(db: AsyncSession, sample: TemplateSample) -> bool:
+    """False when it was already CANCELED (nothing to do)."""
+    if sample.status == "CANCELED":
+        return False
+    if sample.status in ("READY", "FAILED"):
+        raise AppError(409, "sample_not_cancelable", "error.sample_not_cancelable")
+    await release_once(db, sample)
+    now = utcnow()
+    sample.status, sample.cancel_requested_at = "CANCELED", now
+    sample.claimed_at, sample.updated_at = None, now
+    await db.flush()
+    return True
 
 
 async def cancel(
@@ -479,16 +510,8 @@ async def cancel(
     """Cancel wins: the sample is CANCELED at once and a worker that returns later finds
     it ended; the reservation of an unfinished OCR is released once."""
     sample = await own_sample(db, ctx, sample_id, for_update=True)
-    if sample.status == "CANCELED":
-        return sample
-    if sample.status in ("READY", "FAILED"):
-        raise AppError(409, "sample_not_cancelable", "error.sample_not_cancelable")
-    await release_once(db, sample)
-    now = utcnow()
-    sample.status, sample.cancel_requested_at = "CANCELED", now
-    sample.claimed_at, sample.updated_at = None, now
-    await db.flush()
-    await audit(db, principal, "template_sample.cancel", sample.id)
+    if await _cancel(db, sample):
+        await audit(db, principal, "template_sample.cancel", sample.id)
     return sample
 
 
@@ -513,3 +536,147 @@ async def delete(
     sample.deleted_at = now
     await purge(db, store, sample, now)
     await audit(db, principal, "template_sample.delete", sample.id)
+
+
+# ---------------------------------------------------------------------------------------
+# platform admin samples (FR-SYS-142): an upload only, no tenant, nothing reserved or
+# charged; visible to the creating admin account alone, with the same limits, seven days,
+# purge and ID-only audit as a tenant sample.
+
+
+async def audit_admin(
+    db: AsyncSession, admin_id: int, action: str, target_id: str | None, *, ok: bool = True
+) -> None:
+    await audit_service.record(
+        db,
+        AuditEvent(
+            "admin",
+            str(admin_id),
+            action,
+            "template_sample",
+            target_id,
+            "success" if ok else "failure",
+        ),
+    )
+
+
+def _admin_visible(sample: TemplateSample | None, admin_id: int) -> bool:
+    return (
+        sample is not None
+        and sample.tenant_id is None
+        and sample.created_by_admin_id == admin_id
+        and sample.deleted_at is None
+        and sample.purged_at is None
+        and sample.expires_at > utcnow()
+    )
+
+
+async def admin_sample(
+    db: AsyncSession, admin_id: int, sample_id: str, *, for_update: bool = False
+) -> TemplateSample:
+    if not isinstance(sample_id, str) or len(sample_id) > 64:
+        raise not_found()
+    q = select(TemplateSample).where(
+        TemplateSample.id == sample_id, TemplateSample.tenant_id.is_(None)
+    )
+    if for_update:
+        q = q.with_for_update().execution_options(populate_existing=True)
+    sample = (await db.execute(q)).scalar_one_or_none()
+    if not _admin_visible(sample, admin_id):
+        raise not_found()
+    return sample  # type: ignore[return-value]
+
+
+async def admin_ready_sample(db: AsyncSession, admin_id: int, sample_id: object) -> TemplateSample:
+    """The admin's own READY sample a template is saved from; anything else is 404."""
+    if not isinstance(sample_id, str) or not sample_id:
+        raise AppError(422, "validation_error", "error.validation", ["sample_id"])
+    sample = await admin_sample(db, admin_id, sample_id)
+    if sample.status != "READY":
+        raise not_found()
+    return sample
+
+
+async def admin_create_upload(
+    db: AsyncSession, store: ObjectStore, admin_id: int, data: bytes
+) -> TemplateSample:
+    kind, pages = await inspect_file(data)
+    now = utcnow()
+    sample = TemplateSample(
+        id=str(uuid.uuid4()),
+        tenant_id=None,
+        created_by_admin_id=admin_id,
+        source="UPLOAD",
+        status="QUEUED",
+        file_kind=kind,
+        size_bytes=len(data),
+        pages=pages,
+        expires_at=now + RETENTION,
+        created_at=now,
+        updated_at=now,
+    )
+    name = object_name(None, sample.id, f"original.{kind}")
+    await store.put(name, data, inspect.MIME[kind])
+    sample.original_key = name
+    try:
+        db.add(sample)
+        await db.flush()
+        await audit_admin(db, admin_id, "template_sample.create", sample.id)
+    except Exception:
+        await store.delete(name)
+        raise
+    return sample
+
+
+async def admin_list(db: AsyncSession, admin_id: int) -> list[TemplateSample]:
+    return list(
+        (
+            await db.execute(
+                select(TemplateSample)
+                .where(
+                    TemplateSample.tenant_id.is_(None),
+                    TemplateSample.created_by_admin_id == admin_id,
+                    TemplateSample.deleted_at.is_(None),
+                    TemplateSample.purged_at.is_(None),
+                    TemplateSample.expires_at > utcnow(),
+                )
+                .order_by(TemplateSample.created_at.desc(), TemplateSample.id.desc())
+            )
+        ).scalars()
+    )
+
+
+async def admin_page(
+    db: AsyncSession, store: ObjectStore, admin_id: int, sample_id: str, page: int
+) -> tuple[bytes, str]:
+    return await _uploaded_page(store, await admin_sample(db, admin_id, sample_id), page)
+
+
+async def admin_original(
+    db: AsyncSession, store: ObjectStore, admin_id: int, sample_id: str
+) -> tuple[bytes, str]:
+    return await _uploaded(store, await admin_sample(db, admin_id, sample_id))
+
+
+async def admin_retry(db: AsyncSession, admin_id: int, sample_id: str) -> TemplateSample:
+    """As a tenant retry, but a new OCR reserves nothing (no tenant quota is involved)."""
+    sample = await admin_sample(db, admin_id, sample_id, for_update=True)
+    _requeue(sample, _retry_kind(sample))
+    await db.flush()
+    await audit_admin(db, admin_id, "template_sample.retry", sample.id)
+    return sample
+
+
+async def admin_cancel(db: AsyncSession, admin_id: int, sample_id: str) -> TemplateSample:
+    sample = await admin_sample(db, admin_id, sample_id, for_update=True)
+    if await _cancel(db, sample):
+        await audit_admin(db, admin_id, "template_sample.cancel", sample.id)
+    return sample
+
+
+async def admin_delete(db: AsyncSession, store: ObjectStore, admin_id: int, sample_id: str) -> None:
+    sample = await admin_sample(db, admin_id, sample_id, for_update=True)
+    now = utcnow()
+    sample.deleted_at = now
+    await purge(db, store, sample, now)
+    await audit_admin(db, admin_id, "template_sample.delete", sample.id)

@@ -50,6 +50,15 @@ class TemplateSample(Base):
             "(source = 'OCR_RESULT') = (source_job_id is not null)",
             name="template_samples_source_job",
         ),
+        # a sample belongs to a tenant user, or (no tenant, nothing charged) to an admin
+        CheckConstraint(
+            "(tenant_id is null) = (created_by_admin_id is not null)",
+            name="template_samples_owner",
+        ),
+        CheckConstraint(
+            "created_by_admin_id is null or (source = 'UPLOAD' and reservation_id is null)",
+            name="template_samples_admin_upload",
+        ),
         Index("ix_template_samples_status", "status", "created_at"),
         Index(
             "ix_template_samples_expires", "expires_at", postgresql_where=text("purged_at is null")
@@ -57,9 +66,13 @@ class TemplateSample(Base):
     )
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenants.id"), index=True)
+    # NULL only for a platform admin's sample (created_by_admin_id set; FR-SYS-142)
+    tenant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tenants.id"), index=True)
     created_by_user_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("users.id"), index=True
+    )
+    created_by_admin_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("admin_accounts.id"), index=True
     )
     source: Mapped[str] = mapped_column(Text)
     source_job_id: Mapped[str | None] = mapped_column(Text, ForeignKey("ocr_jobs.id"), index=True)

@@ -86,6 +86,33 @@ web-pc（5174）：列表区分系统/个人/组织并可见 `tax_invoice`、`bi
 
 本机负载说明：本机 CPU 长时间 100%（其他程序占用）时，前端 vitest 在 line-mini、web-admin、web-pc 中各出现若干与模板无关的等待超时；单独重跑通过，CI 干净环境全部通过，判定为负载导致，不是回归。
 
-## 线上功能回归（阻塞）
+## 线上功能回归
 
-生产 admin 仅支持平台管理员用户名/密码登录，客户端 PC 仅支持 LINE 登录；本会话没有可用的管理员凭据，也不使用负责人本人的 LINE 账号测试（读取凭据文件已被工具权限拒绝，不绕过）。因此线上模板全流程（含真实 OCR/LLM 样例生成与计量）**尚未执行**，需负责人在浏览器中登录管理员与测试 LINE 账号后继续。
+首次部署后会话内无管理员凭据，线上回归一度阻塞；负责人随后在浏览器中自行登录（PC 使用测试账号），并提出下述第二轮需求。线上结果见“第二轮部署与线上验证”。
+
+## 第二轮：样例对照、批量确认与入口调整（2026-11-10）
+
+负责人需求（附 web-pc 样例页截图）：①从样例生成时原件锚定在屏幕上始终可见；②样例建议增加“全部接受/全部拒绝”；③管理后台增加“从样例导入”入口，管理端与客户端都隐藏“导入 JSON”按钮。
+
+| 位置 | 实现 / 选择 | 规格落点 |
+|---|---|---|
+| 原件对照 | web-pc `.pc-sample-original`、admin `.ad-sample-original`：宽屏（≥992px）`position: sticky; top: 88px`，查看区高 `calc(100dvh - 104px)`，内部滚动与翻页；窄屏恢复普通流 | FR-TEMPLATE-008、FR-SYS-140/142 |
+| 全部接受/拒绝 | `TemplateEditor` 待确认摘要区两个按钮，均先弹二次确认；接受=采用建议值，拒绝=与建议相同的取值改为否/无角色，其余保持；两者都清空待确认 | FR-TEMPLATE-008（新增 AC-FR-TEMPLATE-008-04） |
+| 导入 JSON | web-pc 与 admin 均移除按钮与前端导入流程；`/templates/new` 只做手动新建；后端接口 `source: "import"` 与导出保留 | FR-TEMPLATE-002/011、FR-SYS-140/142 |
+| admin 从样例导入 | 列表页“从样例导入”→ 选目标（系统 / 客户租户）+ 上传 PDF/JPG/PNG → `/templates/samples/:id`（进度、取消、重试、删除）→ READY 后原件与候选并排，可改目标后“保存草稿”（`source: "sample"` + `sample_id` + 待确认项）；列表页显示本 admin 近 7 天样例 | FR-SYS-142（AC-FR-SYS-142-03 改写） |
+| admin 样例后端 | 迁移 `0016_admin_template_samples`：`template_samples.tenant_id` 可空，新增 `created_by_admin_id`（FK admin_accounts）及“恰有一方归属”约束；路由 `/api/v1/admin/template-samples`（CSRF）；对象存 `samples/admin/<id>/`；同样文件头/20 MB/50 页校验、7 天保留与清理；**不预占、不扣任何客户配额**（平台承担）；仅创建者可见，其他 admin 404 并记失败审计；审计 actor=admin，只记 ID；不能用客户 OCR 结果建 admin 样例；保存后样例保留至删除/到期 | FR-TEMPLATE-014（新增 AC-FR-TEMPLATE-014-07） |
+| 错误提示 | admin 新增 `err.storage_unavailable`、样例文件/重试/取消错误的中英文 | FR-SYS-142 |
+
+以上默认值是负责人“中间不要询问”授权下的实施选择，已写入 delta spec；`openspec validate template-report-management --strict` 通过。
+
+### 第二轮本地验证
+
+| 检查 | 结果 |
+|---|---|
+| 后端 `tests/integration/test_admin_template_samples.py`（loopback `saiflow_test_full1`） | 4 passed：上传到 READY 不建预占、客户扫描数不变；坏文件/超页 422；他人 admin 全路由 404 + 失败审计；客户调用 admin 路由 401；CSRF 403；系统/租户草稿各一份并带待确认项，未确认生效 422 `template_unconfirmed`；他人或客户样例保存 404；取消幂等、重试 409、删除清对象、到期清理 |
+| 后端 `test_template_samples`、`test_template_management`、`test_migrations` 与全部单元 | 501 passed；`ruff check` 通过 |
+| `packages/ui` vitest | 30 passed（含批量接受/拒绝 2 项） |
+| web-pc vitest（`--maxWorkers=2`） | 181 passed |
+| web-admin vitest | `templates.test.tsx` 8 passed（新增：列表无 JSON 导入且列出本人样例；上传→样例页→保存为系统草稿的请求体）；并发全量时 6 个无关文件 11 项 15 s 超时，`--maxWorkers=2` 重跑 49/49 通过（本机 CPU 负载） |
+| `pnpm -r lint`、web-pc/web-admin `tsc --noEmit` | 通过 |
+| 本地浏览器 admin（5175，API 8010 已迁到 0016） | 列表只有“从样例导入”“新建模板”；对话框显示目标、文件与“平台承担、仅本人可见、7 天删除”说明；本地未配置 GCS，上传返回 503 `storage_unavailable` → 补充专门提示。READY 后的对照与保存在线上验证 |

@@ -49,6 +49,11 @@ export interface TemplateEditorLabels {
   suggested: (attr: string, value: string) => string;
   accept: string;
   reject: string;
+  /** Decide every pending suggestion at once (asks first). */
+  acceptAll: string;
+  rejectAll: string;
+  acceptAllConfirm: (n: number) => string;
+  rejectAllConfirm: (n: number) => string;
   yes: string;
   no: string;
   emptyGroups: string;
@@ -115,6 +120,10 @@ export const DEFAULT_TEMPLATE_EDITOR_LABELS: TemplateEditorLabels = {
   suggested: (attr, value) => `Suggested ${attr}: ${value}`,
   accept: "Accept",
   reject: "Reject",
+  acceptAll: "Accept all",
+  rejectAll: "Reject all",
+  acceptAllConfirm: (n) => `Apply all ${n} suggestion${n === 1 ? "" : "s"}?`,
+  rejectAllConfirm: (n) => `Reject all ${n} suggestion${n === 1 ? "" : "s"}? Suggested values already set are cleared.`,
   yes: "Yes",
   no: "No",
   emptyGroups: "No groups yet. Add a group to start.",

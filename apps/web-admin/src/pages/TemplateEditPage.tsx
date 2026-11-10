@@ -57,7 +57,7 @@ import { ownerText, type NewTemplateState } from "./TemplatesPage";
 
 /** Warn before the browser leaves a page with unsaved edits. The console uses BrowserRouter
  * (no data router), so in-app links are guarded by GuardedLink instead of useBlocker. */
-function useLeaveWarning(dirty: boolean) {
+export function useLeaveWarning(dirty: boolean) {
   useEffect(() => {
     if (!dirty) return;
     const warn = (e: BeforeUnloadEvent) => {
@@ -69,7 +69,7 @@ function useLeaveWarning(dirty: boolean) {
   }, [dirty]);
 }
 
-function GuardedLink({ to, dirty, children }: { to: string; dirty: boolean; children: ReactNode }) {
+export function GuardedLink({ to, dirty, children }: { to: string; dirty: boolean; children: ReactNode }) {
   const t = useT();
   const { modal } = App.useApp();
   const navigate = useNavigate();
@@ -90,17 +90,17 @@ function GuardedLink({ to, dirty, children }: { to: string; dirty: boolean; chil
   );
 }
 
-function useEditorLabels() {
+export function useEditorLabels() {
   return templateEditorLabels(useLanguage((s) => s.lang));
 }
 
 /** A client "code" error before the first save: the server needs a valid code to store a draft. */
-function codeErrors(content: TemplateContent, t: T): TemplatePathError[] {
+export function codeErrors(content: TemplateContent, t: T): TemplatePathError[] {
   return CODE_PATTERN.test(content.code ?? "") ? [] : [{ path: "code", message: t("field.code") }];
 }
 
 /** Editor errors for a failed save: a bad or conflicting code is shown at the code input. */
-function saveErrors(error: unknown, t: T): TemplatePathError[] | null {
+export function saveErrors(error: unknown, t: T): TemplatePathError[] | null {
   if (error instanceof ApiError && error.code === "validation_error" && error.fields.includes("code")) {
     return [{ path: "code", message: t("field.code") }];
   }
@@ -114,7 +114,7 @@ function conflictCode(error: unknown): string {
 }
 
 /** The page-level message of an action error (template_invalid is shown by the editor). */
-function ActionError({ error }: { error: unknown }) {
+export function ActionError({ error }: { error: unknown }) {
   const t = useT();
   if (!error) return null;
   if (isCode(error, "template_code_conflict")) {
@@ -139,12 +139,13 @@ function ReasonsText({ reasons }: { reasons: readonly string[] }) {
   return <>{reasons.length ? t("tpl.protected", { reasons: text }) : t("err.template_in_use")}</>;
 }
 
-const same = (a: TemplateContent, b: TemplateContent) => JSON.stringify(a) === JSON.stringify(b);
+export const same = (a: TemplateContent, b: TemplateContent) => JSON.stringify(a) === JSON.stringify(b);
 
 // ---------------------------------------------------------------- /templates/new
 
-/** A new template for the system or one customer tenant, written or imported (FR-SYS-142,
- * FR-TEMPLATE-011). Saving creates a draft only. */
+/** A new template for the system or one customer tenant, written by hand (FR-SYS-142). Saving
+ * creates a draft only. (Starting from a sample is /templates/samples/:id; JSON import has no
+ * console entry since 2026-11-10, the API stays.) */
 export function TemplateNewPage() {
   const [params] = useSearchParams();
   const tenantId = idParam(params.get("tenant_id") ?? undefined);
@@ -161,12 +162,11 @@ function NewTemplate({ target }: { target: TemplateTarget }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const state = (useLocation().state ?? {}) as NewTemplateState;
-  const source = state.source === "import" ? "import" : "manual";
-  const [initial] = useState<TemplateContent>(() => (state.content as TemplateContent | undefined) ?? emptyContent());
+  const [initial] = useState<TemplateContent>(emptyContent);
   const [content, setContent] = useState(initial);
   const [errors, setErrors] = useState<TemplatePathError[]>([]);
   const [error, setError] = useState<unknown>(null);
-  const dirty = source === "import" || !same(content, initial);
+  const dirty = !same(content, initial);
   useLeaveWarning(dirty);
 
   const owner =
@@ -181,7 +181,7 @@ function NewTemplate({ target }: { target: TemplateTarget }) {
     const local = codeErrors(content, t);
     if (local.length) return setErrors(local);
     try {
-      const created = await templates.create(target, content, source);
+      const created = await templates.create(target, content);
       queryClient.setQueryData(templateKeys.one(created.id), created);
       await queryClient.invalidateQueries({ queryKey: templateKeys.lists });
       void message.success(t("tpl.created"));
@@ -206,7 +206,6 @@ function NewTemplate({ target }: { target: TemplateTarget }) {
         <Typography.Text strong data-testid="template-target">
           {t("tpl.targetIs", { owner })}
         </Typography.Text>
-        {source === "import" && <Alert type="info" showIcon message={t("tpl.import.note")} />}
         <ActionError error={error} />
         <Space>
           <Button type="primary" loading={pending} onClick={() => void run()}>
@@ -252,7 +251,7 @@ function DetailLoader({ id }: { id: number }) {
   return <Workbench initial={detail.data} />;
 }
 
-function remapPaths<E extends { path: string }>(list: E[], remap: PathRemap): E[] {
+export function remapPaths<E extends { path: string }>(list: E[], remap: PathRemap): E[] {
   const out: E[] = [];
   for (const e of list) {
     const path = remap(e.path);
@@ -538,7 +537,7 @@ function HistoryDrawer({ open, detail, onClose }: { open: boolean; detail: Templ
     enabled: open && viewing !== null,
   });
   return (
-    <Drawer open={open} onClose={onClose} title={t("tpl.history")} width={960} destroyOnClose>
+    <Drawer open={open} onClose={onClose} title={t("tpl.history")} width={960} destroyOnHidden>
       <Space direction="vertical" size="middle" style={{ width: "100%" }}>
         <List
           size="small"

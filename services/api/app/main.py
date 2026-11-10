@@ -20,6 +20,7 @@ from app.routers import (
     admin_ocr,
     admin_organizations,
     admin_query,
+    admin_template_samples,
     admin_templates,
     auth,
     billing,
@@ -123,6 +124,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(template_management.router)
     app.include_router(template_samples.router)
     app.include_router(admin_templates.router)
+    app.include_router(admin_template_samples.router)
     return app
 
 

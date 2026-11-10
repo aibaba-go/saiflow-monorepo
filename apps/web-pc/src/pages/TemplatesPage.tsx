@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Alert, App, Button, Space, Table, Tag, Typography } from "antd";
-import { useRef, useState } from "react";
+import { App, Button, Space, Table, Tag, Typography } from "antd";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { ConfirmButton } from "../components/ConfirmButton";
@@ -10,7 +10,7 @@ import { formatBangkokDate, formatBangkokDateTime } from "../format";
 import { useT, type MessageKey } from "../i18n";
 import { Icon } from "../layout/icons";
 import { errorMessage } from "../services/errors";
-import { deleteSample, pickContent, useSamples, useTemplates, type Sample } from "../templates/api";
+import { deleteSample, useSamples, useTemplates, type Sample } from "../templates/api";
 import { ScopeTag, StatusTag, TemplateGate } from "../templates/common";
 import { SampleDialog } from "../templates/SampleDialog";
 
@@ -89,22 +89,8 @@ function TemplateList() {
   const navigate = useNavigate();
   const templates = useTemplates();
   const [sampleOpen, setSampleOpen] = useState(false);
-  const [importError, setImportError] = useState(false);
-  const file = useRef<HTMLInputElement>(null);
 
-  // Only the structure of the file is kept (FR-TEMPLATE-011); nothing is saved until the
-  // user saves on the next page.
-  async function importJson(f: File) {
-    setImportError(false);
-    try {
-      const raw: unknown = JSON.parse(await f.text());
-      if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("not an object");
-      navigate("/templates/new", { state: { content: pickContent(raw as Record<string, unknown>), source: "import" } });
-    } catch {
-      setImportError(true);
-    }
-  }
-
+  // JSON import has no entry here (hidden by product decision 2026-11-10); export stays.
   return (
     <Page
       name="templates"
@@ -112,26 +98,12 @@ function TemplateList() {
       extra={
         <Space>
           <Button onClick={() => navigate("/templates/new")}>{t("tpl.newBlank")}</Button>
-          <Button onClick={() => file.current?.click()}>{t("tpl.importJson")}</Button>
           <Button type="primary" icon={<Icon name="spark" />} onClick={() => setSampleOpen(true)}>
             {t("tpl.fromSample")}
           </Button>
         </Space>
       }
     >
-      <input
-        ref={file}
-        type="file"
-        accept=".json,application/json"
-        aria-label={t("tpl.importJson")}
-        style={{ display: "none" }}
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          e.target.value = "";
-          if (f) void importJson(f);
-        }}
-      />
-      {importError && <Alert role="alert" type="error" showIcon closable message={t("tpl.importBad")} onClose={() => setImportError(false)} />}
       <section className="pc-panel" aria-label={t("tpl.list")}>
         <ErrorText error={templates.error} />
         <Table
@@ -181,8 +153,8 @@ function TemplateList() {
   );
 }
 
-/** The template list of the current tenant with the three entries (FR-SYS-140,
- * FR-TEMPLATE-001/002): from a sample first, blank and JSON import beside it. */
+/** The template list of the current tenant (FR-SYS-140, FR-TEMPLATE-001/002): from a
+ * sample first, blank beside it. */
 export function TemplatesPage() {
   return (
     <TemplateGate>
