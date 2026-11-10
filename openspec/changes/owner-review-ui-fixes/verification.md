@@ -52,3 +52,11 @@
 - 核验工作台、单据详情、复核详情的原件固定，以及弹出框在真实页面中的拖动：本地开发租户没有单据，而上传会触发收费的 OCR，所以没有上传。这些只由组件测试与 CSS 覆盖，需要部署后在真实单据上检查。
 - 管理端套餐申请的操作列：本地 admin 开发服务器的 Vite 依赖缓存已过期（504），没有在浏览器中查看，只由 web-admin 测试覆盖。
 - LINE 内退出后再登录：无法在本机的 LINE 应用中复现，只由模拟 LIFF 的测试覆盖；需要部署后用隔离测试账号在 LINE 中复测。
+
+## 5. CI 与正式环境部署（2026-11-11）
+
+- 提交 `83feba5`；CI 运行 42857914270：stack、frontend、scripts、contract、backend 全部通过。
+- 第一次触发部署（42857926726）在 CI 尚未结束时被"CI must have passed"门禁拦下，没有做任何改动；CI 通过后重新触发部署 42859090532，成功（4m35s），无数据库迁移。
+- 健康检查：`saiflow-app`、`saiflow-admin`、`saiflow-line2` 的 `/api/v1/health` 都返回 `status: ok`、`database: ok`、`version: 83feba5…`。
+- 线上前端包已包含新代码：web-pc 包含 `pc-rows-dialog`、`pc-plan--current`、`pc-email-row`；line-mini 包含 `my.loggedOut` 与 "used before monthly pages"。
+- 仍待线上人工复测：§4 所列三项（LINE 内退出后再登录、真实单据上的原件固定与弹出框拖动、管理端套餐申请操作列）。
