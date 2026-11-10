@@ -290,14 +290,14 @@ function ScanHome() {
               </div>
             </div>
           )}
+          <span className={s["welcome-label"]} aria-hidden="true">
+            {t("home.documentAi")}
+          </span>
           <h1 className={s.tagline}>
             {t("home.taglineLead")}
             <span className={s["tagline-accent"]}>{t("home.taglineAccent")}</span>
           </h1>
           <p className={s["tagline-sub"]}>{t("home.taglineSub")}</p>
-          <span className={s["welcome-label"]} aria-hidden="true">
-            {t("home.documentAi")}
-          </span>
           {refreshNote && (
             <p
               className={cx("status-line", home.outcome === "partial" && "error")}
@@ -353,6 +353,10 @@ function ScanHome() {
                 {u.free.remaining > 0 && (
                   <div className={s["quota-free"]}>
                     <span>{t("usage.free", { n: formatCount(u.free.remaining) })}</span>
+                    <span className={s["quota-days"]}>
+                      {" · "}
+                      {t("home.freeFirst")}
+                    </span>
                     {u.free.expires_at && (
                       <span className={s["quota-days"]}>
                         {" · "}

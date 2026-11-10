@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, Card, Col, Modal, Radio, Row, Space, Spin, Tag, Typography } from "antd";
+import { Alert, Button, Modal, Radio, Space, Spin, Typography } from "antd";
 import { useState } from "react";
 
 import { formatTHB } from "../billing/money";
@@ -11,6 +11,7 @@ import { Page } from "../components/Page";
 import { formatBangkokDateTime, formatCount } from "../format";
 import { useSubmit } from "../hooks/useSubmit";
 import { useT, type MessageKey } from "../i18n";
+import { Icon } from "../layout/icons";
 import { api, call } from "../services/api";
 import { can } from "../tenants/permissions";
 import { useTenant } from "../tenants/useTenant";
@@ -18,14 +19,78 @@ import { useTenant } from "../tenants/useTenant";
 type Period = "month" | "year";
 const PERIOD_KEY: Record<Period, MessageKey> = { month: "plans.periodMonth", year: "plans.periodYear" };
 
+/** The price block: the first available price large, the other below it (FR-SYS-102). */
 function Prices({ plan }: { plan: CatalogPlan }) {
   const t = useT();
-  if (plan.monthly_price === null && plan.yearly_price === null) return <Typography.Text>{t("plans.contactUs")}</Typography.Text>;
+  if (plan.monthly_price === null && plan.yearly_price === null) {
+    return (
+      <div className="pc-plan__price">
+        <span className="pc-plan__price-main">{t("plans.contactUs")}</span>
+      </div>
+    );
+  }
+  const lines = [
+    plan.monthly_price !== null && t("plans.perMonth", { price: formatTHB(plan.monthly_price, t) }),
+    plan.yearly_price !== null && t("plans.perYear", { price: formatTHB(plan.yearly_price, t) }),
+  ].filter((x): x is string => Boolean(x));
   return (
-    <Space direction="vertical" size={0}>
-      {plan.monthly_price !== null && <Typography.Text>{t("plans.perMonth", { price: formatTHB(plan.monthly_price, t) })}</Typography.Text>}
-      {plan.yearly_price !== null && <Typography.Text>{t("plans.perYear", { price: formatTHB(plan.yearly_price, t) })}</Typography.Text>}
-    </Space>
+    <div className="pc-plan__price">
+      <span className="pc-plan__price-main">{lines[0]}</span>
+      {lines[1] && <span className="pc-plan__price-alt">{lines[1]}</span>}
+    </div>
+  );
+}
+
+/** One plan: badge and name, the price, what it includes, and the action pinned to the
+ * bottom so every card's button lines up. Without an action the slot keeps its height. */
+function PlanCard({
+  plan,
+  current,
+  action,
+  pending,
+  onChoose,
+}: {
+  plan: CatalogPlan;
+  current: boolean;
+  action: "renew" | "apply" | null;
+  pending: boolean;
+  onChoose(): void;
+}) {
+  const t = useT();
+  const org = plan.tenant_kind === "organization";
+  return (
+    <article className={current ? "pc-plan pc-plan--current" : "pc-plan"} data-testid={`plan-${plan.code}`}>
+      {current && <span className="pc-plan__current">{t("plans.current")}</span>}
+      <header className="pc-plan__head">
+        <span className="pc-plan__badge" aria-hidden="true">
+          <Icon name={org ? "org" : "user"} />
+        </span>
+        <div className="pc-plan__name">
+          <h3>{planName(plan.code, t)}</h3>
+          <span className="pc-plan__kind">{t(org ? "plans.kindOrganization" : "plans.kindPersonal")}</span>
+        </div>
+      </header>
+      <Prices plan={plan} />
+      <ul className="pc-plan__features">
+        <li>
+          <Icon name="check" />
+          <span>{t("plans.quota", { n: formatCount(plan.monthly_quota) })}</span>
+        </li>
+        <li>
+          <Icon name="check" />
+          <span>{plan.member_limit === null ? t("plans.membersUnlimited") : t("plans.members", { n: plan.member_limit })}</span>
+        </li>
+      </ul>
+      <div className="pc-plan__action">
+        {action ? (
+          <Button block size="large" type="primary" disabled={pending} onClick={onChoose}>
+            {t(action === "renew" ? "plans.renew" : "plans.apply")}
+          </Button>
+        ) : (
+          <span className="pc-plan__na">{current ? t("plans.inUse") : t("plans.unavailable")}</span>
+        )}
+      </div>
+    </article>
   );
 }
 
@@ -108,38 +173,24 @@ export function PlansPage() {
         )}
         <ErrorText error={error} />
         <UsageCard />
-        <Row gutter={[16, 16]}>
-          {catalog.data.map((plan) => {
-            const action = applicableAction(plan, tenant?.kind ?? "personal", usage.data, mayApply);
-            return (
-              <Col key={plan.code} span={6}>
-                <Card
-                  data-testid={`plan-${plan.code}`}
-                  title={
-                    <Space>
-                      {planName(plan.code, t)}
-                      {plan.code === current && <Tag color="green">{t("plans.current")}</Tag>}
-                    </Space>
-                  }
-                  style={{ height: "100%" }}
-                >
-                  <Space direction="vertical">
-                    <Typography.Text>{t("plans.quota", { n: formatCount(plan.monthly_quota) })}</Typography.Text>
-                    <Typography.Text>
-                      {plan.member_limit === null ? t("plans.membersUnlimited") : t("plans.members", { n: plan.member_limit })}
-                    </Typography.Text>
-                    <Prices plan={plan} />
-                    {action && (
-                      <Button type="primary" disabled={!!pending} onClick={() => setChoosing(plan)}>
-                        {t(action === "renew" ? "plans.renew" : "plans.apply")}
-                      </Button>
-                    )}
-                  </Space>
-                </Card>
-              </Col>
-            );
-          })}
-        </Row>
+        <section className="pc-plans" aria-labelledby="plans-heading">
+          <div className="pc-plans__intro">
+            <h2 id="plans-heading">{t("plans.choose")}</h2>
+            <p>{t("plans.subtitle")}</p>
+          </div>
+          <div className="pc-plans__grid">
+            {catalog.data.map((plan) => (
+              <PlanCard
+                key={plan.code}
+                plan={plan}
+                current={plan.code === current}
+                action={applicableAction(plan, tenant?.kind ?? "personal", usage.data, mayApply)}
+                pending={!!pending}
+                onChoose={() => setChoosing(plan)}
+              />
+            ))}
+          </div>
+        </section>
         {choosing && <ApplyDialog plan={choosing} onSubmit={(period) => apply(choosing, period)} onClose={() => setChoosing(null)} />}
       </Space>
     );

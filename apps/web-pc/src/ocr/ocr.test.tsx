@@ -121,6 +121,73 @@ describe("EditableResult", () => {
     await userEvent.click(ok);
     await waitFor(() => expect(current().header).toEqual({ seller: "A", buyer: "" }));
   });
+
+  it("expands a line table into a movable dialog that edits the same draft (FR-SYS-129-11)", async () => {
+    renderWithProviders(<Harness initial={{ document: { invoice_no: "IV1", total: "" }, goods: { line_items: [{ qty: "1" }] } }} />);
+    expect(screen.getByText("Rows: 1")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Expand: Line items" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Drag the title bar to move")).toBeInTheDocument();
+
+    const qty = within(dialog).getByRole("textbox", { name: "Qty 1" });
+    await userEvent.clear(qty);
+    await userEvent.type(qty, "5");
+    expect(current().goods.line_items).toEqual([{ qty: "5" }]);
+    // the compact table beside it shows the same draft
+    expect(screen.getAllByRole("textbox", { name: "Qty 1" }).map((i) => (i as HTMLInputElement).value)).toEqual(["5", "5"]);
+
+    await userEvent.click(within(dialog).getByRole("button", { name: /Add row/ }));
+    expect(current().goods.line_items).toEqual([{ qty: "5" }, { qty: "" }]);
+    expect(within(dialog).getByRole("textbox", { name: "Qty 2" })).toBeInTheDocument();
+    await userEvent.click(within(dialog).getAllByRole("button", { name: "Delete row" })[1]!);
+    expect(current().goods.line_items).toEqual([{ qty: "5" }]);
+
+    // moved by its title bar
+    const bar = within(dialog).getByTestId("rows-dialog-bar");
+    fireEvent.pointerDown(bar, { button: 0, clientX: 100, clientY: 100, pointerId: 1 });
+    fireEvent.pointerMove(bar, { clientX: 160, clientY: 140, pointerId: 1 });
+    fireEvent.pointerUp(bar, { pointerId: 1 });
+    const moved = bar.closest<HTMLElement>('[style*="translate"]');
+    expect(moved?.style.transform).toBe("translate(60px, 40px)");
+
+    // Done closes it (jsdom never finishes the leave animation, so the closing motion is checked)
+    await userEvent.click(within(dialog).getByRole("button", { name: "Done" }));
+    await waitFor(() => expect(dialog.closest(".ant-modal")?.className ?? "").toMatch(/leave/));
+    expect(current().goods.line_items).toEqual([{ qty: "5" }]);
+  });
+
+  it("read-only tables can still be expanded, without editing (FR-SYS-129-11)", async () => {
+    renderWithProviders(<Harness initial={{ goods: { line_items: [{ qty: "3" }] } }} editable={false} />);
+    await userEvent.click(screen.getByRole("button", { name: "Expand: Line items" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("textbox", { name: "Qty 1" })).toBeDisabled();
+    expect(within(dialog).queryByRole("button", { name: /Add row/ })).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: "Delete row" })).toBeNull();
+  });
+
+  it("shows nested objects as fields and lists of rows as tables, not JSON text (FR-SYS-129-12)", async () => {
+    renderWithProviders(
+      <Harness
+        initial={{ header: { seller: "A", address: { city: "Bangkok", zip: "10110" }, notes: [{ text: "x" }] } }}
+        groups={null}
+      />,
+    );
+    const city = screen.getByRole("textbox", { name: "city" });
+    expect(city).toHaveValue("Bangkok");
+    await userEvent.type(city, "!");
+    expect(current().header.address).toEqual({ city: "Bangkok!", zip: "10110" });
+    expect(screen.getByRole("textbox", { name: "text 1" })).toHaveValue("x");
+    expect(screen.queryByDisplayValue(/\{|\[/)).toBeNull();
+  });
+
+  it("a template group shows an extra list of rows as a table (FR-SYS-129-12)", async () => {
+    const initial = { document: { ...SAVED.document, extra_lines: [{ sku: "A1" }] }, payment: SAVED.payment };
+    renderWithProviders(<Harness initial={initial} groups={TPL} />);
+    const sku = screen.getByRole("textbox", { name: "sku 1" });
+    await userEvent.type(sku, "0");
+    expect(current().document.extra_lines).toEqual([{ sku: "A10" }]);
+    expect(screen.getByRole("button", { name: "Expand: extra_lines" })).toBeInTheDocument();
+  });
 });
 
 /** A template result whose Document group has header fields and a line table (FR-SYS-129). */

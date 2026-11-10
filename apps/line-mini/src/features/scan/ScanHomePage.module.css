@@ -455,21 +455,15 @@
   color: var(--brand-on-navy-muted);
 }
 
-/* prototype .welcome-label: a quiet tag at the band's right edge (9px there; 12px floor) */
+/* prototype .welcome-label: a quiet eyebrow above the tagline (9px there; 12px floor). It
+ * sits in the flow so a long or wrapped subtitle never runs under it. */
 .welcome-label {
-  position: absolute;
-  right: calc(var(--page-x) + 4px);
-  bottom: 50px;
+  align-self: flex-start;
+  margin-top: 8px;
   font-size: 12px;
-  line-height: 1;
+  line-height: 1.4;
   letter-spacing: 1.6px;
   color: color-mix(in srgb, var(--brand-on-navy-muted) 72%, var(--brand-navy));
-}
-
-@media (max-width: 360px) {
-  .welcome-label {
-    display: none;
-  }
 }
 
 .welcome .status-line {

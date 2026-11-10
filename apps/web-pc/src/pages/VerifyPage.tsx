@@ -371,7 +371,7 @@ export function VerifyPage() {
         </aside>
         {job ? (
           <>
-            <div className="pc-verify__original">
+            <div className="pc-verify__original pc-sticky-original">
               <OriginalPages key={job.id} fileId={job.file_id} fileName={job.file_name} pageCount={job.page_count} />
             </div>
             <section className="pc-verify__editor">

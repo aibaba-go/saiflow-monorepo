@@ -66,6 +66,10 @@ describe("plans (FR-SYS-102)", () => {
     await screen.findByTestId("plan-kinder");
     expect(within(card("starter")).queryByRole("button")).not.toBeInTheDocument();
     expect(within(card("kinder")).queryByRole("button")).not.toBeInTheDocument();
+    // a card without an action says so in the button's place; the current plan is highlighted
+    expect(within(card("starter")).getByText(en("plans.unavailable"))).toBeInTheDocument();
+    expect(card("intermediate")).toHaveClass("pc-plan--current");
+    expect(card("advance")).not.toHaveClass("pc-plan--current");
     expect(within(card("intermediate")).getByText(en("plans.current"))).toBeInTheDocument();
     await userEvent.click(within(card("intermediate")).getByRole("button", { name: en("plans.renew") }));
     const dialog = await screen.findByRole("dialog");

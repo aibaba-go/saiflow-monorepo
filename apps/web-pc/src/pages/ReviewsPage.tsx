@@ -58,14 +58,14 @@ export function ReviewsPage() {
             key: "file",
             title: t("review.col.file"),
             render: (_, r) => (
-              <>
-                {r.file_name}
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+                <span style={{ overflowWrap: "anywhere" }}>{r.file_name}</span>
                 {r.block_reason && (
-                  <Tag color="orange" style={{ marginLeft: 8 }}>
+                  <Tag color="orange" style={{ marginInlineEnd: 0, whiteSpace: "normal", height: "auto", lineHeight: "18px" }}>
                     {t(r.block_reason === "did_level1" ? "review.blocked.did_level1" : "review.blocked.own_confirmation")}
                   </Tag>
                 )}
-              </>
+              </div>
             ),
           },
           { key: "pages", title: t("review.col.pages"), align: "right", className: "num", render: (_, r) => r.page_count },

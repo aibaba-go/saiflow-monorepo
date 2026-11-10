@@ -66,11 +66,11 @@ async def test_detail_and_summary(api, line, mail, store, sm, ai_settings, llm, 
     await pending_job(org, store, sm, ai_settings, llm, db)
     own = await pending_job(org, store, sm, ai_settings, llm, db, by=org.owner)
     summary = (await org.owner.client.get(f"{R}/summary", headers=org.h)).json()
-    assert summary == {"l1": 2, "l2": 0}
+    assert summary == {"l1": 3, "l2": 0}  # the owner can act on every job (2026-11-10)
     assert (await org.r1.client.get(f"{R}/summary", headers=org.h)).json() == {"l1": 3, "l2": None}
     items = (await org.owner.client.get(f"{R}?level=1", headers=org.h)).json()["items"]
     reasons = {i["job_id"]: i["block_reason"] for i in items}
-    assert reasons[own["id"]] == "own_confirmation"
+    assert reasons[own["id"]] is None
     d = await org.r1.client.get(f"{R}/{own['id']}", headers=org.h)
     assert d.status_code == 200, d.text
     detail = d.json()
@@ -106,12 +106,39 @@ async def test_level2_gate_then_official(api, line, mail, store, sm, ai_settings
 async def test_confirmer_cannot_review(api, line, mail, store, sm, ai_settings, llm, db):
     # AC-FR-VERIFY-012-03
     org = await review_org(api, line, mail, db)
+    clerk_rev = await make_role(
+        db, org.tenant_id, "ClerkRev", ["upload_ocr", "verify_own", "export", "review_l1"]
+    )
+    await db.execute(
+        text("update memberships set role_id = :r where tenant_id = :t and user_id = :u"),
+        {"r": clerk_rev, "t": org.tenant_id, "u": org.clerk.user_id},
+    )
+    await db.commit()
     await set_level(db, org.tenant_id, 1)
-    job = await pending_job(org, store, sm, ai_settings, llm, db, by=org.owner)
-    r = await decide(org.owner, org, job["id"], 1)
+    job = await pending_job(org, store, sm, ai_settings, llm, db)
+    r = await decide(org.clerk, org, job["id"], 1)
     assert (r.status_code, r.json()["code"]) == (403, "reviewer_conflict")
-    got = (await org.owner.client.get(f"{JOBS}/{job['id']}", headers=org.h)).json()
+    items = (await org.clerk.client.get(f"{R}?level=1", headers=org.h)).json()["items"]
+    assert items[0]["block_reason"] == "own_confirmation"
+    assert (await org.clerk.client.get(f"{R}/summary", headers=org.h)).json()["l1"] == 0
+    got = (await org.clerk.client.get(f"{JOBS}/{job['id']}", headers=org.h)).json()
     assert got["stage"] == "PENDING_REVIEW" and got["review_level"] == 1
+
+
+async def test_owner_reviews_everything(api, line, mail, store, sm, ai_settings, llm, db):
+    # AC-FR-VERIFY-012-06: the owner confirms, then approves both levels
+    org = await review_org(api, line, mail, db)
+    await set_level(db, org.tenant_id, 2)
+    job = await pending_job(org, store, sm, ai_settings, llm, db, by=org.owner)
+    d = (await org.owner.client.get(f"{R}/{job['id']}", headers=org.h)).json()
+    assert d["block_reason"] is None
+    assert (await decide(org.owner, org, job["id"], 1)).status_code == 200
+    items = (await org.owner.client.get(f"{R}?level=2", headers=org.h)).json()["items"]
+    assert items[0]["block_reason"] is None
+    assert (await org.owner.client.get(f"{R}/summary", headers=org.h)).json()["l2"] == 1
+    r = await decide(org.owner, org, job["id"], 2)
+    assert r.status_code == 200, r.text
+    assert r.json()["job"]["stage"] == "CONFIRMED"
 
 
 async def test_l1_reviewer_not_l2(api, line, mail, store, sm, ai_settings, llm, db):

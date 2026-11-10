@@ -462,8 +462,13 @@ body {
 .ad-content .ad-panel .ant-table-thead > tr > th {
   background: color-mix(in srgb, var(--brand-bg) 70%, var(--surface));
 }
-.ad-panel--tabs .ant-space {
+/* only the panel's own vertical stack loses its gap; buttons inside table cells keep theirs */
+.ad-panel--tabs > .ant-space {
   gap: 0 !important;
+}
+.ad-row-actions {
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 /* ---------- home: pending counts as stat cards ---------- */

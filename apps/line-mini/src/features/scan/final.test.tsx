@@ -71,7 +71,8 @@ beforeEach(() => {
 
 describe("confirm (FR-SYS-106)", () => {
   it("guest confirm after login keeps the edit (106-01)", async () => {
-    const liff = testAuth(fakeLiff({ loggedIn: false }));
+    // outside LINE: a guest is sent to LINE login (inside LINE the page reopens instead)
+    const liff = testAuth(fakeLiff({ loggedIn: false, inClient: false }));
     let stored = result(1, { document: { invoice_no: "IV1", invoice_date: "2026-10-01" } });
     const api = mockApi({
       [`GET ${JOB}`]: () => json(200, job("VERIFYING")),

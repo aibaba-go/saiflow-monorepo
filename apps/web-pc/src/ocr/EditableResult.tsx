@@ -1,5 +1,7 @@
 import { Button, Card, Input, Modal, Space, Table, Typography } from "antd";
-import { Fragment, useState } from "react";
+import { Fragment, type PointerEvent, useRef, useState } from "react";
+
+import { Icon } from "../layout/icons";
 
 import { useT } from "../i18n";
 import { useLanguage } from "../stores/language";
@@ -77,16 +79,7 @@ function FieldInput({
   );
 }
 
-function RowsEditor({
-  path,
-  title,
-  columns,
-  rows,
-  marks,
-  editable,
-  onSet,
-  onChangeRows,
-}: {
+type RowsProps = {
   path: Path;
   title: string;
   columns: Column[];
@@ -95,76 +88,242 @@ function RowsEditor({
   editable: boolean;
   onSet: (path: Path, value: Json) => void;
   onChangeRows: (rows: Obj[]) => void;
-}) {
+};
+
+/** The line-item grid. `wide` is the dialog's roomy version: a row-number column, wider
+ * cells and a header that stays put while the rows scroll. */
+function RowsTable({ path, columns, rows, marks, editable, onSet, onChangeRows, wide }: RowsProps & { wide: boolean }) {
   const t = useT();
   const lang = useLanguage((s) => s.lang);
+  const cellWidth = wide ? 168 : 120;
   return (
-    <div style={{ marginBottom: 12 }}>
-      <Table<Obj & { _i: number }>
-        size="small"
-        bordered
-        pagination={false}
-        scroll={{ x: true }}
-        title={() => <Typography.Text strong>{title}</Typography.Text>}
-        rowKey="_i"
-        dataSource={rows.map((r, i) => ({ ...r, _i: i }))}
-        columns={[
-          ...columns.map((c) => ({
-            key: c.key,
-            title: label(c, lang),
-            align: isNumeric(c.type) ? ("right" as const) : undefined,
-            className: isNumeric(c.type) ? "num" : undefined,
-            render: (_: unknown, r: Obj & { _i: number }) => {
-              const p = [...path, r._i, c.key];
-              const key = pathText(p);
-              const cls = markClass(key, marks);
-              return (
-                <div data-path={key} className={cls}>
-                  <Input
+    <Table<Obj & { _i: number }>
+      className={wide ? "pc-rows pc-rows--wide" : "pc-rows"}
+      size={wide ? "middle" : "small"}
+      bordered
+      pagination={false}
+      scroll={wide ? { x: "max-content", y: "calc(min(72vh, 760px) - 150px)" } : { x: "max-content" }}
+      rowKey="_i"
+      dataSource={rows.map((r, i) => ({ ...r, _i: i }))}
+      columns={[
+        ...(wide
+          ? [
+              {
+                key: "_no",
+                title: "#",
+                width: 52,
+                fixed: "left" as const,
+                align: "center" as const,
+                render: (_: unknown, r: Obj & { _i: number }) => <span className="pc-rows__no">{r._i + 1}</span>,
+              },
+            ]
+          : []),
+        ...columns.map((c) => ({
+          key: c.key,
+          title: label(c, lang),
+          width: cellWidth,
+          align: isNumeric(c.type) ? ("right" as const) : undefined,
+          className: isNumeric(c.type) ? "num" : undefined,
+          render: (_: unknown, r: Obj & { _i: number }) => {
+            const p = [...path, r._i, c.key];
+            const key = pathText(p);
+            const cls = markClass(key, marks);
+            const text = asText(r[c.key] ?? null);
+            return (
+              <div data-path={key} className={cls}>
+                <Input
+                  size={wide ? "middle" : "small"}
+                  className={isNumeric(c.type) ? "num num--right" : undefined}
+                  style={{ minWidth: cellWidth - 16 }}
+                  aria-label={`${label(c, lang)} ${r._i + 1}`}
+                  title={text || undefined}
+                  status={cls ? "error" : undefined}
+                  disabled={!editable}
+                  value={text}
+                  onChange={(e) => onSet(p, cleanValue(e.target.value, c.type))}
+                />
+              </div>
+            );
+          },
+        })),
+        ...(editable
+          ? [
+              {
+                key: "_del",
+                title: "",
+                width: 56,
+                fixed: wide ? ("right" as const) : undefined,
+                align: "center" as const,
+                render: (_: unknown, r: Obj & { _i: number }) => (
+                  <Button
                     size="small"
-                    className={isNumeric(c.type) ? "num num--right" : undefined}
-                    aria-label={`${label(c, lang)} ${r._i + 1}`}
-                    status={cls ? "error" : undefined}
-                    disabled={!editable}
-                    value={asText(r[c.key] ?? null)}
-                    onChange={(e) => onSet(p, cleanValue(e.target.value, c.type))}
-                  />
-                </div>
-              );
-            },
-          })),
-          ...(editable
-            ? [
-                {
-                  key: "_del",
-                  title: "",
-                  width: 60,
-                  render: (_: unknown, r: Obj & { _i: number }) => (
-                    <Button
-                      size="small"
-                      danger
-                      aria-label={t("ocr.deleteRow")}
-                      onClick={() => onChangeRows(rows.filter((_, i) => i !== r._i))}
-                    >
-                      ×
-                    </Button>
-                  ),
-                },
-              ]
-            : []),
-        ]}
-      />
-      {editable && (
+                    danger
+                    aria-label={t("ocr.deleteRow")}
+                    onClick={() => onChangeRows(rows.filter((_, i) => i !== r._i))}
+                  >
+                    ×
+                  </Button>
+                ),
+              },
+            ]
+          : []),
+      ]}
+    />
+  );
+}
+
+const blankRow = (columns: Column[]) => Object.fromEntries(columns.map((c) => [c.key, ""])) as Obj;
+
+/** A dialog the user can move by its title bar, so the original or the fields beside it stay
+ * readable while the table is open. The offset resets each time it opens. */
+function useDrag() {
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const start = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
+  const handle = {
+    onPointerDown(e: PointerEvent<HTMLElement>) {
+      if (e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
+      start.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y };
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    },
+    onPointerMove(e: PointerEvent<HTMLElement>) {
+      const from = start.current;
+      if (!from) return;
+      // keep the title bar reachable on screen
+      const maxX = window.innerWidth / 2;
+      const maxY = window.innerHeight - 120;
+      setOffset({
+        x: Math.max(-maxX, Math.min(maxX, from.ox + e.clientX - from.x)),
+        y: Math.max(-80, Math.min(maxY, from.oy + e.clientY - from.y)),
+      });
+    },
+    onPointerUp() {
+      start.current = null;
+    },
+  };
+  return { offset, reset: () => setOffset({ x: 0, y: 0 }), handle };
+}
+
+/** A line-item table (FR-SYS-129): compact in the result; "Expand" opens the same rows in a
+ * large movable dialog where every cell has room. Both edit the same draft. */
+function RowsEditor(props: RowsProps) {
+  const { title, columns, rows, editable, onChangeRows } = props;
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const drag = useDrag();
+  const addRow = () => onChangeRows([...rows, blankRow(columns)]);
+  return (
+    <div className="pc-rows-block" style={{ marginBottom: 12 }}>
+      <div className="pc-rows-block__head">
+        <Typography.Text strong>{title}</Typography.Text>
+        <span className="pc-rows-block__count">{t("ocr.rowCount", { n: rows.length })}</span>
         <Button
           size="small"
-          style={{ marginTop: 6 }}
-          onClick={() => onChangeRows([...rows, Object.fromEntries(columns.map((c) => [c.key, ""])) as Obj])}
+          className="pc-rows-block__expand"
+          icon={<Icon name="expand" />}
+          aria-label={`${t("ocr.expandTable")}: ${title}`}
+          onClick={() => {
+            drag.reset();
+            setOpen(true);
+          }}
         >
+          {t("ocr.expandTable")}
+        </Button>
+      </div>
+      <RowsTable {...props} wide={false} />
+      {editable && (
+        <Button size="small" style={{ marginTop: 6 }} onClick={addRow}>
           {t("ocr.addRow")}
         </Button>
       )}
+      <Modal
+        open={open}
+        destroyOnHidden
+        width="min(1280px, 94vw)"
+        className="pc-rows-dialog"
+        maskClosable={false}
+        title={
+          <div className="pc-rows-dialog__bar" data-testid="rows-dialog-bar" {...drag.handle}>
+            <span>{title}</span>
+            <span className="pc-rows-dialog__hint">{t("ocr.dragHint")}</span>
+          </div>
+        }
+        modalRender={(node) => (
+          <div style={{ transform: `translate(${drag.offset.x}px, ${drag.offset.y}px)` }}>{node}</div>
+        )}
+        onCancel={() => setOpen(false)}
+        footer={
+          <div className="pc-rows-dialog__foot">
+            {editable ? (
+              <Button onClick={addRow} icon={<Icon name="plus" />}>
+                {t("ocr.addRow")}
+              </Button>
+            ) : (
+              <span />
+            )}
+            <Button type="primary" onClick={() => setOpen(false)}>
+              {t("ocr.tableDone")}
+            </Button>
+          </div>
+        }
+      >
+        <RowsTable {...props} wide />
+      </Modal>
     </div>
   );
+}
+
+/** A value shown in a field's place: a list of rows becomes a table and a nested object its
+ * own fields, instead of raw JSON text in one input. */
+function ValueEditor({
+  path,
+  name,
+  value,
+  marks,
+  editable,
+  onSet,
+}: {
+  path: Path;
+  name: string;
+  value: Json;
+  marks: Marks;
+  editable: boolean;
+  onSet: (path: Path, value: Json) => void;
+}) {
+  if (isTable(value) && (value as Obj[]).length > 0) {
+    const rows = value as Obj[];
+    const columns = [...new Set(rows.flatMap((r) => Object.keys(r)))].map((c) => ({ key: c, name: c }));
+    return (
+      <RowsEditor
+        path={path}
+        title={name}
+        columns={columns}
+        rows={rows}
+        marks={marks}
+        editable={editable}
+        onSet={onSet}
+        onChangeRows={(next) => onSet(path, next)}
+      />
+    );
+  }
+  if (isObj(value) && Object.keys(value).length > 0) {
+    return (
+      <fieldset className="pc-nested" data-path={pathText(path)}>
+        <legend>{name}</legend>
+        {Object.entries(value).map(([k, v]) => (
+          <ValueEditor
+            key={k}
+            path={[...path, k]}
+            name={k}
+            value={v ?? null}
+            marks={marks}
+            editable={editable}
+            onSet={onSet}
+          />
+        ))}
+      </fieldset>
+    );
+  }
+  return <FieldInput path={path} name={name} value={value} marks={marks} editable={editable} onSet={onSet} />;
 }
 
 /** A header field with its delete button: the input takes the full row, like the template's
@@ -250,13 +409,13 @@ export function EditableResult({
           const defined = g.items.map((i) => i.key);
           // Extra header fields (FR-SYS-129): saved or drafted in this group but not defined by
           // the template, shown with their entered names after the template's fields.
-          const extras = Object.keys(gv).filter((k) => !defined.includes(k) && !isTable(gv[k]));
+          const extras = Object.keys(gv).filter((k) => !defined.includes(k));
           const lastField = g.items.reduce((at, item, i) => (item.kind === "field" ? i : at), -1);
           const ordinary = lastField >= 0 || extras.length > 0;
           const extraFields = extras.map((k) => (
             <div key={`extra-${k}`} style={FIELD_ROW} data-extra-field={k}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <FieldInput path={[g.key, k]} name={k} value={gv[k] ?? null} marks={marks} editable={editable} onSet={set} />
+                <ValueEditor path={[g.key, k]} name={k} value={gv[k] ?? null} marks={marks} editable={editable} onSet={set} />
               </div>
               {editable && (
                 <Button
@@ -326,7 +485,7 @@ export function EditableResult({
         if (!isObj(gv)) {
           return (
             <Card key={gk} size="small">
-              <FieldInput path={[gk]} name={gk} value={gv} marks={marks} editable={editable} onSet={set} />
+              <ValueEditor path={[gk]} name={gk} value={gv} marks={marks} editable={editable} onSet={set} />
             </Card>
           );
         }
@@ -342,7 +501,7 @@ export function EditableResult({
             {fieldKeys.map((k) => (
               <div key={k} style={FIELD_ROW}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <FieldInput path={[gk, k]} name={k} value={gv[k] ?? null} marks={marks} editable={editable} onSet={set} />
+                  <ValueEditor path={[gk, k]} name={k} value={gv[k] ?? null} marks={marks} editable={editable} onSet={set} />
                 </div>
                 {editable && (
                   <Button

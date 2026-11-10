@@ -148,7 +148,10 @@ export async function startLogin(returnTo: string = deps.currentPath()): Promise
       return;
     }
     safe(() => sessionStorage.setItem(INTENT_KEY, JSON.stringify({ returnTo, at: Date.now() })));
-    deps.liff.login(window.location.href);
+    // liff.login() cannot be used in the LIFF browser: there LIFF logs in when it starts, so
+    // reopen the page and let boot complete the login from the intent.
+    if (safe(() => deps.liff.isInClient())) window.location.reload();
+    else deps.liff.login(window.location.href);
   } catch (error) {
     store().set({ loginError: error });
   }
@@ -195,9 +198,11 @@ async function revokeAndBecomeGuest(): Promise<void> {
   deps.onIdentityChange(); // drop the old identity's data before anything re-renders
   useTenantChoice.getState().choose(null);
   safe(() => sessionStorage.removeItem(INTENT_KEY));
-  safe(() => deps.liff.logout());
+  // Inside LINE the LINE account stays signed in (the LIFF browser has no login() to come
+  // back with); only the SaiFlow session ends. Outside LINE the LIFF token is dropped too.
+  if (!safe(() => deps.liff.isInClient())) safe(() => deps.liff.logout());
   await loadIdentity();
-  store().set({ status: "ready", registerOpen: false, loginError: null });
+  store().set({ status: "ready", registerOpen: false, loginError: null, notice: "my.loggedOut" });
   deps.navigate("/");
 }
 

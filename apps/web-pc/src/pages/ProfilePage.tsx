@@ -39,18 +39,27 @@ function ChangeEmail({ onDone }: { onDone(): void }) {
   return (
     <Form layout="vertical">
       <Form.Item label={t("profile.newEmail")} htmlFor="new-email" {...item("email")}>
-        <Space.Compact style={{ width: "100%" }}>
-          <Input id="new-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <EmailCodeButton email={email} onError={setError} />
-        </Space.Compact>
+        <div className="pc-email-row">
+          <Input
+            id="new-email"
+            type="email"
+            placeholder="name@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <EmailCodeButton email={email} onError={setError} size="middle" />
+        </div>
       </Form.Item>
       <Form.Item label={t("profile.code")} htmlFor="new-email-code" {...item("code")}>
         <Input id="new-email-code" value={code} onChange={(e) => setCode(e.target.value)} />
       </Form.Item>
       <ErrorText error={formLevel(error)} />
-      <Button type="primary" loading={submit.pending} onClick={() => void submit.run()} style={{ marginTop: 8 }}>
-        {t("common.confirm")}
-      </Button>
+      <div className="pc-email-actions">
+        <Button onClick={onDone}>{t("common.cancel")}</Button>
+        <Button type="primary" loading={submit.pending} onClick={() => void submit.run()}>
+          {t("common.confirm")}
+        </Button>
+      </div>
     </Form>
   );
 }

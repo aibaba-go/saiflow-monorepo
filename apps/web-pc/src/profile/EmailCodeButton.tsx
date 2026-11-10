@@ -11,11 +11,12 @@ export const RESEND_SECONDS = 60;
 export interface EmailCodeButtonProps {
   email: string;
   onError(error: unknown): void;
+  size?: "small" | "middle";
 }
 
 /** "Send code" with a 60 s countdown after each successful send (FR-SYS-095, 020); a new email
  * address can get a code at once. */
-export function EmailCodeButton({ email, onError }: EmailCodeButtonProps) {
+export function EmailCodeButton({ email, onError, size = "small" }: EmailCodeButtonProps) {
   const t = useT();
   const [left, setLeft] = useState(0);
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -40,7 +41,8 @@ export function EmailCodeButton({ email, onError }: EmailCodeButtonProps) {
 
   return (
     <Button
-      size="small"
+      size={size}
+      className="pc-email-code"
       disabled={counting || !email}
       loading={send.pending}
       onClick={() => void send.run()}

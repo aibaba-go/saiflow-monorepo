@@ -74,8 +74,10 @@ export function ApplicationQueue<A extends Row>({
   const actions: ColumnsType<A>[number] = {
     title: t("col.actions"),
     key: "actions",
+    fixed: "right",
+    width: 176,
     render: (_, row) => (
-      <Space>
+      <Space size={8} className="ad-row-actions">
         {approveWithDates ? (
           <Button type="primary" onClick={() => setApproving(row.id)}>
             {t("app.approve")}

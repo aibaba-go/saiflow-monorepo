@@ -166,8 +166,12 @@ def _held(ctx: TenantContext) -> list[int]:
     return [lvl for lvl, perm in _PERM_OF.items() if ctx.has(perm)]
 
 
-def block_reason(rnd: ReviewRound, user_id: int | None, level: int) -> str | None:
-    """Why this user may not decide this round at this level (FR-VERIFY-012 rule 2)."""
+def block_reason(rnd: ReviewRound, ctx: TenantContext, level: int) -> str | None:
+    """Why this user may not decide this round at this level (FR-VERIFY-012 rule 2). The
+    organization's owner holds every operation and is never blocked (2026-11-10 decision)."""
+    if ctx.is_owner:
+        return None
+    user_id = ctx.user_id
     if rnd.confirmed_by_user_id is not None and rnd.confirmed_by_user_id == user_id:
         return "own_confirmation"
     if level == 2 and rnd.l1_reviewer_user_id is not None and rnd.l1_reviewer_user_id == user_id:
@@ -215,7 +219,7 @@ async def _items(db: AsyncSession, ctx: TenantContext, rows, level: int) -> list
             "level": level,
             "required_level": rnd.required_level,
             "level_entered_at": rnd.level_entered_at,
-            "block_reason": block_reason(rnd, ctx.user_id, level),
+            "block_reason": block_reason(rnd, ctx, level),
         }
         for job, rnd, name in rows
     ]
@@ -248,8 +252,10 @@ async def summary(db: AsyncSession, ctx: TenantContext) -> dict:
     """Jobs the caller can act on, per level; None for a level they do not hold."""
     out: dict[str, int | None] = {"l1": None, "l2": None}
     for level in _held(ctx):
-        cond = [ReviewRound.confirmed_by_user_id.is_distinct_from(ctx.user_id)]
-        if level == 2:
+        cond = []
+        if not ctx.is_owner:
+            cond.append(ReviewRound.confirmed_by_user_id.is_distinct_from(ctx.user_id))
+        if level == 2 and not ctx.is_owner:
             cond.append(ReviewRound.l1_reviewer_user_id.is_distinct_from(ctx.user_id))
         q = _queue_base(ctx, level).where(*cond)
         out[f"l{level}"] = (
@@ -266,7 +272,7 @@ async def _tail(db: AsyncSession, ctx: TenantContext, job: OcrJob, rnd: ReviewRo
         "required_level": rnd.required_level,
         "confirmed_by_name": confirmer.display_name if confirmer else None,
         "confirmed_at": job.confirmed_at,
-        "block_reason": block_reason(rnd, ctx.user_id, level) if level else None,
+        "block_reason": block_reason(rnd, ctx, level) if level else None,
     }
 
 
@@ -320,7 +326,7 @@ async def decide(
     rnd = await open_round(db, job.id)
     if job.review_status != _STATUS_OF[level] or rnd is None or rnd.current_level != level:
         raise AppError(409, "review_state_changed", "error.review_state_changed")
-    if block_reason(rnd, ctx.user_id, level):
+    if block_reason(rnd, ctx, level):
         raise AppError(403, "reviewer_conflict", "error.reviewer_conflict")
     now = utcnow()
     db.add(

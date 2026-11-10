@@ -119,7 +119,9 @@ export function ReviewDetailPage() {
           </Typography.Text>
         )}
         <div className="pc-document">
-          <OriginalPages fileId={d.job.file_id} fileName={d.job.file_name} pageCount={d.job.page_count} />
+          <div className="pc-sticky-original">
+            <OriginalPages fileId={d.job.file_id} fileName={d.job.file_name} pageCount={d.job.page_count} />
+          </div>
           <section className="pc-editor">
             <div className="pc-editor__top">
               <strong>{t("editor.current")}</strong>

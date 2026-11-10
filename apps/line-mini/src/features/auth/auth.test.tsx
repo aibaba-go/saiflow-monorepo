@@ -165,7 +165,7 @@ describe("logout (FR-SYS-043)", () => {
 
   it("logs out to a guest home (043-01)", async () => {
     const api = loggedIn();
-    const liff = fakeLiff({ loggedIn: true });
+    const liff = fakeLiff({ loggedIn: true, inClient: false });
     localStorage.setItem("saiflow.tenant", "5");
     start(api, liff);
     await userEvent.click(await screen.findByRole("button", { name: "Log out" }));
@@ -174,6 +174,24 @@ describe("logout (FR-SYS-043)", () => {
     expect(liff.logout).toHaveBeenCalled();
     expect(localStorage.getItem("saiflow.tenant")).toBeNull();
     expect(localStorage.getItem(LOGOUT_FLAG)).toBeNull();
+  });
+
+  it("inside LINE: says so, keeps the LINE account and can log in again with a tap", async () => {
+    const api = loggedIn();
+    const liff = fakeLiff({ loggedIn: true, idToken: "tok" });
+    start(api, liff);
+    await userEvent.click(await screen.findByRole("button", { name: "Log out" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+    expect(await screen.findByText("Logged out. You are now using SaiFlow as a guest.")).toBeInTheDocument();
+    expect(useSession.getState().me?.kind).toBe("guest");
+    expect(liff.logout).not.toHaveBeenCalled();
+    api.set("POST /api/v1/auth/line", () => {
+      api.set("GET /api/v1/me", () => json(200, USER));
+      return json(200, USER);
+    });
+    await userEvent.click(await screen.findByRole("tab", { name: "My" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Log in / Register" }));
+    expect(await screen.findByText("Somchai")).toBeInTheDocument();
   });
 
   it("cancel keeps the user logged in (043-02)", async () => {

@@ -89,7 +89,9 @@ export function DocumentPage() {
       }
     >
       <div className="pc-document">
-        <OriginalPages fileId={j.file_id} fileName={j.file_name} pageCount={j.page_count} />
+        <div className="pc-sticky-original">
+          <OriginalPages fileId={j.file_id} fileName={j.file_name} pageCount={j.page_count} />
+        </div>
         <section className="pc-editor">
           <div className="pc-editor__top">
             <strong>{t("editor.current")}</strong>

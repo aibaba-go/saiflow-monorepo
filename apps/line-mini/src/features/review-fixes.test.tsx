@@ -40,7 +40,7 @@ describe("Important 1: a 401 during logout", () => {
     await logout();
     expect(api.count("POST /api/v1/auth/guest")).toBe(1);
     expect(useSession.getState().me?.kind).toBe("guest");
-    expect(useSession.getState().notice).toBeNull();
+    expect(useSession.getState().notice).toBe("my.loggedOut"); // logged out, not "session expired"
   });
 });
 

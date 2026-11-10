@@ -1691,19 +1691,25 @@ tr:hover .pc-file__name {
   font-size: 11px;
   color: var(--pc-ink-2);
 }
-/* A sample's original stays in view beside the long candidate editor (below the 72px topbar);
- * the page scrolls inside the viewer instead of with the editor. */
-.pc-sample-original {
+/* An original stays in view beside a long editor (below the 72px topbar): the sample page,
+ * the verify workbench, document and review details. The page scrolls inside the viewer
+ * instead of with the editor; align-self keeps a stretched grid cell from filling the row. */
+.pc-sample-original,
+.pc-sticky-original {
   position: sticky;
   top: 88px;
   z-index: 1;
+  align-self: start;
+  min-width: 0;
 }
-.pc-sample-original .pc-viewer {
+.pc-sample-original .pc-viewer,
+.pc-sticky-original .pc-viewer {
   height: calc(100vh - 104px);
   height: calc(100dvh - 104px);
   min-height: 360px;
 }
-.pc-sample-original .pc-viewer__paper {
+.pc-sample-original .pc-viewer__paper,
+.pc-sticky-original .pc-viewer__paper {
   min-height: 0;
 }
 
@@ -2155,4 +2161,281 @@ tr:hover .pc-file__name {
   line-height: 38px;
   font-weight: 600;
   color: var(--pc-ink);
+}
+
+/* Line-item tables (FR-SYS-129): a heading row with the row count and an expand button; the
+ * expanded table opens in a wide dialog that can be dragged by its title bar. */
+.pc-rows-block__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  min-width: 0;
+}
+.pc-rows-block__count {
+  font-size: 12px;
+  color: var(--pc-muted);
+  white-space: nowrap;
+}
+.pc-rows-block__expand.ant-btn {
+  margin-left: auto;
+}
+.pc-rows .num--right input,
+.pc-rows input.num--right {
+  text-align: right;
+}
+.pc-rows__no {
+  color: var(--pc-muted);
+  font-variant-numeric: tabular-nums;
+}
+.pc-rows-dialog .ant-modal-content {
+  padding: 0;
+  overflow: hidden;
+}
+.pc-rows-dialog .ant-modal-header {
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--pc-line);
+}
+.pc-rows-dialog .ant-modal-body {
+  padding: 12px 16px;
+}
+.pc-rows-dialog .ant-modal-footer {
+  margin: 0;
+  padding: 10px 16px;
+  border-top: 1px solid var(--pc-line);
+}
+.pc-rows-dialog__bar {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 14px 48px 14px 16px;
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+.pc-rows-dialog__hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--pc-muted);
+}
+.pc-rows-dialog__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pc-rows--wide .ant-input {
+  font-size: 14px;
+}
+
+/* A value that is itself an object: its fields grouped under the key. */
+.pc-nested {
+  margin: 0 0 10px;
+  padding: 8px 12px 2px;
+  border: 1px solid var(--pc-line);
+  border-radius: 8px;
+  min-width: 0;
+}
+.pc-nested > legend {
+  width: auto;
+  margin: 0;
+  padding: 0 6px;
+  border: 0;
+  font-size: 12px;
+  color: var(--pc-ink-2);
+}
+
+/* Profile, change e-mail (FR-SYS-046): the address and the code button on one row. */
+.pc-email-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pc-email-row > .ant-input,
+.pc-email-row > .ant-input-affix-wrapper {
+  flex: 1;
+  min-width: 0;
+}
+.pc-email-row .pc-email-code {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.pc-email-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* Plans (FR-SYS-102): equal-height cards; price, inclusions, and the action pinned to the
+ * bottom so the buttons line up across the row. */
+.pc-plans__intro {
+  margin-bottom: 14px;
+}
+.pc-plans__intro h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 600;
+  color: var(--pc-ink);
+}
+.pc-plans__intro p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--pc-muted);
+}
+.pc-plans__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+.pc-plan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 28px 20px 18px;
+  background: var(--surface);
+  border: 1px solid var(--pc-line);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: box-shadow 0.15s ease-out, border-color 0.15s ease-out, transform 0.15s ease-out;
+}
+.pc-plan::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: linear-gradient(90deg, var(--brand-blue), var(--brand-teal));
+  opacity: 0.35;
+}
+.pc-plan:hover {
+  border-color: color-mix(in srgb, var(--brand-blue) 40%, var(--pc-line));
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--brand-navy) 10%, transparent);
+  transform: translateY(-2px);
+}
+.pc-plan--current {
+  border-color: var(--brand-blue);
+  box-shadow: 0 0 0 1px var(--brand-blue);
+}
+.pc-plan--current::before {
+  opacity: 1;
+}
+.pc-plan__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.pc-plan__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--brand-blue-soft);
+  color: var(--brand-blue);
+}
+.pc-plan__name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.pc-plan__name h3 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+  color: var(--pc-ink);
+  overflow-wrap: anywhere;
+}
+.pc-plan__kind {
+  font-size: 12px;
+  color: var(--pc-muted);
+}
+/* the current plan's corner label, inside the top padding so no card's content moves */
+.pc-plan__current {
+  position: absolute;
+  top: 0;
+  right: 16px;
+  padding: 2px 10px 3px;
+  border-radius: 0 0 6px 6px;
+  background: var(--brand-blue);
+  color: var(--surface);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+.pc-plan__price {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 62px;
+  margin: 18px 0 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed var(--pc-line);
+}
+.pc-plan__price-main {
+  font-size: 22px;
+  line-height: 30px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--pc-ink);
+  font-variant-numeric: tabular-nums;
+}
+.pc-plan__price-alt {
+  font-size: 13px;
+  color: var(--pc-muted);
+  font-variant-numeric: tabular-nums;
+}
+.pc-plan__features {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+  flex: 1;
+}
+.pc-plan__features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--pc-ink-2);
+}
+.pc-plan__features li > svg {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  color: var(--brand-teal-ink, var(--brand-blue));
+}
+.pc-plan__action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 45px;
+  margin-top: auto;
+}
+.pc-plan__na {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 45px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--pc-quiet-bg);
+  font-size: 13px;
+  text-align: center;
+  color: var(--pc-muted);
 }
