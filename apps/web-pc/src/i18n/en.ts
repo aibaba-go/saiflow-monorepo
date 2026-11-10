@@ -1,4 +1,6 @@
 // Ported from apps/line-mini/src/i18n/en.ts (web-pc-account plan: copied, not shared).
+import { templatesEn } from "./templates.en";
+
 /** English (default language, D4). Every visible string lives here; th and zh mirror the keys. */
 export const en = {
   "common.ok": "OK",
@@ -557,6 +559,7 @@ export const en = {
   "upload.title": "Upload original documents",
   "upload.choose": "Choose files",
   "upload.processing": "{n} in progress",
+  ...templatesEn,
 } as const;
 
 export type MessageKey = keyof typeof en;

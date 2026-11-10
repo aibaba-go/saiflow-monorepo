@@ -42,7 +42,7 @@ describe("branded shell (enterprise-ui-redesign, FR-SYS-135, FR-SYS-138)", () =>
       .getAllByRole("link")
       .map((a) => a.textContent);
     expect(labels).toEqual(
-      (["nav.home", "nav.upload", "nav.verify", "nav.library", "nav.org", "nav.plans", "nav.notifications", "nav.profile"] as const).map((k) => en(k)),
+      (["nav.home", "nav.upload", "nav.verify", "nav.library", "nav.org", "nav.templates", "nav.plans", "nav.notifications", "nav.profile"] as const).map((k) => en(k)),
     );
     const banner = screen.getByRole("banner");
     expect(within(banner).getByText(en("nav.upload"), { selector: "[aria-current=page]" })).toBeInTheDocument();

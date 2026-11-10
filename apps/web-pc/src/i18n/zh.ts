@@ -1,4 +1,5 @@
 // Ported from apps/line-mini/src/i18n/zh.ts (web-pc-account plan: copied, not shared).
+import { templatesZh } from "./templates.zh";
 import type { MessageKey } from "./en";
 
 /** Simplified Chinese. */
@@ -559,4 +560,5 @@ export const zh: Record<MessageKey, string> = {
   "upload.title": "上传原始单据",
   "upload.choose": "选择文件",
   "upload.processing": "{n} 个任务处理中",
+  ...templatesZh,
 };

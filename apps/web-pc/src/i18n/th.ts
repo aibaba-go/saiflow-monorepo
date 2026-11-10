@@ -1,4 +1,5 @@
 // Ported from apps/line-mini/src/i18n/th.ts (web-pc-account plan: copied, not shared).
+import { templatesTh } from "./templates.th";
 import type { MessageKey } from "./en";
 
 /** Thai (first draft; reviewed by a native speaker before launch, D4). */
@@ -559,4 +560,5 @@ export const th: Record<MessageKey, string> = {
   "upload.title": "อัปโหลดเอกสารต้นฉบับ",
   "upload.choose": "เลือกไฟล์",
   "upload.processing": "กำลังดำเนินการ {n} งาน",
+  ...templatesTh,
 };

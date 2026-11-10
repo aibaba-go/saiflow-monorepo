@@ -11,3 +11,8 @@ export {
 } from "./tokens";
 export { adminTheme, pcTheme } from "./antdTheme";
 export { loadChineseFont } from "./fonts";
+
+// Shared template component (template-report-management). The antd TemplateEditor itself is
+// exported from "@saiflow/ui/template-editor" so that the LINE mini app (no antd) can import
+// this entry point.
+export * from "./components/TemplateEditor/core";

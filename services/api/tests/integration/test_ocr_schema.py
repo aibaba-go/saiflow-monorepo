@@ -191,7 +191,9 @@ async def test_0010_moves_an_old_billing_note_to_the_new_version(db_engine):
     m0010 = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m0010)
     async with db_engine.begin() as conn:
-        # pretend the stored version predates the fix
+        # pretend the stored version predates the fix (versions are append-only since 0014;
+        # the superuser test DB may bypass the trigger to fake the old state)
+        await conn.execute(text("SET LOCAL session_replication_role = replica"))
         await conn.execute(
             text(
                 f"update {S}.document_template_versions v set content_hash = 'old' "
@@ -199,6 +201,7 @@ async def test_0010_moves_an_old_billing_note_to_the_new_version(db_engine):
                 "where t.id = v.template_id and t.code = 'billing_note'"
             )
         )
+        await conn.execute(text("SET LOCAL session_replication_role = origin"))
         await conn.run_sync(lambda c: m0010._seeding().seed_templates(c))
         rows = (
             await conn.execute(

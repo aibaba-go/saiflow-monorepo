@@ -3,6 +3,10 @@ and of 通用结果, and the organization's switch for emailing reviewers. Only 
 or changes them; a change affects later confirms only. Personal and guest tenants are
 always level 0.
 
+Only templates the organization may newly use are offered for a new level
+(FR-TEMPLATE-009); a template that stopped being usable (disabled, grant removed) keeps
+its stored level, which the owner may still change or lower, until it is deleted.
+
 The operation log has no detail column, so a change is written as its target:
 `<tenant>/<template id or generic>/<before>-><after>` and `<tenant>/<before>-><after>`."""
 
@@ -13,8 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clock import utcnow
 from app.errors import AppError
-from app.models import Organization, ReviewLevel
-from app.services import audit_service, mapping_service
+from app.models import DocumentTemplate, DocumentTemplateVersion, Organization, ReviewLevel
+from app.services import audit_service, mapping_service, template_access
 from app.services.audit_service import AuditEvent
 from app.services.tenant_access import TenantContext, not_found
 
@@ -62,11 +66,23 @@ async def read(db: AsyncSession, ctx: TenantContext) -> dict:
             await db.execute(select(ReviewLevel).where(ReviewLevel.tenant_id == ctx.tenant_id))
         ).scalars()
     }
-    templates = sorted(
-        await mapping_service.available_versions(db, ctx.tenant_id), key=lambda tv: tv[1].name
-    )
+    usable = {t.id: v.name for t, v in await mapping_service.available_versions(db, ctx.tenant_id)}
+    kept = [tid for tid, level in stored.items() if tid is not None and level > 0]
+    kept = [tid for tid in kept if tid not in usable]
+    if kept:  # stored levels of templates no longer usable but not deleted
+        rows = await db.execute(
+            select(DocumentTemplate.id, DocumentTemplate.name, DocumentTemplateVersion.name)
+            .outerjoin(
+                DocumentTemplateVersion,
+                DocumentTemplateVersion.id == DocumentTemplate.current_version_id,
+            )
+            .where(DocumentTemplate.id.in_(kept), DocumentTemplate.deleted_at.is_(None))
+        )
+        for tid, tname, vname in rows.all():
+            usable[tid] = vname or tname
+    templates = sorted(usable.items(), key=lambda item: (item[1], item[0]))
     items = [
-        {"template_id": t.id, "name": v.name, "level": stored.get(t.id, 0)} for t, v in templates
+        {"template_id": tid, "name": name, "level": stored.get(tid, 0)} for tid, name in templates
     ]
     items.append({"template_id": None, "name": None, "level": stored.get(None, 0)})
     return {"email_enabled": org.review_email_enabled, "items": items}
@@ -88,13 +104,12 @@ async def set_level(db: AsyncSession, ctx: TenantContext, template_id: Any, leve
         raise _invalid("template_id")
     await _org(db, ctx.tenant_id, lock=True)  # serialize writers of this organization
     name = None
+    tpl = None
     if template_id is not None:
-        names = {
-            t.id: v.name for t, v in await mapping_service.available_versions(db, ctx.tenant_id)
-        }
-        if template_id not in names:
+        # org → template lock order; serializes with deleting the template (T15)
+        tpl = await template_access.lock_template(db, template_id)
+        if tpl is None or tpl.deleted_at is not None:
             raise not_found()
-        name = names[template_id]
     cond = (
         ReviewLevel.template_id.is_(None)
         if template_id is None
@@ -104,6 +119,14 @@ async def set_level(db: AsyncSession, ctx: TenantContext, template_id: Any, leve
         await db.execute(select(ReviewLevel).where(ReviewLevel.tenant_id == ctx.tenant_id, cond))
     ).scalar_one_or_none()
     before = row.level if row else 0
+    if tpl is not None:
+        # a new level needs a template usable now; an existing one may still be changed
+        if before == 0 and not await template_access.is_usable(db, ctx.tenant_id, tpl.id):
+            raise not_found()
+        name = tpl.name
+        if tpl.current_version_id is not None:
+            ver = await db.get(DocumentTemplateVersion, tpl.current_version_id)
+            name = ver.name if ver is not None else tpl.name
     if before != level:
         if row is None:
             db.add(

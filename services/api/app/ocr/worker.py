@@ -23,7 +23,7 @@ from app.clock import utcnow
 from app.config import Settings
 from app.integrations.storage import ObjectMissing, ObjectStore
 from app.models import File, OcrJob, OcrRawResult, ResultVersion
-from app.ocr import mapping_worker, states
+from app.ocr import mapping_worker, sample_worker, states
 from app.ocr.engines import (
     Engine,
     EngineFailure,
@@ -294,6 +294,7 @@ async def loop(
 ) -> None:
     await recover(sm, utcnow(), startup=True)
     await mapping_worker.recover(sm, startup=True)
+    await sample_worker.recover(sm, utcnow(), startup=True)  # template samples (FR-TEMPLATE-014)
     last_purge = last_recover = asyncio.get_running_loop().time()
     while not stop.is_set():
         busy = False
@@ -301,14 +302,17 @@ async def loop(
             if settings.ocr_worker_enabled:
                 busy = await run_once(sm, store, settings)
                 busy = await mapping_worker.run_once(sm, settings) or busy
+                busy = await sample_worker.run_once(sm, store, settings) or busy
                 clock = asyncio.get_running_loop().time()
                 if clock - last_purge > 60:
                     await purge_uploads(sm, store)
+                    await sample_worker.purge_expired(sm, store)
                     last_purge = clock
             clock = asyncio.get_running_loop().time()
             if clock - last_recover >= RECOVER_EVERY:
                 await recover(sm, utcnow())
                 await mapping_worker.recover(sm)
+                await sample_worker.recover(sm, utcnow())
                 last_recover = clock
         except Exception:
             log.exception("ocr worker pass failed")

@@ -23,6 +23,8 @@ import { OrganizationDetailPage } from "./pages/OrganizationDetailPage";
 import { OrganizationsPage } from "./pages/OrganizationsPage";
 import { PlansPage } from "./pages/PlansPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { TemplateDetailPage, TemplateNewPage } from "./pages/TemplateEditPage";
+import { TemplatesPage } from "./pages/TemplatesPage";
 import { TenantBillingPage } from "./pages/TenantBillingPage";
 import { UsersPage } from "./pages/UsersPage";
 import { setUnauthenticatedHandler } from "./services/api";
@@ -75,6 +77,9 @@ export function AppRoutes() {
             <Route path="/users" element={<UsersPage />} />
             <Route path="/audit-log" element={<AuditLogPage />} />
             <Route path="/ocr" element={<OcrSettingsPage />} />
+            <Route path="/templates" element={<TemplatesPage />} />
+            <Route path="/templates/new" element={<TemplateNewPage />} />
+            <Route path="/templates/:id" element={<TemplateDetailPage />} />
             <Route path="/password" element={<ChangePasswordPage />} />
             <Route path="*" element={<NotFound />} />
           </Route>

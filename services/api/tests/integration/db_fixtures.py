@@ -91,14 +91,20 @@ def migrated_db(db_settings_session):
     return db_settings_session
 
 
-def _seed_templates(conn) -> None:
+def _migration(file: str):
     import importlib.util
 
-    path = API_DIR / "alembic" / "versions" / "0009_ocr_scan_flow.py"
-    spec = importlib.util.spec_from_file_location("m0009", path)
+    path = API_DIR / "alembic" / "versions" / file
+    spec = importlib.util.spec_from_file_location(f"m_{path.stem}", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    module.seed_templates(conn)
+    return module
+
+
+def _seed_templates(conn) -> None:
+    _migration("0009_ocr_scan_flow.py").seed_templates(conn)
+    # 0014: the seeded system templates are granted to every plan (FR-TEMPLATE-006)
+    _migration("0014_template_management.py").grant_system_templates(conn)
 
 
 async def _truncate_all(engine) -> None:

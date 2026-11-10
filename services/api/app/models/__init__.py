@@ -15,10 +15,17 @@ from app.models.organization import (
     Role,
     VerificationApplication,
 )
+from app.models.report import Report, ReportSnapshot, ReportTemplateRef
 from app.models.review import ResultChange, ReviewLevel, ReviewNotice, ReviewRecord, ReviewRound
 from app.models.session import CustomerSession
 from app.models.setting import SystemSetting
-from app.models.template import DocumentTemplate, DocumentTemplateVersion, TemplateMapping
+from app.models.template import (
+    DocumentTemplate,
+    DocumentTemplateVersion,
+    TemplateGrantTarget,
+    TemplateMapping,
+)
+from app.models.template_sample import TemplateSample
 from app.models.tenant import Tenant
 from app.models.user import User
 
@@ -34,12 +41,17 @@ __all__ = [
     "OcrJob",
     "OcrRawResult",
     "ResultVersion",
+    "Report",
+    "ReportSnapshot",
+    "ReportTemplateRef",
     "ResultChange",
     "ReviewLevel",
     "ReviewNotice",
     "ReviewRecord",
     "ReviewRound",
+    "TemplateGrantTarget",
     "TemplateMapping",
+    "TemplateSample",
     "CustomerSession",
     "EmailCode",
     "FreeQuota",

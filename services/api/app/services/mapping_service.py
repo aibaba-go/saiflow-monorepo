@@ -76,21 +76,34 @@ def llm_config(ocr: OcrSettings, settings: Settings) -> dict:
 async def available_versions(
     db: AsyncSession, tenant_id: int
 ) -> list[tuple[DocumentTemplate, DocumentTemplateVersion]]:
-    """System templates plus this tenant's, enabled and not deleted, at their current version."""
-    rows = await db.execute(
-        select(DocumentTemplate, DocumentTemplateVersion)
-        .join(
-            DocumentTemplateVersion,
-            DocumentTemplateVersion.id == DocumentTemplate.current_version_id,
+    """The templates this tenant may newly use, at their active version (FR-TEMPLATE-009):
+    its own plus the system templates granted to it, enabled and not deleted."""
+    from app.services import template_access
+
+    return await template_access.usable_versions(db, tenant_id)
+
+
+async def mapped_version(
+    db: AsyncSession, job_id: str, version_id: int
+) -> tuple[DocumentTemplate, DocumentTemplateVersion] | None:
+    """A template version this job was actually mapped to (its history, T12), whatever the
+    template's current status or grant; None for any other version."""
+    row = (
+        await db.execute(
+            select(DocumentTemplate, DocumentTemplateVersion)
+            .join(
+                DocumentTemplateVersion,
+                DocumentTemplateVersion.template_id == DocumentTemplate.id,
+            )
+            .join(
+                TemplateMapping,
+                TemplateMapping.template_version_id == DocumentTemplateVersion.id,
+            )
+            .where(TemplateMapping.job_id == job_id, DocumentTemplateVersion.id == version_id)
+            .limit(1)
         )
-        .where(
-            (DocumentTemplate.tenant_id.is_(None)) | (DocumentTemplate.tenant_id == tenant_id),
-            DocumentTemplate.status == "ENABLED",
-            DocumentTemplate.deleted_at.is_(None),
-        )
-        .order_by(DocumentTemplate.id)
-    )
-    return [(t, v) for t, v in rows.all()]
+    ).first()
+    return (row[0], row[1]) if row else None
 
 
 async def current_version(db: AsyncSession, job_id: str) -> ResultVersion | None:
@@ -349,10 +362,16 @@ async def apply_template(
     """("switched", mapping) when a READY conversion exists (no LLM call), else
     ("started", mapping) for a new attempt. The job row is locked by the caller."""
     _check_open(job)
+    from app.services import template_access
+
     available = {v.id: (t, v) for t, v in await available_versions(db, job.tenant_id)}
     if template_version_id not in available:
         raise not_found()
     tpl, ver = available[template_version_id]
+    # re-checked under the template lock (job → template): a template disabled, revoked or
+    # deleted meanwhile is not applied; the first real use protects it from deletion
+    if await template_access.claim_for_use(db, job.tenant_id, tpl.id, ver.id) is None:
+        raise not_found()
     ready = (
         await db.execute(
             select(TemplateMapping)

@@ -1,5 +1,5 @@
 {
-  "extends": "@saiflow/tsconfig/base.json",
-  "compilerOptions": { "types": ["node"] },
+  "extends": "@saiflow/tsconfig/react-package.json",
+  "compilerOptions": { "types": ["node", "vitest/globals", "@testing-library/jest-dom"] },
   "include": ["src"]
 }

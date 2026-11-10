@@ -1,0 +1,104 @@
+import type { TemplateEditorLabels } from "@saiflow/ui/template-editor";
+import { useMemo } from "react";
+
+import { useT, type T } from "../i18n";
+
+/** The shared editor's texts in the current language (FR-SYS-140, AC-093-03): the same
+ * shape as DEFAULT_TEMPLATE_EDITOR_LABELS, filled from the app dictionaries. */
+export function editorLabels(t: T): TemplateEditorLabels {
+  return {
+    templateSection: t("te.templateSection"),
+    code: t("te.code"),
+    name: t("te.name"),
+    description: t("te.description"),
+    names: t("te.names"),
+    nameLang: { en: t("te.lang.en"), th: t("te.lang.th"), zh: t("te.lang.zh") },
+    key: t("te.key"),
+    type: t("te.type"),
+    required: t("te.required"),
+    primary: t("te.primary"),
+    role: t("te.role"),
+    noRole: t("te.noRole"),
+    sampleValue: t("te.sampleValue"),
+    more: t("te.more"),
+    less: t("te.less"),
+    group: (n) => t("te.group", { n }),
+    field: (n) => t("te.field", { n }),
+    table: (n) => t("te.table", { n }),
+    column: (n) => t("te.column", { n }),
+    columns: t("te.columns"),
+    addGroup: t("te.addGroup"),
+    addField: t("te.addField"),
+    addTable: t("te.addTable"),
+    addColumn: t("te.addColumn"),
+    remove: t("te.remove"),
+    removeGroup: t("te.removeGroup"),
+    removeTable: t("te.removeTable"),
+    removeConfirm: t("te.removeConfirm"),
+    confirmOk: t("te.confirmOk"),
+    cancel: t("te.cancel"),
+    moveUp: t("te.moveUp"),
+    moveDown: t("te.moveDown"),
+    types: {
+      string: t("te.type.string"),
+      integer: t("te.type.integer"),
+      decimal: t("te.type.decimal"),
+      amount: t("te.type.amount"),
+      date: t("te.type.date"),
+    },
+    fieldRoles: {
+      lines_total: t("te.role.lines_total"),
+      discount: t("te.role.discount"),
+      base: t("te.role.base"),
+      tax: t("te.role.tax"),
+      grand_total: t("te.role.grand_total"),
+    },
+    columnRoles: {
+      quantity: t("te.colRole.quantity"),
+      unit_price: t("te.colRole.unit_price"),
+      line_discount: t("te.colRole.line_discount"),
+      line_base: t("te.colRole.line_base"),
+      line_tax: t("te.colRole.line_tax"),
+      line_total: t("te.colRole.line_total"),
+    },
+    countGroups: t("te.countGroups"),
+    countFields: t("te.countFields"),
+    countTables: t("te.countTables"),
+    limitReached: t("te.limitReached"),
+    errorSummary: (n) => t("te.errorSummary", { n }),
+    toConfirm: t("te.toConfirm"),
+    pendingSummary: (n) => t("te.pendingSummary", { n }),
+    suggested: (attr, value) => t("te.suggested", { attr, value }),
+    accept: t("te.accept"),
+    reject: t("te.reject"),
+    yes: t("te.yes"),
+    no: t("te.no"),
+    emptyGroups: t("te.emptyGroups"),
+    errors: {
+      codePattern: t("te.err.codePattern"),
+      keyPattern: t("te.err.keyPattern"),
+      pattern: t("te.err.pattern"),
+      empty: t("te.err.empty"),
+      maxLength: (n) => t("te.err.maxLength", { n }),
+      listMin: (n) => t("te.err.listMin", { n }),
+      listMax: (n) => t("te.err.listMax", { n }),
+      needGroup: t("te.err.needGroup"),
+      needItem: t("te.err.needItem"),
+      needColumn: t("te.err.needColumn"),
+      missing: t("te.err.missing"),
+      extra: t("te.err.extra"),
+      invalid: t("te.err.invalid"),
+      duplicateGroup: (key) => t("te.err.duplicateGroup", { key }),
+      duplicateItem: (key) => t("te.err.duplicateItem", { key }),
+      duplicateColumn: (key) => t("te.err.duplicateColumn", { key }),
+      fieldsTotal: (total, max) => t("te.err.fieldsTotal", { total, max }),
+      tablesTotal: (total, max) => t("te.err.tablesTotal", { total, max }),
+      nothingToActivate: t("te.err.nothingToActivate"),
+    },
+  };
+}
+
+export function useEditorLabels(): TemplateEditorLabels {
+  const t = useT();
+  return useMemo(() => editorLabels(t), [t]);
+}

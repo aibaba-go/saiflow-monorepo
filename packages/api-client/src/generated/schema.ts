@@ -389,6 +389,213 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Templates */
+        get: operations["adminListTemplates"];
+        put?: never;
+        /** Create */
+        post: operations["adminCreateTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/templates/grant-candidates/organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Grant Organizations */
+        get: operations["adminSearchTemplateGrantOrganizations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/templates/grant-candidates/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Grant Users */
+        get: operations["adminSearchTemplateGrantUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/templates/owners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Owners */
+        get: operations["adminSearchTemplateOwners"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/templates/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate */
+        post: operations["adminValidateTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/templates/{template_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Template */
+        get: operations["adminGetTemplate"];
+        put?: never;
+        post?: never;
+        /** Delete Template */
+        delete: operations["adminDeleteTemplate"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/templates/{template_id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate */
+        post: operations["adminActivateTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/templates/{template_id}/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save Draft */
+        put: operations["adminSaveTemplateDraft"];
+        post?: never;
+        /** Discard Draft */
+        delete: operations["adminDiscardTemplateDraft"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/templates/{template_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export */
+        get: operations["adminExportTemplate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/templates/{template_id}/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Grants */
+        put: operations["adminSetTemplateGrants"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/templates/{template_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set Status */
+        post: operations["adminSetTemplateStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/templates/{template_id}/versions/{version_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Version */
+        get: operations["adminGetTemplateVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/tenants/{tenant_id}/reservations": {
         parameters: {
             query?: never;
@@ -826,6 +1033,148 @@ export interface paths {
          * @description The organization an invitation leads to, before joining; guests may look (FR-SYS-024).
          */
         get: operations["previewInvitation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/managed-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Templates */
+        get: operations["listManagedTemplates"];
+        put?: never;
+        /** Create */
+        post: operations["createManagedTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/managed-templates/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate */
+        post: operations["validateManagedTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/managed-templates/{template_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Template */
+        get: operations["getManagedTemplate"];
+        put?: never;
+        post?: never;
+        /** Delete Template */
+        delete: operations["deleteManagedTemplate"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/managed-templates/{template_id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate */
+        post: operations["activateManagedTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/managed-templates/{template_id}/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save Draft */
+        put: operations["saveManagedTemplateDraft"];
+        post?: never;
+        /** Discard Draft */
+        delete: operations["discardManagedTemplateDraft"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/managed-templates/{template_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export
+         * @description The structure JSON (FR-TEMPLATE-011), for managers of the template only.
+         */
+        get: operations["exportManagedTemplate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/managed-templates/{template_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set Status */
+        post: operations["setManagedTemplateStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/managed-templates/{template_id}/versions/{version_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Version */
+        get: operations["getManagedTemplateVersion"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1494,6 +1843,127 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/template-samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Samples */
+        get: operations["listTemplateSamples"];
+        put?: never;
+        /** Create Sample */
+        post: operations["createTemplateSample"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/template-samples/from-job": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create From Job */
+        post: operations["createTemplateSampleFromJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/template-samples/{sample_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Sample */
+        get: operations["getTemplateSample"];
+        put?: never;
+        post?: never;
+        /** Delete Sample */
+        delete: operations["deleteTemplateSample"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/template-samples/{sample_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Sample */
+        post: operations["cancelTemplateSample"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/template-samples/{sample_id}/original": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Original */
+        get: operations["getTemplateSampleOriginal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/template-samples/{sample_id}/pages/{page}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Page */
+        get: operations["getTemplateSamplePage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/template-samples/{sample_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Sample */
+        post: operations["retryTemplateSample"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/templates": {
         parameters: {
             query?: never;
@@ -1524,6 +1994,8 @@ export interface paths {
         /**
          * Template Version
          * @description A published template version's fields, for preview before applying (FR-OCR-024).
+         *     With `job_id`: also a version that job was mapped to, though the template is no longer
+         *     newly usable (history, T12); never any other version.
          */
         get: operations["getTemplateVersion"];
         put?: never;
@@ -1599,6 +2071,16 @@ export interface components {
             /** Tenant Id */
             tenant_id: number;
         };
+        /** ActivateOut */
+        ActivateOut: {
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "activated" | "unchanged";
+            template: components["schemas"]["TemplateDetail"];
+            version: components["schemas"]["VersionDetail"];
+        };
         /** AdminApplicationOut */
         AdminApplicationOut: {
             /** Address */
@@ -1628,6 +2110,26 @@ export interface components {
             /** Tenant Id */
             tenant_id: number | null;
         };
+        /** AdminCreateTemplateIn */
+        AdminCreateTemplateIn: {
+            /** Content */
+            content: {
+                [key: string]: unknown;
+            };
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "system" | "tenant";
+            /**
+             * Source
+             * @default manual
+             * @enum {string}
+             */
+            source: "manual" | "import";
+            /** Tenant Id */
+            tenant_id?: number | null;
+        };
         /** AdminLoginRequest */
         AdminLoginRequest: {
             /** Password */
@@ -1641,6 +2143,50 @@ export interface components {
             admin_id: number;
             /** Username */
             username: string;
+        };
+        /** AdminTemplateListOut */
+        AdminTemplateListOut: {
+            /** Items */
+            items: components["schemas"]["AdminTemplateSummary"][];
+        };
+        /** AdminTemplateSummary */
+        AdminTemplateSummary: {
+            /** Can Manage */
+            can_manage: boolean;
+            /** Code */
+            code: string;
+            current_version: components["schemas"]["CurrentVersionBrief"] | null;
+            /** Deletable */
+            deletable: boolean;
+            /** Has Draft */
+            has_draft: boolean;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Owner Name */
+            owner_name?: string | null;
+            /** Protected Reasons */
+            protected_reasons: ("applied" | "report" | "review_settings")[];
+            /** Revision */
+            revision: number;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "system" | "personal" | "organization";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ENABLED" | "DISABLED";
+            /** Tenant Id */
+            tenant_id: number | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** AdminUserOut */
         AdminUserOut: {
@@ -1802,6 +2348,42 @@ export interface components {
             /** New Password */
             new_password?: string | null;
         };
+        /** ConfigError */
+        ConfigError: {
+            /** Message */
+            message: string;
+            /** Path */
+            path: string;
+        };
+        /** CreateTemplateIn */
+        CreateTemplateIn: {
+            /** Content */
+            content: {
+                [key: string]: unknown;
+            };
+            /** Pending Confirmations */
+            pending_confirmations?: components["schemas"]["PendingConfirmation"][] | null;
+            /** Sample Id */
+            sample_id?: string | null;
+            /**
+             * Source
+             * @default manual
+             * @enum {string}
+             */
+            source: "manual" | "import" | "sample";
+        };
+        /** CurrentVersionBrief */
+        CurrentVersionBrief: {
+            /**
+             * Activated At
+             * Format: date-time
+             */
+            activated_at: string;
+            /** Id */
+            id: number;
+            /** Version */
+            version: number;
+        };
         /**
          * DecisionIn
          * @description Types are checked by the service, which answers 422 naming the field.
@@ -1878,6 +2460,49 @@ export interface components {
              * @enum {string}
              */
             status: "UPLOADING" | "UPLOADED" | "READY" | "REJECTED" | "DELETED";
+        };
+        /** GrantOrganization */
+        GrantOrganization: {
+            /** Name */
+            name: string;
+            /** Tenant Id */
+            tenant_id: number;
+        };
+        /** GrantOut */
+        GrantOut: {
+            /** Mode */
+            mode: ("PLANS" | "TARGETS") | null;
+            /** Organizations */
+            organizations: components["schemas"]["GrantOrganization"][];
+            /** Plans */
+            plans: ("kinder" | "starter" | "intermediate" | "advance")[];
+            /** Users */
+            users: components["schemas"]["GrantUser"][];
+        };
+        /** GrantUser */
+        GrantUser: {
+            /** Display Name */
+            display_name: string | null;
+            /** Email */
+            email: string | null;
+            /** Id */
+            id: number;
+        };
+        /** GrantsIn */
+        GrantsIn: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "PLANS" | "TARGETS";
+            /** Organization Tenant Ids */
+            organization_tenant_ids?: number[];
+            /** Plans */
+            plans?: ("kinder" | "starter" | "intermediate" | "advance")[];
+            /** Revision */
+            revision: number;
+            /** User Ids */
+            user_ids?: number[];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2192,6 +2817,11 @@ export interface components {
             /** Switch Threshold */
             switch_threshold: number;
         };
+        /** OrganizationCandidatesOut */
+        OrganizationCandidatesOut: {
+            /** Items */
+            items: components["schemas"]["GrantOrganization"][];
+        };
         /**
          * OrganizationDetailOut
          * @description What members see: also the member limit (None = unlimited) and the seats in use,
@@ -2265,10 +2895,45 @@ export interface components {
             /** Name */
             name?: string | null;
         };
+        /** OwnerItem */
+        OwnerItem: {
+            /** Email */
+            email?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "personal" | "organization";
+            /** Name */
+            name: string | null;
+            /** Tenant Id */
+            tenant_id: number;
+        };
         /** OwnerTransferredOut */
         OwnerTransferredOut: {
             /** Owner User Id */
             owner_user_id: number;
+        };
+        /** OwnersOut */
+        OwnersOut: {
+            /** Items */
+            items: components["schemas"]["OwnerItem"][];
+        };
+        /**
+         * PendingConfirmation
+         * @description A required/primary/role suggestion from a sample that a person must confirm
+         *     (FR-TEMPLATE-008); activation is refused while any is left.
+         */
+        PendingConfirmation: {
+            /**
+             * Attr
+             * @enum {string}
+             */
+            attr: "required" | "primary" | "role";
+            /** Path */
+            path: string;
+            /** Value */
+            value?: unknown;
         };
         /** PlanApplicationIn */
         PlanApplicationIn: {
@@ -2545,6 +3210,11 @@ export interface components {
             /** L2 */
             l2: number | null;
         };
+        /** RevisionIn */
+        RevisionIn: {
+            /** Revision */
+            revision: number;
+        };
         /** RoleAssignedOut */
         RoleAssignedOut: {
             /** Role Id */
@@ -2577,10 +3247,109 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** SampleCandidate */
+        SampleCandidate: {
+            /** Content */
+            content: {
+                [key: string]: unknown;
+            };
+            /** Suggestions */
+            suggestions: components["schemas"]["SampleSuggestion"][];
+            /** Values */
+            values: {
+                [key: string]: string | (string | null)[][] | null;
+            };
+        };
+        /** SampleFromJobIn */
+        SampleFromJobIn: {
+            /** Job Id */
+            job_id?: string | null;
+        };
+        /** SampleListOut */
+        SampleListOut: {
+            /** Items */
+            items: components["schemas"]["SampleOut"][];
+        };
+        /** SampleOut */
+        SampleOut: {
+            candidate?: components["schemas"]["SampleCandidate"] | null;
+            /** Charged Pages */
+            charged_pages: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Error Code */
+            error_code: string | null;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Failed Stage */
+            failed_stage: ("OCR" | "GENERATE") | null;
+            /** File Kind */
+            file_kind: string | null;
+            /** Id */
+            id: string;
+            /** Pages */
+            pages: number | null;
+            /** Ready At */
+            ready_at: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "UPLOAD" | "OCR_RESULT";
+            /** Source Job Id */
+            source_job_id?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "QUEUED" | "OCR_RUNNING" | "GENERATING" | "READY" | "FAILED" | "CANCELED";
+        };
+        /**
+         * SampleSuggestion
+         * @description The model's opinion on one attribute; the person confirms or changes it.
+         */
+        SampleSuggestion: {
+            /**
+             * Attr
+             * @enum {string}
+             */
+            attr: "required" | "primary" | "role";
+            /** Path */
+            path: string;
+            /** Value */
+            value: boolean | string | null;
+        };
+        /** SaveDraftIn */
+        SaveDraftIn: {
+            /** Content */
+            content: {
+                [key: string]: unknown;
+            };
+            /** Pending Confirmations */
+            pending_confirmations?: components["schemas"]["PendingConfirmation"][] | null;
+            /** Revision */
+            revision: number;
+        };
         /** SetVerifiedIn */
         SetVerifiedIn: {
             /** Verified */
             verified?: boolean | null;
+        };
+        /** StatusIn */
+        StatusIn: {
+            /** Revision */
+            revision: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ENABLED" | "DISABLED";
         };
         /** StatusOut */
         StatusOut: {
@@ -2630,12 +3399,87 @@ export interface components {
              */
             starts_at: string;
         };
+        /** TemplateDetail */
+        TemplateDetail: {
+            /** Can Manage */
+            can_manage: boolean;
+            /** Code */
+            code: string;
+            current: components["schemas"]["VersionDetail"] | null;
+            current_version: components["schemas"]["CurrentVersionBrief"] | null;
+            /** Deletable */
+            deletable: boolean;
+            /** Draft */
+            draft: {
+                [key: string]: unknown;
+            } | null;
+            /** Draft Errors */
+            draft_errors: components["schemas"]["ConfigError"][];
+            grant?: components["schemas"]["GrantOut"] | null;
+            /** Has Draft */
+            has_draft: boolean;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Owner Name */
+            owner_name?: string | null;
+            /** Pending Confirmations */
+            pending_confirmations: components["schemas"]["PendingConfirmation"][];
+            /** Protected Reasons */
+            protected_reasons: ("applied" | "report" | "review_settings")[];
+            /** Revision */
+            revision: number;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "system" | "personal" | "organization";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ENABLED" | "DISABLED";
+            /** Tenant Id */
+            tenant_id: number | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Versions */
+            versions: components["schemas"]["VersionBrief"][];
+        };
+        /**
+         * TemplateExport
+         * @description The structure only (FR-TEMPLATE-011): no owner, grant, status, version or sample
+         *     values.
+         */
+        TemplateExport: {
+            /** Code */
+            code?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Groups */
+            groups?: unknown[];
+            /** Name */
+            name?: string | null;
+            /** Names */
+            names?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** TemplateItemOut */
         TemplateItemOut: {
             /** Name */
             name: string;
             /** Template Id */
             template_id: number;
+        };
+        /** TemplateListOut */
+        TemplateListOut: {
+            /** Items */
+            items: components["schemas"]["TemplateSummary"][];
         };
         /** TemplateOption */
         TemplateOption: {
@@ -2680,6 +3524,43 @@ export interface components {
             name: string;
             /** Template Version Id */
             template_version_id: number;
+        };
+        /** TemplateSummary */
+        TemplateSummary: {
+            /** Can Manage */
+            can_manage: boolean;
+            /** Code */
+            code: string;
+            current_version: components["schemas"]["CurrentVersionBrief"] | null;
+            /** Deletable */
+            deletable: boolean;
+            /** Has Draft */
+            has_draft: boolean;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Protected Reasons */
+            protected_reasons: ("applied" | "report" | "review_settings")[];
+            /** Revision */
+            revision: number;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "system" | "personal" | "organization";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ENABLED" | "DISABLED";
+            /** Tenant Id */
+            tenant_id: number | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** TemplateVersionOut */
         TemplateVersionOut: {
@@ -2782,12 +3663,29 @@ export interface components {
              */
             starts_at: string;
         };
+        /** UserCandidatesOut */
+        UserCandidatesOut: {
+            /** Items */
+            items: components["schemas"]["GrantUser"][];
+        };
         /** UserPageOut */
         UserPageOut: {
             /** Has More */
             has_more: boolean;
             /** Items */
             items: components["schemas"]["AdminUserOut"][];
+        };
+        /** ValidateIn */
+        ValidateIn: {
+            /** Content */
+            content: {
+                [key: string]: unknown;
+            };
+        };
+        /** ValidateOut */
+        ValidateOut: {
+            /** Errors */
+            errors: components["schemas"]["ConfigError"][];
         };
         /** ValidationError */
         ValidationError: {
@@ -2831,6 +3729,46 @@ export interface components {
         VerifiedOut: {
             /** Verified */
             verified: boolean;
+        };
+        /** VersionBrief */
+        VersionBrief: {
+            /** Activated By User Id */
+            activated_by_user_id: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Version */
+            version: number;
+        };
+        /** VersionDetail */
+        VersionDetail: {
+            /** Content Hash */
+            content_hash: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string | null;
+            /** Groups */
+            groups: {
+                [key: string]: unknown;
+            }[];
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Template Id */
+            template_id: number;
+            /** Version */
+            version: number;
         };
         /** WarningOut */
         WarningOut: {
@@ -3623,6 +4561,498 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntSettingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminListTemplates: {
+        parameters: {
+            query?: {
+                scope?: ("system" | "tenant") | null;
+                tenant_id?: number | null;
+                q?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminTemplateListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminCreateTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminCreateTemplateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminSearchTemplateGrantOrganizations: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationCandidatesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminSearchTemplateGrantUsers: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserCandidatesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminSearchTemplateOwners: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnersOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminValidateTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminGetTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminDeleteTemplate: {
+        parameters: {
+            query: {
+                revision: number;
+            };
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminActivateTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminSaveTemplateDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveDraftIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminDiscardTemplateDraft: {
+        parameters: {
+            query: {
+                revision: number;
+            };
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminExportTemplate: {
+        parameters: {
+            query?: {
+                draft?: number;
+            };
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateExport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminSetTemplateGrants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrantsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminSetTemplateStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StatusIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminGetTemplateVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+                version_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionDetail"];
                 };
             };
             /** @description Validation Error */
@@ -4461,6 +5891,399 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InvitationPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listManagedTemplates: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    createManagedTemplate: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTemplateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    validateManagedTemplate: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getManagedTemplate: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deleteManagedTemplate: {
+        parameters: {
+            query: {
+                revision: number;
+            };
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activateManagedTemplate: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    saveManagedTemplateDraft: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveDraftIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discardManagedTemplateDraft: {
+        parameters: {
+            query: {
+                revision: number;
+            };
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    exportManagedTemplate: {
+        parameters: {
+            query?: {
+                draft?: number;
+            };
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateExport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    setManagedTemplateStatus: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StatusIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getManagedTemplateVersion: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                template_id: number;
+                version_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionDetail"];
                 };
             };
             /** @description Validation Error */
@@ -5994,6 +7817,313 @@ export interface operations {
             };
         };
     };
+    listTemplateSamples: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SampleListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    createTemplateSample: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SampleOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    createTemplateSampleFromJob: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SampleFromJobIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SampleOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getTemplateSample: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                sample_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SampleOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deleteTemplateSample: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                sample_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancelTemplateSample: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                sample_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SampleOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getTemplateSampleOriginal: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                sample_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getTemplateSamplePage: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                sample_id: string;
+                page: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retryTemplateSample: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                sample_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SampleOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     listTemplates: {
         parameters: {
             query?: never;
@@ -6028,7 +8158,9 @@ export interface operations {
     };
     getTemplateVersion: {
         parameters: {
-            query?: never;
+            query?: {
+                job_id?: string | null;
+            };
             header?: {
                 /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
                 "X-Tenant-Id"?: string | null;

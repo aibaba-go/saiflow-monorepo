@@ -5,7 +5,10 @@ transaction open; the job and mapping are re-read before writing, so a deleted r
 confirmed job or a superseded mapping is never overwritten (Review Focus 2).
 
 Added here: a conversion missing a primary field fails as PRIMARY_MISSING (the chosen
-template does not fit the document, FR-OCR-020).
+template does not fit the document, FR-OCR-020). When the match reaches 70% the template is
+locked after the job and checked again before converting; one revoked or disabled
+meanwhile is not used (quiet free-form, TEMPLATE_UNAVAILABLE), one still usable is marked
+applied (FR-TEMPLATE-010; scoring alone never is).
 """
 
 import asyncio
@@ -28,10 +31,11 @@ from app.ocr.templates.llm import (
     LlmClient,
     MappingError,
 )
-from app.services import mapping_service, ocr_settings_service
+from app.services import mapping_service, ocr_settings_service, template_access
 
 log = logging.getLogger("app.ocr.mapping")
 PRIMARY_MISSING = "PRIMARY_MISSING"
+TEMPLATE_UNAVAILABLE = "TEMPLATE_UNAVAILABLE"
 STALE_AFTER = timedelta(minutes=15)
 
 
@@ -115,35 +119,49 @@ async def run_once(
                 raise MappingError(RAW_RESULT_MISSING, "raw result missing")
             payload = raw.payload
             job = await db.get(OcrJob, job_id)
+            tenant_id = job.tenant_id
             ocr = await ocr_settings_service.get(db)
             candidates = [
                 matcher.Candidate(t.id, v.id, v.name, v.description, v.groups)
-                for t, v in await mapping_service.available_versions(db, job.tenant_id)
+                for t, v in await mapping_service.available_versions(db, tenant_id)
             ]
         client = LlmClient(
             mapping_service.llm_config(ocr, settings), transport=transport, sleep=sleep
         )
         if stage == states.MATCHING:
             result = await asyncio.to_thread(matcher.match, client, payload, candidates)
+            fits = not _no_fit(result)
             async with sm() as db:
+                if fits:  # conversion starts: lock job → template, re-check, mark applied
+                    await db.execute(select(OcrJob).where(OcrJob.id == job_id).with_for_update())
                 if not await _alive(db, job_id, mapping_id, states.MATCHING):
                     return True
+                usable = fits and (
+                    await template_access.claim_for_use(
+                        db, tenant_id, result.template_id, result.template_version_id
+                    )
+                    is not None
+                )
+                chosen = fits and not usable
                 await db.execute(
                     update(TemplateMapping)
                     .where(
                         TemplateMapping.id == mapping_id, TemplateMapping.status == states.MATCHING
                     )
                     .values(
-                        template_id=result.template_id,
-                        template_version_id=result.template_version_id,
+                        # a template revoked while scoring is not recorded as applied
+                        template_id=None if chosen else result.template_id,
+                        template_version_id=None if chosen else result.template_version_id,
                         match_score=result.score,
                         match_reason=(result.reason or None) and result.reason[:255],
                         candidates=result.ranking,
-                        status=states.MATCHING if _no_fit(result) else states.CONVERTING,
+                        status=states.CONVERTING if usable else states.MATCHING,
                         updated_at=utcnow(),
                     )
                 )
                 await db.commit()
+            if chosen:  # revoked/disabled meanwhile: free-form stays, quietly (AC-006-04)
+                raise MappingError(TEMPLATE_UNAVAILABLE, "template no longer usable")
             if _no_fit(result):  # below 70%: free-form stays, quietly (FR-OCR-019)
                 raise MappingError(
                     mapping_service.NO_TEMPLATE_FIT, f"best score {result.score} below threshold"
@@ -152,7 +170,7 @@ async def run_once(
             mapping = await db.get(TemplateMapping, mapping_id, populate_existing=True)
             version = await db.get(DocumentTemplateVersion, mapping.template_version_id)
             if version is None:
-                raise MappingError("TEMPLATE_UNAVAILABLE", "template version missing")
+                raise MappingError(TEMPLATE_UNAVAILABLE, "template version missing")
             groups, name = version.groups, version.name
         raw_text = matcher.compact_raw(payload)
         structured, warnings, dropped = await asyncio.to_thread(

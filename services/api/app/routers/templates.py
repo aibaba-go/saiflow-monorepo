@@ -111,10 +111,26 @@ versions_router = APIRouter(
     operation_id="getTemplateVersion",
     response_model=TemplateVersionOut,
 )
-async def template_version(version_id: int, ctx: Tenant, db: Db) -> TemplateVersionOut:
-    """A published template version's fields, for preview before applying (FR-OCR-024)."""
+async def template_version(
+    version_id: int, ctx: Tenant, db: Db, job_id: str | None = None
+) -> TemplateVersionOut:
+    """A published template version's fields, for preview before applying (FR-OCR-024).
+    With `job_id`: also a version that job was mapped to, though the template is no longer
+    newly usable (history, T12); never any other version."""
     for tpl, ver in await mapping_service.available_versions(db, ctx.tenant_id):
         if ver.id == version_id:
+            return TemplateVersionOut(
+                template_version_id=ver.id,
+                template_id=tpl.id,
+                code=tpl.code,
+                name=ver.name,
+                groups=ver.groups,
+            )
+    if job_id is not None:
+        job = await job_service.job_access(db, ctx, job_id, review=True)
+        found = await mapping_service.mapped_version(db, job.id, version_id)
+        if found is not None:
+            tpl, ver = found
             return TemplateVersionOut(
                 template_version_id=ver.id,
                 template_id=tpl.id,

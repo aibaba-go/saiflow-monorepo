@@ -7,6 +7,7 @@
   "types": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./template-editor": "./src/components/TemplateEditor/index.ts",
     "./styles/tokens.css": "./src/styles/tokens.css",
     "./styles/theme.css": "./src/styles/theme.css",
     "./styles/brand.css": "./src/styles/brand.css",
@@ -21,8 +22,29 @@
     "@fontsource/ibm-plex-sans-thai": "^5.3.0",
     "@fontsource/noto-sans-sc": "^5.3.1"
   },
+  "peerDependencies": {
+    "antd": "^5.29.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "peerDependenciesMeta": {
+    "antd": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@saiflow/tsconfig": "workspace:*",
-    "@types/node": "*"
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
+    "@types/node": "*",
+    "@types/react": "~18.3.31",
+    "@types/react-dom": "~18.3.7",
+    "antd": "^5.29.3",
+    "jsdom": "^30.1.3",
+    "react": "~18.3.1",
+    "react-dom": "~18.3.1",
+    "vitest": "^5.0.5"
   }
 }

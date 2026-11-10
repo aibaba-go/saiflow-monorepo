@@ -23,9 +23,17 @@ trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
 printf '%s' "$ghcr_token" | docker login ghcr.io -u "$ghcr_user" --password-stdin >/dev/null
 unset ghcr_token
 
-# Record the deployed tag in .env (compose reads IMAGE_TAG from it; rollback = old tag).
+# Record the deployed tag in .env (compose reads IMAGE_TAG from it; rollback = old tag,
+# kept as PREVIOUS_IMAGE_TAG so the images to go back to are known).
+previous="$(sed -n 's/^IMAGE_TAG=//p' .env | tail -n1)"
 tmp="$(mktemp "$DEPLOY_DIR/.env.XXXXXX")"
-grep -v '^IMAGE_TAG=' .env >"$tmp" || true
+grep -v -e '^IMAGE_TAG=' -e '^PREVIOUS_IMAGE_TAG=' .env >"$tmp" || true
+if [ -n "$previous" ] && [ "$previous" != "$tag" ]; then
+  echo "PREVIOUS_IMAGE_TAG=$previous" >>"$tmp"
+else
+  # same tag again: the tag to go back to stays what it was
+  grep '^PREVIOUS_IMAGE_TAG=' .env | tail -n1 >>"$tmp" || true
+fi
 echo "IMAGE_TAG=$tag" >>"$tmp"
 chmod 600 "$tmp"
 mv "$tmp" .env
@@ -37,6 +45,9 @@ echo "remote-deploy: pulling $tag"
 bash "$DEPLOY_DIR/secrets-perms.sh"
 "${compose[@]}" up -d --wait postgres
 bash "$DEPLOY_DIR/db-roles.sh"
+# A fresh dump (local + GCS, FR-PLAT-006) before any migration; no backup, no migration.
+echo "remote-deploy: backing up the database before migrating"
+bash "$DEPLOY_DIR/backup.sh"
 echo "remote-deploy: migrating"
 "${compose[@]}" run --rm saiflow-be-migrate alembic upgrade head
 "${compose[@]}" up -d --remove-orphans

@@ -17,6 +17,8 @@ export type PageName =
   | "users"
   | "auditLog"
   | "ocr"
+  | "templates"
+  | "template"
   | "password";
 
 /** A console page in the branded PC page language (enterprise-ui-redesign, FR-SYS-135,

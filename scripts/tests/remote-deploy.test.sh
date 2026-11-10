@@ -11,8 +11,11 @@ setup() {
   printf 'POSTGRES_USER=u\nIMAGE_TAG=oldsha\nAPP_HOST=a\nDB_MIGRATE_PASSWORD=mig-secret-9\n' >"$work/.env"
   cp "$here/../deploy/db-roles.sh" "$here/../deploy/db-roles.sql" "$here/../deploy/secrets-perms.sh" \
     "$here/../deploy/secrets-fix.sh" "$work/" 2>/dev/null || true
+  # backup.sh has its own test; here a stand-in records the call (and can fail)
+  printf '#!/usr/bin/env bash\necho "backup.sh" >>"$FAKE_LOG"\n[ -z "${FAKE_BACKUP_FAIL:-}" ]\n' \
+    >"$work/backup.sh"
   export DEPLOY_DIR="$work" FAKE_LOG="$work/calls.log" PATH="$here/fakes:$PATH"
-  unset FAKE_MIGRATE_FAIL FAKE_ROLES_FAIL
+  unset FAKE_MIGRATE_FAIL FAKE_ROLES_FAIL FAKE_BACKUP_FAIL
   : >"$FAKE_LOG"
 }
 order_of() { grep -n -- "$1" "$FAKE_LOG" | head -n1 | cut -d: -f1; }
@@ -37,6 +40,17 @@ roles=$(order_of 'exec -T -e DB_MIGRATE_PASSWORD postgres')
 check "order postgres<roles<migrate" test -n "$roles" -a "$pg" -lt "$roles" -a "$roles" -lt "$m"
 check "migrations run in the migrate service" grep -q 'run --rm saiflow-be-migrate alembic upgrade head' "$FAKE_LOG"
 check "migration password not in call log" bash -c "! grep -q mig-secret-9 '$FAKE_LOG'"
+b=$(order_of 'backup.sh')
+check "order roles<backup<migrate" test -n "$b" -a "$roles" -lt "$b" -a "$b" -lt "$m"
+check "previous tag kept for rollback" grep -qx 'PREVIOUS_IMAGE_TAG=oldsha' "$work/.env"
+printf 'bot\ntoken-123\n' | bash "$script" newsha >/dev/null 2>&1
+check "redeploying the same tag keeps the previous tag" grep -qx 'PREVIOUS_IMAGE_TAG=oldsha' "$work/.env"
+rm -rf "$work"
+
+setup
+printf 'bot\ntoken-123\n' | FAKE_BACKUP_FAIL=1 bash "$script" newsha >/dev/null 2>&1; code=$?
+check "backup failure exits non-zero" test "$code" -ne 0
+check "backup failure skips migrate and up" bash -c "! grep -q -e 'saiflow-be-migrate alembic' -e 'up -d --remove-orphans' '$FAKE_LOG'"
 rm -rf "$work"
 
 setup

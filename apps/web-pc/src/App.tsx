@@ -24,6 +24,9 @@ import { ReviewDetailPage } from "./pages/ReviewDetailPage";
 import { ReviewSettingsPage } from "./pages/ReviewSettingsPage";
 import { ReviewsPage } from "./pages/ReviewsPage";
 import { RolesPage } from "./pages/RolesPage";
+import { TemplateDetailPage, TemplateNewPage } from "./pages/TemplateEditPage";
+import { TemplateSamplePage } from "./pages/TemplateSamplePage";
+import { TemplatesPage } from "./pages/TemplatesPage";
 import { UploadPage } from "./pages/UploadPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { setTenantGoneHandler, setUnauthenticatedHandler } from "./services/api";
@@ -72,6 +75,10 @@ export function AppRoutes() {
               <Route path="/reviews" element={<ReviewsPage />} />
               <Route path="/reviews/:id" element={<ReviewDetailPage />} />
               <Route path="/review-settings" element={<ReviewSettingsPage />} />
+              <Route path="/templates" element={<TemplatesPage />} />
+              <Route path="/templates/new" element={<TemplateNewPage />} />
+              <Route path="/templates/samples/:id" element={<TemplateSamplePage />} />
+              <Route path="/templates/:id" element={<TemplateDetailPage />} />
               <Route path="/upload" element={<UploadPage />} />
               <Route path="/verify" element={<VerifyPage />} />
               <Route path="/verify/:id" element={<VerifyPage />} />

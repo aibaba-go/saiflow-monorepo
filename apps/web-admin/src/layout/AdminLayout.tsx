@@ -20,6 +20,7 @@ export const MENU: { path: string; label: MessageKey }[] = [
   { path: "/users", label: "nav.users" },
   { path: "/audit-log", label: "nav.auditLog" },
   { path: "/ocr", label: "nav.ocr" },
+  { path: "/templates", label: "nav.templates" },
 ];
 
 /** The company behind SaiFlow, linked from the sidebar footer (FR-SYS-135). */
@@ -40,6 +41,7 @@ const ICONS: Record<string, IconName> = {
   "/users": "users",
   "/audit-log": "history",
   "/ocr": "spark",
+  "/templates": "template",
 };
 
 function selected(pathname: string): string {

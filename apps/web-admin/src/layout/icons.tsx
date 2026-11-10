@@ -42,6 +42,12 @@ const PATHS = {
   ),
   history: <path d="M3 11a9 9 0 1 1 2.5 7M3 4v7h7m2-4v5l3 2" />,
   spark: <path d="m12 3 2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2L12 3Z" />,
+  template: (
+    <>
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <path d="M8 8h8M8 12h8M8 16h5" />
+    </>
+  ),
   shield: <path d="m12 3 8 4v5c0 5-8 9-8 9s-8-4-8-9V7l8-4Zm-3 9h6m-3-3v6" />,
   arrow: <path d="M4 12h15m-6-6 6 6-6 6" />,
   chevron: <path d="m9 5 7 7-7 7" />,
