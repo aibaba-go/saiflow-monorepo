@@ -118,6 +118,44 @@ describe("queue (FR-SYS-123)", () => {
     expect(await screen.findByText("doc-25.png")).toBeInTheDocument();
     expect(screen.queryByText("doc-1.png")).not.toBeInTheDocument();
   });
+
+  it("opens review detail from an explicit review button (123/124)", async () => {
+    signedIn(
+      {
+        ...detailRoutes,
+        "GET /api/v1/reviews": () => json(200, { items: [item(1)], total: 1, page: 1, page_size: 20 }),
+      },
+      inOrg(BOTH),
+    );
+    renderAt("/reviews");
+    const row = (await screen.findByText("doc-1.png")).closest("tr") as HTMLElement;
+    const button = within(row).getByRole("button", { name: en("review.open") });
+    button.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(await screen.findByTestId("page-review-detail")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: en("review.approve") })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: en("review.return") })).toBeInTheDocument();
+  });
+
+  it.each(["own_confirmation", "did_level1"])("offers view detail without decisions when blocked by %s (FR-VERIFY-012)", async (block_reason) => {
+    signedIn(
+      {
+        ...detailRoutes,
+        "GET /api/v1/reviews": () =>
+          json(200, { items: [{ ...item(1), block_reason }], total: 1, page: 1, page_size: 20 }),
+        "GET /api/v1/reviews/j1": () => json(200, { ...detail, block_reason }),
+      },
+      inOrg(BOTH),
+    );
+    renderAt("/reviews");
+    const row = (await screen.findByText("doc-1.png")).closest("tr") as HTMLElement;
+    expect(within(row).getByText(en(block_reason === "did_level1" ? "review.blocked.did_level1" : "review.blocked.own_confirmation"))).toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: en("review.open") })).not.toBeInTheDocument();
+    await userEvent.click(within(row).getByRole("button", { name: en("action.viewDetail") }));
+    expect(await screen.findByText("IV1")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: en("review.approve") })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: en("review.return") })).not.toBeInTheDocument();
+  });
 });
 
 describe("detail (FR-SYS-124)", () => {

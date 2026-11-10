@@ -1,4 +1,4 @@
-import { Table, Tabs, Tag, Typography } from "antd";
+import { Button, Table, Tabs, Tag, Typography } from "antd";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -44,6 +44,7 @@ export function ReviewsPage() {
         loading={queue.isPending}
         dataSource={queue.data?.items ?? []}
         locale={{ emptyText: t("review.empty") }}
+        scroll={{ x: 1100 }}
         onRow={(r) => ({ onClick: () => navigate(`/reviews/${r.job_id}`), style: { cursor: "pointer" } })}
         pagination={{
           current: page,
@@ -79,6 +80,23 @@ export function ReviewsPage() {
             key: "levels",
             title: t("review.col.levels"),
             render: (_, r) => t(r.required_level === 2 ? "review.settings.l2" : "review.settings.l1"),
+          },
+          {
+            key: "actions",
+            title: t("common.actions"),
+            fixed: "right",
+            width: 140,
+            render: (_, r) => (
+              <Button
+                type={r.block_reason ? "default" : "primary"}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  navigate(`/reviews/${r.job_id}`);
+                }}
+              >
+                {t(r.block_reason ? "action.viewDetail" : "review.open")}
+              </Button>
+            ),
           },
         ]}
       />
