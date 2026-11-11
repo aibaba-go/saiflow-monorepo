@@ -277,6 +277,30 @@ OS 只读采样显示并行验收期间 CPU 79%→100%、可用内存 1.4→1.2 
 
 自有6173/6174/6175预览退出；8021/6273/6274/6275验收监听也为0，只清理本轮已确认的进程树，不操作无关开发服务。实施计划已标记报表本地完成，模板隐私/完整混合矩阵/部署与备份等未验证项保持未勾选。没有业务代码后续修改，不用旧结果替代新结果，也不再重复运行已完整通过的昂贵测试。
 
-### 未授权或未覆盖
+### 本地交付时未授权或未覆盖（发布授权前历史）
 
-本轮未提交、推送、部署、生产迁移或线上 LINE 验收。历史模板真实 OCR/LLM、GCS 历史副本/七天保留及线上登录验收缺口仍保留，报表完成不会自动解决这些模板缺口。实际浏览器未遍历每一种角色与全部异常数据组合，此类证据来自 RTL/隔离 PG 集成而非截图。语言扫描前轮的 6 项英文品牌 eyebrow 被人工判断为品牌文案，并非未翻译功能错误，不宣称原始扫描全绿。
+本地交付结束时未提交、推送、部署、生产迁移或线上 LINE 验收；随后新增的明确发布授权及执行结果以下一节为准。历史模板真实 OCR/LLM、GCS 历史副本/七天保留及线上登录验收缺口仍保留，报表完成不会自动解决这些模板缺口。实际浏览器未遍历每一种角色与全部异常数据组合，此类证据来自 RTL/隔离 PG 集成而非截图。语言扫描前轮的 6 项英文品牌 eyebrow 被人工判断为品牌文案，并非未翻译功能错误，不宣称原始扫描全绿。
+
+### 报表正式发布（2026-11-11，已完成）
+
+负责人在本地全量交付后明确回复 **“提交并发布”**，授权本轮报表实现及已验证配套修复的提交、推送与现有 GitHub Actions 正式发布；不沿用模板的旧授权。仅操作既有发布分支 `chore/ai-workflow-v2` 和生产 `38.60.156.234`，不直接 SSH 修改服务器，不使用生产测试 fixtures，不运行付费 OCR 或登录后业务写入，不归档含模板隐私/混合未覆盖项的整个 change。
+
+代码提交 **`2a33b61179b27b13f377925a3bdbcbef4f76c218`** 已推送，121 文件；`.qoder/` 与 `docs/10-product/user-manuals/` 明确排除，提交后只剩这两类未追踪本地文件。暂存检查发现 PC ReportViewPage 多余 EOF 空行，已仅移除该空行，未改逻辑；随后云端 CI 重新执行完整门禁通过。
+
+[CI 42983209132](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/42983209132) 对上述精确 SHA **completed/success**，backend、frontend、contract、scripts、stack 五项全部 success，2026-11-11 08:03:59Z 完成最后一项。触发前再次核实远端分支仍指向同 SHA。GitHub CLI 通过已有 Git credential manager 仅进程内取得认证，不输出或落盘凭据，不新增 auth 配置；临时 launcher 只允许审阅过的发布命令，禁止 auth token 等凭据输出命令。
+
+GitHub Variables 已实际核实：VPS_HOST 为 `38.60.156.234`，APP_HOST=`saiflow-app.aibaba.asia`、ADMIN_HOST=`saiflow-admin.aibaba.asia`、LINE_HOST=`saiflow-line2.aibaba.asia`。发布前真实三端健康均为 status/database ok，原版本 `83feba5f0f29c74d240a52cabf7705aaccf98805`。现有 remote-deploy 脚本在迁移前执行本地 dump 与 GCS 上传，任一步备份失败即停止迁移；本轮未修改部署流程或已部署0015/0016，仅追加0017。
+
+[Deploy 42984238639](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/42984238639) 于 08:05:09Z 通过既有 workflow_dispatch 触发，headSha 为上述精确代码提交；**completed/success**，deploy job 于 **08:10:07Z** 完成。四个同 SHA 镜像构建/推送、迁移与重启、三站 smoke、外部数据库端口检查及 runner SSH key 清理全部 success。实际状态/日志保存于 `temp/report-run/deploy-report-release.json`、`deploy-report-release.log`，未手动 SSH 部署或重复触发。
+
+已逐项核对生产日志：08:09:24Z 写入 **`saiflow-20261111T080924Z.dump`、274,534 bytes**，08:09:29Z 成功上传 `gs://saiflow-db-backup/`；上传成功后才开始 migration，08:09:32Z 实际 **0016 → 0017**，08:09:45Z remote-deploy done，精确 SHA 一致。08:09:59Z 三端 HTML 200 text/html、status/database ok、version 均为 `2a33b61179b27b13f377925a3bdbcbef4f76c218`；08:10:04Z 外部 **5432 closed**。只追加0017，未改已部署0015/0016，不执行生产 downgrade 或恢复演练。
+
+云端精确提交的 CI 日志另存 `temp/report-run/ci-report-release.json`、`ci-report-release.log`：后端 **1,215 passed / 335.36 s**，Node24 正常 `pnpm -r test` 前端 **787/787、81文件**（api-client5/UI162/LINE313/admin84/PC223）；脚本 **212 passed、12 suites、0 failed**，shellcheck/凭据材料扫描、ruff、契约一致性、三端构建均成功。CI 临时 Docker stack 实际升级0001→0017并通过三站 smoke，独立 dump/restore 的 `restore-check OK` 验证恢复库中 saiflow_v3.alembic_version 一行；这是 **CI 可丢弃库恢复证据，不是上述生产备份的恢复演练**。未验证生产备份校验和、保留策略实效或完整可用回滚镜像摘要，混合 D04/D05 checkbox 保持未勾选。
+
+08:18:53Z 开始的最终线上只读检查 `temp/report-run/production-readonly-results.json` **pass=true、34/34检查通过**，仅允许 GET/HEAD/OPTIONS，禁用 Service Worker，无已有 Cookie、不提交登录或业务表单。再次独立核实三站精确健康版本及 HTML/JS 200，生产入口分别为 PC `index-CkwG6Z0J.js`（1,892,199 bytes）、admin `index-tboSjV7b.js`（1,564,214 bytes）、LINE `index-ClXkUUz_.js`（785,885 bytes）；三个实际入口包含静态报表路由/API，客户端含 CSV report_version、admin 含合成预览调用。报表页直接静态导入，没有独立报表 lazy chunk；不把后端健康版本单独当作前端逐字节制品哈希证明。三站匿名报表 API 均401，无效 CSV 票均 opaque404，未生成真实 CSV、游客或业务记录。
+
+最终三张截图均已实际打开：`production-web-pc-public.png`、`production-web-admin-public.png` 的匿名登录页可读、无重叠；`production-line-mini-public.png` 是 **刻意阻止游客创建后的启动错误页，不是正常 LINE 首页**。实际网络记录明确 GET `/api/v1/me`→401、唯一被阻止写请求为 POST `/api/v1/auth/guest`；源码 boot 在该游客创建之后才执行 LIFF init，阻止请求被 call 映射成网络错误并显示 Retry。因此仅验证受限错误状态渲染，不声称生产游客会话、真实 LINE 登录/LIFF 或登录后报表/CSV E2E 通过。三端均无 pageerror，自有 Chrome 正常关闭并 disconnected。
+
+临时 checker 初轮错误假设生产存在报表 lazy chunk，查实际入口与静态 import 后修正；第二轮遇20秒入口下载超时，独立 curl 得到 admin JS 200 / 1,564,214 bytes / 4.863 s 后将只读下载窗口改为60秒，未修改产品或测试配置。两次失败结果保留为 `production-readonly-before-bundle-fix.json`、`production-readonly-before-network-window.json`。截图复核发现先前通用“有文本”判定不能证明 LINE 首页启动，追加真实401/被阻止游客POST与精确错误状态断言并重跑，前轮结果另存 `production-readonly-before-boot-boundary.json`，只以最终34项及上述限制为结论。
+
+发布收尾仅同步本计划/验证证据并作新的文档提交，不 amend 代码提交、不再部署文档提交；生产继续明确记录为 **2a33b61**。`.qoder/` 与用户手册不纳入，未合并 main、未归档整个混合 change；报表发布不会自动补齐模板历史隐私与外部真实调用缺口。
