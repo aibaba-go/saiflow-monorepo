@@ -188,7 +188,8 @@ async def test_mapping_state_has_target(api, line, store, sm, ai_settings, llm, 
             "insert into template_mappings (id, job_id, raw_result_id, template_id, "
             "template_version_id, source, status, error_code, finished_at, created_at) "
             "select gen_random_uuid()::text, :j, m.raw_result_id, :t, :v, 'MANUAL', 'FAILED', "
-            "'PRIMARY_MISSING', now() + interval '1 second', now() + interval '1 second' "
+            "'PRIMARY_MISSING', clock_timestamp() + interval '1 second', "
+            "clock_timestamp() + interval '1 second' "
             "from template_mappings m where m.job_id = :j limit 1"
         ),
         {"j": job_id, "t": billing[0], "v": billing[1]},

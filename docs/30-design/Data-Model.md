@@ -3,8 +3,8 @@ doc_id: DES-002
 title: "SaiFlow — 数据模型"
 type: data-model
 status: active
-version: 2.12.0
-updated: 2026-11-07
+version: 2.13.0
+updated: 2026-11-11
 owner: Product Engineering
 source: "PRD-001 v3.3 §3, §4, §4.9; ADR-008"
 related: [ADR-008, DM-FormDocument, DM-ExtractionPayload, DM-OcrJob, DM-DocumentTemplate, DM-Tenant, DM-Subscription]
@@ -41,6 +41,11 @@ erDiagram
     DM-OcrJob ||--o| DM-FormDocument : "生成"
     DM-DocumentTemplate ||--o{ DM-FormDocument : "按模板"
     DM-Tenant ||--o{ DM-FormDocument : "拥有"
+    DM-Tenant ||--o{ DM-TemplateSample : "样例"
+    DM-Tenant ||--o{ DM-Report : "报表"
+    DM-Report ||--o{ DM-ReportSnapshot : "发布"
+    DM-Report ||--o{ DM-ReportTemplateRef : "引用"
+    DM-DocumentTemplate ||--o{ DM-ReportTemplateRef : "被引用"
     DM-Tenant ||--o{ DM-OperationLog : "审计"
     DM-AdminAccount ||--o{ DM-OperationLog : "admin 操作"
 ```
@@ -66,7 +71,7 @@ erDiagram
 | `DM-Notification` | 站内通知：收件用户、所属租户、类型、相关数据、生成时间、已读时间 | PostgreSQL | 用户 | N:1 用户、N:1 租户 | 未读 → 已读；不删除 |
 | `DM-File` | 文件元数据：原件、导入、导出、头像 | PostgreSQL | 租户 | 1:1 GCS 对象；1:N 识别任务 | 上传 → 删除（按保留策略） |
 | `DM-OcrJob` | 识别任务：状态、页数、所用引擎；月扫描配额计量与调用观测的依据 | PostgreSQL | 租户 | N:1 文件；1:N 原始载荷；0..1 表单文档 | 排队 → 识别中 → 完成 / 失败 / 取消 |
-| `DM-DocumentTemplate` | 文档格式模板及其版本 | PostgreSQL | 全局（V1.0 由实施人员预置） | 1:N 表单文档 | 草稿 → 已发布 → 停用；发布后版本不可变 |
+| `DM-DocumentTemplate` | 文档格式模板及其版本；系统模板的可用范围由授权对象（套餐档位或点名租户/用户）决定 | PostgreSQL | 系统（平台 admin）、个人租户或组织租户 | 1:N 表单文档；1:N 授权对象；N:M 报表（引用） | 可编辑草稿（修订号）→ 生效为新的不可变版本 → 停用；被报表或识别结果引用时不可删除 |
 | `DM-SystemSetting` | 系统参数：OCR 首选/备用引擎与切换参数、大模型配置引用、免费额度、各档成员人数上限、置信度阈值 | PostgreSQL | 全局（平台 admin 配置） | — | 修改时写操作日志；密钥本体在服务器环境变量文件中 |
 | `DM-OperationLog` | 操作日志（审计） | PostgreSQL | 租户或平台 | N:1 操作者（用户或 admin 账号） | 仅追加 |
 | `DM-AdminAccount` | 平台 admin 账号 | PostgreSQL（与客户账号分表隔离） | 平台 | 1:N 操作日志 | 启用 → 锁定 / 停用 |
@@ -76,6 +81,10 @@ erDiagram
 | `DM-TemplateMapping` | 一次模板匹配或结构化转换：所用模板版本（或通用结果）、来源（自动 / 用户选择）、状态、失败原因 | PostgreSQL | 租户 | N:1 识别任务、模板版本；1:0..1 结果版本 | 等待 → 匹配中 / 转换中 → 完成 / 失败；每份单据最多 5 次 |
 | `DM-Export` | 一次 Excel 导出：所导出的结果版本、对象位置、到期时间（24 小时） | PostgreSQL + 私有 GCS（文件） | 租户 | N:1 识别任务、结果版本 | 生成 → 可下载 → 过期 |
 | `DM-OcrEngineHealth` | 各 OCR 引擎的健康状态：连续失败次数、是否已切换到备用引擎、下次试探首选引擎的时间 | PostgreSQL | 全局 | — | 由识别服务更新；首选引擎恢复后切回 |
+| `DM-TemplateSample` | 模板样例：从上传样例或已有识别结果生成模板定义的一次过程（进度、计量、候选定义）；敏感内容最长保留 7 天 | PostgreSQL + 私有 GCS（样例原件） | 租户或平台 admin（恰有一方） | N:0..1 识别任务（来源）；生成的定义保存为 `DM-DocumentTemplate` 草稿 | 排队 → 识别中 → 生成中 → 就绪 / 失败 / 取消；主动删除或 7 天到期清理原件与载荷 |
+| `DM-Report` | 组织运营报表：可不完整的设计草稿（网格卡片配置）、修订号、当前发布指针；只存配置，不存统计结果 | PostgreSQL（配置为 jsonb） | 组织租户 | 1:N 发布快照；N:M 模板版本（引用） | 草稿 → 已发布（可再改草稿、再发布）→ 撤销发布 / 删除（软删除） |
+| `DM-ReportSnapshot` | 报表发布快照：一次发布的不可变整页配置与版本号 | PostgreSQL（jsonb） | 组织租户（随报表） | N:1 报表 | 发布时写入，不可修改；新草稿不影响旧快照 |
+| `DM-ReportTemplateRef` | 报表卡片对模板版本的引用（草稿 / 已发布两类），用于模板删除保护和原卡片历史授权延续；无卡片标识的兼容引用仅保护删除，不授予新绑定 | PostgreSQL | 组织租户（随报表） | N:1 报表、模板、模板版本 | 随保存草稿 / 发布重写；撤销发布、删除时移除 |
 
 - 登录会话、邮箱验证码等短期技术数据不作为实体登记，设计见 B-2a 的 `openspec/changes/archive/2026-11-03-rebuild-identity/plan.md`。
 - **`ocr-ui-parity`：** `DM-DocumentTemplate` 的字段与明细列可带“角色”（数量、单价、行金额、合计、税额等），供金额校验使用（迁移 0011 为两个系统模板写入新版本）；`DM-TemplateMapping` 保存每个模板的匹配度，自动匹配低于 70% 时记为“没有合适的模板”，结果按自由格式显示；按链接导入的文件与上传的文件同为 `DM-File`。
@@ -86,7 +95,8 @@ erDiagram
 - **B-2c 已实现（`rebuild-plans-metering`）：** `DM-Plan`、`DM-Subscription`（保留历史）、`DM-FreeQuota`、续费与开通申请；扫描次数的预占记录（所属租户、关联识别、次数、来自免费额度与月配额的拆分、预占与退还时间）按记录逐笔计算用量，不另记操作日志；这些记录都不随游客数据归集。`DM-PlanReminder` 随 B-2d（见上）。
 - **B-2b 已实现（`rebuild-tenant-rbac`）：** `DM-Tenant` 增加组织；组织资料与企业认证存在组织上，建组织申请与企业认证申请各自留有申请记录；`DM-Membership` 每个成员一个角色，owner 不持有角色、拥有全部权限点，每个组织恰好一名 owner（可转让）；`DM-Role` 每个组织一个默认角色；`DM-Invitation` 只存凭据摘要；`DM-SystemSetting` 先有“组织开通套餐前的成员人数上限”一项。这些记录都不随游客数据归集。
 - **B-2a 已实现（`rebuild-identity`）：** `DM-User`（LINE 身份 ID 与邮箱作为唯一的关联身份直接存在用户上，邮箱统一小写；手机号不要求唯一）；`DM-Tenant` 只有个人租户与游客临时租户两类（组织随 B-2b）；`DM-OperationLog` 仅可追加（数据库触发器禁止修改与删除），每条记录带前一条的校验值，服务器命令 `audit-verify` 检查是否被改动；`DM-AdminAccount` 口令为 argon2id 哈希，连续 5 次错误锁定 15 分钟。`DM-UserIdentity` 在接入第三种身份（如 Google）时再拆成独立的表。
-- 报表数据（方式 B，PostgreSQL 内的报表汇总表）为后续能力（OQ-8），实现时再登记实体。
+- **`template-report-management` 已实现：** 模板（迁移 0014、0016）——`DM-DocumentTemplate` 增加归属（系统 / 个人 / 组织）、可编辑草稿与修订号（保存与生效分离，生效生成新的不可变版本）、系统模板授权对象（`template_grant_targets`）；`DM-TemplateSample` 记录样例生成过程，客户样例按页计量，平台 admin 样例不扣客户配额；样例原件与载荷最长 7 天，不进入长期备份。报表（迁移 0015、0017）——`DM-Report`、`DM-ReportSnapshot`、`DM-ReportTemplateRef`；报表只存配置，每次打开或手动刷新都按发布快照对正式业务数据（已确认结果版本）在数据库内实时聚合，不保存统计结果、不跨用户缓存；CSV 下载凭证为签名令牌，不落库。
+- 报表采用方式 A（实时查询正式业务数据）；方式 B 的报表汇总表（OQ-8）未实现，不登记实体。
 - 数据库备份文件（VPS 本地 7 天、GCS 备份桶 30 天）是运维数据，不作为实体登记（ADR-008）。
 
 ### 2.1 v1 实体去向
@@ -117,7 +127,7 @@ erDiagram
 | 订阅状态 | 有效、已到期 |
 | 开通周期 | 按月、按年 |
 | 套餐档位 | Kinder < Starter < Intermediate < Advance |
-| 权限点 | 上传与识别、核验与确认、核验他人单据、一级复核、二级复核、导出、数据浏览、成员管理、角色管理、套餐申请、企业认证申请、模板管理（P1）、报表查看（P1）——见 PRD §4.9 |
+| 权限点 | 上传与识别、核验与确认、核验他人单据、一级复核、二级复核、导出、数据浏览、成员管理、角色管理、套餐申请、企业认证申请、模板管理、报表管理、报表查看——见 PRD §4.9 与 FR-SYS-002 |
 
 ## 4. 数据保留与隐私
 
@@ -143,6 +153,7 @@ erDiagram
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.13.0 | 2026-11-11 | Product Engineering | `template-report-management`：模板归属、草稿与修订号、系统模板授权、`DM-TemplateSample`；报表 `DM-Report`、`DM-ReportSnapshot`、`DM-ReportTemplateRef`（只存配置，实时查询正式业务数据） |
 | 2.12.0 | 2026-11-07 | Product Engineering | `review-flow`：复核层级、复核轮次与记录、修改记录（jsonb）、复核通知记录；识别任务的复核状态与正式业务数据时间 |
 | 2.11.0 | 2026-11-06 | Product Engineering | `ocr-ui-parity`：模板字段角色（金额校验）、匹配度与“没有合适的模板”、按链接导入 |
 | 2.10.0 | 2026-11-06 | Product Engineering | 按 B-3：新增 `DM-TemplateMapping`、`DM-Export`、`DM-OcrEngineHealth`；记录 B-3 已实现的范围（文件、识别任务、原始载荷、模板、结果版本） |

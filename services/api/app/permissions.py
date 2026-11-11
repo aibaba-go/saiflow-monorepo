@@ -17,6 +17,7 @@ class Permission(StrEnum):
     VERIFICATION_APPLY = "verification_apply"  # 企业认证申请
     TEMPLATE_MANAGE = "template_manage"  # 模板管理（P1）
     REPORT_VIEW = "report_view"  # 报表查看（P1）
+    REPORT_MANAGE = "report_manage"  # 报表管理（P1，FR-SYS-139）
 
 
 ALL: frozenset[Permission] = frozenset(Permission)

@@ -82,12 +82,16 @@ class ReportTemplateRef(Base):
             "kind in (" + ", ".join(f"'{k}'" for k in REPORT_REF_KINDS) + ")",
             name="report_template_refs_kind",
         ),
-        UniqueConstraint("report_id", "kind", "template_version_id", name="uq_report_template_ref"),
+        UniqueConstraint(
+            "report_id", "kind", "card_id", "template_version_id", name="uq_report_template_ref"
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     report_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("reports.id"), index=True)
     kind: Mapped[str] = mapped_column(Text)
+    # NULL legacy refs protect deletion, but never authorize new card bindings.
+    card_id: Mapped[str | None] = mapped_column(Text)
     template_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("document_templates.id"), index=True
     )

@@ -247,11 +247,15 @@ async def test_periodic_recovery_in_the_loop(api, line, store, db, sm, app_setti
 
     monkeypatch.setattr(worker, "recover", fake_recover)
     monkeypatch.setattr(worker.mapping_worker, "recover", fake_mapping_recover)
+    monkeypatch.setattr(worker.sample_worker, "recover", lambda *_a, **_k: asyncio.sleep(0))
     monkeypatch.setattr(worker, "RECOVER_EVERY", 0.0)
     stop = asyncio.Event()
     settings = app_settings.model_copy(update={"ocr_poll_seconds": 0.01})
     task = asyncio.create_task(worker.loop(sm, store, settings, stop))
-    await asyncio.sleep(0.2)
+    for _ in range(500):  # until a periodic pass ran (a slow machine needs longer than 0.2 s)
+        if False in calls and ("m", False) in calls:
+            break
+        await asyncio.sleep(0.01)
     stop.set()
     await task
     assert calls[:2] == [True, ("m", True)]

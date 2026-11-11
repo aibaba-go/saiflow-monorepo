@@ -11,7 +11,7 @@ import { useSubmit } from "./hooks/useSubmit";
 import { useT } from "./i18n";
 import { HealthPage } from "./pages/HealthPage";
 import { HistoryPage } from "./features/scan/HistoryPage";
-import { HomePage, ReportPage } from "./pages/HomePage";
+import { HomePage } from "./pages/HomePage";
 import { MyPage } from "./pages/MyPage";
 import { RegisterDialog } from "./features/auth/RegisterDialog";
 import { ProfilePage } from "./features/profile/ProfilePage";
@@ -19,6 +19,8 @@ import { ApplyOrgPage } from "./features/orgs/ApplyOrgPage";
 import { OrgPage } from "./features/orgs/OrgPage";
 import { RolesPage } from "./features/orgs/RolesPage";
 import { VerificationPage } from "./features/orgs/VerificationPage";
+import { ReportDetailPage } from "./features/reports/ReportDetailPage";
+import { ReportListPage } from "./features/reports/ReportListPage";
 import { ReviewDetailPage } from "./features/reviews/ReviewDetailPage";
 import { ReviewQueuePage } from "./features/reviews/ReviewQueuePage";
 import { ReviewSettingsPage } from "./features/reviews/ReviewSettingsPage";
@@ -131,8 +133,11 @@ export function Shell({ liff, search, liffTimeoutMs = 20_000, logoutTimeoutMs = 
 
 const TAB_PATHS = new Set(["/", "/history", "/report", "/my"]);
 
-/** The signed-in or guest app: pages plus the bottom navigation on the four tab pages. */
+/** The signed-in or guest app: pages plus the bottom navigation on the four tab pages. The
+ * report pages need the Report tab's conditions (FR-SYS-056); a report link while they are
+ * not met leads home. */
 function MainShell() {
+  const t = useT();
   const { pathname } = useLocation();
   const { tenant } = useCurrentTenant();
   const usage = useUsage();
@@ -142,7 +147,19 @@ function MainShell() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/history" element={<HistoryPage />} />
-        <Route path="/report" element={report ? <ReportPage /> : <HomePage />} />
+        <Route path="/report" element={report ? <ReportListPage /> : <HomePage />} />
+        <Route
+          path="/report/:id"
+          element={
+            report ? (
+              <ReportDetailPage />
+            ) : tenant?.kind === "organization" && usage.isPending ? (
+              <BrandLoading variant="page" label={t("common.loading")} />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
         <Route path="/my" element={<MyPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/orgs/apply" element={<ApplyOrgPage />} />

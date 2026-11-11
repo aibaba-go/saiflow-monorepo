@@ -224,6 +224,8 @@ JSONB SHALL 由服务端受控参数化查询安全转换并在数据库以 nume
 ### Requirement: FR-REPORT-016 授权内聚合 CSV 导出
 持有 report_view 及现有 export 权限的用户 SHALL 可将已发布报表聚合结果导出 CSV，范围/期间/版本/诊断与查看一致；SHALL 不导出原始单据或无权数据。配置及查询限制 SHALL 同样适用，超时/超限不输出伪完整文件；文本单元 SHALL 防止电子表格公式执行。
 
+与 FR-ENTRY-015 一致，为在不带会话的下载器中打开（Android 的 LINE 内置浏览器），用户 SHALL 可为某张已发布卡片的 CSV 换取 60 秒有效的下载凭证，凭证签名绑定租户、报表、卡片、期间覆盖、用户与会话，且不在服务端存储；兑换时 SHALL 重新检查会话有效、套餐门槛及 report_view/export 权限并按当前正式数据重新查询。凭证过期、被篡改、会话结束或权限不再满足时 SHALL 返回 404。
+
 #### Scenario: AC-FR-REPORT-016-01 同范围导出
 - **GIVEN** U 有 report_view/export 但无 data_browse，页面使用整页期间覆盖
 - **WHEN** 导出 CSV
@@ -233,6 +235,11 @@ JSONB SHALL 由服务端受控参数化查询安全转换并在数据库以 nume
 - **GIVEN** 分类名称以 =、+、-、@ 开始，另一图查询超过限制
 - **WHEN** 导出
 - **THEN** 文本分类被安全转义而不执行公式，数值仍保留正确符号；超限图使导出明确失败，不冒充完整
+
+#### Scenario: AC-FR-REPORT-016-03 下载凭证
+- **GIVEN** U 有 report_view/export，为某卡片换取了下载凭证
+- **WHEN** 60 秒内用该凭证下载，或在凭证过期、被篡改、U 退出登录或失去 export 后下载
+- **THEN** 前者得到与页面同期间同范围的 CSV；后者均返回 404，不泄露报表是否存在
 
 ### Requirement: FR-REPORT-017 查询与页面容量限制
 统计 SHALL 在服务端以 10 秒 statement 超时约束执行，单图最多 1000 分组（含系列组合），页面最多 30 卡片；超时/超限 SHALL 返回明确错误及收窄范围提示，不截断冒充完整。SHALL 不引入公开共享链接、跨图联动钻取、投影/预聚合或任意用户查询执行。

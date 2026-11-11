@@ -1,7 +1,7 @@
 // Ported from apps/line-mini/src/features/tenants/permissions.ts (web-pc-account plan: copied, not shared).
 import type { CurrentTenant } from "./useCurrentTenant";
 
-/** The 13 permission points (FR-SYS-002); the owner holds all of them. */
+/** The 14 permission points (FR-SYS-002, FR-SYS-139); the owner holds all of them. */
 export type Permission =
   | "upload_ocr"
   | "verify_own"
@@ -15,7 +15,8 @@ export type Permission =
   | "plan_apply"
   | "verification_apply"
   | "template_manage"
-  | "report_view";
+  | "report_view"
+  | "report_manage";
 
 export const PERMISSIONS: Permission[] = [
   "upload_ocr",
@@ -31,6 +32,7 @@ export const PERMISSIONS: Permission[] = [
   "verification_apply",
   "template_manage",
   "report_view",
+  "report_manage",
 ];
 
 /** Whether the user may do this in the tenant (A8: actions without permission are hidden). */

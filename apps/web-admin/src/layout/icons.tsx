@@ -48,6 +48,7 @@ const PATHS = {
       <path d="M8 8h8M8 12h8M8 16h5" />
     </>
   ),
+  chart: <path d="M3 3v18h18M8 17v-5m4 5V8m4 9v-7" />,
   shield: <path d="m12 3 8 4v5c0 5-8 9-8 9s-8-4-8-9V7l8-4Zm-3 9h6m-3-3v6" />,
   arrow: <path d="M4 12h15m-6-6 6 6-6 6" />,
   chevron: <path d="m9 5 7 7-7 7" />,

@@ -46,9 +46,13 @@ async def _expiring_today_tenant(db) -> int:
     return tenant
 
 
-async def test_run_once_cli_prints_count(db, migrated_db):
+async def test_run_once_cli_prints_count(db, migrated_db, monkeypatch):
+    # FR-SYS-037: the enabled command must not depend on the test runner's worker switch.
+    monkeypatch.setenv("REMINDERS_ENABLED", "false")
     tenant = await _expiring_today_tenant(db)
-    r = _cli(migrated_db, "reminders-run-once", SMTP_HOST="", SMTP_FROM="")
+    r = _cli(
+        migrated_db, "reminders-run-once", REMINDERS_ENABLED="true", SMTP_HOST="", SMTP_FROM=""
+    )
     assert r.returncode == 0, r.stdout + r.stderr
     assert "reminders OK (1 created)" in r.stdout
     count = (
@@ -57,7 +61,9 @@ async def test_run_once_cli_prints_count(db, migrated_db):
         )
     ).scalar_one()
     assert count == 1
-    again = _cli(migrated_db, "reminders-run-once", SMTP_HOST="", SMTP_FROM="")
+    again = _cli(
+        migrated_db, "reminders-run-once", REMINDERS_ENABLED="true", SMTP_HOST="", SMTP_FROM=""
+    )
     assert "reminders OK (0 created)" in again.stdout
 
 

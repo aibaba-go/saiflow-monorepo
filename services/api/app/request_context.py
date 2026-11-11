@@ -56,7 +56,8 @@ class RequestIdMiddleware:
             await self.app(scope, receive, send_with_id)
         finally:
             elapsed_ms = (time.perf_counter() - started) * 1000
-            access_logger.info(
-                "%s %s %d %.0fms", scope["method"], scope["path"], status, elapsed_ms
-            )
+            path = scope["path"]
+            if path.startswith("/api/v1/report-downloads/"):
+                path = "/api/v1/report-downloads/[redacted]"
+            access_logger.info("%s %s %d %.0fms", scope["method"], path, status, elapsed_ms)
         request_id_var.reset(token)

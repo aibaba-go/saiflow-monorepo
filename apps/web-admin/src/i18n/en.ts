@@ -1,3 +1,4 @@
+import { reportsEn } from "./reports.en";
 import type { MessageKey } from "./zh";
 
 export const en: Record<MessageKey, string> = {
@@ -514,4 +515,5 @@ export const en: Record<MessageKey, string> = {
   "field.organization_tenant_ids": "A chosen organization is not valid",
   "field.tenant_id": "Choose the customer tenant",
   "field.content": "The template must be a JSON object",
+  ...reportsEn,
 };

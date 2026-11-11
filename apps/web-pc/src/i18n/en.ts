@@ -1,4 +1,5 @@
 // Ported from apps/line-mini/src/i18n/en.ts (web-pc-account plan: copied, not shared).
+import { reportsEn } from "./reports.en";
 import { templatesEn } from "./templates.en";
 
 /** English (default language, D4). Every visible string lives here; th and zh mirror the keys. */
@@ -201,6 +202,7 @@ export const en = {
   "perm.verification_apply": "Apply for verification",
   "perm.template_manage": "Manage templates",
   "perm.report_view": "View reports",
+  "perm.report_manage": "Manage reports",
   "invite.title": "You are invited to join {name}",
   "invite.validUntil": "This invitation is valid until {date}.",
   "invite.join": "Join",
@@ -571,6 +573,7 @@ export const en = {
   "upload.choose": "Choose files",
   "upload.processing": "{n} in progress",
   ...templatesEn,
+  ...reportsEn,
 } as const;
 
 export type MessageKey = keyof typeof en;

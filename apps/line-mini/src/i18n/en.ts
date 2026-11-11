@@ -1,3 +1,5 @@
+import { reportsEn } from "./reports.en";
+
 /** English (default language, D4). Every visible string lives here; th and zh mirror the keys. */
 export const en = {
   "common.ok": "OK",
@@ -169,6 +171,7 @@ export const en = {
   "perm.verification_apply": "Apply for verification",
   "perm.template_manage": "Manage templates",
   "perm.report_view": "View reports",
+  "perm.report_manage": "Manage reports",
   "invite.title": "You are invited to join {name}",
   "invite.validUntil": "This invitation is valid until {date}.",
   "invite.join": "Join",
@@ -607,6 +610,7 @@ export const en = {
   "my.allRead": "All read",
   "result.title": "Verify result",
   "result.aiCaption": "AI extracted · check against the original",
+  ...reportsEn,
 } as const;
 
 export type MessageKey = keyof typeof en;

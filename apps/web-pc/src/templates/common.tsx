@@ -47,7 +47,10 @@ export function StatusTag({ status }: { status: TemplateSummary["status"] }) {
 
 /** Unsaved edits: ask before leaving by the router, the tenant switcher or closing the tab
  * (FR-SYS-140, as FR-SYS-129). `leave` lets a save navigate without asking. */
-export function useLeaveGuard(dirty: boolean): { leave: (go: () => void) => void; guard: ReactNode } {
+export function useLeaveGuard(
+  dirty: boolean,
+  body: MessageKey = "tpl.leaveBody",
+): { leave: (go: () => void) => void; guard: ReactNode } {
   const t = useT();
   const leaving = useRef(false);
   const blocker = useBlocker(
@@ -74,7 +77,7 @@ export function useLeaveGuard(dirty: boolean): { leave: (go: () => void) => void
       onOk={() => blocker.proceed?.()}
       onCancel={() => blocker.reset?.()}
     >
-      {t("tpl.leaveBody")}
+      {t(body)}
     </Modal>
   );
   return {

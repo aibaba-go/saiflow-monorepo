@@ -6,6 +6,7 @@ import { useMe, useMyTenants } from "../auth/session";
 import { ErrorText } from "../components/ErrorText";
 import { useT, type MessageKey } from "../i18n";
 import { BellBadge } from "../notifications/BellBadge";
+import { useReportAccess } from "../reports/common";
 import { canManageTemplates } from "../templates/common";
 import { can } from "../tenants/permissions";
 import { TenantSwitcher } from "../tenants/TenantSwitcher";
@@ -32,6 +33,7 @@ export const MENU: MenuItem[] = [
   { key: "org", path: "/org", label: "nav.org" },
   { key: "roles", path: "/roles", label: "nav.roles" },
   { key: "templates", path: "/templates", label: "nav.templates" },
+  { key: "reports", path: "/reports", label: "nav.reports" },
   { key: "plans", path: "/plans", label: "nav.plans" },
   { key: "notifications", path: "/notifications", label: "nav.notifications" },
   { key: "profile", path: "/profile", label: "nav.profile" },
@@ -60,6 +62,7 @@ const ICONS: Record<string, IconName> = {
   org: "org",
   roles: "users",
   templates: "file",
+  reports: "chart",
   plans: "plan",
   notifications: "bell",
   profile: "user",
@@ -110,6 +113,7 @@ export function AppLayout() {
   const tenants = useTenantsLoader(me.data?.user_id);
   const loaded = useTenantChoice((s) => s.tenants) !== null;
   const { tenant } = useTenant();
+  const { access: reports } = useReportAccess();
   // Roles only in an organization, for those holding role management; Reviews for holders
   // of a review permission; Review settings for the owner (FR-SYS-094).
   const org = tenant?.kind === "organization";
@@ -121,6 +125,8 @@ export function AppLayout() {
     ...(org && tenant.is_owner ? [] : ["reviewSettings"]),
     // Templates for the personal account and template_manage holders (FR-SYS-140)
     ...(canManageTemplates(tenant) ? [] : ["templates"]),
+    // Reports for report_manage / report_view holders on a Starter+ plan (FR-SYS-141)
+    ...(reports.manage || reports.view ? [] : ["reports"]),
   ];
   // The same items, order and permission filter as before; only grouped under two headings.
   const item = (m: MenuItem) => ({

@@ -1,4 +1,5 @@
 import type { MessageKey } from "./en";
+import { reportsZh } from "./reports.zh";
 
 /** Simplified Chinese. */
 export const zh: Record<MessageKey, string> = {
@@ -171,6 +172,7 @@ export const zh: Record<MessageKey, string> = {
   "perm.verification_apply": "企业认证申请",
   "perm.template_manage": "模板管理",
   "perm.report_view": "报表查看",
+  "perm.report_manage": "报表管理",
   "invite.title": "邀请你加入 {name}",
   "invite.validUntil": "邀请有效期至 {date}。",
   "invite.join": "加入",
@@ -609,4 +611,5 @@ export const zh: Record<MessageKey, string> = {
   "my.allRead": "全部已读",
   "result.title": "核验结果",
   "result.aiCaption": "AI 提取 · 请对照原件核验",
+  ...reportsZh,
 };

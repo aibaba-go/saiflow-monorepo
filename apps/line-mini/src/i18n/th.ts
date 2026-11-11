@@ -1,4 +1,5 @@
 import type { MessageKey } from "./en";
+import { reportsTh } from "./reports.th";
 
 /** Thai (first draft; reviewed by a native speaker before launch, D4). */
 export const th: Record<MessageKey, string> = {
@@ -171,6 +172,7 @@ export const th: Record<MessageKey, string> = {
   "perm.verification_apply": "ขอยืนยันนิติบุคคล",
   "perm.template_manage": "จัดการเทมเพลต",
   "perm.report_view": "ดูรายงาน",
+  "perm.report_manage": "จัดการรายงาน",
   "invite.title": "คุณได้รับเชิญให้เข้าร่วม {name}",
   "invite.validUntil": "คำเชิญนี้ใช้ได้ถึง {date}",
   "invite.join": "เข้าร่วม",
@@ -609,4 +611,5 @@ export const th: Record<MessageKey, string> = {
   "my.allRead": "อ่านทั้งหมดแล้ว",
   "result.title": "ผลการตรวจสอบ",
   "result.aiCaption": "AI ดึงข้อมูล · โปรดตรวจเทียบกับต้นฉบับ",
+  ...reportsTh,
 };

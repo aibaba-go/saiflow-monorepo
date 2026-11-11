@@ -20,6 +20,9 @@ import { LoginPage } from "./pages/LoginPage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { PlansPage } from "./pages/PlansPage";
 import { RegisterGuidePage } from "./pages/RegisterGuidePage";
+import { ReportDesignPage } from "./pages/ReportDesignPage";
+import { ReportsPage } from "./pages/ReportsPage";
+import { ReportViewPage } from "./pages/ReportViewPage";
 import { ReviewDetailPage } from "./pages/ReviewDetailPage";
 import { ReviewSettingsPage } from "./pages/ReviewSettingsPage";
 import { ReviewsPage } from "./pages/ReviewsPage";
@@ -79,6 +82,9 @@ export function AppRoutes() {
               <Route path="/templates/new" element={<TemplateNewPage />} />
               <Route path="/templates/samples/:id" element={<TemplateSamplePage />} />
               <Route path="/templates/:id" element={<TemplateDetailPage />} />
+              <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/reports/:id/design" element={<ReportDesignPage />} />
+              <Route path="/reports/:id" element={<ReportViewPage />} />
               <Route path="/upload" element={<UploadPage />} />
               <Route path="/verify" element={<VerifyPage />} />
               <Route path="/verify/:id" element={<VerifyPage />} />

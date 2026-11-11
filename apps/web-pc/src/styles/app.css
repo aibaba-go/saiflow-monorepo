@@ -2439,3 +2439,85 @@ tr:hover .pc-file__name {
   text-align: center;
   color: var(--pc-muted);
 }
+/* reports (FR-SYS-141, FR-REPORT-014/015) */
+.pc-report-toolbar:not(.ant-card) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+  padding: 14px 20px;
+  overflow: visible;
+}
+.pc-report-toolbar__name {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 320px;
+  min-width: 240px;
+  max-width: 520px;
+  font-size: 12px;
+  color: var(--pc-muted);
+}
+.pc-content .pc-report-toolbar__note {
+  flex-basis: 100%;
+  font-size: 12px;
+}
+.pc-report-bar:not(.ant-card) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 24px;
+  padding: 12px 20px;
+  overflow: visible;
+}
+.pc-report-bar__period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.pc-report-bar__label {
+  font-size: 12px;
+  color: var(--pc-muted);
+}
+.pc-report-bar__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+}
+.pc-report-bar__facts > div {
+  display: flex;
+  gap: 6px;
+}
+.pc-report-bar__facts dt {
+  color: var(--pc-muted);
+}
+.pc-report-bar__facts dd {
+  margin: 0;
+  color: var(--pc-ink);
+  font-variant-numeric: tabular-nums;
+}
+.pc-report-bar__hint {
+  color: var(--pc-muted);
+}
+.pc-report-bar__note {
+  flex-basis: 100%;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--pc-muted);
+}
+.pc-report-view {
+  min-width: 0;
+  transition: opacity 0.2s ease;
+}
+/* a result that a later refresh could not replace: still readable, visibly not current */
+.pc-report-view.is-stale {
+  opacity: 0.6;
+}
+.pc-report-details {
+  max-width: 360px;
+  font-size: 12px;
+}

@@ -1,4 +1,5 @@
 // Ported from apps/line-mini/src/i18n/zh.ts (web-pc-account plan: copied, not shared).
+import { reportsZh } from "./reports.zh";
 import { templatesZh } from "./templates.zh";
 import type { MessageKey } from "./en";
 
@@ -202,6 +203,7 @@ export const zh: Record<MessageKey, string> = {
   "perm.verification_apply": "企业认证申请",
   "perm.template_manage": "模板管理",
   "perm.report_view": "报表查看",
+  "perm.report_manage": "报表管理",
   "invite.title": "邀请你加入 {name}",
   "invite.validUntil": "邀请有效期至 {date}。",
   "invite.join": "加入",
@@ -572,4 +574,5 @@ export const zh: Record<MessageKey, string> = {
   "upload.choose": "选择文件",
   "upload.processing": "{n} 个任务处理中",
   ...templatesZh,
+  ...reportsZh,
 };

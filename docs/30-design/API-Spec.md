@@ -3,8 +3,8 @@ doc_id: DES-003
 title: "SaiFlow — API 规范"
 type: api
 status: active
-version: 2.1.0
-updated: 2026-11-07
+version: 2.2.0
+updated: 2026-11-11
 owner: Product Engineering
 source: "services/api（FastAPI 导出的 OpenAPI）"
 related: [STD-004, FR-PLAT-004]
@@ -25,5 +25,6 @@ doc_source: generated
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.2.0 | 2026-11-11 | Product Engineering | `template-report-management`：`openapi.json` 新增客户报表（`/api/v1/reports`：目录、草稿、预览、发布/撤回、查询 `/data`、CSV `/csv`）、LINE 用 60 秒 CSV 下载票据（`/api/v1/reports/{report_id}/csv/ticket` → `/api/v1/report-downloads/{token}`）与管理端报表配置（`/api/v1/admin/reports`）；报表详情含所引用模板的数据来源 `sources` |
 | 2.1.0 | 2026-11-07 | Product Engineering | `review-flow`：`openapi.json` 新增复核设置（`/api/v1/review-settings`）、复核队列与决定（`/api/v1/reviews`）、修改记录（`/api/v1/ocr/jobs/{job_id}/changes`），结果与任务增加复核状态 |
 | 2.0.0 | 2026-11-03 | Product Engineering | 改为说明页：契约以后端导出的 `openapi.json` 为唯一来源（B-1 `rebuild-skeleton`）；v1 内容见 tag `legacy-v1` |

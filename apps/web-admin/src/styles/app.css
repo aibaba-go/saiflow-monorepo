@@ -724,3 +724,35 @@ body {
 .ad-page--ocr .ant-descriptions + .ant-alert {
   margin-top: 8px;
 }
+
+/* reports: configuration of an organization's reports (FR-SYS-143) */
+.ad-report-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+  padding: 14px 20px;
+  overflow: visible;
+}
+.ad-report-toolbar__name {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 320px;
+  min-width: 240px;
+  max-width: 520px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.ad-report-toolbar__note {
+  flex-basis: 100%;
+  font-size: 12px;
+}
+.ad-report-designer {
+  padding: 16px 20px;
+  overflow: visible;
+}
+.ad-report-org {
+  width: 360px;
+  max-width: 100%;
+}

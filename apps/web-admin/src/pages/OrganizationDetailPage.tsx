@@ -46,7 +46,12 @@ function Detail({ id }: { id: number }) {
     <Page
       name="organization"
       title={o.name}
-      extra={<Link to={`/tenants/${o.tenant_id}/billing?kind=organization`}>{t("org.billing")}</Link>}
+      extra={
+        <Space>
+          <Link to={`/reports?tenant=${o.tenant_id}`}>{t("rpa.reports")}</Link>
+          <Link to={`/tenants/${o.tenant_id}/billing?kind=organization`}>{t("org.billing")}</Link>
+        </Space>
+      }
     >
       <Space direction="vertical" size="large" style={{ width: "100%" }}>
         <ErrorText error={error} />

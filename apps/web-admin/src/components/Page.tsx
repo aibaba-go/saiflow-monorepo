@@ -19,6 +19,8 @@ export type PageName =
   | "ocr"
   | "templates"
   | "template"
+  | "reports"
+  | "report"
   | "password";
 
 /** A console page in the branded PC page language (enterprise-ui-redesign, FR-SYS-135,

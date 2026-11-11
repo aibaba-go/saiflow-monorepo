@@ -3,6 +3,7 @@
 import pytest
 from sqlalchemy import text
 
+from app import permissions
 from tests.integration.tenancy_helpers import (
     add_member,
     make_org,
@@ -55,7 +56,8 @@ async def test_list_usable_tenants(api, db, line):  # AC-FR-SYS-017-02
     assert set(by_id) - {t["tenant_id"] for t in body if t["kind"] == "personal"} == {o1, o2}
     assert by_id[o1]["role"]["name"] == "Member" and by_id[o1]["is_owner"] is False
     assert by_id[o2]["is_owner"] is True and by_id[o2]["role"] is None
-    assert len(by_id[o2]["permissions"]) == 13 and "export" in by_id[o1]["permissions"]
+    assert set(by_id[o2]["permissions"]) == {p.value for p in permissions.ALL}
+    assert "export" in by_id[o1]["permissions"]
     assert by_id[o1]["name"] == "O1"
 
 

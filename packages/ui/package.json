@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./template-editor": "./src/components/TemplateEditor/index.ts",
+    "./report-designer": "./src/components/ReportDesigner/index.ts",
     "./styles/tokens.css": "./src/styles/tokens.css",
     "./styles/theme.css": "./src/styles/theme.css",
     "./styles/brand.css": "./src/styles/brand.css",
@@ -20,7 +21,9 @@
   "dependencies": {
     "@fontsource/ibm-plex-sans": "^5.3.0",
     "@fontsource/ibm-plex-sans-thai": "^5.3.0",
-    "@fontsource/noto-sans-sc": "^5.3.1"
+    "@fontsource/noto-sans-sc": "^5.3.1",
+    "echarts": "^6.1.0",
+    "react-grid-layout": "^2.3.0"
   },
   "peerDependencies": {
     "antd": "^5.29.3",

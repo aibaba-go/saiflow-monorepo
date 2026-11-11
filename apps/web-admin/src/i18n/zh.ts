@@ -1,3 +1,5 @@
+import { reportsZh } from "./reports.zh";
+
 /** Chinese is the console's default language and the source of the keys (FR-SYS-062). */
 export const zh = {
   "app.title": "SaiFlow 运营后台",
@@ -513,6 +515,7 @@ export const zh = {
   "field.organization_tenant_ids": "所选组织无效",
   "field.tenant_id": "请选择客户租户",
   "field.content": "模板内容必须是 JSON 对象",
+  ...reportsZh,
 } as const;
 
 export type MessageKey = keyof typeof zh;

@@ -5,6 +5,7 @@ import asyncio
 import pytest
 from sqlalchemy import text
 
+from app import permissions
 from tests.integration.tenancy_helpers import (
     add_member,
     approved_org,
@@ -109,7 +110,8 @@ async def test_transfer_owner(api, db, line, mail):  # AC-FR-SYS-029-01
     assert r.status_code == 200
     assert await _owners(db, org) == [m]
     mine = [t for t in (await cm.get("/api/v1/me/tenants")).json() if t["tenant_id"] == org][0]
-    assert mine["is_owner"] is True and len(mine["permissions"]) == 13
+    assert mine["is_owner"] is True
+    assert set(mine["permissions"]) == {p.value for p in permissions.ALL}
     old = [t for t in (await owner.get("/api/v1/me/tenants")).json() if t["tenant_id"] == org][0]
     assert old["is_owner"] is False and old["role"]["name"] == "Member"
 

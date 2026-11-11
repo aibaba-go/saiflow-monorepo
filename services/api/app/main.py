@@ -20,6 +20,7 @@ from app.routers import (
     admin_ocr,
     admin_organizations,
     admin_query,
+    admin_reports,
     admin_template_samples,
     admin_templates,
     auth,
@@ -31,6 +32,7 @@ from app.routers import (
     notifications,
     ocr_jobs,
     organizations,
+    reports,
     results,
     review_settings,
     reviews,
@@ -120,11 +122,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(imports.router)
     app.include_router(review_settings.router)
     app.include_router(reviews.router)
-    # template-report-management (FR-TEMPLATE-*); reports paused 2026-11-10
+    # template-report-management (FR-TEMPLATE-*, FR-REPORT-*)
     app.include_router(template_management.router)
     app.include_router(template_samples.router)
     app.include_router(admin_templates.router)
     app.include_router(admin_template_samples.router)
+    app.include_router(reports.router)
+    app.include_router(reports.downloads_router)
+    app.include_router(admin_reports.router)
     return app
 
 

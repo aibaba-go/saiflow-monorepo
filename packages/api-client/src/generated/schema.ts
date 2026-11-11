@@ -335,6 +335,128 @@ export interface paths {
         patch: operations["adminUpdatePlan"];
         trace?: never;
     };
+    "/api/v1/admin/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Reports */
+        get: operations["adminListReports"];
+        put?: never;
+        /** Create Report */
+        post: operations["adminCreateReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reports/catalog/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Catalog Fields */
+        get: operations["adminGetReportCatalogFields"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reports/catalog/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Catalog Templates */
+        get: operations["adminListReportCatalogTemplates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reports/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Report */
+        get: operations["adminGetReport"];
+        /** Save Report */
+        put: operations["adminSaveReport"];
+        post?: never;
+        /** Delete Report */
+        delete: operations["adminDeleteReport"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reports/{report_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Report */
+        post: operations["adminPreviewReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reports/{report_id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish Report */
+        post: operations["adminPublishReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reports/{report_id}/unpublish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unpublish Report */
+        post: operations["adminUnpublishReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/settings/free-quota-organization": {
         parameters: {
             query?: never;
@@ -1828,6 +1950,199 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/report-downloads/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Redeem Csv Ticket */
+        get: operations["redeemReportCsvTicket"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Reports */
+        get: operations["listReports"];
+        put?: never;
+        /** Create Report */
+        post: operations["createReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/catalog/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Catalog Fields */
+        get: operations["getReportCatalogFields"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/catalog/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Catalog Templates */
+        get: operations["listReportCatalogTemplates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Report */
+        get: operations["getReport"];
+        /** Save Report */
+        put: operations["saveReport"];
+        post?: never;
+        /** Delete Report */
+        delete: operations["deleteReport"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/{report_id}/csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export Csv */
+        get: operations["exportReportCsv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/{report_id}/csv/ticket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Csv Ticket
+         * @description A 60-second link to one card's CSV for the LINE in-app browser (FR-REPORT-016).
+         */
+        post: operations["createReportCsvTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/{report_id}/data": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Report Data */
+        post: operations["queryReportData"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/{report_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Report */
+        post: operations["previewReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/{report_id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish Report */
+        post: operations["publishReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/{report_id}/unpublish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unpublish Report */
+        post: operations["unpublishReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/review-settings": {
         parameters: {
             query?: never;
@@ -2214,6 +2529,13 @@ export interface components {
             /** Tenant Id */
             tenant_id: number | null;
         };
+        /** AdminCreateReportIn */
+        AdminCreateReportIn: {
+            /** Name */
+            name?: unknown;
+            /** Tenant Id */
+            tenant_id?: unknown;
+        };
         /** AdminCreateTemplateIn */
         AdminCreateTemplateIn: {
             /** Content */
@@ -2425,6 +2747,91 @@ export interface components {
             /** Next Before */
             next_before: number | null;
         };
+        /** CatalogField */
+        CatalogField: {
+            /** Compatible */
+            compatible: boolean;
+            /**
+             * Grain
+             * @enum {string}
+             */
+            grain: "document" | "table";
+            /** Name */
+            name: string;
+            /** Names */
+            names: {
+                [key: string]: unknown;
+            } | null;
+            /** Path */
+            path: string;
+            /** Table Key */
+            table_key: string | null;
+            /** Type */
+            type: string;
+            /** Versions */
+            versions: number[];
+        };
+        /** CatalogFieldsOut */
+        CatalogFieldsOut: {
+            /** Fields */
+            fields: components["schemas"]["CatalogField"][];
+            /** Grains */
+            grains: components["schemas"]["CatalogGrain"][];
+        };
+        /** CatalogGrain */
+        CatalogGrain: {
+            /** Compatible */
+            compatible: boolean;
+            /**
+             * Grain
+             * @enum {string}
+             */
+            grain: "document" | "table";
+            /** Name */
+            name?: string | null;
+            /** Names */
+            names?: {
+                [key: string]: unknown;
+            } | null;
+            /** Table Key */
+            table_key?: string | null;
+            /** Versions */
+            versions: number[];
+        };
+        /** CatalogTemplate */
+        CatalogTemplate: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "system" | "tenant";
+            /** Template Id */
+            template_id: number;
+            /** Usable */
+            usable: boolean;
+            /** Versions */
+            versions: components["schemas"]["CatalogVersion"][];
+        };
+        /** CatalogTemplatesOut */
+        CatalogTemplatesOut: {
+            /** Items */
+            items: components["schemas"]["CatalogTemplate"][];
+        };
+        /** CatalogVersion */
+        CatalogVersion: {
+            /** Current */
+            current: boolean;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Version */
+            version: number;
+        };
         /** ChangeOut */
         ChangeOut: {
             /** After */
@@ -2463,6 +2870,11 @@ export interface components {
             /** Path */
             path: string;
         };
+        /** CreateReportIn */
+        CreateReportIn: {
+            /** Name */
+            name?: unknown;
+        };
         /** CreateTemplateIn */
         CreateTemplateIn: {
             /** Content */
@@ -2480,6 +2892,19 @@ export interface components {
              */
             source: "manual" | "import" | "sample";
         };
+        /** CsvTicketIn */
+        CsvTicketIn: {
+            /** Card Id */
+            card_id?: unknown;
+            period?: components["schemas"]["PeriodIn"] | null;
+            /** Report Version */
+            report_version?: number | null;
+        };
+        /** CsvTicketOut */
+        CsvTicketOut: {
+            /** Url */
+            url: string;
+        };
         /** CurrentVersionBrief */
         CurrentVersionBrief: {
             /**
@@ -2492,6 +2917,15 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** DataIn */
+        DataIn: {
+            period?: components["schemas"]["PeriodIn"] | null;
+            /**
+             * Refresh
+             * @default false
+             */
+            refresh: boolean;
+        };
         /**
          * DecisionIn
          * @description Types are checked by the service, which answers 422 naming the field.
@@ -2503,6 +2937,20 @@ export interface components {
             decision?: unknown;
             /** Level */
             level?: unknown;
+        };
+        /** Diagnostics */
+        Diagnostics: {
+            /**
+             * Documents
+             * @default 0
+             */
+            documents: number;
+            excluded?: components["schemas"]["Excluded"];
+            /**
+             * Items
+             * @default 0
+             */
+            items: number;
         };
         /** EmailChangeRequest */
         EmailChangeRequest: {
@@ -2520,6 +2968,44 @@ export interface components {
         EmailIn: {
             /** Enabled */
             enabled?: unknown;
+        };
+        /** Excluded */
+        Excluded: {
+            /**
+             * Empty Row
+             * @default 0
+             */
+            empty_row: number;
+            /**
+             * Invalid Date
+             * @default 0
+             */
+            invalid_date: number;
+            /**
+             * Invalid Number
+             * @default 0
+             */
+            invalid_number: number;
+            /**
+             * Invalid Structure
+             * @default 0
+             */
+            invalid_structure: number;
+            /**
+             * Missing
+             * @default 0
+             */
+            missing: number;
+            /**
+             * Missing Date
+             * @default 0
+             */
+            missing_date: number;
+            /**
+             * Too Precise
+             * @default 0
+             */
+            too_precise: number;
         };
         /** ExportIn */
         ExportIn: {
@@ -3043,6 +3529,13 @@ export interface components {
             /** Value */
             value?: unknown;
         };
+        /** PeriodIn */
+        PeriodIn: {
+            /** From */
+            from?: unknown;
+            /** To */
+            to?: unknown;
+        };
         /** PlanApplicationIn */
         PlanApplicationIn: {
             /** Note */
@@ -3121,6 +3614,12 @@ export interface components {
             /** Yearly Price */
             yearly_price?: string | number | null;
         };
+        /** PreviewIn */
+        PreviewIn: {
+            /** Config */
+            config?: unknown;
+            period?: components["schemas"]["PeriodIn"] | null;
+        };
         /**
          * ProfileUpdate
          * @description Only the fields present are changed; an empty phone clears it.
@@ -3130,6 +3629,85 @@ export interface components {
             display_name?: string | null;
             /** Phone */
             phone?: string | null;
+        };
+        /** PublishedReport */
+        PublishedReport: {
+            /** Config */
+            config: {
+                [key: string]: unknown;
+            };
+            /** Name */
+            name: string;
+            /**
+             * Published At
+             * Format: date-time
+             */
+            published_at: string;
+            /** Published By Admin Id */
+            published_by_admin_id?: number | null;
+            /** Published By User Id */
+            published_by_user_id?: number | null;
+            /** Version */
+            version: number;
+        };
+        /** QueryCard */
+        QueryCard: {
+            /** Card Id */
+            card_id: string | null;
+            diagnostics: components["schemas"]["Diagnostics"];
+            /** Error Code */
+            error_code: ("query_timeout" | "group_limit" | "mixed_units" | "negative_in_pie" | "invalid_config") | null;
+            /** Period Applied */
+            period_applied: boolean;
+            /** Rows */
+            rows: components["schemas"]["QueryRow"][];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "error" | "not_applicable" | "empty";
+        };
+        /** QueryPeriod */
+        QueryPeriod: {
+            /** From */
+            from: string;
+            /** To */
+            to: string;
+        };
+        /** QueryResult */
+        QueryResult: {
+            /** Cards */
+            cards: components["schemas"]["QueryCard"][];
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            period: components["schemas"]["QueryPeriod"];
+            /** Report Version */
+            report_version: number | null;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "all" | "own" | "synthetic";
+            /** Synthetic */
+            synthetic: boolean;
+        };
+        /** QueryRow */
+        QueryRow: {
+            /** Count */
+            count: number;
+            /** Dimension */
+            dimension: string | null;
+            /** Series */
+            series: string | null;
+            /** Unit */
+            unit: string | null;
+            /** Valid Count */
+            valid_count: number;
+            /** Value */
+            value: string | null;
         };
         /** RegistrationRequest */
         RegistrationRequest: {
@@ -3146,6 +3724,100 @@ export interface components {
         RejectIn: {
             /** Reason */
             reason?: string | null;
+        };
+        /** ReportDetail */
+        ReportDetail: {
+            /** Can Export */
+            can_export: boolean;
+            /** Can Manage */
+            can_manage: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Draft */
+            draft: {
+                [key: string]: unknown;
+            } | null;
+            /** Draft Errors */
+            draft_errors: components["schemas"]["ReportError"][];
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            published: components["schemas"]["PublishedReport"] | null;
+            /** Revision */
+            revision: number;
+            /**
+             * Sources
+             * @default []
+             */
+            sources: components["schemas"]["ReportSource"][];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "published" | "changed";
+            /** Tenant Id */
+            tenant_id: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ReportError */
+        ReportError: {
+            /** Card Id */
+            card_id: string | null;
+            /** Message */
+            message: string;
+            /** Path */
+            path: string;
+        };
+        /** ReportListOut */
+        ReportListOut: {
+            /** Items */
+            items: components["schemas"]["ReportSummary"][];
+        };
+        /**
+         * ReportSource
+         * @description A template the page reads, with the versions it names (FR-REPORT-002): viewers have
+         *     no catalog access, so the page shows these names and version numbers.
+         */
+        ReportSource: {
+            /** Name */
+            name: string;
+            /** Template Id */
+            template_id: number;
+            /** Versions */
+            versions: components["schemas"]["SourceVersion"][];
+        };
+        /** ReportSummary */
+        ReportSummary: {
+            /** Can Manage */
+            can_manage: boolean;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Published At */
+            published_at: string | null;
+            /** Published Version */
+            published_version: number | null;
+            /** Revision */
+            revision: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "published" | "changed";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** ReservationOut */
         ReservationOut: {
@@ -3318,11 +3990,6 @@ export interface components {
             /** L2 */
             l2: number | null;
         };
-        /** RevisionIn */
-        RevisionIn: {
-            /** Revision */
-            revision: number;
-        };
         /** RoleAssignedOut */
         RoleAssignedOut: {
             /** Role Id */
@@ -3444,10 +4111,26 @@ export interface components {
             /** Revision */
             revision: number;
         };
+        /** SaveReportIn */
+        SaveReportIn: {
+            /** Config */
+            config?: unknown;
+            /** Name */
+            name?: unknown;
+            /** Revision */
+            revision?: unknown;
+        };
         /** SetVerifiedIn */
         SetVerifiedIn: {
             /** Verified */
             verified?: boolean | null;
+        };
+        /** SourceVersion */
+        SourceVersion: {
+            /** Id */
+            id: number;
+            /** Version */
+            version: number;
         };
         /** StatusIn */
         StatusIn: {
@@ -3884,6 +4567,16 @@ export interface components {
             code: string;
             /** Path */
             path: string;
+        };
+        /** RevisionIn */
+        app__schemas__report__RevisionIn: {
+            /** Revision */
+            revision?: unknown;
+        };
+        /** RevisionIn */
+        app__schemas__template_management__RevisionIn: {
+            /** Revision */
+            revision: number;
         };
     };
     responses: never;
@@ -4510,6 +5203,349 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminListReports: {
+        parameters: {
+            query: {
+                tenant_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminCreateReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminCreateReportIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminGetReportCatalogFields: {
+        parameters: {
+            query: {
+                tenant_id: number;
+                template_id: number;
+                version_ids: string;
+                report_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogFieldsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminListReportCatalogTemplates: {
+        parameters: {
+            query: {
+                tenant_id: number;
+                report_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogTemplatesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminGetReport: {
+        parameters: {
+            query?: {
+                tenant_id?: number | null;
+            };
+            header?: never;
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminSaveReport: {
+        parameters: {
+            query?: {
+                tenant_id?: number | null;
+            };
+            header?: never;
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveReportIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminDeleteReport: {
+        parameters: {
+            query: {
+                revision: number;
+                tenant_id?: number | null;
+            };
+            header?: never;
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminPreviewReport: {
+        parameters: {
+            query?: {
+                tenant_id?: number | null;
+            };
+            header?: never;
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueryResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminPublishReport: {
+        parameters: {
+            query?: {
+                tenant_id?: number | null;
+            };
+            header?: never;
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__schemas__report__RevisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminUnpublishReport: {
+        parameters: {
+            query?: {
+                tenant_id?: number | null;
+            };
+            header?: never;
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__schemas__report__RevisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportDetail"];
                 };
             };
             /** @description Validation Error */
@@ -5176,7 +6212,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RevisionIn"];
+                "application/json": components["schemas"]["app__schemas__template_management__RevisionIn"];
             };
         };
         responses: {
@@ -6427,7 +7463,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RevisionIn"];
+                "application/json": components["schemas"]["app__schemas__template_management__RevisionIn"];
             };
         };
         responses: {
@@ -7897,6 +8933,506 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VerificationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    redeemReportCsvTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listReports: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    createReport: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateReportIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getReportCatalogFields: {
+        parameters: {
+            query: {
+                template_id: number;
+                version_ids: string;
+                report_id?: number | null;
+            };
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogFieldsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listReportCatalogTemplates: {
+        parameters: {
+            query?: {
+                report_id?: number | null;
+            };
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogTemplatesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getReport: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    saveReport: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveReportIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deleteReport: {
+        parameters: {
+            query: {
+                revision: number;
+            };
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    exportReportCsv: {
+        parameters: {
+            query: {
+                card_id: string;
+                from?: string | null;
+                to?: string | null;
+                report_version?: number | null;
+            };
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    createReportCsvTicket: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CsvTicketIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CsvTicketOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    queryReportData: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DataIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueryResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    previewReport: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueryResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publishReport: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__schemas__report__RevisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unpublishReport: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__schemas__report__RevisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportDetail"];
                 };
             };
             /** @description Validation Error */

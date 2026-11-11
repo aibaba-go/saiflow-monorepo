@@ -83,6 +83,15 @@ async def test_access_log_omits_query_string(client, caplog):
     assert server_logs and not any("secret-query-value" in m for m in server_logs)
 
 
+async def test_report_ticket_is_redacted_in_access_logs(client, caplog):
+    # FR-REPORT-004: a URL download credential is not a loggable resource identifier.
+    caplog.set_level("INFO")
+    await client.get("/api/v1/report-downloads/sensitive-report-ticket")
+    messages = [r.getMessage() for r in _access_records(caplog)]
+    assert messages and all("sensitive-report-ticket" not in m for m in messages)
+    assert any("/api/v1/report-downloads/[redacted]" in m for m in messages)
+
+
 async def test_app_error_details_in_body(client):  # rebuild-plans-metering: quota_exceeded
     r = await client.get("/api/v1/_test/details")
     body = r.json()

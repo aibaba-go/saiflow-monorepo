@@ -1,0 +1,216 @@
+/* ReportDesigner (PC / admin; antd controls, STD-008 PC density). */
+.sf-rd {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  color: var(--text, #171a1c);
+}
+.sf-rd__body {
+  display: grid;
+  grid-template-columns: 148px minmax(0, 1fr) 340px;
+  gap: 12px;
+  align-items: start;
+}
+.sf-rd.is-readonly .sf-rd__body {
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+.sf-rd__palette,
+.sf-rd__panel {
+  position: sticky;
+  top: 12px;
+  box-sizing: border-box;
+  padding: 12px;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+}
+.sf-rd__panel {
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+}
+.sf-rd__palette-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sf-rd__limit {
+  margin: 8px 0 0;
+  color: var(--text-secondary, #5b6670);
+  font-size: 12px;
+}
+.sf-rd__canvas {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 480px;
+  padding: 8px;
+  border: 1px dashed var(--border-strong, #cbd5e1);
+  border-radius: 10px;
+  background: var(--surface-muted, #f6f8fa);
+}
+.sf-rd__canvas > .ant-empty {
+  margin-top: 160px;
+}
+.sf-rd__back.ant-btn {
+  padding: 0;
+  margin-bottom: 8px;
+}
+.sf-rd-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.sf-rd-panel__title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.sf-rd-panel__head .sf-rd-panel__title {
+  margin: 0;
+}
+.sf-rd-panel__body > .ant-alert {
+  margin-bottom: 12px;
+}
+.sf-rd-field.ant-form-item {
+  margin-bottom: 12px;
+}
+.sf-rd-tab {
+  display: flex;
+  flex-direction: column;
+}
+.sf-rd-spin {
+  min-height: 48px;
+}
+.sf-rd-group {
+  min-width: 0;
+  margin: 0 0 12px;
+  padding: 8px 12px 0;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+}
+.sf-rd-group > legend {
+  width: auto;
+  margin: 0;
+  padding: 0 4px;
+  border: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.sf-rd-versions.ant-checkbox-group,
+.sf-rd-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sf-rd-confirm .ant-checkbox-wrapper {
+  margin-inline-start: 0;
+  word-break: break-all;
+}
+.sf-rd-colors {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.sf-rd-color {
+  display: inline-flex;
+  align-items: center;
+}
+.sf-rd-color input[type="color"] {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+.sf-rd-switches {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 16px;
+}
+.sf-rd-dates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.sf-rd-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.sf-rd-card > .sf-chart {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.sf-rd-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sf-rd-card__title {
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sf-rd-card__placeholder {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 0;
+  color: var(--text-secondary, #5b6670);
+  text-align: center;
+}
+.sf-rd-card__corner {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+}
+.sf-rd-card__badge.ant-tag {
+  margin: 0;
+}
+.sf-rd-summary ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  max-height: 220px;
+  overflow: auto;
+}
+.sf-rd-summary__note {
+  margin: 0;
+  color: var(--text-secondary, #5b6670);
+}
+.sf-rd-summary__link.ant-btn {
+  height: auto;
+  padding: 0;
+  white-space: normal;
+  text-align: left;
+}
+@media (max-width: 1100px) {
+  .sf-rd__body,
+  .sf-rd.is-readonly .sf-rd__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sf-rd__palette,
+  .sf-rd__panel {
+    position: static;
+    max-height: none;
+  }
+  .sf-rd__palette-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .sf-rd__palette-list .ant-btn {
+    width: auto;
+  }
+}

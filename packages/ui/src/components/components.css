@@ -214,3 +214,57 @@
 .sf-rg-stack .sf-rg-card {
   height: auto;
 }
+
+/* ---------- ReportCardInfo ---------- */
+.sf-card-info {
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border, #e2e8f0);
+  min-width: 0;
+  color: var(--text-secondary, #5d6673);
+  font-size: 12px;
+  line-height: 18px;
+}
+.sf-card-info__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.sf-card-info__line {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sf-card-info__line--warn {
+  color: var(--warning-text, #9a5b00);
+}
+.sf-card-info__actions {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  align-items: center;
+}
+.sf-card-info__list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 12px;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+}
+.sf-card-info__list dt {
+  font-weight: 600;
+  color: var(--text, #171a1c);
+}
+.sf-card-info__list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.sf-card-info__reasons {
+  margin: 0;
+  padding-left: 16px;
+}
