@@ -99,7 +99,23 @@ describe("dialogs", () => {
     expect(await screen.findByText("transferred")).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
+
+  // Radix portals the overlay and the panel separately and may append the overlay last; with
+  // equal z-index the mask then covers the buttons and nothing can be tapped (FR-SYS-043).
+  it("the panel stacks above its mask whatever the DOM order", async () => {
+    render(<DialogHost />);
+    void confirmDialog({ title: "Log out?", confirmText: "Confirm", cancelText: "Cancel" });
+    const panel = await screen.findByRole("alertdialog");
+    const mask = document.querySelector<HTMLElement>(".bg-overlay")!;
+    expect(zOf(panel)).toBeGreaterThan(zOf(mask));
+  });
 });
+
+/** The Tailwind z-index class of an element (z-50 or z-[51]). */
+function zOf(el: HTMLElement): number {
+  const m = /(?:^|\s)z-\[?(\d+)\]?(?:\s|$)/.exec(el.className);
+  return m ? Number(m[1]) : Number.NaN;
+}
 
 describe("BottomSheet", () => {
   it("closes on Escape and restores pointer events (Review Focus 5)", async () => {
@@ -118,6 +134,17 @@ describe("BottomSheet", () => {
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByText("body")).not.toBeInTheDocument());
     await waitFor(() => expect(document.body.style.pointerEvents).not.toBe("none"));
+  });
+
+  it("the panel stacks above its mask whatever the DOM order", () => {
+    render(
+      <BottomSheet open onClose={() => {}} label="Choose">
+        <p>body</p>
+      </BottomSheet>,
+    );
+    const panel = screen.getByRole("dialog", { name: "Choose" });
+    const mask = document.querySelector<HTMLElement>(".bg-overlay")!;
+    expect(zOf(panel)).toBeGreaterThan(zOf(mask));
   });
 });
 

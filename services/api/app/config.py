@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # App channel has no callback URL. Unset = web login uses line_channel_id as before.
     line_web_channel_id: str | None = None
     line_web_channel_secret: SecretStr | None = None
+    # web-pc's public origin, e.g. https://saiflow-app.aibaba.asia: where an admin's
+    # "log in as this user" link points (FR-SYS-145); unset = that link answers 503
+    web_pc_origin: str | None = None
     smtp_host: str | None = None
     smtp_port: int = 587
     smtp_username: str | None = None

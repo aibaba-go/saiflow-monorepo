@@ -13,6 +13,7 @@ import { TenantSwitcher } from "../tenants/TenantSwitcher";
 import { useTenantChoice } from "../tenants/useCurrentTenant";
 import { useTenant } from "../tenants/useTenant";
 import { Icon, type IconName } from "./icons";
+import { ImpersonationBanner } from "./ImpersonationBanner";
 import { LanguageSwitch } from "./LanguageSwitch";
 import { LogoutButton } from "./LogoutButton";
 
@@ -172,6 +173,7 @@ export function AppLayout() {
         </div>
       </aside>
       <div className="pc-workspace">
+        {me.data?.impersonated && <ImpersonationBanner name={name || `#${me.data.user_id}`} />}
         <header className="pc-topbar">
           <nav className="pc-breadcrumb" aria-label={t("layout.breadcrumb")}>
             <span className="pc-breadcrumb__root">{t("app.title")}</span>

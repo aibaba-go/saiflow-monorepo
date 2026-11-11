@@ -67,7 +67,7 @@ async def get_optional_principal(
     principal = await session_service.resolve(db, token)
     if principal is not None:
         await db.commit()  # keep the extended lifetime
-        max_age = int(session_service.CUSTOMER_IDLE.total_seconds())
+        max_age = int(session_service.idle_limit(principal).total_seconds())
         refresh_later(request, session_service.CUSTOMER_COOKIE, token, max_age)
     return principal
 

@@ -95,6 +95,10 @@ describe("plans page (FR-SYS-053)", () => {
     expect(within(card("Intermediate")).getByText("Contact us")).toBeInTheDocument();
     expect(within(card("Advance")).getByText("Contact us")).toBeInTheDocument();
     expect(within(card("Starter")).getByText("Current plan")).toBeInTheDocument();
+    // an organization owner cannot pick Kinder: the card says why instead of showing a button
+    expect(within(card("Kinder")).getByText("Not available for this workspace")).toBeInTheDocument();
+    expect(within(card("Kinder")).queryByRole("button")).toBeNull();
+    expect(within(card("Starter")).getByRole("button", { name: "Renew" })).toBeInTheDocument();
   });
 
   it("applies with confirmation, then shows the pending banner (053-02)", async () => {

@@ -166,6 +166,9 @@ export function buildEchartsOption(card: ReportCard, model: ChartModel, ctx: Opt
       stack: style.stacked ? "total" : undefined,
       connectNulls: false,
       showSymbol: card.type === "line" ? true : undefined,
+      // ECharts' "auto" hides symbols on a long category axis, which loses an isolated point
+      // between gaps (connectNulls is off); always show them (FR-REPORT-013).
+      showAllSymbol: card.type === "line" ? true : undefined,
       emphasis: { focus: "series" },
       label: {
         show: showLabels,

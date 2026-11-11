@@ -51,10 +51,27 @@ export function configOf(raw: Record<string, unknown> | null | undefined): Repor
   return { ...(raw ?? {}), version: 1, cards } as ReportConfig;
 }
 
+/** Whether this browser can hand a file to the system share sheet (FR-SYS-144). */
+export function canShareFiles(): boolean {
+  try {
+    const probe = new File(["x"], "probe.csv", { type: "text/csv" });
+    return typeof navigator.share === "function" && typeof navigator.canShare === "function" &&
+      navigator.canShare({ files: [probe] });
+  } catch {
+    return false;
+  }
+}
+
+/** How an export went: opened in the phone browser, saved directly, or prepared for the
+ * share sheet (the caller shares it from a tap, which the browser requires). */
+export type CsvOutcome = { how: "external" } | { how: "saved" } | { how: "share"; file: File };
+
 /** One card's aggregated rows as CSV (view + export; FR-REPORT-016) for the page period on
- * screen. The LINE in-app browser hands downloads to the system browser, which has no
- * session: a 60-second ticket stands in for it (as FR-ENTRY-015). Elsewhere the file is
- * fetched with the tenant header and saved through an object URL. Returns how it went. */
+ * screen. Inside LINE the file is fetched with the session and prepared for the system
+ * share sheet when the browser supports it (FR-SYS-144); otherwise, or when `external` is
+ * asked for, a 60-second ticket stands in for the session in the system browser (as
+ * FR-ENTRY-015). Elsewhere the file is fetched with the tenant header and saved through an
+ * object URL. */
 export async function downloadCsv(
   liff: Liff,
   id: number,
@@ -62,14 +79,16 @@ export async function downloadCsv(
   period: Period | null,
   reportVersion: number,
   signal?: AbortSignal,
-): Promise<"external" | "saved"> {
-  if (liff.isInClient()) {
+  external = false,
+): Promise<CsvOutcome> {
+  const name = `report-${id}-${cardId}.csv`;
+  if (liff.isInClient() && (external || !canShareFiles())) {
     const ticket = await call(
       api.POST("/api/v1/reports/{report_id}/csv/ticket", { ...rid(id), signal, body: { card_id: cardId, period, report_version: reportVersion } }),
     );
     signal?.throwIfAborted();
     liff.openWindow({ url: new URL(ticket.url, apiBaseUrl || window.location.origin).href, external: true });
-    return "external";
+    return { how: "external" };
   }
   const blob = (await call(
     api.GET("/api/v1/reports/{report_id}/csv", {
@@ -82,13 +101,18 @@ export async function downloadCsv(
     }),
   )) as unknown as Blob;
   signal?.throwIfAborted(); // even a transport that ignores abort cannot deliver an old account's file
+  if (liff.isInClient()) {
+    const bytes = await blob.arrayBuffer();
+    signal?.throwIfAborted();
+    return { how: "share", file: new File([bytes], name, { type: "text/csv" }) };
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `report-${id}-${cardId}.csv`;
+  a.download = name;
   document.body.appendChild(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  return "saved";
+  return { how: "saved" };
 }

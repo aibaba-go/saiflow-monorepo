@@ -52,6 +52,8 @@ services:
       # web-pc's own LINE Login channel (same provider); empty = web login uses LINE_CHANNEL_ID
       LINE_WEB_CHANNEL_ID: ${LINE_WEB_CHANNEL_ID:-}
       LINE_WEB_CHANNEL_SECRET: ${LINE_WEB_CHANNEL_SECRET:-}
+      # web-pc's public origin: the admin's "log in as this user" link points here (FR-SYS-145)
+      WEB_PC_ORIGIN: https://${APP_HOST:?}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USERNAME: ${SMTP_USERNAME:-}

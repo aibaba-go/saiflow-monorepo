@@ -95,5 +95,10 @@ export const reportsTh: Record<ReportsKey, string> = {
   "rpt.detailsOf": "รายละเอียดของ {title}",
   "rpt.csvExternal": "กำลังเปิดเบราว์เซอร์ของโทรศัพท์เพื่อดาวน์โหลด ไฟล์ CSV จะถูกบันทึกในโฟลเดอร์ดาวน์โหลด (Downloads) ดูได้ที่แถบการแจ้งเตือนหรือแอปไฟล์",
   "rpt.csvReady": "ดาวน์โหลด CSV แล้ว",
+  "rpt.csvPrepared": "CSV พร้อมแล้ว",
+  "rpt.csvPreparedBody": "{title} · {from} – {to} บันทึกลงในแอปไฟล์หรือส่งไปยังแอปอื่นได้",
+  "rpt.csvShare": "บันทึกหรือแชร์",
+  "rpt.csvInBrowser": "ดาวน์โหลดในเบราว์เซอร์",
+  "rpt.csvShareFailed": "เปิดหน้าต่างแชร์ไม่ได้ ลองใช้ ดาวน์โหลดในเบราว์เซอร์",
   "rpt.periodOrder": "เลือกวันที่เริ่มต้นและวันที่สิ้นสุด โดยวันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่มต้น",
 };

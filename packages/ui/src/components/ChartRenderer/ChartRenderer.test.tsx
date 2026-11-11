@@ -147,6 +147,8 @@ describe("ChartRenderer data mapping", () => {
     expect(opt.xAxis!.data).toEqual(["Jan", "Unknown"]);
     expect(opt.series.map((s) => s.name)).toEqual(["A", "B"]);
     expect(opt.series[1]!.data).toEqual([null, null]);
+    // a point between gaps stays visible however long the date axis is (FR-REPORT-013)
+    expect(opt.series.every((s) => (s as { showAllSymbol?: unknown }).showAllSymbol === true)).toBe(true);
     expect(screen.getByRole("rowheader", { name: "Unknown" })).toBeInTheDocument();
     expect(screen.getByRole("img")).toHaveAccessibleName("Sales: Line chart, 3 data points in 2 series");
   });

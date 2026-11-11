@@ -54,6 +54,8 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
   const [data, setData] = useState<DataState>({ result: null, error: null, loading: true });
   const [exporting, setExporting] = useState<string | null>(null);
   const [sheet, setSheet] = useState<ReportCard | null>(null);
+  // a CSV fetched inside LINE, waiting for a tap to open the share sheet (FR-SYS-144)
+  const [prepared, setPrepared] = useState<{ card: ReportCard; file: File; period: Period } | null>(null);
   const seq = useRef(0);
   const active = useRef(true);
   const currentPeriod = useRef<Period | null>(null);
@@ -62,6 +64,7 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
     download.current?.abort();
     download.current = null;
     setExporting(null);
+    setPrepared(null); // a prepared file belongs to the old version, account or page
   }, []);
 
   // Only the latest answer lands. Non-auth failures may retain marked older data;
@@ -144,16 +147,19 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
 
   const titleOf = (card: ReportCard) => card.title?.trim() || labels.chart.chartTypes[card.type];
 
-  const exportCard = async (card: ReportCard) => {
+  const exportCard = async (card: ReportCard, external = false) => {
     if (!result || download.current) return; // the mobile viewer intentionally exports one file at a time
+    setPrepared(null);
     const controller = new AbortController();
     download.current = controller;
     setExporting(card.id);
     try {
       // Pin the effective displayed period; a ticket must not re-resolve next year's default.
-      const how = await downloadCsv(authLiff(), detail.id, card.id, result.period, version, controller.signal);
+      const shown = result.period;
+      const out = await downloadCsv(authLiff(), detail.id, card.id, shown, version, controller.signal, external);
       if (!active.current || controller.signal.aborted) return;
-      showToast(t(how === "external" ? "rpt.csvExternal" : "rpt.csvReady"));
+      if (out.how === "share") setPrepared({ card, file: out.file, period: shown });
+      else showToast(t(out.how === "external" ? "rpt.csvExternal" : "rpt.csvReady"));
     } catch (e) {
       if (!active.current || controller.signal.aborted) return;
       // A refresh changes the data sequence, not the authority of a pending CSV refusal.
@@ -177,6 +183,33 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
         if (active.current) setExporting(null);
       }
     }
+  };
+
+  // Called straight from the tap: the share sheet needs that user activation.
+  const sharePrepared = () => {
+    if (!prepared) return;
+    const { file, card } = prepared;
+    let pending: Promise<void>;
+    try {
+      pending = navigator.share({ files: [file], title: titleOf(card) });
+    } catch (e) {
+      pending = Promise.reject(e);
+    }
+    pending.then(
+      () => {
+        if (active.current) setPrepared((p) => (p?.file === file ? null : p));
+      },
+      (e: unknown) => {
+        // closing the share sheet is not an error; the file stays ready to try again
+        if (!active.current || (e instanceof DOMException && e.name === "AbortError")) return;
+        showToast(t("rpt.csvShareFailed"));
+      },
+    );
+  };
+  const inBrowser = () => {
+    const card = prepared?.card;
+    setPrepared(null);
+    if (card) void exportCard(card, true);
   };
 
   const notPublished = data.error instanceof ApiError && data.error.code === "report_not_published";
@@ -340,6 +373,27 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
             <Button block className={s["sheet-close"]} onClick={() => setSheet(null)}>
               {t("common.close")}
             </Button>
+          </>
+        )}
+      </BottomSheet>
+      <BottomSheet open={prepared !== null} onClose={() => setPrepared(null)} label={t("rpt.csvPrepared")}>
+        {prepared && (
+          <>
+            <h2 className={s["sheet-title"]}>{t("rpt.csvPrepared")}</h2>
+            <p className={s["sheet-body"]}>
+              {t("rpt.csvPreparedBody", { title: titleOf(prepared.card), from: prepared.period.from, to: prepared.period.to })}
+            </p>
+            <div className={s["sheet-actions"]}>
+              <Button variant="primary" block onClick={sharePrepared}>
+                {t("rpt.csvShare")}
+              </Button>
+              <Button block onClick={inBrowser}>
+                {t("rpt.csvInBrowser")}
+              </Button>
+              <Button variant="ghost" block onClick={() => setPrepared(null)}>
+                {t("common.close")}
+              </Button>
+            </div>
           </>
         )}
       </BottomSheet>

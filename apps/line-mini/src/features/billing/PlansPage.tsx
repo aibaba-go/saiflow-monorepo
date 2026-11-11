@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Building2, Check, UserRound } from "lucide-react";
 import { useState } from "react";
 
 import { BrandLoading } from "../../components/BrandLoading";
@@ -18,25 +19,79 @@ import { Alert } from "../../components/ui/alert";
 import { alertDialog } from "../../components/ui/dialogs";
 import { Button } from "../../components/ui/button";
 import { BottomSheet } from "../../components/ui/sheet";
-import { Tag } from "../../components/ui/tag";
 
 type Period = "month" | "year";
 const PERIOD_KEY: Record<Period, MessageKey> = { month: "plans.periodMonth", year: "plans.periodYear" };
 
+/** The price block: the first available price large, the other below it (FR-SYS-053). */
 function Prices({ plan }: { plan: CatalogPlan }) {
   const t = useT();
-  if (plan.monthly_price === null && plan.yearly_price === null) {
-    return <div className="plan__price">{t("plans.contactUs")}</div>;
-  }
+  const lines = [
+    plan.monthly_price !== null && t("plans.perMonth", { price: formatTHB(plan.monthly_price, t) }),
+    plan.yearly_price !== null && t("plans.perYear", { price: formatTHB(plan.yearly_price, t) }),
+  ].filter((x): x is string => Boolean(x));
   return (
-    <>
-      {plan.monthly_price !== null && (
-        <div className="plan__price">{t("plans.perMonth", { price: formatTHB(plan.monthly_price, t) })}</div>
+    <div className="plan__price">
+      <span className={lines[0] ? "plan__price-main" : "plan__price-main plan__price-main--contact"}>
+        {lines[0] ?? t("plans.contactUs")}
+      </span>
+      {lines[1] && <span className="plan__price-alt">{lines[1]}</span>}
+    </div>
+  );
+}
+
+/** One plan: tier badge and name, the price, what it includes and the action at the bottom.
+ * The current plan is outlined and labelled; a member who may apply but cannot pick this
+ * tier sees why instead of a button. */
+function PlanCard({
+  plan,
+  current,
+  action,
+  mayApply,
+  disabled,
+  onChoose,
+}: {
+  plan: CatalogPlan;
+  current: boolean;
+  action: "renew" | "apply" | null;
+  mayApply: boolean;
+  disabled: boolean;
+  onChoose(): void;
+}) {
+  const t = useT();
+  const org = plan.tenant_kind === "organization";
+  const TierIcon = org ? Building2 : UserRound;
+  const note = action ? null : current ? t("plans.inUse") : mayApply ? t("plans.unavailable") : null;
+  return (
+    <article className={current ? "plan plan--current" : "plan"} data-plan={plan.code}>
+      <header className="plan__head">
+        <span className="plan__badge" aria-hidden="true">
+          <TierIcon size={20} strokeWidth={2} />
+        </span>
+        <div className="plan__name">
+          <h2 className="plan__title">{planName(plan.code, t)}</h2>
+          <span className="plan__kind">{t(org ? "plans.kindOrganization" : "plans.kindPersonal")}</span>
+        </div>
+        {current && <span className="plan__current">{t("plans.current")}</span>}
+      </header>
+      <Prices plan={plan} />
+      <ul className="plan__features">
+        <li>
+          <Check size={16} strokeWidth={2.5} aria-hidden="true" />
+          <span>{t("plans.quota", { n: formatCount(plan.monthly_quota) })}</span>
+        </li>
+        <li>
+          <Check size={16} strokeWidth={2.5} aria-hidden="true" />
+          <span>{plan.member_limit === null ? t("plans.membersUnlimited") : t("plans.members", { n: plan.member_limit })}</span>
+        </li>
+      </ul>
+      {action && (
+        <Button block variant="primary" disabled={disabled} onClick={onChoose}>
+          {t(action === "renew" ? "plans.renew" : "plans.apply")}
+        </Button>
       )}
-      {plan.yearly_price !== null && (
-        <div className="plan__price">{t("plans.perYear", { price: formatTHB(plan.yearly_price, t) })}</div>
-      )}
-    </>
+      {note && <div className="plan__na">{note}</div>}
+    </article>
   );
 }
 
@@ -86,7 +141,10 @@ export function PlansPage() {
 
   return (
     <div className="page">
-      <h1 className="page__title">{t("plans.title")}</h1>
+      <div>
+        <h1 className="page__title plans__title">{t("plans.title")}</h1>
+        <p className="plans__subtitle">{t(isUser ? "plans.subtitle" : "plans.guestNote")}</p>
+      </div>
       {pending && (
         <Alert tone="warning">
           {t("plans.pending", {
@@ -96,35 +154,20 @@ export function PlansPage() {
           })}
         </Alert>
       )}
-      {!isUser && <div className="card-row__meta">{t("plans.guestNote")}</div>}
       <ErrorText error={error} />
-      {catalog.data.map((plan) => {
-        const action = applicableAction(plan, tenant?.kind ?? "guest", usage.data, mayApply);
-        return (
-          <div key={plan.code} className="card-row" data-plan={plan.code}>
-            <div className="card-row__title">
-              {planName(plan.code, t)} {plan.code === current && <Tag tone="primary">{t("plans.current")}</Tag>}
-            </div>
-            <div className="card-row__meta">{t("plans.quota", { n: formatCount(plan.monthly_quota) })}</div>
-            <div className="card-row__meta">
-              {plan.member_limit === null
-                ? t("plans.membersUnlimited")
-                : t("plans.members", { n: plan.member_limit })}
-            </div>
-            <Prices plan={plan} />
-            {action && (
-              <Button
-                size="sm"
-                variant="primary"
-                disabled={!!pending || submit.pending}
-                onClick={() => setChoosing(plan)}
-              >
-                {t(action === "renew" ? "plans.renew" : "plans.apply")}
-              </Button>
-            )}
-          </div>
-        );
-      })}
+      <div className="plans">
+        {catalog.data.map((plan) => (
+          <PlanCard
+            key={plan.code}
+            plan={plan}
+            current={plan.code === current}
+            action={applicableAction(plan, tenant?.kind ?? "guest", usage.data, mayApply)}
+            mayApply={mayApply}
+            disabled={!!pending || submit.pending}
+            onChoose={() => setChoosing(plan)}
+          />
+        ))}
+      </div>
       <BottomSheet open={choosing !== null} onClose={() => setChoosing(null)} label={t("plans.choosePeriod")}>
         <div className="section__label">{t("plans.choosePeriod")}</div>
         <div role="listbox" aria-label={t("plans.choosePeriod")} className="choice-list">

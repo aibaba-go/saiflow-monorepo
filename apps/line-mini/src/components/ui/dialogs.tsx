@@ -71,12 +71,14 @@ export function DialogHost() {
   return (
     <AlertDialog.Root open={current !== null} onOpenChange={(open) => !open && current && settle(current.id, false)}>
       <AlertDialog.Portal>
+        {/* The overlay and the panel are portaled separately, and the overlay may be appended
+            after the panel: the panel's higher z-index keeps it above the mask (FR-SYS-043). */}
         <AlertDialog.Overlay className="fixed inset-0 z-50 bg-overlay" />
         {current && (
           <AlertDialog.Content
             key={current.id}
             {...(current.kind === "confirm" && current.content ? {} : { "aria-describedby": undefined })}
-            className="fixed top-1/2 left-1/2 z-50 flex w-[min(340px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col gap-3 rounded-card bg-surface p-5 shadow-pop focus:outline-none"
+            className="fixed top-1/2 left-1/2 z-[51] flex w-[min(340px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col gap-3 rounded-card bg-surface p-5 shadow-pop focus:outline-none"
           >
             {current.kind === "alert" ? (
               <AlertDialog.Title className="m-0 text-body text-text">{current.content}</AlertDialog.Title>

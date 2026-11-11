@@ -10,6 +10,7 @@ export const USER: Me = {
   phone: "0812345678",
   avatar_url: null,
   registered: true,
+  impersonated: false,
 };
 export const UNREGISTERED: Me = {
   ...USER,

@@ -24,3 +24,10 @@ class MeResponse(BaseModel):
     email: str | None = None
     phone: str | None = None
     email_suggestion: str | None = None  # LINE email, offered only before registration
+    impersonated: bool = False  # a platform admin entered as this user (FR-SYS-148)
+
+
+class ImpersonationRedeemRequest(LooseRequest):
+    """The one-time ticket from an admin's link (FR-SYS-145); checked by the service."""
+
+    ticket: str | None = None

@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { createBrowserRouter, Navigate, Route, RouterProvider, Routes } from "react-router-dom";
 
 import { AppConfig } from "./AppConfig";
+import { ImpersonatePage } from "./auth/ImpersonatePage";
 import { RequireUser } from "./auth/RequireUser";
 import { forgetSession, useSessionNotice } from "./auth/session";
 import { useT } from "./i18n";
@@ -67,6 +68,7 @@ export function AppRoutes() {
         <SessionWatcher />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/impersonate" element={<ImpersonatePage />} />
           <Route path="/register" element={<RegisterGuidePage />} />
           <Route path="/health" element={<HealthPage />} />
           <Route element={<RequireUser />}>

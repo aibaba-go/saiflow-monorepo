@@ -315,6 +315,102 @@ describe("LINE report detail (FR-REPORT-018, -010, -015, -016)", () => {
     expect(await screen.findByText(/The CSV could not be created\. .+/)).toBeInTheDocument();
   });
 
+  describe("saving the CSV inside LINE through the share sheet (FR-SYS-144)", () => {
+    let share: ReturnType<typeof vi.fn>;
+    beforeEach(() => {
+      share = vi.fn(async () => {});
+      Object.defineProperty(navigator, "canShare", { configurable: true, value: () => true });
+      Object.defineProperty(navigator, "share", { configurable: true, value: share });
+      return () => {
+        Reflect.deleteProperty(navigator, "canShare");
+        Reflect.deleteProperty(navigator, "share");
+      };
+    });
+    const csvOk = () =>
+      new Response("category,value\nChiang Mai,1500.5\n", { status: 200, headers: { "Content-Type": "text/csv" } });
+
+    it("prepares the file with the session and shares it on tap, without the phone browser (144-01)", async () => {
+      const liff = testAuth(fakeLiff({ loggedIn: true, inClient: true }));
+      inOrg();
+      const api = mockApi({ [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()), [CSV]: csvOk });
+      pages("/report/31");
+      await userEvent.click(await screen.findByRole("button", { name: "Download CSV of B sales" }));
+      const sheet = await screen.findByRole("dialog", { name: "CSV ready" });
+      const url = new URL(api.calls.find((c) => c.method === "GET" && c.url.includes("/csv"))!.url);
+      expect(url.searchParams.get("card_id")).toBe("c_b");
+      expect(url.searchParams.get("report_version")).toBe("2");
+      expect(url.searchParams.get("from")).toBe("2026-01-01");
+      expect(within(sheet).getByText(/B sales/)).toBeInTheDocument();
+      await userEvent.click(within(sheet).getByRole("button", { name: "Save or share" }));
+      expect(share).toHaveBeenCalledTimes(1);
+      const [{ files }] = share.mock.calls[0] as [{ files: File[] }];
+      expect(files.map((f) => [f.name, f.type])).toEqual([["report-31-c_b.csv", "text/csv"]]);
+      // the shared file carries exactly the bytes the API returned
+      expect(files[0]!.size).toBe("category,value\nChiang Mai,1500.5\n".length);
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(api.count(TICKET)).toBe(0);
+      expect(liff.openWindow).not.toHaveBeenCalled();
+    });
+
+    it("without file sharing it falls back to the ticket in the phone browser (144-02)", async () => {
+      Object.defineProperty(navigator, "canShare", { configurable: true, value: () => false });
+      const liff = testAuth(fakeLiff({ loggedIn: true, inClient: true }));
+      inOrg();
+      const api = mockApi({
+        [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()),
+        [TICKET]: () => json(200, { url: "/api/v1/report-downloads/abc.def" }),
+      });
+      pages("/report/31");
+      await userEvent.click(await screen.findByRole("button", { name: "Download CSV of A sales" }));
+      await waitFor(() => expect(liff.openWindow).toHaveBeenCalled());
+      expect(await screen.findByText(/Opening your phone browser to download/)).toBeInTheDocument();
+      expect(api.count(CSV)).toBe(0);
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    it("a cancelled share says nothing and keeps the sheet; the browser stays available (144-03)", async () => {
+      share.mockRejectedValueOnce(new DOMException("cancelled", "AbortError"));
+      const liff = testAuth(fakeLiff({ loggedIn: true, inClient: true }));
+      inOrg();
+      const api = mockApi({
+        [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()), [CSV]: csvOk,
+        [TICKET]: () => json(200, { url: "/api/v1/report-downloads/abc.def" }),
+      });
+      pages("/report/31");
+      await userEvent.click(await screen.findByRole("button", { name: "Download CSV of A sales" }));
+      const sheet = await screen.findByRole("dialog", { name: "CSV ready" });
+      await userEvent.click(within(sheet).getByRole("button", { name: "Save or share" }));
+      await act(async () => {});
+      expect(screen.getByRole("dialog", { name: "CSV ready" })).toBeInTheDocument();
+      expect(screen.queryByText(/could not|failed/i)).toBeNull();
+      await userEvent.click(within(sheet).getByRole("button", { name: "Save or share" }));
+      expect(share).toHaveBeenCalledTimes(2);
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      await userEvent.click(screen.getByRole("button", { name: "Download CSV of A sales" }));
+      const again = await screen.findByRole("dialog", { name: "CSV ready" });
+      await userEvent.click(within(again).getByRole("button", { name: "Download in browser" }));
+      await waitFor(() => expect(liff.openWindow).toHaveBeenCalledTimes(1));
+      expect(await api.bodies(TICKET)).toEqual([{ card_id: "c_a", period: RESULT().period, report_version: 2 }]);
+      expect(screen.queryByRole("dialog", { name: "CSV ready" })).toBeNull();
+    });
+
+    it("a new publication drops the prepared file (144-04)", async () => {
+      testAuth(fakeLiff({ loggedIn: true, inClient: true }));
+      inOrg();
+      const api = mockApi({ [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()), [CSV]: csvOk });
+      const { queryClient } = pages("/report/31");
+      await userEvent.click(await screen.findByRole("button", { name: "Download CSV of A sales" }));
+      await screen.findByRole("dialog", { name: "CSV ready" });
+      const nextConfig = { ...CONFIG, cards: [{ ...CONFIG.cards[2], title: "Average sales" }] };
+      api.set(ONE, () => json(200, detail({ published: { name: "New overview", version: 3, published_at: T0, config: nextConfig } })));
+      api.set(DATA, () => json(200, RESULT({ report_version: 3 })));
+      await act(async () => { await queryClient.refetchQueries({ queryKey: ["report", 5, 31], exact: true }); });
+      await screen.findByRole("heading", { level: 1, name: "New overview" });
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(share).not.toHaveBeenCalled();
+    });
+  });
+
   it("reloads card definitions when refresh returns a newly published snapshot", async () => {
     testAuth();
     inOrg();

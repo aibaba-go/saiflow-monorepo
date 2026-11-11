@@ -3,8 +3,8 @@ doc_id: DES-002
 title: "SaiFlow — 数据模型"
 type: data-model
 status: active
-version: 2.13.0
-updated: 2026-11-11
+version: 2.14.0
+updated: 2026-11-12
 owner: Product Engineering
 source: "PRD-001 v3.3 §3, §4, §4.9; ADR-008"
 related: [ADR-008, DM-FormDocument, DM-ExtractionPayload, DM-OcrJob, DM-DocumentTemplate, DM-Tenant, DM-Subscription]
@@ -97,6 +97,7 @@ erDiagram
 - **B-2a 已实现（`rebuild-identity`）：** `DM-User`（LINE 身份 ID 与邮箱作为唯一的关联身份直接存在用户上，邮箱统一小写；手机号不要求唯一）；`DM-Tenant` 只有个人租户与游客临时租户两类（组织随 B-2b）；`DM-OperationLog` 仅可追加（数据库触发器禁止修改与删除），每条记录带前一条的校验值，服务器命令 `audit-verify` 检查是否被改动；`DM-AdminAccount` 口令为 argon2id 哈希，连续 5 次错误锁定 15 分钟。`DM-UserIdentity` 在接入第三种身份（如 Google）时再拆成独立的表。
 - **`template-report-management` 已实现：** 模板（迁移 0014、0016）——`DM-DocumentTemplate` 增加归属（系统 / 个人 / 组织）、可编辑草稿与修订号（保存与生效分离，生效生成新的不可变版本）、系统模板授权对象（`template_grant_targets`）；`DM-TemplateSample` 记录样例生成过程，客户样例按页计量，平台 admin 样例不扣客户配额；样例原件与载荷最长 7 天，不进入长期备份。报表（迁移 0015、0017）——`DM-Report`、`DM-ReportSnapshot`、`DM-ReportTemplateRef`；报表只存配置，每次打开或手动刷新都按发布快照对正式业务数据（已确认结果版本）在数据库内实时聚合，不保存统计结果、不跨用户缓存；CSV 下载凭证为签名令牌，不落库。
 - 报表采用方式 A（实时查询正式业务数据）；方式 B 的报表汇总表（OQ-8）未实现，不登记实体。
+- **`admin-impersonate-user`（迁移 0018）：** 平台 admin 以用户身份进入 web-pc 用的一次性票据（`impersonation_tickets`：只存摘要、60 秒、单次）与登录会话上的代登录标记（`customer_sessions.impersonated_by_admin_id`；闲置 30 分钟、最长 2 小时、管理员停用即失效）。二者同属短期技术数据，不登记实体；签发与进入记入 `DM-OperationLog`。
 - 数据库备份文件（VPS 本地 7 天、GCS 备份桶 30 天）是运维数据，不作为实体登记（ADR-008）。
 
 ### 2.1 v1 实体去向
@@ -153,6 +154,7 @@ erDiagram
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.14.0 | 2026-11-12 | Product Engineering | `admin-impersonate-user`：代登录票据与会话代登录标记（短期技术数据，不登记实体） |
 | 2.13.0 | 2026-11-11 | Product Engineering | `template-report-management`：模板归属、草稿与修订号、系统模板授权、`DM-TemplateSample`；报表 `DM-Report`、`DM-ReportSnapshot`、`DM-ReportTemplateRef`（只存配置，实时查询正式业务数据） |
 | 2.12.0 | 2026-11-07 | Product Engineering | `review-flow`：复核层级、复核轮次与记录、修改记录（jsonb）、复核通知记录；识别任务的复核状态与正式业务数据时间 |
 | 2.11.0 | 2026-11-06 | Product Engineering | `ocr-ui-parity`：模板字段角色（金额校验）、匹配度与“没有合适的模板”、按链接导入 |

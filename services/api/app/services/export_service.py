@@ -32,7 +32,7 @@ from app.models import (
 from app.ocr.xlsx import build_xlsx
 from app.permissions import Permission
 from app.services import job_service, tenant_access
-from app.services.session_service import CUSTOMER_IDLE, Principal
+from app.services.session_service import Principal, principal_of, session_alive
 from app.services.tenant_access import TenantContext, not_found, require
 
 EXPORT_TTL = timedelta(hours=24)
@@ -193,12 +193,11 @@ async def redeem(
     session = await db.get(CustomerSession, sid)
     if (
         session is None
-        or session.revoked_at is not None
-        or now - session.last_used_at > CUSTOMER_IDLE
+        or not await session_alive(db, session, now)
         or (session.user_id or 0) != user
     ):
         raise not_found()
-    principal = Principal(session.kind, session.id, session.tenant_id, session.user_id)  # type: ignore[arg-type]
+    principal = principal_of(session)
     export = await db.get(Export, export_id)
     if export is None:
         raise not_found()

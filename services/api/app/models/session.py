@@ -22,6 +22,10 @@ class CustomerSession(Base):
     __tablename__ = "customer_sessions"
     __table_args__ = (
         CheckConstraint("kind in ('guest', 'user')", name="customer_sessions_kind"),
+        CheckConstraint(
+            "impersonated_by_admin_id is null or kind = 'user'",
+            name="customer_sessions_impersonation_user",
+        ),
         Index("ix_customer_sessions_user", "user_id"),
     )
 
@@ -35,3 +39,7 @@ class CustomerSession(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # set when a platform admin entered as this user (FR-SYS-148)
+    impersonated_by_admin_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("admin_accounts.id")
+    )

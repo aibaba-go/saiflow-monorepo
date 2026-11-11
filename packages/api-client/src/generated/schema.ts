@@ -882,11 +882,31 @@ export interface paths {
         };
         /**
          * Search Users
-         * @description Customer users by email, nickname or user id (FR-SYS-080).
+         * @description Customer users by email, nickname or user id; every user when q is empty (FR-SYS-080).
          */
         get: operations["adminSearchUsers"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/impersonation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Impersonate User
+         * @description A one-time, 60-second web-pc link that enters as this registered user (FR-SYS-145).
+         */
+        post: operations["adminImpersonateUser"];
         delete?: never;
         options?: never;
         head?: never;
@@ -955,6 +975,27 @@ export interface paths {
         put?: never;
         /** Create Guest Session */
         post: operations["createGuestSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/impersonation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeem Impersonation
+         * @description Enter as a user with an admin's one-time ticket (FR-SYS-145, FR-SYS-148): replaces
+         *     this browser's session; a bad ticket is 401 and changes nothing.
+         */
+        post: operations["redeemImpersonation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3118,6 +3159,24 @@ export interface components {
             /** Version */
             version: string;
         };
+        /**
+         * ImpersonationLinkOut
+         * @description A one-time web-pc link that enters as the user (FR-SYS-145).
+         */
+        ImpersonationLinkOut: {
+            /** Expires In */
+            expires_in: number;
+            /** Url */
+            url: string;
+        };
+        /**
+         * ImpersonationRedeemRequest
+         * @description The one-time ticket from an admin's link (FR-SYS-145); checked by the service.
+         */
+        ImpersonationRedeemRequest: {
+            /** Ticket */
+            ticket?: string | null;
+        };
         /** ImportIn */
         ImportIn: {
             /** Url */
@@ -3315,6 +3374,11 @@ export interface components {
             email?: string | null;
             /** Email Suggestion */
             email_suggestion?: string | null;
+            /**
+             * Impersonated
+             * @default false
+             */
+            impersonated: boolean;
             /**
              * Kind
              * @enum {string}
@@ -6568,6 +6632,37 @@ export interface operations {
             };
         };
     };
+    adminImpersonateUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpersonationLinkOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     adminListVerificationApplications: {
         parameters: {
             query?: {
@@ -6681,6 +6776,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+        };
+    };
+    redeemImpersonation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImpersonationRedeemRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

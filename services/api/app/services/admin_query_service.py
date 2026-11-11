@@ -54,7 +54,8 @@ async def audit_page(db: AsyncSession, f: AuditFilter) -> tuple[list[AuditLog], 
 
 async def search_users(db: AsyncSession, q: str, page: int) -> tuple[list[dict], bool]:
     """Email or nickname contains q (>= 2 chars, case-insensitive), or the exact user id when
-    q is all digits. Guests have no user row, so they never appear."""
+    q is all digits; an empty q lists every user. Guests have no user row, so they never
+    appear."""
     conditions = []
     if q.isdigit() and len(q) <= 19:
         conditions.append(User.id == int(q))
@@ -67,10 +68,11 @@ async def search_users(db: AsyncSession, q: str, page: int) -> tuple[list[dict],
         .where(Tenant.owner_user_id == User.id, Tenant.kind == "personal")
         .scalar_subquery()
     )
+    query = select(User, personal.label("personal_tenant_id"))
+    if q:
+        query = query.where(or_(*conditions))
     query = (
-        select(User, personal.label("personal_tenant_id"))
-        .where(or_(*conditions))
-        .order_by(func.coalesce(User.registered_at, User.created_at).desc(), User.id.desc())
+        query.order_by(func.coalesce(User.registered_at, User.created_at).desc(), User.id.desc())
         .offset((page - 1) * USERS_PER_PAGE)
         .limit(USERS_PER_PAGE + 1)
     )

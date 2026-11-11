@@ -22,11 +22,13 @@ export function BottomSheet({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogPrimitive.Portal>
+        {/* Portaled apart from the panel and possibly appended after it: the panel's higher
+            z-index keeps it above the mask. */}
         <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-overlay" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
           className={cn(
-            "fixed inset-x-0 bottom-0 z-40 max-h-[85vh] overflow-y-auto rounded-t-card bg-surface p-3 pb-[max(12px,env(safe-area-inset-bottom))] shadow-pop",
+            "fixed inset-x-0 bottom-0 z-[41] max-h-[85vh] overflow-y-auto rounded-t-card bg-surface p-3 pb-[max(12px,env(safe-area-inset-bottom))] shadow-pop",
             "focus:outline-none",
             className,
           )}

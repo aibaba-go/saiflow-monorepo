@@ -95,5 +95,10 @@ export const reportsZh: Record<ReportsKey, string> = {
   "rpt.detailsOf": "{title} 的详情",
   "rpt.csvExternal": "正在用手机浏览器下载。CSV 文件保存在“下载”中，请查看通知栏或“文件”应用。",
   "rpt.csvReady": "CSV 已下载",
+  "rpt.csvPrepared": "CSV 已准备好",
+  "rpt.csvPreparedBody": "{title}（{from} – {to}）。可存到“文件”，或发送到其他应用。",
+  "rpt.csvShare": "保存或分享",
+  "rpt.csvInBrowser": "在浏览器中下载",
+  "rpt.csvShareFailed": "无法打开分享面板，请改用“在浏览器中下载”。",
   "rpt.periodOrder": "请选择开始和结束日期，结束日期不能早于开始日期。",
 };

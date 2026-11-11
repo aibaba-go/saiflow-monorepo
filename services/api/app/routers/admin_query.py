@@ -1,4 +1,5 @@
-"""Admin read-only queries: operation log (FR-SYS-003) and user search (FR-SYS-080).
+"""Admin read-only queries: operation log (FR-SYS-003) and user search (FR-SYS-080); plus
+the one-time link to enter web-pc as a user (FR-SYS-145).
 Query parameters are taken as strings and checked here, so a bad value is 400 with the
 field (like request bodies), never FastAPI's 422."""
 
@@ -8,10 +9,19 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import BIGINT_MAX, AdminContext, get_admin, get_db, require_csrf_header
+from app.config import Settings
+from app.dependencies import (
+    BIGINT_MAX,
+    AdminContext,
+    PathId,
+    get_admin,
+    get_db,
+    get_settings,
+    require_csrf_header,
+)
 from app.errors import AppError
-from app.schemas.admin_query import AuditEntryOut, AuditPageOut, UserPageOut
-from app.services import admin_query_service
+from app.schemas.admin_query import AuditEntryOut, AuditPageOut, ImpersonationLinkOut, UserPageOut
+from app.services import admin_query_service, impersonation_service
 from app.services.admin_query_service import AuditFilter
 
 router = APIRouter(
@@ -91,12 +101,28 @@ async def list_audit_log(
 async def search_users(
     db: Db, admin: Admin, q: str | None = None, page: str | None = None
 ) -> UserPageOut:
-    """Customer users by email, nickname or user id (FR-SYS-080)."""
+    """Customer users by email, nickname or user id; every user when q is empty (FR-SYS-080)."""
     term = (q or "").strip()
-    if len(term) < 2 and not (term.isdigit() and term):
+    if term and len(term) < 2 and not term.isdigit():
         raise _bad("q")
     if len(term) > 200:
         raise _bad("q")
     number = _int(page, "page", 1, 10_000) or 1
     items, more = await admin_query_service.search_users(db, term, number)
     return UserPageOut(items=items, has_more=more)
+
+
+@router.post(
+    "/users/{user_id}/impersonation",
+    operation_id="adminImpersonateUser",
+    response_model=ImpersonationLinkOut,
+)
+async def impersonate_user(
+    user_id: PathId,
+    db: Db,
+    admin: Admin,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> ImpersonationLinkOut:
+    """A one-time, 60-second web-pc link that enters as this registered user (FR-SYS-145)."""
+    link = await impersonation_service.issue(db, settings, admin.account, user_id)
+    return ImpersonationLinkOut(url=link.url, expires_in=link.expires_in)

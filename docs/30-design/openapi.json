@@ -1832,6 +1832,43 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "ImpersonationLinkOut": {
+        "description": "A one-time web-pc link that enters as the user (FR-SYS-145).",
+        "properties": {
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expires_in"
+        ],
+        "title": "ImpersonationLinkOut",
+        "type": "object"
+      },
+      "ImpersonationRedeemRequest": {
+        "description": "The one-time ticket from an admin's link (FR-SYS-145); checked by the service.",
+        "properties": {
+          "ticket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticket"
+          }
+        },
+        "title": "ImpersonationRedeemRequest",
+        "type": "object"
+      },
       "ImportIn": {
         "properties": {
           "url": {
@@ -2391,6 +2428,11 @@
               }
             ],
             "title": "Email Suggestion"
+          },
+          "impersonated": {
+            "default": false,
+            "title": "Impersonated",
+            "type": "boolean"
           },
           "kind": {
             "enum": [
@@ -9248,7 +9290,7 @@
     },
     "/api/v1/admin/users": {
       "get": {
-        "description": "Customer users by email, nickname or user id (FR-SYS-080).",
+        "description": "Customer users by email, nickname or user id; every user when q is empty (FR-SYS-080).",
         "operationId": "adminSearchUsers",
         "parameters": [
           {
@@ -9307,6 +9349,51 @@
           }
         },
         "summary": "Search Users",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/users/{user_id}/impersonation": {
+      "post": {
+        "description": "A one-time, 60-second web-pc link that enters as this registered user (FR-SYS-145).",
+        "operationId": "adminImpersonateUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9223372036854775807,
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpersonationLinkOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Impersonate User",
         "tags": [
           "admin"
         ]
@@ -9491,6 +9578,48 @@
           }
         },
         "summary": "Create Guest Session",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/impersonation": {
+      "post": {
+        "description": "Enter as a user with an admin's one-time ticket (FR-SYS-145, FR-SYS-148): replaces\nthis browser's session; a bad ticket is 401 and changes nothing.",
+        "operationId": "redeemImpersonation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImpersonationRedeemRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Redeem Impersonation",
         "tags": [
           "auth"
         ]

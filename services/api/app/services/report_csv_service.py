@@ -30,7 +30,7 @@ from app.services.export_service import TICKET_TTL
 from app.services.export_service import _key as ticket_key
 from app.services.report_config import CardSpec, validate
 from app.services.report_service import audit_now, audit_target, user_actor
-from app.services.session_service import CUSTOMER_IDLE, Principal
+from app.services.session_service import Principal, principal_of, session_alive
 from app.services.tenant_access import TenantContext, not_found, submitter_scope
 
 FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
@@ -228,11 +228,10 @@ async def redeem(
     session = await db.get(CustomerSession, sid)
     if (
         session is None
-        or session.revoked_at is not None
-        or now - session.last_used_at > CUSTOMER_IDLE
+        or not await session_alive(db, session, now)
         or (session.user_id or 0) != user
     ):
         raise not_found()
-    principal = Principal(session.kind, session.id, session.tenant_id, session.user_id)  # type: ignore[arg-type]
+    principal = principal_of(session)
     ctx = await tenant_access.resolve_tenant(db, principal, tenant_id)
     return ctx, report_id, card_id, period, version

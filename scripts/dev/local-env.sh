@@ -56,6 +56,8 @@ export SAIFLOW_API_PORT="${SAIFLOW_API_PORT:-8010}"
 export SAIFLOW_API_PROXY="http://127.0.0.1:${SAIFLOW_API_PORT}"
 export VITE_DEV_LOGIN=1
 export VITE_API_BASE_URL=""  # same-origin /api through the Vite proxy
+# web-pc's dev server: where the admin's "log in as this user" link opens (FR-SYS-145)
+export WEB_PC_ORIGIN="${WEB_PC_ORIGIN:-http://localhost:5174}"
 
 if [ -x "$SAIFLOW_ROOT/services/api/.venv/Scripts/python.exe" ]; then
   SAIFLOW_PY="$SAIFLOW_ROOT/services/api/.venv/Scripts/python.exe"

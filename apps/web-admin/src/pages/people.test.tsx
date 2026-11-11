@@ -1,5 +1,5 @@
 import { screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useLanguage } from "../stores/language";
 import { json } from "../test/mockApi";
@@ -11,6 +11,7 @@ beforeEach(() => {
 });
 
 const query = (r: Request) => new URL(r.url).searchParams;
+const lastUsers = (api: { calls: Request[] }) => query(api.calls.filter((c) => c.url.includes("/admin/users")).at(-1)!);
 
 describe("user search (FR-SYS-070)", () => {
   it("finds Somchai and opens the personal tenant (070-01)", async () => {
@@ -33,7 +34,7 @@ describe("user search (FR-SYS-070)", () => {
     const row = (await screen.findByText("somchai@example.com")).closest("tr") as HTMLElement;
     expect(within(row).getByText("Somchai")).toBeInTheDocument();
     expect(within(row).getByText("2026-10-01 10:00")).toBeInTheDocument();
-    expect(query(api.calls.find((c) => c.url.includes("/admin/users"))!).get("q")).toBe("somchai");
+    await waitFor(() => expect(lastUsers(api).get("q")).toBe("somchai"));
     await userEvent.click(within(row).getByRole("link", { name: zh("tenant.ref", { id: 41 }) }));
     expect(await screen.findByRole("heading", { name: zh("billing.title", { id: 41 }) })).toBeInTheDocument();
     expect(screen.getByText(zh("billing.kind.personal"))).toBeInTheDocument();
@@ -42,16 +43,140 @@ describe("user search (FR-SYS-070)", () => {
   it("one character asks for more and sends nothing (070-02)", async () => {
     const api = signedIn({ "GET /api/v1/admin/users": () => json(200, { items: [], has_more: false }) });
     renderAt("/users");
+    await waitFor(() => expect(api.count("GET /api/v1/admin/users")).toBe(1)); // the default list
     await userEvent.type(await screen.findByPlaceholderText(zh("users.placeholder")), "s{Enter}");
     expect(await screen.findByText(zh("users.tooShort"))).toBeInTheDocument();
-    expect(api.count("GET /api/v1/admin/users")).toBe(0);
+    expect(api.count("GET /api/v1/admin/users")).toBe(1);
   });
 
   it("a single digit is a user id and is searched", async () => {
     const api = signedIn({ "GET /api/v1/admin/users": () => json(200, { items: [], has_more: false }) });
     renderAt("/users");
-    await userEvent.type(await screen.findByPlaceholderText(zh("users.placeholder")), "7{Enter}");
     await waitFor(() => expect(api.count("GET /api/v1/admin/users")).toBe(1));
+    await userEvent.type(await screen.findByPlaceholderText(zh("users.placeholder")), "7{Enter}");
+    await waitFor(() => expect(api.count("GET /api/v1/admin/users")).toBe(2));
+    expect(lastUsers(api).get("q")).toBe("7");
+  });
+
+  it("opens on every user, page by page (070-03)", async () => {
+    const api = signedIn({
+      "GET /api/v1/admin/users": (r) => {
+        const page = query(r).get("page");
+        return page === "2"
+          ? json(200, { items: [user(1, "last@example.com")], has_more: false })
+          : json(200, { items: [user(2, "first@example.com")], has_more: true });
+      },
+    });
+    renderAt("/users");
+    expect(await screen.findByText("first@example.com")).toBeInTheDocument();
+    const first = query(api.calls.find((c) => c.url.includes("/admin/users"))!);
+    expect(first.get("q") ?? "").toBe("");
+    expect(first.get("page")).toBe("1");
+    expect(screen.getByText(zh("users.page", { n: 1 }))).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: zh("common.prev") })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: zh("common.next") }));
+    expect(await screen.findByText("last@example.com")).toBeInTheDocument();
+    expect(screen.getByText(zh("users.page", { n: 2 }))).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: zh("common.next") })).toBeDisabled();
+  });
+
+  it("clearing the search returns to every user (070-04)", async () => {
+    const api = signedIn({
+      "GET /api/v1/admin/users": (r) =>
+        query(r).get("q")
+          ? json(200, { items: [user(3, "somchai@example.com")], has_more: false })
+          : json(200, { items: [user(4, "all@example.com"), user(3, "somchai@example.com")], has_more: false }),
+    });
+    renderAt("/users");
+    const box = await screen.findByPlaceholderText(zh("users.placeholder"));
+    expect(await screen.findByText("all@example.com")).toBeInTheDocument();
+    await userEvent.type(box, "somchai{Enter}");
+    await waitFor(() => expect(screen.queryByText("all@example.com")).not.toBeInTheDocument());
+    await userEvent.clear(box);
+    await userEvent.type(box, "{Enter}");
+    expect(await screen.findByText("all@example.com")).toBeInTheDocument();
+    expect(lastUsers(api).get("q") ?? "").toBe("");
+    expect(screen.queryByText(zh("users.tooShort"))).not.toBeInTheDocument();
+  });
+});
+
+function user(id: number, email: string) {
+  return {
+    user_id: id, display_name: `User ${id}`, email, phone: null, registered: true,
+    registered_at: "2026-10-01T03:00:00Z", created_at: "2026-10-01T03:00:00Z", personal_tenant_id: null,
+  };
+}
+
+describe("log in as a user (FR-SYS-146)", () => {
+  const LINK = "http://localhost:5174/impersonate#ticket-abc";
+  const users = () =>
+    json(200, {
+      items: [user(3, "somchai@example.com"), { ...user(4, "guest@example.com"), registered: false, registered_at: null }],
+      has_more: false,
+    });
+  const rowOf = async (email: string) => (await screen.findByText(email)).closest("tr") as HTMLElement;
+  const confirmIn = async (row: HTMLElement) => {
+    await userEvent.click(within(row).getByRole("button", { name: zh("users.impersonate") }));
+    expect(await screen.findByText(zh("users.impersonateTitle", { name: "User 3" }))).toBeInTheDocument();
+  };
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("confirms, issues once and opens the link in a new tab (146-01)", async () => {
+    const tab = { opener: {} as unknown, location: { href: "" }, close: vi.fn() };
+    const open = vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
+    const api = signedIn({
+      "GET /api/v1/admin/users": users,
+      "POST /api/v1/admin/users/3/impersonation": () => json(200, { url: LINK, expires_in: 60 }),
+    });
+    renderAt("/users");
+    const row = await rowOf("somchai@example.com");
+    const guest = await rowOf("guest@example.com");
+    expect(within(guest).queryByRole("button", { name: zh("users.impersonate") })).not.toBeInTheDocument();
+
+    await confirmIn(row);
+    await userEvent.click(screen.getByRole("button", { name: zh("common.cancel") }));
+    expect(open).not.toHaveBeenCalled();
+    expect(api.count("POST /api/v1/admin/users/3/impersonation")).toBe(0);
+
+    await confirmIn(row);
+    await userEvent.click(screen.getByRole("button", { name: zh("common.confirm") }));
+    await waitFor(() => expect(tab.location.href).toBe(LINK));
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(tab.opener).toBeNull();
+    expect(api.count("POST /api/v1/admin/users/3/impersonation")).toBe(1);
+    expect(screen.getByText("somchai@example.com")).toBeInTheDocument();
+  });
+
+  it("a blocked tab shows a link to click (146-02)", async () => {
+    vi.spyOn(window, "open").mockReturnValue(null);
+    signedIn({
+      "GET /api/v1/admin/users": users,
+      "POST /api/v1/admin/users/3/impersonation": () => json(200, { url: LINK, expires_in: 60 }),
+    });
+    renderAt("/users");
+    await confirmIn(await rowOf("somchai@example.com"));
+    await userEvent.click(screen.getByRole("button", { name: zh("common.confirm") }));
+    expect(await screen.findByText(zh("users.impersonateBlocked"))).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: zh("users.impersonateOpen") });
+    expect(link).toHaveAttribute("href", LINK);
+    expect(link).toHaveAttribute("target", "_blank");
+  });
+
+  it("an error shows the reason and opens nothing (146-02)", async () => {
+    const tab = { opener: {} as unknown, location: { href: "" }, close: vi.fn() };
+    vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
+    signedIn({
+      "GET /api/v1/admin/users": users,
+      "POST /api/v1/admin/users/3/impersonation": () =>
+        json(409, { code: "user_not_registered", message_key: "admin.impersonate_unregistered" }),
+    });
+    renderAt("/users");
+    await confirmIn(await rowOf("somchai@example.com"));
+    await userEvent.click(screen.getByRole("button", { name: zh("common.confirm") }));
+    expect(await screen.findByText(zh("err.user_not_registered"))).toBeInTheDocument();
+    expect(tab.close).toHaveBeenCalled();
+    expect(tab.location.href).toBe("");
   });
 });
 

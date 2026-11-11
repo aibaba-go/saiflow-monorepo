@@ -35,3 +35,10 @@ class AdminUserOut(BaseModel):
 class UserPageOut(BaseModel):
     items: list[AdminUserOut]
     has_more: bool
+
+
+class ImpersonationLinkOut(BaseModel):
+    """A one-time web-pc link that enters as the user (FR-SYS-145)."""
+
+    url: str
+    expires_in: int  # seconds

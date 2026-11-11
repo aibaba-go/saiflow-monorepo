@@ -94,6 +94,11 @@ export const reportsEn = {
   "rpt.detailsOf": "Details of {title}",
   "rpt.csvExternal": "Opening your phone browser to download. The CSV file is saved to Downloads — check the notification bar or the Files app.",
   "rpt.csvReady": "CSV downloaded",
+  "rpt.csvPrepared": "CSV ready",
+  "rpt.csvPreparedBody": "{title} · {from} – {to}. Save it to Files or send it to another app.",
+  "rpt.csvShare": "Save or share",
+  "rpt.csvInBrowser": "Download in browser",
+  "rpt.csvShareFailed": "The share sheet could not be opened. Try Download in browser.",
   "rpt.periodOrder": "Choose a start and an end date, the end not before the start.",
 } as const;
 

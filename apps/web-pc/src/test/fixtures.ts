@@ -13,6 +13,7 @@ export const USER: Me = {
   phone: "0812345678",
   avatar_url: null,
   registered: true,
+  impersonated: false,
 };
 export const OTHER: Me = { ...USER, user_id: 8, tenant_id: 80, display_name: "Malee", email: "malee@example.com" };
 export const UNREGISTERED: Me = {

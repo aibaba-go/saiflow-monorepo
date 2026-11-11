@@ -1,4 +1,5 @@
-"""Customer authentication: guest session, logout and LINE login."""
+"""Customer authentication: guest session, logout, LINE login, and entering as a user
+with an admin's one-time ticket."""
 
 from typing import Annotated
 
@@ -19,9 +20,15 @@ from app.dependencies import (
 from app.errors import AppError
 from app.integrations.line import LineClient
 from app.rate_limit import SlidingWindowLimiter, client_key
-from app.schemas.auth import LineLoginRequest, MeResponse
+from app.schemas.auth import ImpersonationRedeemRequest, LineLoginRequest, MeResponse
 from app.schemas.loose import ensure_text
-from app.services import auth_service, dev_login_service, me_service, session_service
+from app.services import (
+    auth_service,
+    dev_login_service,
+    impersonation_service,
+    me_service,
+    session_service,
+)
 from app.services.audit_service import AuditEvent, record
 from app.services.session_service import CUSTOMER_COOKIE, CUSTOMER_IDLE, Principal
 
@@ -106,4 +113,21 @@ async def login_with_line(
             db, line, current, req, allowed, web=web
         )
     set_customer_cookie(response, token)
+    return await me_service.me(db, principal)
+
+
+@router.post("/impersonation", operation_id="redeemImpersonation", response_model=MeResponse)
+async def redeem_impersonation(
+    req: ImpersonationRedeemRequest,
+    response: Response,
+    db: Db,
+    current: Annotated[Principal | None, Depends(get_optional_principal)],
+) -> MeResponse:
+    """Enter as a user with an admin's one-time ticket (FR-SYS-145, FR-SYS-148): replaces
+    this browser's session; a bad ticket is 401 and changes nothing."""
+    token, principal = await impersonation_service.redeem(
+        db, req.ticket if not req.invalid_fields else None, current
+    )
+    max_age = int(session_service.idle_limit(principal).total_seconds())
+    set_session_cookie(response, CUSTOMER_COOKIE, token, max_age)
     return await me_service.me(db, principal)

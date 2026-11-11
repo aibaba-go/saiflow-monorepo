@@ -84,7 +84,9 @@ describe("login and session (FR-SYS-060)", () => {
       },
       "GET /api/v1/admin/organizations": () =>
         signedIn ? json(200, []) : json(401, { code: "unauthenticated" }),
-      "GET /api/v1/admin/users": () => {
+      // the page lists all users on open (FR-SYS-070); the session expires on the search
+      "GET /api/v1/admin/users": (r) => {
+        if (!new URL(r.url).searchParams.has("q")) return json(200, { items: [], has_more: false });
         signedIn = false;
         return json(401, { code: "unauthenticated" });
       },

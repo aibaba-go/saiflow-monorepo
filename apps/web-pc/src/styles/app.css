@@ -246,6 +246,28 @@ body {
   flex-direction: column;
 }
 
+/* ---------- administrator acting as the user (FR-SYS-147): stays above the topbar ---------- */
+.pc-impersonation {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  height: 40px;
+  padding: 0 24px;
+  box-sizing: border-box;
+  background: #fff1e6;
+  color: #ad4e00;
+  border-bottom: 1px solid #ffbb96;
+  font-size: 13px;
+}
+.pc-impersonation + .pc-topbar {
+  top: 40px;
+}
+
 /* ---------- topbar: breadcrumb left; tenant, language, bell and user right ---------- */
 .pc-topbar {
   position: sticky;

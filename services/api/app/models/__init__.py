@@ -5,6 +5,7 @@ from app.models.audit import AuditLog
 from app.models.billing import FreeQuota, Plan, PlanApplication, QuotaReservation, Subscription
 from app.models.document import Export, File, OcrJob, OcrRawResult, ResultVersion
 from app.models.email_code import EmailCode
+from app.models.impersonation import ImpersonationTicket
 from app.models.notification import Notification, Reminder
 from app.models.ocr_engine import OcrEngineHealth
 from app.models.organization import (
@@ -37,6 +38,7 @@ __all__ = [
     "DocumentTemplateVersion",
     "Export",
     "File",
+    "ImpersonationTicket",
     "OcrEngineHealth",
     "OcrJob",
     "OcrRawResult",
