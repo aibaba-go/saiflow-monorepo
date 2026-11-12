@@ -24,6 +24,7 @@
 - `web-admin`：FR-SYS-070 打开"用户"页即分页列出全部用户；查询后只显示匹配结果；清空后回到全部用户。新增 AC-03、AC-04。
 - `line-mini`：新增 FR-SYS-144。LINE 内点击"CSV"一律用当前会话取得 CSV，显示带预览的"CSV 已准备好"面板，不打开外部浏览器；支持分享文件时可"保存或分享"，始终可"复制 CSV"；只有用户点击"在浏览器中下载"才使用 FR-REPORT-016 的下载凭证。
   - 2026-11-12 修订：首版在不支持分享文件时直接走下载凭证。负责人在 iOS LINE 实测仍弹出"打开外部应用"（iOS LINE 不支持分享文件），故改为上述行为。
+- `line-mini`：修改 FR-SYS-107 与 FR-SYS-116（2026-11-12 负责人提出并先行手改）。LINE 内"导出 Excel"同样用当前会话取得 XLSX，在页面显示"Excel 已就绪"，不自动打开外部浏览器；支持分享文件时可"分享 Excel"，始终可"在浏览器中下载"（下载凭证仅在点击时使用）。XLSX 内容、权限、下载凭证与服务端接口不变。新增 AC-06、AC-07。
 - 不改变行为的修正，不另写 delta：
   - 第 1 项：确认框与底部面板的内容层级高于各自的遮罩，对应 FR-SYS-043 与 FR-SYS-137；
   - 第 2 项：套餐页改为等高卡片、突出当前档位、操作区对齐，按 FR-SYS-053 与 FR-SYS-138"只改样子"处理；
@@ -39,23 +40,24 @@
 
 - `identity`：FR-SYS-080。
 - `web-admin`：FR-SYS-070。
-- `line-mini`：新增 FR-SYS-144。
+- `line-mini`：新增 FR-SYS-144；修改 FR-SYS-107、FR-SYS-116。
 
 ## 归档顺序
 
 - FR-SYS-144 引用 `reporting` 的 FR-REPORT-016，它由未归档的 `template-report-management` 引入。本变更 SHALL 在 `template-report-management` 之后归档。
-- FR-SYS-080 与 FR-SYS-070 目前没有其他未归档变更修改。
+- FR-SYS-107 也由未归档的 `verify-template-custom-fields` 修改（AC-04、AC-05）；本变更的 FR-SYS-107 已包含其内容，SHALL 在其之后归档。
+- FR-SYS-080、FR-SYS-070 与 FR-SYS-116 目前没有其他未归档变更修改。
 
 ## Impact
 
 - 后端：`services/api/app/routers/admin_query.py`、`services/api/app/services/admin_query_service.py`；集成测试。
 - web-admin：`pages/UsersPage.tsx`、`people.test.tsx`、三语资源。
-- line-mini：`components/ui/dialogs.tsx`、`components/ui/sheet.tsx`、`features/reports/api.ts`、`features/reports/ReportDetailPage.tsx`、`features/billing/PlansPage.tsx` 与样式、三语资源及测试。
+- line-mini：`features/scan/download.ts`、`features/scan/FinalResultPage.tsx` 与样式、`final.test.tsx`；`components/ui/dialogs.tsx`、`components/ui/sheet.tsx`、`features/reports/api.ts`、`features/reports/ReportDetailPage.tsx`、`features/billing/PlansPage.tsx` 与样式、三语资源及测试。
 - packages/ui：`components/ChartRenderer/option.ts` 及测试。
 
 ## Non-goals
 
 - 不改变用户查询的字段、排序与每页条数，不增加总数统计或跳页。
 - 不改变 CSV 内容、权限、下载凭证与服务端接口。
-- 不改变 Excel 导出（FR-SYS-107）。它在 LINE 内同样通过外部浏览器下载，需要时另立变更。
+- 不改变 Excel 的内容、版式、权限与服务端接口（原"不改变 Excel 导出"一条已由 2026-11-12 的 FR-SYS-107 修订取代）。
 - 不改变套餐规则、价格与申请流程。
