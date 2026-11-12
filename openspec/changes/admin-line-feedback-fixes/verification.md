@@ -90,3 +90,13 @@
 - 检查结束后已停止本次启动的 vite 与 API 进程。
 
 **仍待真机确认。** iPhone 与 Android LINE 中的复制与系统分享面板，本机无法验证。若两种复制方式在真机都失败，面板会提示改用"在浏览器中下载"。本修订尚未提交、未部署。
+
+### 修订发布（2026-11-12，已完成）
+
+负责人回复 **"提交部署我测试下"**，授权本修订的提交、推送与既有 GitHub Actions 正式发布；未手动 SSH，未做业务写入，未调用付费 OCR。
+
+- 代码提交 **`614884bd212e9d4fbc8babddee94934754daebda`**（11 个文件；`.qoder/` 与 `docs/10-product/user-manuals/` 排除）。
+- [CI 43138830581](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43138830581)：backend、frontend、contract、scripts、stack 全部 success。
+- [Deploy 43139598856](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43139598856)：workflow_dispatch，headSha `614884b`，全部步骤 success。迁移前备份 `saiflow-20261112T021508Z.dump`（301,477 bytes）已上传 `gs://saiflow-db-backup/`；无新迁移；三站健康、外部 5432 关闭、runner SSH key 清理均 success。日志存 `temp/csv-release/deploy.log`。
+- 只读线上检查：三站 `/api/v1/health` 均 status/database ok、version `614884b…`；LINE 入口 `index-Dr6yPEVn.js` 含 `execCommand`、`csv-preview`、`canShare` 与 `showAllSymbol`。
+- 待负责人在 iPhone/Android LINE 真机确认复制与分享。
