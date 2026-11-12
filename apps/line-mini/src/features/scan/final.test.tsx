@@ -176,27 +176,41 @@ describe("final result and export (FR-SYS-107)", () => {
     expect(await api.bodies(`POST ${JOB}/exports`)).toEqual([{ language: "th" }]);
   });
 
-  it("without file sharing, the browser download is offered and used only on request (107-06)", async () => {
+  it.each(["false", "missing", "throws"])("shares directly without trusting canShare (%s), never offering the browser (107-06)", async (probe) => {
     const liff = testAuth(fakeLiff({ loggedIn: true, inClient: true }));
-    stubShare(false);
+    const share = stubShare(false);
+    if (probe === "missing") Reflect.deleteProperty(navigator, "canShare");
+    if (probe === "throws") Object.defineProperty(navigator, "canShare", { configurable: true, value: () => { throw new Error("unsupported probe"); } });
     const api = finalApi();
-    api.set("POST /api/v1/exports/e1/ticket", () => json(200, { url: "/api/v1/export-downloads/abc.def" }));
     signedIn(USER, [PERSONAL]);
     pages("/scan/jobs/j1/final");
     await userEvent.click(await screen.findByRole("button", { name: "Export Excel" }));
-    expect(await screen.findByText(/cannot save files directly/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Share Excel" })).toBeNull();
+    const button = await screen.findByRole("button", { name: "Share Excel" });
+    expect(share).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Download in browser" })).toBeNull();
+    await userEvent.click(button);
+    expect(share).toHaveBeenCalledTimes(1);
     expect(liff.openWindow).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole("button", { name: "Download in browser" }));
-    await waitFor(() => expect(liff.openWindow).toHaveBeenCalled());
-    const arg = liff.openWindow.mock.calls[0]![0] as { url: string; external: boolean };
-    expect(arg.external).toBe(true);
-    expect(arg.url).toMatch(/\/api\/v1\/export-downloads\/abc\.def$/);
-    expect(await screen.findByText(/Opening your phone browser/)).toBeInTheDocument();
+    expect(api.count("POST /api/v1/exports/e1/ticket")).toBe(0);
   });
 
-  it("a cancelled share stays quiet; a failed share points to the browser (107-07)", async () => {
-    testAuth(fakeLiff({ loggedIn: true, inClient: true }));
+  it("missing share API is explained in the page without an external fallback (107-06)", async () => {
+    const liff = testAuth(fakeLiff({ loggedIn: true, inClient: true }));
+    Reflect.deleteProperty(navigator, "share");
+    const api = finalApi();
+    signedIn(USER, [PERSONAL]);
+    pages("/scan/jobs/j1/final");
+    await userEvent.click(await screen.findByRole("button", { name: "Export Excel" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Share Excel" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("does not provide file sharing");
+    expect(screen.getByRole("button", { name: "Share Excel" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Download in browser" })).toBeNull();
+    expect(liff.openWindow).not.toHaveBeenCalled();
+    expect(api.count("POST /api/v1/exports/e1/ticket")).toBe(0);
+  });
+
+  it("a cancelled share stays quiet; a failed share stays in the page for retry (107-07)", async () => {
+    const liff = testAuth(fakeLiff({ loggedIn: true, inClient: true }));
     const share = stubShare(true, vi.fn<(data: ShareData) => Promise<void>>(async () => {
       throw new DOMException("cancelled", "AbortError");
     }));
@@ -211,8 +225,13 @@ describe("final result and export (FR-SYS-107)", () => {
       throw new DOMException("blocked", "NotAllowedError");
     });
     await userEvent.click(screen.getByRole("button", { name: "Share Excel" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Download in browser");
-    expect(screen.getByRole("button", { name: "Download in browser" })).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("try sharing again");
+    expect(screen.getByRole("button", { name: "Share Excel" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Download in browser" })).toBeNull();
+    expect(liff.openWindow).not.toHaveBeenCalled();
+    share.mockResolvedValueOnce();
+    await userEvent.click(screen.getByRole("button", { name: "Share Excel" }));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Excel export ready" })).toBeNull());
   });
 
   it("no export permission hides button (107-02)", async () => {

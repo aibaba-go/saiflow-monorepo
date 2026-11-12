@@ -25,7 +25,6 @@ import { PageHeader } from "../scan/components/PageHeader";
 import theme from "../scan/theme.module.css";
 import { useCurrentTenant } from "../tenants/useCurrentTenant";
 import {
-  canShareFiles,
   configOf,
   copyText,
   downloadCsv,
@@ -74,7 +73,6 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
     const rows = parseCsv(prepared.text).filter((r) => r.some((c) => c !== ""));
     return { rows: rows.slice(0, PREVIEW_ROWS), total: rows.length };
   }, [prepared]);
-  const shareable = useMemo(() => prepared !== null && canShareFiles(), [prepared]);
   const seq = useRef(0);
   const active = useRef(true);
   const currentPeriod = useRef<Period | null>(null);
@@ -140,7 +138,7 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
     return () => {
       active.current = false;
       seq.current += 1;
-      cancelDownloads(); // invalidate before leaving the tenant/page can open a ticket
+      cancelDownloads(); // discard the file when leaving the tenant/page
     };
   }, [cancelDownloads]);
 
@@ -166,19 +164,19 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
 
   const titleOf = (card: ReportCard) => card.title?.trim() || labels.chart.chartTypes[card.type];
 
-  const exportCard = async (card: ReportCard, external = false) => {
+  const exportCard = async (card: ReportCard) => {
     if (!result || download.current) return; // the mobile viewer intentionally exports one file at a time
     setPrepared(null);
     const controller = new AbortController();
     download.current = controller;
     setExporting(card.id);
     try {
-      // Pin the effective displayed period; a ticket must not re-resolve next year's default.
+      // Pin the effective displayed period rather than re-resolving a moving default.
       const shown = result.period;
-      const out = await downloadCsv(authLiff(), detail.id, card.id, shown, version, controller.signal, external);
+      const out = await downloadCsv(authLiff(), detail.id, card.id, shown, version, controller.signal);
       if (!active.current || controller.signal.aborted) return;
       if (out.how === "prepared") setPrepared({ card, file: out.file, text: out.text, period: shown });
-      else showToast(t(out.how === "external" ? "rpt.csvExternal" : "rpt.csvReady"));
+      else showToast(t("rpt.csvReady"));
     } catch (e) {
       if (!active.current || controller.signal.aborted) return;
       // A refresh changes the data sequence, not the authority of a pending CSV refusal.
@@ -231,11 +229,6 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
     void copyText(prepared.text, e.currentTarget.parentElement ?? document.body).then((ok) => {
       if (active.current) showToast(t(ok ? "rpt.csvCopied" : "rpt.csvCopyFailed"));
     });
-  };
-  const inBrowser = () => {
-    const card = prepared?.card;
-    setPrepared(null);
-    if (card) void exportCard(card, true);
   };
 
   const notPublished = data.error instanceof ApiError && data.error.code === "report_not_published";
@@ -407,7 +400,7 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
           <>
             <h2 className={s["sheet-title"]}>{t("rpt.csvPrepared")}</h2>
             <p className={s["sheet-body"]}>
-              {t(shareable ? "rpt.csvPreparedBody" : "rpt.csvPreparedCopy", {
+              {t("rpt.csvPreparedBody", {
                 title: titleOf(prepared.card),
                 from: prepared.period.from,
                 to: prepared.period.to,
@@ -434,18 +427,12 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
               </>
             )}
             <div className={s["sheet-actions"]}>
-              {shareable && (
-                <Button variant="primary" block onClick={sharePrepared}>
-                  {t("rpt.csvShare")}
-                </Button>
-              )}
-              <Button variant={shareable ? "outline" : "primary"} block onClick={copyPrepared}>
+              <Button variant="primary" block onClick={sharePrepared}>
+                {t("rpt.csvShare")}
+              </Button>
+              <Button variant="outline" block onClick={copyPrepared}>
                 {t("rpt.csvCopy")}
               </Button>
-              <Button block onClick={inBrowser}>
-                {t("rpt.csvInBrowser")}
-              </Button>
-              <p className={s.note}>{t("rpt.csvBrowserHint")}</p>
               <Button variant="ghost" block onClick={() => setPrepared(null)}>
                 {t("common.close")}
               </Button>

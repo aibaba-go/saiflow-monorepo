@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { BrandLoading } from "../../components/BrandLoading";
@@ -15,7 +15,7 @@ import { OriginalPreview } from "./components/OriginalPreview";
 import { PageHeader } from "./components/PageHeader";
 import { StatusChip } from "./components/StatusChip";
 import { StructuredDataView } from "./components/StructuredDataView";
-import { canShareFile, exportAndDownload, openExportInBrowser, type XlsxOutcome } from "./download";
+import { exportAndDownload, type XlsxOutcome } from "./download";
 import s from "./FinalResultPage.module.css";
 import { useJob } from "./ProcessingPage";
 import { useResult } from "./ResultPage";
@@ -24,7 +24,7 @@ import theme from "./theme.module.css";
 
 /** main `FinalResultPage.vue` (FR-SYS-107, 116): the confirmed result read-only with its
  * original, "Export Excel" for holders of the export permission (preparing → ready; in LINE
- * the file is kept in the page to share, with the phone browser only on request), and
+ * the file is kept in the page and shared from a second tap, never via a phone browser), and
  * "New scan". */
 export function FinalResultPage() {
   const t = useT();
@@ -44,8 +44,7 @@ export function FinalResultPage() {
   const [exporting, setExporting] = useState(false);
   const [preparedFor, setPrepared] = useState<(Extract<XlsxOutcome, { how: "prepared" }> & { tenantId?: number }) | null>(null);
   const [saved, setSaved] = useState(false);
-  const [external, setExternal] = useState(false);
-  const [shareFailed, setShareFailed] = useState(false);
+  const [shareError, setShareError] = useState<"unavailable" | "failed" | null>(null);
   const [error, setError] = useState<unknown>(null);
   const data = result.data;
   const confirmed = job.data?.stage === "CONFIRMED";
@@ -53,15 +52,13 @@ export function FinalResultPage() {
   const tenantId = tenant?.tenant_id;
   // A file prepared for another tenant is not offered after switching (FR-SYS-107).
   const prepared = preparedFor && preparedFor.tenantId === tenantId ? preparedFor : null;
-  const shareable = useMemo(() => prepared !== null && canShareFile(prepared.file), [prepared]);
 
   async function exportExcel() {
     setExporting(true);
     setError(null);
     setPrepared(null);
     setSaved(false);
-    setExternal(false);
-    setShareFailed(false);
+    setShareError(null);
     try {
       const liff = authLiff();
       const outcome: XlsxOutcome = await exportAndDownload(id, lang, liff, job.data?.file_name ?? "result");
@@ -74,25 +71,22 @@ export function FinalResultPage() {
     }
   }
 
+  // Match the user's share-on-tap flow. A missing/false canShare probe is not used to
+  // replace the share button with an external download (FR-SYS-107).
   async function sharePrepared() {
     if (!prepared) return;
-    setShareFailed(false);
+    setShareError(null);
+    if (typeof navigator.share !== "function") {
+      setShareError("unavailable");
+      return;
+    }
+    const file = prepared.file;
     try {
-      await navigator.share({ files: [prepared.file], title: prepared.file.name });
+      await navigator.share({ files: [file], title: file.name });
+      setPrepared((p) => (p?.file === file ? null : p));
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") return; // user closed the sheet
-      setShareFailed(true);
-    }
-  }
-
-  async function openInBrowser() {
-    if (!prepared) return;
-    setError(null);
-    try {
-      await openExportInBrowser(prepared.exportId, authLiff());
-      setExternal(true);
-    } catch (e) {
-      setError(e);
+      setShareError("failed");
     }
   }
 
@@ -191,28 +185,16 @@ export function FinalResultPage() {
             {saved && <p className={s["export-ready"]}>{t("final.exportReady")}</p>}
             {prepared && (
               <div className={s["export-panel"]} role="region" aria-label={t("final.exportReady")}>
-                <p className={s["export-panel-title"]}>
-                  {t(shareable ? "final.exportPrepared" : "final.exportPreparedNoShare")}
-                </p>
+                <p className={s["export-panel-title"]}>{t("final.exportPrepared")}</p>
                 <p className={s["export-panel-name"]}>{prepared.file.name}</p>
-                {shareable && (
-                  <button type="button" className={s["primary-btn"]} onClick={() => void sharePrepared()}>
-                    {t("final.shareExcel")}
-                  </button>
-                )}
-                {shareFailed && (
+                {shareError && (
                   <p className={s["status-error"]} role="alert">
-                    {t("final.shareFailed")}
+                    {t(shareError === "unavailable" ? "final.shareUnavailable" : "final.shareFailed")}
                   </p>
                 )}
-                <button
-                  type="button"
-                  className={s[shareable ? "secondary-btn" : "primary-btn"]}
-                  onClick={() => void openInBrowser()}
-                >
-                  {t("final.downloadInBrowser")}
+                <button type="button" className={s["primary-btn"]} onClick={() => void sharePrepared()}>
+                  {t("final.shareExcel")}
                 </button>
-                <p className={s["export-panel-hint"]}>{external ? t("final.exportExternal") : t("final.browserHint")}</p>
               </div>
             )}
           </div>

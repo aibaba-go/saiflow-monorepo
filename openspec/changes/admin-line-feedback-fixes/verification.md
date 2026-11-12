@@ -134,3 +134,47 @@
 - 只读线上检查：三站 `/api/v1/health` 均为 status/database ok，version `8eacd4c…`；LINE 入口 `index-BaWrOuwp.js` 含 `final.shareExcel`、`final.downloadInBrowser`、`export-panel`、`csv-preview` 与 `canShare`。
 - 部署目标仍为 GitHub Variable `VPS_HOST`（38.60.156.234）。DoH 查询三个域名均解析到该地址，负责人提到的新服务器 IP 尚未提供。
 - 待负责人在 iPhone/Android LINE 真机确认。若 iOS LINE 不支持分享文件，面板只提供"在浏览器中下载"，这时仍会出现一次"允许"询问，属于 LINE 的限制。
+
+## 2026-11-12 再修订：CSV 与 Excel 只在点击时分享，彻底移除浏览器退路
+
+**反馈与授权。** 负责人再次提供 iOS LINE 的"此网站正尝试打开外部应用"截图，并要求"请更换导出方式……按照我刚才修改代码的那种方式来"。本次按其手改方式完成本地代码与验证；未获得新的提交、推送或生产部署授权，**尚未提交、未部署**。前文是历史版本的验证及发布证据，其能力探测隐藏按钮、浏览器退路与允许提示不再适用于本次代码。此前将 iOS LINE 的分享能力一概视为不支持也不构成本次真机证据，实际结果只能由运行时调用确定。
+
+**当前行为（FR-SYS-144、FR-SYS-107、FR-SYS-116、FR-ENTRY-015、FR-REPORT-016）。**
+
+- CSV 与 XLSX 均使用当前会话、租户上下文取得原始文件字节，先在当前页面准备文件；第二次点击分享按钮时直接调用 `navigator.share({ files })`，调用之前没有异步等待。
+- 不使用 `navigator.canShare` 隐藏按钮。其缺失、返回 false 或抛错时仍保留分享按钮并直接尝试分享。
+- 删除两条 LINE 导出路径的下载凭证请求、外部浏览器跳转、浏览器下载按钮和允许提示；同时移除 `features/scan/api.ts` 中无引用的旧 `exportTicket` 封装。全项目 line-mini 非测试代码搜索上述旧符号与两条 ticket 请求均无匹配。
+- CSV 保留最多 50 个非空行的预览和完整文本复制，复制文本去 BOM，分享文件保留原始字节。分享缺失或同步/异步失败时提示改用复制；复制失败时提示重试复制或分享，均不离开当前页面。
+- XLSX 分享接口缺失或失败时在页面明确提示，文件保留供重试；取消静默，成功后关闭文件就绪面板。错误提示上移到分享按钮上方，并缩短英文、泰文提示，避免被底部操作栏遮挡。
+- LINE 外的普通浏览器仍沿用原直接下载方式；文件内容、版式、服务端接口、权限规则均未扩展。proposal、plan 与 delta spec 已同步，无新迁移、无 design/tasks 文件。
+
+### 最终自动化检查
+
+| 检查 | 结果 |
+|---|---|
+| 修改前新增回归用例（红） | 13 failed / 51 passed，证明旧能力探测和外部退路与本次行为不一致 |
+| `reports.test.tsx` 与 `final.test.tsx` | 50 + 14 = 64 passed；覆盖字节、能力探测 false/缺失/抛错、接口缺失、取消、失败、重试及无 ticket/openWindow |
+| line-mini vitest 全量（单 worker、vmThreads） | 33 files，332 passed |
+| line-mini tsc `--noEmit`、eslint | 均 rc=0 |
+| line-mini vite build | 成功，输出 `temp/xlsx-share/share-only-build/` |
+| `openspec validate admin-line-feedback-fixes --strict` | valid |
+| `git diff --check` | 通过 |
+
+测试及构建日志为 `temp/xlsx-share/share-only-full.log`、`share-only-targeted.log`、`share-only-build.log`；未重跑后端或其他应用，本次没有修改它们。
+
+### 浏览器与截图检查
+
+脚本 `temp/xlsx-share/browser-share-only.cjs`，页面 `127.0.0.1:5181`，配置沿用 `temp/csv-panel/vite.config.mts` 的开发 LIFF 替身。**所有 `/api/**` 请求由 Playwright 完全模拟返回，没有 `route.fetch`，未启动或访问真实 API/数据库，未登录或创建任何实际账号/导出记录，未调用 OCR。** XLSX 是标注为模拟的文件字节，不是实际工作簿；这次只验证传递字节完整性，不验证服务端工作簿生成。
+
+- 18 组场景，共 **147 PASS / 0 FAIL**：两种格式各 zh 390px、en 360px、th 320px 的成功分享；各 en 390px 的接口缺失、同步抛错、异步拒绝和取消；另含 XLSX zh 390px、th 320px 的接口缺失与失败。
+- `canShare` 在所有场景均为 false，检查分享按钮仍存在、不调用探测、不自动分享；成功分享时 `navigator.userActivation.isActive` 为 true，收到的文件字节与模拟 API 完全一致。
+- CSV 每组实际点击复制，Chrome 剪贴板得到完整 CSV（仅移除 BOM），复制后面板保留，预览为 50 行。
+- 所有场景均无 ticket 请求、`window.open` 或新窗口，导出使用租户 8；所有 API 请求均命中预期模拟接口，没有页面未处理异常。
+- 页面和面板无横向溢出。XLSX 错误提示的底部高于操作栏顶部；已打开检查 CSV 中/泰文、XLSX 中/泰文及中/英/泰失败截图。截图及逐项 JSON 见 `temp/xlsx-share/shots-share-only/`，结果汇总见 `share-only-browser.log`。
+- 完成后已关闭浏览器及本次启动的 `:5181` Vite 服务，没有停止其他开发服务。
+
+### 审查及仍未验证的边界
+
+独立静态审查全文核对四个导出实现及相关测试，未发现本次新增的实质缺陷。其记录了既有的缓存文件边界：XLSX 只绑定租户，同组件换任务或权限撤销后可能仍保留旧文件；CSV 同发布版本的 `can_export` 单独变 false 时未必清理已准备文件。本次没有扩展到这些既有上下文失效问题，不将其描述为已验证或已修复。
+
+真实 iPhone/Android LINE 的系统分享和复制**仍未验证**。本机模拟分享成功不证明 LINE 支持分享文件；若客户端没有提供该能力，XLSX 将停留在页面显示不支持提示，而不会改用外部浏览器。Web Share 的用户激活及支持条件参考 [MDN Navigator.share](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/share)。本修订仅本地完成，生产仍是此前发布版本。

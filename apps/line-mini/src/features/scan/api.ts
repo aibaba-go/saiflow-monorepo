@@ -55,5 +55,3 @@ export const createExport = (jobId: string, language: Lang) =>
   call(api.POST("/api/v1/ocr/jobs/{job_id}/exports", { ...job(jobId), body: { language } }));
 export const getExport = (exportId: string) =>
   call(api.GET("/api/v1/exports/{export_id}", { params: { path: { export_id: exportId } } }));
-export const exportTicket = (exportId: string) =>
-  call(api.POST("/api/v1/exports/{export_id}/ticket", { params: { path: { export_id: exportId } } }));

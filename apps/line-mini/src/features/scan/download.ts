@@ -1,14 +1,13 @@
-import { apiBaseUrl } from "../../config";
 import { api, call } from "../../services/api";
 import type { Liff } from "../../services/liffTypes";
 import type { Lang } from "../../stores/language";
 
 const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-/** How an XLSX export went: prepared inside LINE for the share sheet, or saved
- *  directly from another browser (FR-SYS-107, FR-ENTRY-015). `exportId` lets the user
- *  still choose the phone browser for the prepared file. */
-export type XlsxOutcome = { how: "prepared"; file: File; exportId: string } | { how: "saved" };
+/** How an XLSX export went: prepared inside LINE for sharing from a tap, or saved
+ * directly from another browser. LINE never uses a download ticket or external browser
+ * (FR-SYS-107, FR-ENTRY-015). */
+export type XlsxOutcome = { how: "prepared"; file: File } | { how: "saved" };
 
 /** Export a confirmed result as XLSX (FR-SYS-107, FR-ENTRY-015). Creating the export
  *  reuses a live one and makes a new one when the old one expired, so the download
@@ -39,7 +38,7 @@ export async function exportAndDownload(
 
   if (liff.isInClient()) {
     const bytes = await blob.arrayBuffer();
-    return { how: "prepared", file: new File([bytes], name, { type: XLSX_TYPE }), exportId: created.id };
+    return { how: "prepared", file: new File([bytes], name, { type: XLSX_TYPE }) };
   }
 
   // Elsewhere: fetched through the api client (tenant header), saved via an object URL.
@@ -52,23 +51,4 @@ export async function exportAndDownload(
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
   return { how: "saved" };
-}
-
-/** Whether this browser can hand the file to the system share sheet (iOS LINE often cannot). */
-export function canShareFile(file: File): boolean {
-  try {
-    return typeof navigator.share === "function" && typeof navigator.canShare === "function" &&
-      navigator.canShare({ files: [file] });
-  } catch {
-    return false;
-  }
-}
-
-/** Only when the user asks for it: the phone browser has no session, so a 60-second ticket
- *  stands in for it (LINE asks before opening the external app). */
-export async function openExportInBrowser(exportId: string, liff: Liff): Promise<void> {
-  const ticket = await call(
-    api.POST("/api/v1/exports/{export_id}/ticket", { params: { path: { export_id: exportId } } }),
-  );
-  liff.openWindow({ url: new URL(ticket.url, apiBaseUrl || window.location.origin).href, external: true });
 }
