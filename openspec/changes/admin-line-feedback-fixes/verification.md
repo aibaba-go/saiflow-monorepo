@@ -267,3 +267,17 @@
 - 五个修改的 Python 文件 Ruff check 与 format --check 全部通过；`git diff --check` 通过。独立静态审查未发现可操作问题，主会话核对实际差异；实现仅涉及两个 router，测试涉及两个集成模块及 OpenAPI 单元模块，证据追加于本文件。暂停的频道配置、前端、服务逻辑和迁移均未改动。
 
 本轮只证明本地 HEAD 405 已修复及既有下载行为回归通过，不证明 iPhone LINE 的“允许后无反应”已解决。没有本轮生产验证、提交、推送或部署，真实 LINE 下载仍需发布后真机复测。
+
+## 下载 HEAD 修复发布（2026-11-12）
+
+负责人随后明确授权“提交发布”。本节记录后续实际发布，上节“未提交发布”保留为当时的阶段状态。
+
+- 业务提交 `a197e422fd213bc45cb0a410bfc6da51e90d109a` 已推送 `chore/ai-workflow-v2`，仅六个文件：两个下载 router、两个集成测试模块、OpenAPI 单元测试及本验证记录。暂停的 Published 频道配置、`.qoder/`、用户手册和临时产物未纳入。
+- [CI 43181404964](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43181404964)：**success**，08:22:25 UTC 完成；frontend、backend、contract、scripts、stack 五项全部通过，包括后端全量 pytest/Ruff、前端全工作区 lint/test/build、客户端生成一致性及隔离栈备份恢复演练。
+- 发布前再次确认远端分支等于业务 SHA，`VPS_HOST=38.60.156.234`。公开变量 `LIFF_ID=2012285576-KbzpK5mY`、`LINE_CHANNEL_ID=2012428743` 不变；已提交 workflow/deploy scripts 与上一业务版本一致，本次无迁移变化。没有使用本地暂停的频道配置，也没有直接 SSH 修改生产。
+- [Deploy 43182548037](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43182548037)：**success**，08:27:58 UTC 完成。实际日志记录迁移前生成 `saiflow-20261112T082719Z.dump`（311703 bytes），上传 `gs://saiflow-db-backup/` 成功，随后迁移检查及重启成功；三个站点 smoke-check 通过，外部 5432 关闭检查通过。
+- 发布后独立只读核验（08:28:42 UTC）：三个站点 `saiflow-app.aibaba.asia`、`saiflow-admin.aibaba.asia`、`saiflow-line2.aibaba.asia` 健康接口均 HTTP 200，`status=ok`、`database=ok`、版本均为业务 SHA。
+- 在 LINE 站点向 CSV/XLSX 两个票据下载路径发送明确无效的 `diagnostic.invalid` HEAD，均返回 **404**；向两个直接下载路径发送未登录 HEAD，均返回 **401**。四项不再返回 405，证明生产已接收 HEAD 并进入原拒绝逻辑，没有绕过授权。
+- 只读核验脚本 `temp/xlsx-share/check-head-production.py` 先用模拟响应验证正确结果、错误 SHA、HEAD 405 三种情况；每轮严格只有三次健康 GET 和四次无效票据/未登录 HEAD，没有签发票据、生成业务导出或触发 OCR。实际结果保存为 `head-production-check.json`（全部 passed），部署日志为 `head-deploy.log`。
+
+有效票据的 200、GET 相同元数据及空 HEAD 文件响应体已由本地集成测试和 CI 验证；本轮生产核验不生成真实导出或签发有效票据，不替代该行为或真实 iPhone/Android LINE 下载验收。不能仅因 HEAD 405 修复就宣称 iPhone“允许后无反应”已解决，仍需负责人关闭并重新打开 LINE 后真机复测 CSV/Excel。发布证据另以仅文档提交推送，不重复部署。
