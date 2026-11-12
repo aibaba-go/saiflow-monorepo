@@ -3,7 +3,7 @@
 from typing import Annotated
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,8 +49,8 @@ class TicketOut(BaseModel):
     url: str
 
 
-def _file(data: bytes, name: str) -> Response:
-    return Response(
+def _file(data: bytes, name: str, *, head_only: bool = False) -> Response:
+    response = Response(
         data,
         media_type=export_service.XLSX_MIME,
         headers={
@@ -58,6 +58,10 @@ def _file(data: bytes, name: str) -> Response:
             "Cache-Control": "private, no-store",
         },
     )
+    if head_only:
+        # Preserve the GET Content-Length while sending no file bytes for HEAD.
+        response.body = b""
+    return response
 
 
 @router.post(
@@ -94,10 +98,11 @@ async def get_export(export_id: str, ctx: Tenant, db: Db) -> ExportStateOut:
     )
 
 
+@router.head("/exports/{export_id}/download", include_in_schema=False)
 @router.get("/exports/{export_id}/download", operation_id="downloadExport", response_class=Response)
-async def download(export_id: str, ctx: Tenant, db: Db, store: Store) -> Response:
+async def download(export_id: str, request: Request, ctx: Tenant, db: Db, store: Store) -> Response:
     data, name = await export_service.content(db, store, ctx, export_id)
-    return _file(data, name)
+    return _file(data, name, head_only=request.method == "HEAD")
 
 
 @router.post(
@@ -113,12 +118,17 @@ async def ticket(
     return TicketOut(url=await export_service.ticket(db, settings, ctx, principal, export_id))
 
 
+@router.head("/export-downloads/{token}", include_in_schema=False)
 @router.get(
     "/export-downloads/{token}", operation_id="redeemDownloadTicket", response_class=Response
 )
 async def redeem(
-    token: str, db: Db, store: Store, settings: Annotated[Settings, Depends(get_settings)]
+    token: str,
+    request: Request,
+    db: Db,
+    store: Store,
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> Response:
     data, name = await export_service.redeem(db, store, settings, token)
     await db.commit()
-    return _file(data, name)
+    return _file(data, name, head_only=request.method == "HEAD")

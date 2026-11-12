@@ -176,8 +176,56 @@ async def test_line_ticket_gives_the_same_file_for_60_seconds(
     later = utcnow() + timedelta(seconds=61)
     monkeypatch.setattr(report_csv_service, "utcnow", lambda: later)
     assert (await bare.get(url)).status_code == 404
+    assert (await bare.head(url)).status_code == 404
     audits = await report_audits(db)
     assert [a[3] for a in audits if a[0] == "report.csv"] == ["success", "success"]
+
+
+async def test_head_csv_and_ticket_match_get_metadata(api, line, db, ticket_secret, monkeypatch):
+    """FR-REPORT-016: authenticated and ticket HEAD retain all GET metadata, not its body."""
+    org = await report_org(api, line, db)
+    u = await join(api, line, db, org, "U", ["report_view", "export"])
+    viewer = await join(api, line, db, org, "V", ["report_view"])
+    await formal(db, org, u.user_id, doc(10, "ACME", "2026-03-01"))
+    await formal(db, org, org.owner.user_id, doc(500, "ACME", "2026-03-02"))
+    report = await published(org.owner, org, page(org.card("c_1", dimension=MONTH), period=YEAR))
+    period = {"from": "2026-03-01", "to": "2026-03-31"}
+    direct_url = f"{R}/{report['id']}/csv"
+    ticket_url = (await csv_ticket(u, org, report["id"], period=period)).json()["url"]
+    sent_bodies = []
+    inner_app = api._transport.app
+
+    async def capture(scope, receive, send):
+        async def record(message):
+            if scope["method"] == "HEAD" and message["type"] == "http.response.body":
+                sent_bodies.append(message.get("body", b""))
+            await send(message)
+
+        await inner_app(scope, receive, record)
+
+    monkeypatch.setattr(api._transport, "app", capture)
+    async with client_like(api) as bare:
+        params = {"card_id": "c_1", "report_version": 1, **period}
+        for client, url, kwargs in (
+            (u.client, direct_url, {"params": params, "headers": org.h}),
+            (bare, ticket_url, {}),
+        ):
+            head = await client.head(url, **kwargs)
+            assert head.status_code == 200, head.status_code
+            downloaded = await client.get(url, **kwargs)
+            assert downloaded.status_code == 200
+            for name in ("content-type", "content-disposition", "content-length", "cache-control"):
+                assert head.headers[name] == downloaded.headers[name]
+            assert int(head.headers["content-length"]) == len(downloaded.content) > 0
+            assert head.content == b""
+            assert "500" not in downloaded.text
+            assert (await client.head(url, **kwargs)).status_code == 200
+        assert sent_bodies and all(body == b"" for body in sent_bodies)
+        assert (await bare.head(direct_url, params=params)).status_code == 401
+        denied = await viewer.client.head(direct_url, params=params, headers=org.h)
+        assert denied.status_code == 403
+        params["report_version"] = 2
+        assert (await u.client.head(direct_url, params=params, headers=org.h)).status_code == 409
 
 
 async def test_ticket_needs_export_and_dies_with_rights_or_session(
@@ -197,9 +245,11 @@ async def test_ticket_needs_export_and_dies_with_rights_or_session(
     bare = client_like(api)
     tampered = url[:-2] + ("AA" if not url.endswith("AA") else "BB")
     assert (await bare.get(tampered)).status_code == 404
+    assert (await bare.head(tampered)).status_code == 404
     # a result-export ticket path does not accept a report ticket
     token = url.rsplit("/", 1)[1]
     assert (await bare.get(f"/api/v1/export-downloads/{token}")).status_code == 404
+    assert (await bare.head(f"/api/v1/export-downloads/{token}")).status_code == 404
     # the right is checked again when the ticket is used
     await db.execute(
         text("update roles set permissions = :p where tenant_id = :t and name = 'Role U'"),
@@ -208,6 +258,7 @@ async def test_ticket_needs_export_and_dies_with_rights_or_session(
     await db.commit()
     r = await bare.get(url)
     assert (r.status_code, r.json()["code"]) == (404, "not_found")
+    assert (await bare.head(url)).status_code == 404
     # Subscription expiry is also opaque to a downloader without a session.
     expiring = (await csv_ticket(org.owner, org, report["id"])).json()["url"]
     await db.execute(
@@ -216,6 +267,7 @@ async def test_ticket_needs_export_and_dies_with_rights_or_session(
     )
     await db.commit()
     assert (await bare.get(expiring)).status_code == 404
+    assert (await bare.head(expiring)).status_code == 404
     await db.execute(
         text("update subscriptions set ends_at = now() + interval '1 year' where tenant_id = :t"),
         {"t": org.tenant_id},
@@ -226,6 +278,7 @@ async def test_ticket_needs_export_and_dies_with_rights_or_session(
     url = (await csv_ticket(w, org, report["id"])).json()["url"]
     await w.client.post("/api/v1/auth/logout")
     assert (await bare.get(url)).status_code == 404
+    assert (await bare.head(url)).status_code == 404
 
 
 async def test_ticket_needs_the_secret(api, line, db):
@@ -285,3 +338,4 @@ async def test_ticket_cannot_change_published_version_at_redemption(api, line, d
     assert r.status_code == 404
     assert r.json()["code"] == "not_found"
     assert "text/csv" not in r.headers["content-type"]
+    assert (await bare.head(url)).status_code == 404

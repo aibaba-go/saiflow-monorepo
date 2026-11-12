@@ -5,7 +5,7 @@ Starter+ organization) and its own right (manage / view / view + export)."""
 from typing import Annotated
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
@@ -201,13 +201,15 @@ async def _csv(
     card_id: str,
     period: dict | None,
     report_version: int | None = None,
+    *,
+    head_only: bool = False,
 ) -> Response:
     async def run():
         await svc.require(db, ctx, "view", "export")
         body, name = await report_csv_service.export(
             db, ctx, report_id, card_id, period, report_version
         )
-        return Response(
+        response = Response(
             body,
             media_type="text/csv; charset=utf-8",
             headers={
@@ -215,13 +217,19 @@ async def _csv(
                 "Cache-Control": "private, no-store",
             },
         )
+        if head_only:
+            # Preserve the GET Content-Length while sending no file bytes for HEAD.
+            response.body = b""
+        return response
 
     return await svc.audited(db, svc.user_actor(ctx), "csv", report_id, run)
 
 
+@router.head("/{report_id}/csv", include_in_schema=False)
 @router.get("/{report_id}/csv", operation_id="exportReportCsv", response_class=Response)
 async def export_csv(
     report_id: PathId,
+    request: Request,
     ctx: Tenant,
     db: Db,
     card_id: Annotated[str, Query(min_length=1, max_length=64)],
@@ -230,7 +238,9 @@ async def export_csv(
     report_version: Annotated[int | None, Query(ge=1)] = None,
 ) -> Response:
     period = None if from_ is None and to is None else {"from": from_, "to": to}
-    return await _csv(db, ctx, report_id, card_id, period, report_version)
+    return await _csv(
+        db, ctx, report_id, card_id, period, report_version, head_only=request.method == "HEAD"
+    )
 
 
 @router.post(
@@ -249,15 +259,18 @@ async def csv_ticket(
     return CsvTicketOut(url=url)
 
 
+@downloads_router.head("/report-downloads/{token}", include_in_schema=False)
 @downloads_router.get(
     "/report-downloads/{token}", operation_id="redeemReportCsvTicket", response_class=Response
 )
-async def redeem_csv_ticket(token: str, db: Db, settings: Config) -> Response:
+async def redeem_csv_ticket(token: str, request: Request, db: Db, settings: Config) -> Response:
     try:
         ctx, report_id, card_id, period, version = await report_csv_service.redeem(
             db, settings, token
         )
-        return await _csv(db, ctx, report_id, card_id, period, version)
+        return await _csv(
+            db, ctx, report_id, card_id, period, version, head_only=request.method == "HEAD"
+        )
     except AppError as exc:
         # AC-FR-REPORT-016-03: a revoked/ended ticket is opaque. _csv has already
         # recorded permission/plan refusals; authenticated CSV retains its usual 403.

@@ -68,6 +68,43 @@ async def test_export_and_download(api, line, mail, store, sm, ai_settings, llm,
     assert wb["_saiflow"]["A1"].value.startswith("template:")
 
 
+async def test_head_download_and_ticket_match_get_metadata(
+    api, line, mail, store, sm, ai_settings, llm, db, ticket_secret, monkeypatch
+):
+    """FR-ENTRY-015: a downloader may HEAD first; it gets GET headers but no file body."""
+    job = await confirmed_job(api, line, mail, store, sm, ai_settings, llm, db)
+    export_id = (await api.post(f"{JOBS}/{job['id']}/exports")).json()["id"]
+    direct_url = f"/api/v1/exports/{export_id}/download"
+    ticket_url = (await api.post(f"/api/v1/exports/{export_id}/ticket")).json()["url"]
+    # HTTPX suppresses HEAD bodies itself, so also inspect what the ASGI app sends.
+    sent_bodies = []
+    inner_app = api._transport.app
+
+    async def capture(scope, receive, send):
+        async def record(message):
+            if scope["method"] == "HEAD" and message["type"] == "http.response.body":
+                sent_bodies.append(message.get("body", b""))
+            await send(message)
+
+        await inner_app(scope, receive, record)
+
+    monkeypatch.setattr(api._transport, "app", capture)
+    async with client_like(api) as bare:
+        for client, url in ((api, direct_url), (bare, ticket_url)):
+            head = await client.head(url)
+            assert head.status_code == 200, head.status_code
+            downloaded = await client.get(url)
+            assert downloaded.status_code == 200
+            for name in ("content-type", "content-disposition", "content-length", "cache-control"):
+                assert head.headers[name] == downloaded.headers[name]
+            assert int(head.headers["content-length"]) == len(downloaded.content) > 0
+            assert head.content == b""
+            # A metadata probe does not consume the ticket or invalidate the export.
+            assert (await client.head(url)).status_code == 200
+        assert sent_bodies and all(body == b"" for body in sent_bodies)
+        assert (await bare.head(direct_url)).status_code == 401
+
+
 async def test_reuse_live_export(api, line, mail, store, sm, ai_settings, llm, db):
     job = await confirmed_job(api, line, mail, store, sm, ai_settings, llm, db)
     first = (await api.post(f"{JOBS}/{job['id']}/exports")).json()["id"]
@@ -79,6 +116,7 @@ async def test_reuse_live_export(api, line, mail, store, sm, ai_settings, llm, d
     )
     await db.commit()
     assert (await api.get(f"/api/v1/exports/{first}/download")).status_code == 404
+    assert (await api.head(f"/api/v1/exports/{first}/download")).status_code == 404
     fresh = await api.post(f"{JOBS}/{job['id']}/exports")
     assert fresh.status_code == 201 and fresh.json()["id"] != first
 
@@ -104,6 +142,7 @@ async def test_ticket_60s(
     later = utcnow() + timedelta(seconds=61)
     monkeypatch.setattr(export_service, "utcnow", lambda: later)
     assert (await bare.get(url)).status_code == 404
+    assert (await bare.head(url)).status_code == 404
 
 
 async def test_other_user_and_session_404(
@@ -116,12 +155,15 @@ async def test_other_user_and_session_404(
     other = client_like(api)
     await login(other, line, "V1")
     assert (await other.get(f"/api/v1/exports/{export_id}/download")).status_code == 404
+    assert (await other.head(f"/api/v1/exports/{export_id}/download")).status_code == 404
     assert (await other.post(f"/api/v1/exports/{export_id}/ticket")).status_code == 404
     # the ticket dies with its session
     await api.post("/api/v1/auth/logout")
     assert (await client_like(api).get(url)).status_code == 404
+    assert (await client_like(api).head(url)).status_code == 404
     tampered = url[:-2] + ("AA" if not url.endswith("AA") else "BB")
     assert (await client_like(api).get(tampered)).status_code == 404
+    assert (await client_like(api).head(tampered)).status_code == 404
 
 
 async def test_member_without_export_403(api, line, mail, store, sm, ai_settings, llm, db):
@@ -216,6 +258,7 @@ async def test_download_needs_export_and_ticket_is_own(api, line, mail, store, d
     await store.put(f"exports/{xid}.en.xlsx", b"x", "application/octet-stream")
     h = tenant(org)
     assert (await api.get(f"/api/v1/exports/{xid}/download", headers=h)).status_code == 403
+    assert (await api.head(f"/api/v1/exports/{xid}/download", headers=h)).status_code == 403
     assert (await api.post(f"/api/v1/exports/{xid}/ticket", headers=h)).status_code == 403
     assert (await other.post(f"/api/v1/exports/{xid}/ticket", headers=h)).status_code == 404
     assert (await other.get(f"/api/v1/exports/{xid}/download", headers=h)).status_code == 200

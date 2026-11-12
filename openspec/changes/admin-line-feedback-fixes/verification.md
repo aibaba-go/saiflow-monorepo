@@ -254,3 +254,16 @@
 - 核验脚本 `temp/xlsx-share/check-reference-production.py` 已先用模拟响应验证成功/错版本两条路径；实际结果 `reference-production-check.json` 全部 passed，原资源保留为 `reference-production-index.js`。核验只有 7 个公共 GET，没有登录、签发下载票据、生成业务导出记录或触发 OCR。
 
 真实 iPhone/Android LINE 原生保存及生产 ticket 配置仍需负责人真机复测；本次部署和公共健康检查不能替代这两项验证。关闭并重新打开 LINE 小程序，再分别测试 CSV 与 Excel；Android 如询问打开手机浏览器需允许。此发布证据另以文档提交推送，不再次部署。
+
+## 下载 HEAD 405 兼容性修复（2026-11-12，本地验证，未提交发布）
+
+负责人要求“fix the 405 head request issue”。本轮仅修复 FR-ENTRY-015 / FR-REPORT-016 既有下载路由的 HEAD 兼容性，不修改 UI、文件名、票据签名/期限或 Published 频道配置，不提交、推送或部署。
+
+- 四条路由显式注册 HEAD 并与 GET 共用处理函数：`/api/v1/exports/{export_id}/download`、`/api/v1/export-downloads/{token}`、`/api/v1/reports/{report_id}/csv`、`/api/v1/report-downloads/{token}`。保留原授权、租户/数据范围、会话、订阅、权限及发布版本检查。成功 HEAD 保留 GET 的 Content-Type、Content-Disposition、Content-Length、Cache-Control，实际 ASGI 文件响应体为空；HEAD 不消耗票据，随后 GET 和重复 HEAD 均成功。仍使用现有文件读取/CSV 生成路径，未另做元数据查询优化。
+- TDD 红灯：两个新增集成用例在实现前均于首次 HEAD 返回 **405** 时失败，记录 `temp/xlsx-share/head-red.log`；实现后两用例 **2 passed in 17.70s**，记录 `head-green.log`。
+- 完整 XLSX/CSV 集成模块：**19 passed in 96.59s**，记录 `temp/xlsx-share/head-integration.log`。使用专用 `127.0.0.1:25432 / saiflow_test_head_downloads`，`REQUIRE_INTEGRATION=1`、`DB_APP_USER=saiflow_v3_app`；未并发运行集成套件，未连接生产或 saiflow_dev，LINE/email/LLM/GCS 使用测试替身，未触发付费 OCR。
+- HEAD 拒绝回归覆盖未登录、跨用户、无 export 权限、文件/票据过期、篡改票据、票据类型混用、会话结束、CSV 权限撤销/订阅到期及重新发布后的旧票据；保持对应 401/403/404/409 行为。成功用例捕获原始 ASGI body，避免仅依赖 HTTPX 自动隐藏 HEAD 响应体而误判。
+- OpenAPI 单元模块：**3 passed in 2.83s**，包括下载 HEAD/GET 同处理函数、HEAD 不进入 schema、四个 GET operationId 不变、签发票据路由仍仅 POST。另将两个已提交 router 模块从 `git show HEAD:...` 在内存加载，比较完整应用 schema：与当前生成结果**完全相同**，过程未连接数据库；无需修改生成客户端。
+- 五个修改的 Python 文件 Ruff check 与 format --check 全部通过；`git diff --check` 通过。独立静态审查未发现可操作问题，主会话核对实际差异；实现仅涉及两个 router，测试涉及两个集成模块及 OpenAPI 单元模块，证据追加于本文件。暂停的频道配置、前端、服务逻辑和迁移均未改动。
+
+本轮只证明本地 HEAD 405 已修复及既有下载行为回归通过，不证明 iPhone LINE 的“允许后无反应”已解决。没有本轮生产验证、提交、推送或部署，真实 LINE 下载仍需发布后真机复测。
