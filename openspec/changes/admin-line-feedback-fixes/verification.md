@@ -331,3 +331,13 @@
 - LINE mini 全量 Vitest **35 files / 384 passed**（`temp/line-attachment-full-frontend.log`），ESLint 及 `tsc --noEmit` + 生产构建通过（`temp/line-attachment-build.log`，产物 `temp/line-attachment-build/`）。后端全量单元 **573 passed**（`temp/line-attachment-all-unit.log`），两个 Python 文件 Ruff check/format 通过，`git diff --check` 通过。未运行数据库集成套件，未连接生产数据库、OCR 或付费服务。
 
 单元测试只能证明分支选择正确，不能证明 iPhone LINE 内置浏览器会把服务器附件链接实际保存为文件；该点及 Android 表现需发布后真机复测。
+
+## LINE 浏览器改走服务器附件发布（2026-11-12）
+
+负责人授权“按照建议修复并提交部署”。
+
+- 业务提交 `d0a1f2f924098d254ff48906d4791d156d15dd52` 仅包含上节 7 个文件，已推送并经 `git ls-remote` 确认。CI run `43225066686` 的 backend、stack、contract、scripts、frontend 五个 job 全部 success（`temp/xlsx-share/line-attachment-ci-watch.log`）。
+- 再次确认远端 SHA 后手动触发标准 Deploy run `43226247484`（workflow_dispatch，SHA 精确一致），结论 success。日志 `temp/xlsx-share/line-attachment-deploy.log` 显示：迁移前备份 `saiflow-20261112T132406Z.dump`（315134 bytes）已上传 `gs://saiflow-db-backup/`；alembic 无新修订；`remote-deploy: done (d0a1f2f…)`，三站健康步骤 done。未改 GitHub 变量、LIFF/频道配置，暂停的 Published 频道配置未纳入。
+- 发布后只读核验（13:25:49 UTC，`temp/xlsx-share/line-attachment-production-check.json`，passed）：三站健康接口 HTTP 200、`status=ok`、`database=ok`、版本均为 `d0a1f2f…`。LINE 首页脚本 `/assets/index-CyTUOq38.js` 中下载分支函数为 `n=e.isInClient()` 后 `r=n||/\bLine\//i.test(navigator.userAgent)` 并上报实际分支；包含 report/export 附件下载路径与既有 LIFF ID，不含暂停的新 ID。
+
+核验只请求公共健康接口、首页与静态脚本，没有签发票据、创建业务导出、修改账号或触发 OCR。iPhone/Android LINE 内是否实际保存 CSV/Excel 仍未经真机验证，需负责人关闭并重开 LINE 后测试，再按时间检索 `liff_diagnostic` 确认 `branch=ticket` 及附件下载请求。本证据以仅文档提交推送，不再次部署。
