@@ -1,5 +1,6 @@
 import { api, call } from "../../services/api";
 import { deliverDownload } from "../../services/download";
+import { downloadInClient } from "../../services/liffDiagnostics";
 import type { Liff } from "../../services/liffTypes";
 import type { Lang } from "../../stores/language";
 
@@ -23,7 +24,7 @@ export async function exportAndDownload(
     }),
   );
   signal?.throwIfAborted();
-  if (liff.isInClient()) {
+  if (downloadInClient(liff, "xlsx")) {
     const ticket = await call(api.POST("/api/v1/exports/{export_id}/ticket", {
       signal,
       params: { path: { export_id: created.id } },

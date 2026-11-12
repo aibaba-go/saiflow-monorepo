@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api, call } from "../../services/api";
 import { deliverDownload } from "../../services/download";
+import { downloadInClient } from "../../services/liffDiagnostics";
 import type { Liff } from "../../services/liffTypes";
 import { useCurrentTenant } from "../tenants/useCurrentTenant";
 
@@ -153,7 +154,7 @@ export async function downloadCsv(
     }),
   )) as unknown as Blob;
   signal?.throwIfAborted(); // even a transport that ignores abort cannot deliver an old account's file
-  if (liff.isInClient()) {
+  if (downloadInClient(liff, "csv")) {
     const bytes = await blob.arrayBuffer();
     signal?.throwIfAborted();
     // TextDecoder drops the byte-order mark the server adds for Excel; the file keeps it.

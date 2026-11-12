@@ -281,3 +281,29 @@
 - 只读核验脚本 `temp/xlsx-share/check-head-production.py` 先用模拟响应验证正确结果、错误 SHA、HEAD 405 三种情况；每轮严格只有三次健康 GET 和四次无效票据/未登录 HEAD，没有签发票据、生成业务导出或触发 OCR。实际结果保存为 `head-production-check.json`（全部 passed），部署日志为 `head-deploy.log`。
 
 有效票据的 200、GET 相同元数据及空 HEAD 文件响应体已由本地集成测试和 CI 验证；本轮生产核验不生成真实导出或签发有效票据，不替代该行为或真实 iPhone/Android LINE 下载验收。不能仅因 HEAD 405 修复就宣称 iPhone“允许后无反应”已解决，仍需负责人关闭并重新打开 LINE 后真机复测 CSV/Excel。发布证据另以仅文档提交推送，不重复部署。
+
+## LIFF 判断诊断日志（2026-11-12，本地修改，未提交发布）
+
+负责人要求“添加 LIFF 判断日志”。按 S 级可观测性小修处理：不改变 FR-SYS-040 / FR-SYS-107 / FR-REPORT-016 的既有登录、初始化超时、权限、取消或下载分支行为，不新增业务接口或实体，不调整 LINE 频道配置、文件名、票据签名/期限或下载方式。
+
+- SDK 初始化完成、失败、超时，以及 CSV/XLSX 实际选择下载分支时记录固定事件。分支的 `isInClient()` 只调用一次并复用结果；判断抛错时原错误继续抛出，不新增 UA 覆盖或 blob/ticket 退路。初始化同步异常原样拒绝，迟到完成不重复记录超时结果。
+- 白名单包括 `in_client`、`logged_in`、SDK OS / UA 推导的 OS 和 LINE 标记、公开 LIFF ID、适配器类别、初始化状态、`ticket/blob/error` 分支、页面类别、loopback / 同源标记及耗时。页面只分为 home/final/report/other，不包含任务、报告或文件 ID。随机 trace 仅关联本次页面加载，不持久化，也不关联账号。
+- 浏览器控制台前缀为 `[SaiFlow LIFF]`。同时使用生成客户端向既有 `GET /api/v1/health` 发送 `X-SaiFlow-Liff` 诊断头；无 query/body，credentials omit、no-referrer、no-store、禁止重定向、keepalive，3 秒超时，不 await，也不调用全局 401 恢复处理。没有另建 diagnostics endpoint 或更改健康响应/OpenAPI。
+- 后端仅在 health GET 上接收该头，完整字段白名单、严格类型/枚举/语义校验、1024 字节限长，拒绝重复 JSON key/重复 header。原始 header、UA、URL、异常文本、令牌、Cookie、下载票据和单据内容不进入日志。有效记录以 `app.liff` / `liff_diagnostic` 写入既有 JSON stdout 日志并带 request_id（FR-PLAT-002/003、NFR-SEC-007）。客户端报告不作为身份或下载成功的可信证据。
+- 上报最多 24 次/适配器/页面加载；后端 20 次/trace/分钟、120 次/进程/分钟，全局限流先于 trace 分配并定期清理，限制日志量和内存。被拒绝、超限或日志组件故障不改变健康接口、登录或下载响应，不创建会话或业务数据。
+
+### 已完成的专项验证
+
+- 前端新增诊断模块：**15 passed**，记录 `temp/liff-diagnostic-focused.log`。包含真实适配器自动注册、初始化 ready/异步失败/同步失败/超时迟到、实际 true/false 下载、SDK 判断原错误、OS/login 探测异常、隐私过滤、trace、console 故障、网络失败/401/无响应以及上报次数限制。
+- 后端日志/错误/健康/OpenAPI 四个模块：**48 passed**，记录 `temp/liff-diagnostic-backend.log`。包括坏输入/敏感字段/注入/重复字段拒绝、单条 request_id 日志、健康响应不变、日志故障隔离、per-trace/global 限流和限流清理；不启动数据库 lifespan，不连接数据库或生产。
+- 首轮新增前后端测试在模块尚未实现时均失败（import 缺失），分别记录 `temp/liff-diagnostic-red-frontend.log` 和 `temp/liff-diagnostic-red-backend.log`。诊断上报异步断言按实际 request 调度等待，后端查询串断言仅检查应用 logger，避免把 HTTPX 测试客户端自身 URL 日志误当应用日志。
+
+### 最终回归与审查
+
+- 独立只读审查发现页面分类最初按 pathname 和 `/reports/:id` 判断，不符合实际 HashRouter / `/report/:id`；主会话核对 `App.tsx` 后修正，增加 home/final/report 三个真实 hash 路由及敏感 query 不泄露测试。最终新增模块 **18 passed**，包含于下述全量测试；审查其余部分未发现可操作的泄密、行为改变或无界内存问题。未把静态审查当作真机上报成功。
+- 修正后的 LINE mini 全量 Vitest：**35 files / 381 passed in 92.23s**，记录 `temp/liff-diagnostic-final-frontend.log`，包含既有初始化、登录、权限/上下文取消、CSV/XLSX 下载回归。
+- 后端全量单元测试：**567 passed in 48.33s**，记录 `temp/liff-diagnostic-all-unit.log`。Ruff check 与 format --check（三个新增/修改的 Python 文件）全部通过。此次不重跑数据库集成套件，不连接生产、共享数据库或付费服务。
+- LINE mini ESLint、`tsc --noEmit` 和修正后的生产构建全部通过；构建记录 `temp/liff-diagnostic-final-build.log`，产物位于 `temp/liff-diagnostic-build/`，不进入正式资产目录。Vite 常规 chunk 大小及 outDir 不自动清空警告不影响成功结果，不为此调整构建/部署配置。`git diff --check` 通过。
+- 暂停的 Published 频道/部署配置保持原样；未修改原生下载 delivery、认证 session、数据库迁移、API schema 或生成客户端。
+
+本轮不执行生产查询、业务导出、票据签发、OCR、提交、推送或部署。部署并由真机复现后，才可能从生产 `saiflow-be-api` 日志搜索 `liff_diagnostic` 获取手机报告。上报为 best effort：断网、页面退出、超时、限流、旧缓存前端等均可能缺失；日志不证明 iPhone/Android 原生保存成功，也不能单凭没有日志断定用户未操作。

@@ -8,6 +8,8 @@ from contextvars import ContextVar
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.liff_diagnostics import LiffDiagnostics
+
 HEADER = "X-Request-ID"
 _VALID = re.compile(r"^[A-Za-z0-9-]{1,64}$")
 
@@ -31,6 +33,7 @@ class RequestIdMiddleware:
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
+        self.liff_diagnostics = LiffDiagnostics()
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -40,6 +43,11 @@ class RequestIdMiddleware:
         token = request_id_var.set(request_id)
         started = time.perf_counter()
         status = 500
+        try:
+            self.liff_diagnostics.record(scope)
+        except Exception:
+            # Optional observations must never change health/login/download handling.
+            pass
 
         async def send_with_id(message: Message) -> None:
             nonlocal status
