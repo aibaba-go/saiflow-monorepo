@@ -55,7 +55,14 @@ function pageKind(): "home" | "final" | "report" | "other" {
   return "other";
 }
 
-function observe(target: Liff, event: "init" | "xlsx_branch" | "csv_branch", inClient: boolean | null): void {
+type Branch = "none" | "ticket" | "blob" | "error";
+
+function observe(
+  target: Liff,
+  event: "init" | "xlsx_branch" | "csv_branch",
+  inClient: boolean | null,
+  branch: Branch = "none",
+): void {
   try {
     const context = contexts.get(target);
     if (!context || context.events >= 24) return;
@@ -71,8 +78,7 @@ function observe(target: Liff, event: "init" | "xlsx_branch" | "csv_branch", inC
       ua_line: /\bLine\//i.test(ua), ua_os: uaOs, page: pageKind(),
       loopback: ["localhost", "127.0.0.1"].includes(window.location.hostname),
       api_same_origin: new URL(apiBaseUrl || window.location.origin, window.location.origin).origin === window.location.origin,
-      liff_id: context.liffId, adapter: context.adapter,
-      branch: event === "init" ? "none" : inClient === null ? "error" : inClient ? "ticket" : "blob",
+      liff_id: context.liffId, adapter: context.adapter, branch,
       elapsed_ms: Math.max(0, Math.min(86_400_000, Math.round(Date.now() - context.started))),
     };
     // One fixed prefix is also useful if iOS Safari Web Inspector is connected.
@@ -96,16 +102,20 @@ export function logLiffInit(target: Liff, state: Exclude<InitState, "not_started
   observe(target, "init", safely(() => target.isInClient()));
 }
 
-/** Capture the original decision once. SDK failure still throws the same error; no
- * UA override or new fallback is introduced by diagnostics. */
-export function downloadInClient(target: Liff, format: "xlsx" | "csv"): boolean {
+/** Choose CSV/XLSX delivery (FR-SYS-107, FR-SYS-144, FR-REPORT-016). Production logs
+ * showed iPhone LINE reporting isInClient()=false with a LINE UA; a blob there triggers
+ * the external-app prompt and saves nothing. Any LINE browser therefore uses the server
+ * attachment ticket; other browsers keep the authenticated blob. isInClient() is called
+ * once and its failure still throws the same error (no new fallback). */
+export function serverAttachmentBranch(target: Liff, format: "xlsx" | "csv"): boolean {
   let inClient: boolean;
   try {
     inClient = target.isInClient();
   } catch (error) {
-    observe(target, `${format}_branch`, null);
+    observe(target, `${format}_branch`, null, "error");
     throw error;
   }
-  observe(target, `${format}_branch`, inClient);
-  return inClient;
+  const attachment = inClient || /\bLine\//i.test(navigator.userAgent);
+  observe(target, `${format}_branch`, inClient, attachment ? "ticket" : "blob");
+  return attachment;
 }

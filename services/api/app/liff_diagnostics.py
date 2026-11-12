@@ -72,14 +72,17 @@ def parse_diagnostic(raw: bytes) -> dict | None:
             if value["branch"] != "none":
                 return None
         else:
-            expected = (
-                "error"
-                if value["in_client"] is None
-                else "ticket"
-                if value["in_client"]
-                else "blob"
-            )
-            if value["branch"] != expected:
+            # LINE browsers use attachments even if isInClient() is false; a cached
+            # earlier bundle may still report blob for that combination.
+            if value["in_client"] is None:
+                allowed = {"error"}
+            elif value["in_client"]:
+                allowed = {"ticket"}
+            elif value["ua_line"]:
+                allowed = {"ticket", "blob"}
+            else:
+                allowed = {"blob"}
+            if value["branch"] not in allowed:
                 return None
         return value
     except (ValueError, TypeError, RecursionError):

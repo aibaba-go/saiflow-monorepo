@@ -65,13 +65,30 @@ def test_accepts_only_bounded_observations():
         {"elapsed_ms": True},
         {"elapsed_ms": -1},
         {"elapsed_ms": 86_400_001},
-        {"branch": "ticket", "in_client": False},
+        {"branch": "ticket", "in_client": False, "ua_line": False},
         {"branch": "blob", "in_client": True},
+        {"branch": "blob", "in_client": True, "ua_line": False},
         {"event": "init", "branch": "blob"},
     ],
 )
 def test_rejects_unknown_sensitive_or_invalid_fields(updates):
     assert parse_diagnostic(json.dumps(diagnostic(**updates)).encode()) is None
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        # Current client: LINE browser uses server attachments even when isInClient is false.
+        {"in_client": False, "ua_line": True, "branch": "ticket"},
+        # A cached previous bundle may still report the old blob decision.
+        {"in_client": False, "ua_line": True, "branch": "blob"},
+        {"in_client": True, "ua_line": False, "branch": "ticket"},
+        {"in_client": False, "ua_line": False, "branch": "blob"},
+        {"in_client": None, "branch": "error"},
+    ],
+)
+def test_accepts_consistent_download_branches(updates):
+    assert parse_diagnostic(json.dumps(diagnostic(**updates)).encode())
 
 
 @pytest.mark.parametrize("raw", [b"{", b"[]", b"null", b"x" * 1025, b"\xff"])

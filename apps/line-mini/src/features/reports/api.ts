@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api, call } from "../../services/api";
 import { deliverDownload } from "../../services/download";
-import { downloadInClient } from "../../services/liffDiagnostics";
+import { serverAttachmentBranch } from "../../services/liffDiagnostics";
 import type { Liff } from "../../services/liffTypes";
 import { useCurrentTenant } from "../tenants/useCurrentTenant";
 
@@ -131,7 +131,7 @@ export async function copyText(text: string, host: HTMLElement = document.body):
 }
 
 /** One card's aggregated rows as CSV (view + export; FR-REPORT-016) for the page period on
- * screen. Inside LINE validate the authenticated CSV first, then request a fresh ticket
+ * screen. Inside LINE (LIFF client or LINE browser UA) validate the authenticated CSV first, then request a fresh ticket
  * for server-link delivery and retain the bytes for preview/copy (FR-SYS-144). Elsewhere
  * save the authenticated blob through an object URL without requesting a ticket. */
 export async function downloadCsv(
@@ -154,7 +154,7 @@ export async function downloadCsv(
     }),
   )) as unknown as Blob;
   signal?.throwIfAborted(); // even a transport that ignores abort cannot deliver an old account's file
-  if (downloadInClient(liff, "csv")) {
+  if (serverAttachmentBranch(liff, "csv")) {
     const bytes = await blob.arrayBuffer();
     signal?.throwIfAborted();
     // TextDecoder drops the byte-order mark the server adds for Excel; the file keeps it.

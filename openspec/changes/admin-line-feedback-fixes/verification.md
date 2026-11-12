@@ -320,3 +320,14 @@
 - 首次脚本核验错误地要求压缩包含完整 `csv_branch/xlsx_branch` 字面量，导致该项断言失败；三站版本及诊断前缀当时已通过。核对实际压缩代码确认事件由模板动态组装，修正核验条件后通过，未因此修改产品或重复部署。保留首次结果 `liff-production-check.json`，不把核验脚本误判当生产故障。
 
 生产核验仅请求公共健康接口、首页及静态脚本，没有发送模拟诊断头、创建真实业务导出、签发票据、改变账号或触发 OCR。日志代码已上线，但真实手机报告是否到达后端、`isInClient()` 的实际值以及 iPhone/Android 原生保存结果，仍需负责人关闭并重新打开 LINE 小程序后测试 CSV/Excel，再按复现时间检索 `liff_diagnostic`。本次日志不改变下载方式，不宣称已解决“允许后无反应”。发布证据另以仅文档提交推送，不再次部署。
+
+## LINE 浏览器改走服务器附件（2026-11-12，本地验证）
+
+负责人真机复测后反馈“还是之前的一样”，并授权“按照建议修复并提交部署”。只读获取的脱敏生产日志 `temp/xlsx-share/liff-phone-logs.json` 显示：同一 trace 在 iPhone 上初始化成功、已登录、`ua_line=true`、`os=ios`，但 Excel（final 页）与 CSV（report 页）两次的 `isInClient()` 均为 **false**，因而都选择 **blob**；对应 `POST .../exports`、`GET /exports/{id}/download`、`GET /reports/{id}/csv` 均为 200，没有签发 ticket。LINE 官方文档中 `isInClient()` 仅表示 LIFF 浏览器，不等于“在 LINE 中”。读取过程校验了已固定的主机 ED25519 指纹，只执行 `date`、`docker ps`、`docker logs`，下载票据路径与 UUID 已脱敏，未修改服务器。
+
+- 修复（FR-SYS-107、FR-SYS-144、FR-REPORT-016）：CSV/XLSX 的分支函数改为 `serverAttachmentBranch`，在 `isInClient()` 为 true **或** UA 带 `Line/` 时使用既有服务器附件 ticket，其余浏览器（PC、手机 Safari 等）保持已认证 blob。`isInClient()` 仍只调用一次，抛错时原样抛出；ticket 签发、`deliverDownload`、文件名、票据期限/签名、认证、LIFF/频道配置均未改。Android 投递逻辑未改：`isInClient=false` 时仍直接点击附件链接，不调用 `openWindow`。
+- 诊断记录改为上报实际选择的分支。后端校验同步放宽为：in_client=true 仅 ticket；in_client=false 且 ua_line=true 可为 ticket（新版）或 blob（缓存的旧前端）；两者均 false 仅 blob；null 仅 error。
+- TDD：新增矩阵用例在实现前失败（前端 14 failed，函数不存在；后端 1 failed，新组合被拒），记录 `temp/line-attachment-red-frontend.log`、`temp/line-attachment-red-backend.log`。实现后专项 **34 passed**（诊断及 download 模块），矩阵覆盖 LIFF+PC UA、iPhone LINE 且 isInClient=false（生产实况）、Android LINE 且 isInClient=false、PC 浏览器、iPhone Safari：断言 ticket/直接下载请求次数、object URL 次数、实际点击的链接与上报分支。后端诊断模块 **36 passed**。
+- LINE mini 全量 Vitest **35 files / 384 passed**（`temp/line-attachment-full-frontend.log`），ESLint 及 `tsc --noEmit` + 生产构建通过（`temp/line-attachment-build.log`，产物 `temp/line-attachment-build/`）。后端全量单元 **573 passed**（`temp/line-attachment-all-unit.log`），两个 Python 文件 Ruff check/format 通过，`git diff --check` 通过。未运行数据库集成套件，未连接生产数据库、OCR 或付费服务。
+
+单元测试只能证明分支选择正确，不能证明 iPhone LINE 内置浏览器会把服务器附件链接实际保存为文件；该点及 Android 表现需发布后真机复测。
