@@ -307,3 +307,16 @@
 - 暂停的 Published 频道/部署配置保持原样；未修改原生下载 delivery、认证 session、数据库迁移、API schema 或生成客户端。
 
 本轮不执行生产查询、业务导出、票据签发、OCR、提交、推送或部署。部署并由真机复现后，才可能从生产 `saiflow-be-api` 日志搜索 `liff_diagnostic` 获取手机报告。上报为 best effort：断网、页面退出、超时、限流、旧缓存前端等均可能缺失；日志不证明 iPhone/Android 原生保存成功，也不能单凭没有日志断定用户未操作。
+
+## LIFF 判断日志发布（2026-11-12）
+
+负责人随后明确授权“提交发布，我测试下”。本节记录后续实际发布，上节“未提交发布”保留为当时的阶段状态。
+
+- 业务提交 `6c6ba3b7b33053fd9d2ff56d0a6a2b7f57aecc86` 已推送 `chore/ai-workflow-v2`，仅包含九个诊断代码、测试及本验证记录文件。暂停的 Published 频道 workflow/scripts、`.qoder/`、用户手册和临时产物未纳入。发布前再次核对远端分支等于业务 SHA。
+- [CI 43207698548](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43207698548)：**success**，11:22:55 UTC 完成；frontend、backend、contract、scripts、stack 五项全部通过，包括后端全量 pytest/Ruff、前端全工作区 lint/test/build、生成客户端一致性及隔离栈备份恢复演练。
+- 使用已提交的 `deploy.yml` 手动发布，没有使用本地暂停的配置或直接 SSH 修改生产。`VPS_HOST=38.60.156.234`、`LIFF_ID=2012285576-KbzpK5mY`、`LINE_CHANNEL_ID=2012428743` 保持不变；本次无迁移变化。
+- [Deploy 43208791138](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43208791138)：**success**，11:28:11 UTC 完成。CI 成功门禁通过；实际日志记录迁移前生成 `saiflow-20261112T112732Z.dump`（315016 bytes），上传 `gs://saiflow-db-backup/` 成功，随后迁移及重启成功；三站健康检查和外部 5432 关闭检查均通过。日志为 `temp/xlsx-share/liff-deploy.log`。
+- 发布后独立只读核验（最终 11:30:21 UTC）：`saiflow-app.aibaba.asia`、`saiflow-admin.aibaba.asia`、`saiflow-line2.aibaba.asia` 健康接口均 HTTP 200，`status=ok`、`database=ok`、版本均为业务 SHA。LINE 首页加载的新脚本为 `/assets/index-BRFMujG-.js`，包含 `X-SaiFlow-Liff`、`[SaiFlow LIFF]`、实际 CSV/XLSX 判断调用和动态 `_branch` 事件生成；公开 LIFF ID 为既有值，不含暂停的新 ID。最终结果为 `temp/xlsx-share/liff-production-final-check.json`，全部 passed。
+- 首次脚本核验错误地要求压缩包含完整 `csv_branch/xlsx_branch` 字面量，导致该项断言失败；三站版本及诊断前缀当时已通过。核对实际压缩代码确认事件由模板动态组装，修正核验条件后通过，未因此修改产品或重复部署。保留首次结果 `liff-production-check.json`，不把核验脚本误判当生产故障。
+
+生产核验仅请求公共健康接口、首页及静态脚本，没有发送模拟诊断头、创建真实业务导出、签发票据、改变账号或触发 OCR。日志代码已上线，但真实手机报告是否到达后端、`isInClient()` 的实际值以及 iPhone/Android 原生保存结果，仍需负责人关闭并重新打开 LINE 小程序后测试 CSV/Excel，再按复现时间检索 `liff_diagnostic`。本次日志不改变下载方式，不宣称已解决“允许后无反应”。发布证据另以仅文档提交推送，不再次部署。
