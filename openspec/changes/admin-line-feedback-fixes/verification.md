@@ -240,3 +240,17 @@
 ### 仍未验证
 
 真实 iPhone/Android LINE 的原生附件保存仍需发布后由负责人真机复测；本地 Chrome 下载不证明 LINE 保存能力。Android 按参考版本可能询问允许打开手机浏览器，不能承诺消除此系统询问。没有线上换票/下载检查，生产 DOWNLOAD_TICKET_SECRET 的当前可用性未在本轮验证；本次未新增或修改该凭据。未提交部署，不宣称生产已经修复。
+
+## 服务器附件导出修复发布（2026-11-12）
+
+负责人在上述本地交付后明确授权“提交并发布”。本节记录后续实际发布；上一节的“未发布”是当时的阶段状态，保留历史记录。
+
+- 业务提交：`ae5913b0975676aeba1972eb27da0deb4e3b0e96`，已推送 `chore/ai-workflow-v2`，仅包含两处导出修复、相关测试及本 change 文档（23 文件）。没有纳入暂停的 Published 频道 workflow/scripts 配置、`.qoder/`、用户手册或临时产物。
+- [CI 43174872663](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43174872663)：**success**；frontend、backend、contract、scripts、stack 五项全部通过。覆盖前端全工作区 lint/test/build、后端全量 pytest/Ruff、API 客户端一致性、脚本安全测试及隔离部署栈备份恢复演练。
+- 启动部署前核对远端分支仍精确指向业务 SHA，`VPS_HOST=38.60.156.234`。使用已提交的原 Deploy workflow，不使用本地暂停配置、不直接 SSH 修改生产。[Deploy 43175807161](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43175807161)：**success**，07:35:37 UTC 完成。
+- 实际部署日志：迁移前生成 `saiflow-20261112T073458Z.dump`（303968 bytes），成功上传 `gs://saiflow-db-backup/`；随后 `alembic upgrade head` 与服务重启成功。本次没有新迁移，也没有修改已部署迁移。三个站点 smoke-check 成功，外部 5432 端口关闭检查通过。
+- 发布后独立只读核验（07:36:21 UTC）：`saiflow-app.aibaba.asia`、`saiflow-admin.aibaba.asia`、`saiflow-line2.aibaba.asia` 首页和健康接口均 HTTP 200，`status=ok`、`database=ok`，版本均为业务 SHA。
+- LINE 当前主资源：`/assets/index-XWEsQkLC.js`，SHA-256 `c93d619db04a55bf5b65913db0b848ea82f633317084690ef1a686e46f73bbb3`；首页 `Cache-Control: no-cache`。实际公共资源包含 CSV/XLSX ticket 请求、两种附件下载 route、`final.exportExternal`、`rpt.csvDownload`、CSV 复制/预览和 Android fallback；不再包含 `final.shareExcel`、`final.shareUnavailable`、`final.shareFailed`、`final.exportPrepared`、`rpt.csvShare`、`rpt.csvShareFailed`。原 LIFF ID `2012285576-KbzpK5mY` 保持不变，未顺带切换 Published 频道。
+- 核验脚本 `temp/xlsx-share/check-reference-production.py` 已先用模拟响应验证成功/错版本两条路径；实际结果 `reference-production-check.json` 全部 passed，原资源保留为 `reference-production-index.js`。核验只有 7 个公共 GET，没有登录、签发下载票据、生成业务导出记录或触发 OCR。
+
+真实 iPhone/Android LINE 原生保存及生产 ticket 配置仍需负责人真机复测；本次部署和公共健康检查不能替代这两项验证。关闭并重新打开 LINE 小程序，再分别测试 CSV 与 Excel；Android 如询问打开手机浏览器需允许。此发布证据另以文档提交推送，不再次部署。
