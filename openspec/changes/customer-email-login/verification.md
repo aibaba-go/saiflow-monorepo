@@ -45,3 +45,13 @@
 - 本轮集成测试使用的 `saiflow_test_shard1–4` 和 `saiflow_test_email` 数据库已删除。默认测试库 `saiflow_test_regression` 保留，测试夹具每次运行都会清空它。
 - `saiflow_dev` 全库文本字段中检索不到 `saiflow-e2e`。最近两天 `email_codes` 没有新行，因为 SMTP 不可用，验证码在写入之前就被拒绝。用户表仍只有原来的 1 个开发用户，所以没有需要删除的记录。
 - 截图工具的临时浏览器配置目录 `temp/shot/profile-*` 已删除；`temp/e2e/` 和 `temp/beautify/` 里的截图作为证据保留。
+
+## 正式发布（2026-11-13）
+
+负责人在验收前把锁定时长改为 **5 分钟**（连续输错 5 次锁定 5 分钟），随后要求"提交并部署"。改动范围：`email_auth_service.LOCK_FOR`、三语提示、delta spec、proposal、PRD 与 Data-Model；集成测试 `test_lock_after_five` 新增断言，确认锁定时长在 4–5 分钟之间。改动后的复测结果：`test_email_login.py` 26 passed，后端单元测试 589 passed，ruff 通过，line-mini 397 passed，web-pc 249 passed。
+
+- 提交 `fb64e41`，同时包含 pc-report-view-menu 和 enterprise-ui-redesign 第三轮美化，推送到 `chore/ai-workflow-v2`。几处共用文件（i18n、App.tsx、app.css）同时含有三个 change 的改动，所以合成一个提交。
+- CI run 43324824310 的 contract、stack、frontend、scripts、backend 五个任务全部通过。
+- Deploy run 43326257854 的目标是 `VPS_HOST` = 38.60.156.234。迁移前先备份：`saiflow-20261112T231258Z.dump`（254461 字节），本地和 GCS 各存一份。随后迁移 `0018 -> 0019`，三站 smoke-check 通过，5432 端口从外部不可达。
+- 部署后只读复查：`saiflow-app`、`saiflow-admin`、`saiflow-line2` 的 `/api/v1/health` 都返回 `version` = `fb64e41…`、`database` = `ok`；`/reset-password` 返回 200；`POST /api/v1/auth/password` 不带 CSRF 头时返回 403 `csrf_header_missing`，说明新接口已上线。
+- 线上没有做任何写操作。生产 SMTP 是否可用、真机 LINE 登录面板，都等负责人验证。
