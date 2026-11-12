@@ -71,5 +71,5 @@ check "ocr worker receives OCR_WORKER_ENABLED" grep -qF "OCR_WORKER_ENABLED: \${
 check "env.example lists OCR_WORKER_ENABLED" grep -q '^OCR_WORKER_ENABLED=' "$deploy/env.example"
 check "the secrets folder (service-account key) is mounted read-only" bash -c "grep -qF './secrets:/run/secrets:ro' <<<\"\$1\" && grep -qF './secrets:/run/secrets:ro' <<<\"\$2\"" _ "$backend" "$ocr"
 # admin-impersonate-user: the admin's one-time link points at web-pc's own host (FR-SYS-145)
-check "backend receives WEB_PC_ORIGIN from APP_HOST" grep -qF 'WEB_PC_ORIGIN: https://${APP_HOST:?}' <<<"$backend"
+check "backend receives WEB_PC_ORIGIN from APP_HOST" grep -qF "WEB_PC_ORIGIN: https://\${APP_HOST:?}" <<<"$backend"
 finish
