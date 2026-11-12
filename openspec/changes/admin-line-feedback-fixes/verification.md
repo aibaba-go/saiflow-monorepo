@@ -100,3 +100,37 @@
 - [Deploy 43139598856](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43139598856)：workflow_dispatch，headSha `614884b`，全部步骤 success。迁移前备份 `saiflow-20261112T021508Z.dump`（301,477 bytes）已上传 `gs://saiflow-db-backup/`；无新迁移；三站健康、外部 5432 关闭、runner SSH key 清理均 success。日志存 `temp/csv-release/deploy.log`。
 - 只读线上检查：三站 `/api/v1/health` 均 status/database ok、version `614884b…`；LINE 入口 `index-Dr6yPEVn.js` 含 `execCommand`、`csv-preview`、`canShare` 与 `showAllSymbol`。
 - 待负责人在 iPhone/Android LINE 真机确认复制与分享。
+
+## 2026-11-12 修订：LINE 内 Excel 导出仍提示"打开外部应用"（FR-SYS-107、FR-SYS-116）
+
+**授权。** 负责人截图反馈 LINE 内导出仍弹出"此网站正尝试打开外部应用"，已先行手改 Excel 导出（`features/scan/download.ts`、`FinalResultPage.tsx`、`final.test.tsx`、三语资源），并要求"你检查下，然后部署到服务器上我测一下"。这一指示授权本修订的检查、提交与既有 GitHub Actions 发布。
+
+**复核负责人的改动，保留做法，修正 3 处。** 做法是在 LINE 内带会话取得 XLSX，再从点击中调用 `navigator.share({ files })`。修正如下：
+
+1. 原实现无条件显示"分享 Excel"。不支持分享文件时（iOS LINE 常见），点击会抛出未处理的异常，用户看不到任何反应。现在只在 `navigator.canShare({ files })` 为真时显示该按钮；否则说明此 LINE 版本无法直接保存文件。
+2. 原实现删除了下载凭证路径，导致没有任何退路。现在始终提供"在浏览器中下载"：只在点击时换取 60 秒凭证并打开系统浏览器，同时提示需选择"允许"。
+3. 分享出错时：`AbortError` 不提示；其他错误显示"无法打开分享面板，请改用'在浏览器中下载'"，并保留已就绪的文件。
+
+另外两处调整：
+
+- 已就绪的文件按租户标记，切换租户后不再提供。
+- 文件改由 `arrayBuffer()` 构建，确保字节与服务端返回一致。
+
+规格方面，delta 修改 FR-SYS-107（含 `verify-template-custom-fields` 的 AC-04/05，归档顺序在其后）与 FR-SYS-116，新增 AC-FR-SYS-107-06、07，并改写 AC-01。
+
+| 检查 | 结果 |
+|---|---|
+| `final.test.tsx` | 11/11；107-01 断言分享文件名为 `invoice.xlsx`、字节与 API 一致、无凭证、无外部窗口；107-06 不支持分享时无"分享 Excel"，点击"在浏览器中下载"才换取凭证并以 `external: true` 打开；107-07 取消不提示，`NotAllowedError` 提示改用浏览器 |
+| line-mini vitest（单 worker） | 33 files，323 passed |
+| tsc、eslint、vite build | 通过 |
+| `openspec validate admin-line-feedback-fixes --strict` | valid |
+| 浏览器检查 `temp/xlsx-share/browser.cjs` | zh 390（支持分享）、zh 390、en 360、th 320（不支持分享）共 **29 PASS / 0 FAIL**：按钮出现条件正确，点击前无凭证、无新窗口，无横向溢出，面板在视口内，分享得到的 xlsx 文件名与字节正确，无控制台错误。截图见 `temp/xlsx-share/shots/`。仅拦截了 job j9 与导出 e9 的接口，未写入记录；结束后已停止本次启动的 vite 与 API |
+
+**发布。**
+
+- 代码提交 **`8eacd4ceb579f7d41a387d0f672df59e957cac1e`**，10 个文件，已排除 `.qoder/` 与 `docs/10-product/user-manuals/`。
+- [CI 43149775308](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43149775308)：backend、frontend、contract、scripts、stack 全部 success。
+- [Deploy 43150621287](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43150621287)：success。迁移前备份 `saiflow-20261112T035153Z.dump`（302,579 bytes）已上传 `gs://saiflow-db-backup/`，本次无新迁移。日志存于 `temp/xlsx-share/deploy.log`。
+- 只读线上检查：三站 `/api/v1/health` 均为 status/database ok，version `8eacd4c…`；LINE 入口 `index-BaWrOuwp.js` 含 `final.shareExcel`、`final.downloadInBrowser`、`export-panel`、`csv-preview` 与 `canShare`。
+- 部署目标仍为 GitHub Variable `VPS_HOST`（38.60.156.234）。DoH 查询三个域名均解析到该地址，负责人提到的新服务器 IP 尚未提供。
+- 待负责人在 iPhone/Android LINE 真机确认。若 iOS LINE 不支持分享文件，面板只提供"在浏览器中下载"，这时仍会出现一次"允许"询问，属于 LINE 的限制。
