@@ -177,4 +177,20 @@
 
 独立静态审查全文核对四个导出实现及相关测试，未发现本次新增的实质缺陷。其记录了既有的缓存文件边界：XLSX 只绑定租户，同组件换任务或权限撤销后可能仍保留旧文件；CSV 同发布版本的 `can_export` 单独变 false 时未必清理已准备文件。本次没有扩展到这些既有上下文失效问题，不将其描述为已验证或已修复。
 
-真实 iPhone/Android LINE 的系统分享和复制**仍未验证**。本机模拟分享成功不证明 LINE 支持分享文件；若客户端没有提供该能力，XLSX 将停留在页面显示不支持提示，而不会改用外部浏览器。Web Share 的用户激活及支持条件参考 [MDN Navigator.share](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/share)。本修订仅本地完成，生产仍是此前发布版本。
+真实 iPhone/Android LINE 的系统分享和复制**仍未验证**。本机模拟分享成功不证明 LINE 支持分享文件；若客户端没有提供该能力，XLSX 将停留在页面显示不支持提示，而不会改用外部浏览器。Web Share 的用户激活及支持条件参考 [MDN Navigator.share](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/share)。上述为本地交付时状态，后续发布授权与结果见下节。
+
+### 再修订正式发布（2026-11-12）
+
+负责人随后明确回复 **"提交并部署"**，授权本次分享方式修订的提交、推送与既有 GitHub Actions 生产发布。代码提交 **`0dcfa77552d8df2ee30bdac2206fb051894e520e`**，18 个文件，已推送 `chore/ai-workflow-v2`；未纳入 `.qoder/`、`docs/10-product/user-manuals/` 或临时文件。
+
+部署前只读确认：GitHub Variable `VPS_HOST` 为 `38.60.156.234`，APP/ADMIN/LINE 地址与现有三站一致；三站健康正常，版本均为此前的 `8eacd4c…`，LINE 入口仍为 `index-BaWrOuwp.js`。沿用 Deploy workflow_dispatch，仅接受既有分支并检查当前提交 CI 成功；迁移前执行本地与 GCS 备份，未手动 SSH，未触发业务写入或付费 OCR。
+
+**发布结果：已完成。**
+
+- [CI 43164852651](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43164852651)：headSha `0dcfa77…`，backend、frontend、contract、scripts、stack 全部 success。
+- [Deploy 43165496859](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43165496859)：workflow_dispatch，headSha `0dcfa77552d8df2ee30bdac2206fb051894e520e`，success；镜像构建与推送、服务更新、三站健康、外部数据库端口关闭及 runner SSH key 清理全部 success。
+- 迁移前备份 `saiflow-20261112T060748Z.dump`（302,877 bytes）已完成并上传 `gs://saiflow-db-backup/`。本次没有新迁移，部署按原流程执行 `alembic upgrade head`。部署日志 `temp/xlsx-share/share-only-deploy.log`。
+- 2026-11-12 14:09 +08:00 的独立只读检查：APP、ADMIN、LINE 三站的 `/api/v1/health` 均 status/database ok，version 均为上述完整代码提交。
+- LINE 实际入口已更新为 `/assets/index-BV5-Dp5b.js`，首页 `Cache-Control: no-cache`。已下载核对真实资源：含 `final.shareExcel`、`final.shareUnavailable`、`rpt.csvShare`、`rpt.csvCopy`、`export-panel`、`csv-preview`；不含旧浏览器按钮/说明键 `final.downloadInBrowser`、`final.browserHint`、`rpt.csvInBrowser`、`rpt.csvBrowserHint`，也不含两种导出的 ticket 请求路径。
+- 只读核验脚本 `temp/xlsx-share/check-share-only.ps1`，结果 `share-only-production-check.json`，所有检查 passed；原始公共资源留在 `share-only-production-index.js`。核验只访问首页、公共静态文件与健康接口，没有登录、生成实际导出或写入业务记录。
+- 真实 iPhone/Android LINE 的系统文件分享仍待负责人测试。可关闭后重新打开小程序，先准备 CSV/Excel，再点击分享；分享不支持时只在当前页面提示，不再提供浏览器下载退路。
