@@ -4,6 +4,7 @@ import { act } from "react";
 import { Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { apiBaseUrl } from "../../config";
 import { useLanguage } from "../../stores/language";
 import { testAuth } from "../../test/auth";
 import { fakeLiff } from "../../test/fakeLiff";
@@ -143,95 +144,89 @@ describe("final result and export (FR-SYS-107)", () => {
       [`GET ${JOB}/result`]: () => json(200, result(2, { document: { invoice_no: "IV1", invoice_date: "2026-10-01" } }, true)),
       [`POST ${JOB}/exports`]: () => json(201, { id: "e1", expires_at: "2026-11-07T00:00:00Z" }),
       "GET /api/v1/exports/e1/download": () => new Response("xlsx-bytes", { status: 200 }),
+      "POST /api/v1/exports/e1/ticket": () => json(200, { url: "/api/v1/export-downloads/synthetic.signature" }),
     });
 
-  const stubShare = (canShare: boolean, share = vi.fn<(data: ShareData) => Promise<void>>(async () => {})) => {
-    Object.defineProperty(navigator, "canShare", { configurable: true, value: () => canShare });
-    Object.defineProperty(navigator, "share", { configurable: true, value: share });
-    return share;
-  };
+  let links: string[];
+  beforeEach(() => {
+    links = [];
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { links.push(this.href); });
+  });
   afterEach(() => {
+    vi.restoreAllMocks();
     Reflect.deleteProperty(navigator, "canShare");
     Reflect.deleteProperty(navigator, "share");
   });
 
-  it("export in LINE prepares a file and shares it from a tap (107-01)", async () => {
-    const liff = testAuth(fakeLiff({ loggedIn: true, inClient: true }));
-    const share = stubShare(true);
+  it("iOS LINE exports with a real server attachment on the first click (107-01)", async () => {
+    const liff = testAuth(fakeLiff({ loggedIn: true, inClient: true, os: "ios" }));
     const api = finalApi();
     useLanguage.getState().setLang("th");
     signedIn(USER, [PERSONAL]);
     pages("/scan/jobs/j1/final");
-    expect(await screen.findByText("IV1")).toBeInTheDocument(); // read only
+    expect(await screen.findByText("IV1")).toBeInTheDocument();
     expect(screen.queryByRole("textbox")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "ส่งออก Excel" }));
-    await userEvent.click(await screen.findByRole("button", { name: "แชร์ Excel" }));
-    await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
-    const file = share.mock.calls[0]![0].files![0]!;
-    expect(file.name).toBe("invoice.xlsx");
-    expect(await file.text()).toBe("xlsx-bytes");
-    // stays inside LINE: no ticket, no external browser
+    await waitFor(() => expect(links).toEqual([`${apiBaseUrl || window.location.origin}/api/v1/export-downloads/synthetic.signature`]));
     expect(liff.openWindow).not.toHaveBeenCalled();
-    expect(await api.bodies("POST /api/v1/exports/e1/ticket")).toEqual([]);
+    expect(api.count("POST /api/v1/exports/e1/ticket")).toBe(1);
+    expect(api.count("GET /api/v1/exports/e1/download")).toBe(0);
     expect(await api.bodies(`POST ${JOB}/exports`)).toEqual([{ language: "th" }]);
   });
 
-  it.each(["false", "missing", "throws"])("shares directly without trusting canShare (%s), never offering the browser (107-06)", async (probe) => {
-    const liff = testAuth(fakeLiff({ loggedIn: true, inClient: true }));
-    const share = stubShare(false);
-    if (probe === "missing") Reflect.deleteProperty(navigator, "canShare");
-    if (probe === "throws") Object.defineProperty(navigator, "canShare", { configurable: true, value: () => { throw new Error("unsupported probe"); } });
-    const api = finalApi();
-    signedIn(USER, [PERSONAL]);
-    pages("/scan/jobs/j1/final");
-    await userEvent.click(await screen.findByRole("button", { name: "Export Excel" }));
-    const button = await screen.findByRole("button", { name: "Share Excel" });
-    expect(share).not.toHaveBeenCalled();
-    expect(screen.queryByRole("button", { name: "Download in browser" })).toBeNull();
-    await userEvent.click(button);
-    expect(share).toHaveBeenCalledTimes(1);
-    expect(liff.openWindow).not.toHaveBeenCalled();
-    expect(api.count("POST /api/v1/exports/e1/ticket")).toBe(0);
-  });
-
-  it("missing share API is explained in the page without an external fallback (107-06)", async () => {
-    const liff = testAuth(fakeLiff({ loggedIn: true, inClient: true }));
-    Reflect.deleteProperty(navigator, "share");
-    const api = finalApi();
-    signedIn(USER, [PERSONAL]);
-    pages("/scan/jobs/j1/final");
-    await userEvent.click(await screen.findByRole("button", { name: "Export Excel" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Share Excel" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("does not provide file sharing");
-    expect(screen.getByRole("button", { name: "Share Excel" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Download in browser" })).toBeNull();
-    expect(liff.openWindow).not.toHaveBeenCalled();
-    expect(api.count("POST /api/v1/exports/e1/ticket")).toBe(0);
-  });
-
-  it("a cancelled share stays quiet; a failed share stays in the page for retry (107-07)", async () => {
-    const liff = testAuth(fakeLiff({ loggedIn: true, inClient: true }));
-    const share = stubShare(true, vi.fn<(data: ShareData) => Promise<void>>(async () => {
-      throw new DOMException("cancelled", "AbortError");
-    }));
+  it("Android LINE uses the working snapshot's phone-browser download (107-06)", async () => {
+    const liff = testAuth(fakeLiff({ loggedIn: true, inClient: true, os: "android" }));
     finalApi();
     signedIn(USER, [PERSONAL]);
     pages("/scan/jobs/j1/final");
     await userEvent.click(await screen.findByRole("button", { name: "Export Excel" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Share Excel" }));
-    await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
-    expect(screen.queryByRole("alert")).toBeNull();
-    share.mockImplementation(async () => {
-      throw new DOMException("blocked", "NotAllowedError");
-    });
-    await userEvent.click(screen.getByRole("button", { name: "Share Excel" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("try sharing again");
-    expect(screen.getByRole("button", { name: "Share Excel" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Download in browser" })).toBeNull();
+    await waitFor(() => expect(liff.openWindow).toHaveBeenCalledWith({ url: `${apiBaseUrl || window.location.origin}/api/v1/export-downloads/synthetic.signature`, external: true }));
+    expect(await screen.findByText(/Download opened in your phone browser/)).toBeInTheDocument();
+    expect(links).toEqual([]);
+  });
+
+  it.each(["missing", "false", "throws"])("exports even when Web Share is unusable (%s)", async (probe) => {
+    const share = vi.fn(() => { throw new Error("must not share files"); });
+    Object.defineProperty(navigator, "share", { configurable: true, value: share });
+    if (probe === "missing") Reflect.deleteProperty(navigator, "share");
+    Object.defineProperty(navigator, "canShare", { configurable: true, value: () => { if (probe === "throws") throw new Error("unsupported probe"); return false; } });
+    testAuth(fakeLiff({ loggedIn: true, inClient: true }));
+    finalApi();
+    signedIn(USER, [PERSONAL]);
+    pages("/scan/jobs/j1/final");
+    await userEvent.click(await screen.findByRole("button", { name: "Export Excel" }));
+    await waitFor(() => expect(links).toHaveLength(1));
+    expect(share).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Share Excel" })).toBeNull();
+  });
+
+  it("a refused ticket offers retry without delivering an invalid file (107-07)", async () => {
+    testAuth(fakeLiff({ loggedIn: true, inClient: true }));
+    const api = finalApi();
+    api.set("POST /api/v1/exports/e1/ticket", () => json(503, { code: "download_ticket_unavailable" }));
+    signedIn(USER, [PERSONAL]);
+    pages("/scan/jobs/j1/final");
+    await userEvent.click(await screen.findByRole("button", { name: "Export Excel" }));
+    await screen.findByRole("alert");
+    expect(links).toHaveLength(0);
+    api.set("POST /api/v1/exports/e1/ticket", () => json(200, { url: "/api/v1/export-downloads/fresh.signature" }));
+    await userEvent.click(screen.getByRole("button", { name: "Export Excel" }));
+    await waitFor(() => expect(links).toEqual([`${apiBaseUrl || window.location.origin}/api/v1/export-downloads/fresh.signature`]));
+  });
+
+  it("discards a late ticket after switching tenants", async () => {
+    const liff = testAuth(fakeLiff({ loggedIn: true, inClient: true }));
+    let finish!: (response: Response) => void;
+    const api = finalApi();
+    api.set("POST /api/v1/exports/e1/ticket", () => new Promise<Response>((resolve) => { finish = resolve; }));
+    signedIn(USER, [PERSONAL, ORG]);
+    pages("/scan/jobs/j1/final");
+    await userEvent.click(await screen.findByRole("button", { name: "Export Excel" }));
+    await waitFor(() => expect(finish).toBeTypeOf("function"));
+    act(() => useTenantChoice.getState().choose(ORG.tenant_id));
+    await act(async () => { finish(json(200, { url: "/api/v1/export-downloads/old.signature" })); });
+    expect(links).toHaveLength(0);
     expect(liff.openWindow).not.toHaveBeenCalled();
-    share.mockResolvedValueOnce();
-    await userEvent.click(screen.getByRole("button", { name: "Share Excel" }));
-    await waitFor(() => expect(screen.queryByRole("region", { name: "Excel export ready" })).toBeNull());
   });
 
   it("no export permission hides button (107-02)", async () => {

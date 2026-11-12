@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { BrandLoading } from "../../components/BrandLoading";
@@ -22,10 +22,9 @@ import { useResult } from "./ResultPage";
 import type { Group, Json } from "./structured";
 import theme from "./theme.module.css";
 
-/** main `FinalResultPage.vue` (FR-SYS-107, 116): the confirmed result read-only with its
- * original, "Export Excel" for holders of the export permission (preparing → ready; in LINE
- * the file is kept in the page and shared from a second tap, never via a phone browser), and
- * "New scan". */
+/** The working 20261104 server-link export flow (FR-SYS-107, 116): read-only
+ * confirmed result with its original, permission-gated Excel download and New scan.
+ * iOS LINE follows the attachment URL; Android LINE uses the phone browser. */
 export function FinalResultPage() {
   const t = useT();
   const navigate = useNavigate();
@@ -41,52 +40,38 @@ export function FinalResultPage() {
   }, [toast]);
   const job = useJob(id, false);
   const result = useResult(id);
-  const [exporting, setExporting] = useState(false);
-  const [preparedFor, setPrepared] = useState<(Extract<XlsxOutcome, { how: "prepared" }> & { tenantId?: number }) | null>(null);
-  const [saved, setSaved] = useState(false);
-  const [shareError, setShareError] = useState<"unavailable" | "failed" | null>(null);
-  const [error, setError] = useState<unknown>(null);
+  const exportRequest = useRef<AbortController | null>(null);
   const data = result.data;
   const confirmed = job.data?.stage === "CONFIRMED";
   const pages = job.data?.page_count || 1;
   const tenantId = tenant?.tenant_id;
-  // A file prepared for another tenant is not offered after switching (FR-SYS-107).
-  const prepared = preparedFor && preparedFor.tenantId === tenantId ? preparedFor : null;
+  const eligible = can(tenant, "export") && confirmed;
+  const exportKey = JSON.stringify([id, tenantId, lang, eligible]);
+  const [exportState, setExportState] = useState<{
+    key: string; loading: boolean; how: XlsxOutcome["how"] | null; error: unknown;
+  }>({ key: "", loading: false, how: null, error: null });
+  // Old status is never displayed under a new task, tenant, language or permission.
+  const exporting = exportState.key === exportKey && exportState.loading;
+  const saved = exportState.key === exportKey ? exportState.how : null;
+  const error = exportState.key === exportKey ? exportState.error : null;
+
+  useLayoutEffect(() => () => {
+    exportRequest.current?.abort();
+    exportRequest.current = null;
+  }, [exportKey]);
 
   async function exportExcel() {
-    setExporting(true);
-    setError(null);
-    setPrepared(null);
-    setSaved(false);
-    setShareError(null);
+    if (exportRequest.current || !eligible) return;
+    const controller = new AbortController();
+    exportRequest.current = controller;
+    setExportState({ key: exportKey, loading: true, how: null, error: null });
     try {
-      const liff = authLiff();
-      const outcome: XlsxOutcome = await exportAndDownload(id, lang, liff, job.data?.file_name ?? "result");
-      if (outcome.how === "prepared") setPrepared({ ...outcome, tenantId });
-      else setSaved(true);
+      const outcome = await exportAndDownload(id, lang, authLiff(), job.data?.file_name ?? "result", controller.signal);
+      if (!controller.signal.aborted) setExportState({ key: exportKey, loading: false, how: outcome.how, error: null });
     } catch (e) {
-      setError(e);
+      if (!controller.signal.aborted) setExportState({ key: exportKey, loading: false, how: null, error: e });
     } finally {
-      setExporting(false);
-    }
-  }
-
-  // Match the user's share-on-tap flow. A missing/false canShare probe is not used to
-  // replace the share button with an external download (FR-SYS-107).
-  async function sharePrepared() {
-    if (!prepared) return;
-    setShareError(null);
-    if (typeof navigator.share !== "function") {
-      setShareError("unavailable");
-      return;
-    }
-    const file = prepared.file;
-    try {
-      await navigator.share({ files: [file], title: file.name });
-      setPrepared((p) => (p?.file === file ? null : p));
-    } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") return; // user closed the sheet
-      setShareError("failed");
+      if (exportRequest.current === controller) exportRequest.current = null;
     }
   }
 
@@ -182,21 +167,7 @@ export function FinalResultPage() {
                 {errorMessage(error, t)}
               </p>
             )}
-            {saved && <p className={s["export-ready"]}>{t("final.exportReady")}</p>}
-            {prepared && (
-              <div className={s["export-panel"]} role="region" aria-label={t("final.exportReady")}>
-                <p className={s["export-panel-title"]}>{t("final.exportPrepared")}</p>
-                <p className={s["export-panel-name"]}>{prepared.file.name}</p>
-                {shareError && (
-                  <p className={s["status-error"]} role="alert">
-                    {t(shareError === "unavailable" ? "final.shareUnavailable" : "final.shareFailed")}
-                  </p>
-                )}
-                <button type="button" className={s["primary-btn"]} onClick={() => void sharePrepared()}>
-                  {t("final.shareExcel")}
-                </button>
-              </div>
-            )}
+            {saved && <p className={s["export-ready"]} role="status">{t(saved === "external" ? "final.exportExternal" : "final.exportReady")}</p>}
           </div>
           <div className={s["action-bar"]}>
             <button type="button" className={s["secondary-btn"]} onClick={() => navigate("/")}>

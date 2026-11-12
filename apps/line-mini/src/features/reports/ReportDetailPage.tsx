@@ -49,7 +49,7 @@ interface DataState {
  * default) plus room for the source line and the card actions below it. */
 const FOOTER = 64;
 const stackHeight = (card: ReportCard) => Math.min(420, Math.max(200, card.layout.h * 56)) + FOOTER;
-/** Rows shown in the in-LINE CSV preview; the copied or shared file always has them all. */
+/** Rows shown in the in-LINE CSV preview; the downloaded file and copied text have them all. */
 const PREVIEW_ROWS = 50;
 
 function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Published }; onStale(): void }) {
@@ -66,7 +66,7 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
   const [data, setData] = useState<DataState>({ result: null, error: null, loading: true });
   const [exporting, setExporting] = useState<string | null>(null);
   const [sheet, setSheet] = useState<ReportCard | null>(null);
-  // a CSV fetched inside LINE, waiting for a tap to share or copy it (FR-SYS-144)
+  // An authenticated CSV retained after download starts, for preview, copy or a fresh retry (FR-SYS-144).
   const [prepared, setPrepared] = useState<{ card: ReportCard; file: File; text: string; period: Period } | null>(null);
   const preview = useMemo(() => {
     if (!prepared) return null;
@@ -134,6 +134,10 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
   }, [version, cancelDownloads]);
 
   useLayoutEffect(() => {
+    if (!detail.can_export) cancelDownloads();
+  }, [detail.can_export, cancelDownloads]);
+
+  useLayoutEffect(() => {
     active.current = true;
     return () => {
       active.current = false;
@@ -165,7 +169,7 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
   const titleOf = (card: ReportCard) => card.title?.trim() || labels.chart.chartTypes[card.type];
 
   const exportCard = async (card: ReportCard) => {
-    if (!result || download.current) return; // the mobile viewer intentionally exports one file at a time
+    if (!result || !detail.can_export || download.current) return; // one authorized export at a time
     setPrepared(null);
     const controller = new AbortController();
     download.current = controller;
@@ -202,30 +206,9 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
     }
   };
 
-  // Called straight from the tap: the share sheet needs that user activation.
-  const sharePrepared = () => {
-    if (!prepared) return;
-    const { file, card } = prepared;
-    let pending: Promise<void>;
-    try {
-      pending = navigator.share({ files: [file], title: titleOf(card) });
-    } catch (e) {
-      pending = Promise.reject(e);
-    }
-    pending.then(
-      () => {
-        if (active.current) setPrepared((p) => (p?.file === file ? null : p));
-      },
-      (e: unknown) => {
-        // closing the share sheet is not an error; the file stays ready to try again
-        if (!active.current || (e instanceof DOMException && e.name === "AbortError")) return;
-        showToast(t("rpt.csvShareFailed"));
-      },
-    );
-  };
-  // Also straight from the tap: iOS only lets the clipboard be written with user activation.
+  // Straight from the tap: iOS only lets the clipboard be written with user activation.
   const copyPrepared = (e: MouseEvent<HTMLButtonElement>) => {
-    if (!prepared) return;
+    if (!prepared || !detail.can_export) return;
     void copyText(prepared.text, e.currentTarget.parentElement ?? document.body).then((ok) => {
       if (active.current) showToast(t(ok ? "rpt.csvCopied" : "rpt.csvCopyFailed"));
     });
@@ -427,8 +410,13 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
               </>
             )}
             <div className={s["sheet-actions"]}>
-              <Button variant="primary" block onClick={sharePrepared}>
-                {t("rpt.csvShare")}
+              <Button
+                variant="primary"
+                block
+                disabled={!result || stale || data.loading || !detail.can_export || exporting !== null}
+                onClick={() => void exportCard(prepared.card)}
+              >
+                {t("rpt.csvDownload")}
               </Button>
               <Button variant="outline" block onClick={copyPrepared}>
                 {t("rpt.csvCopy")}

@@ -4,6 +4,8 @@ export interface Liff {
   init(): Promise<void>;
   isLoggedIn(): boolean;
   isInClient(): boolean;
+  /** Device OS for LINE's native downloader; optional adapters fall back to user agent. */
+  getOS?(): string | undefined;
   login(redirectUri: string): void;
   logout(): void;
   getIDToken(): string | null;

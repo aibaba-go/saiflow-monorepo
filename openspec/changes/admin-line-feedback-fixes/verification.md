@@ -194,3 +194,49 @@
 - LINE 实际入口已更新为 `/assets/index-BV5-Dp5b.js`，首页 `Cache-Control: no-cache`。已下载核对真实资源：含 `final.shareExcel`、`final.shareUnavailable`、`rpt.csvShare`、`rpt.csvCopy`、`export-panel`、`csv-preview`；不含旧浏览器按钮/说明键 `final.downloadInBrowser`、`final.browserHint`、`rpt.csvInBrowser`、`rpt.csvBrowserHint`，也不含两种导出的 ticket 请求路径。
 - 只读核验脚本 `temp/xlsx-share/check-share-only.ps1`，结果 `share-only-production-check.json`，所有检查 passed；原始公共资源留在 `share-only-production-index.js`。核验只访问首页、公共静态文件与健康接口，没有登录、生成实际导出或写入业务记录。
 - 真实 iPhone/Android LINE 的系统文件分享仍待负责人测试。可关闭后重新打开小程序，先准备 CSV/Excel，再点击分享；分享不支持时只在当前页面提示，不再提供浏览器下载退路。
+
+## 参考 20261104 可用版本恢复服务器附件下载（2026-11-12，未发布）
+
+负责人最新要求：对照 `temp/saiflow-monorepo-20261104`，修复当前 CSV 与 Excel 两处导出。本节取代前述分享-only 的当前实现说明，不覆盖其历史测试和发布记录。本次仅本地修复与测试，**没有提交、推送、部署或生产业务写入**。此前 Published 频道配置工作仍暂停，其 workflow/scripts 本地修改没有混入本次导出验证或发布。
+
+### 实际对比与实现
+
+- 完整读取快照 `apps/line-mini/src/views/FinalResultPage.vue`、`api.ts`、`liff.ts` 及旧导出路由：其可用 XLSX 导出不是 Web Share，iOS 等环境用真实 HTTP 附件链接，Android LINE 使用 60 秒票据与外部浏览器。快照没有当前报表 CSV 页面；CSV 是同一机制在现有架构的适配，不能声称复制了旧报表页。
+- 当前 FastAPI 的两种 ticket/redeem 接口仍存在。当前认证还要求租户 header，所以 LINE 两平台都申请现成的短时凭证，让原生下载器无需附带 header/cookie也能由服务端恢复会话和租户、验证权限。iOS 用真实服务器附件 anchor；Android 用 LIFF external（SDK 抛错时用 LINE 外部浏览器参数）。不使用 `navigator.share` 或 `canShare`，非 LINE 原 blob 下载不变。
+- CSV 保留 authenticated GET 的原字节、BOM 去除后的完整复制文本及前 50 非空行预览；首次下载后可再次下载，重走期间/版本/权限校验并申请新 ticket。XLSX 首次点击直接创建/复用有效文件、取票据并发起下载，不再准备第二次分享面板。共享 helper 拒绝非可信 origin、错误 route、凭据、查询、片段和路径穿越。
+- 独立审查发现两项问题，均用红测试复现并修复：同事被复用其他创建者 XLSX 后无法签票；同版本 `can_export=false` 不清理 CSV。后端复用按当前创建者限定，仍禁止交叉签票；前端在权限撤销时立即取消 pending CSV/ticket、关闭预览并禁止复制。复核全文核对四文件及模型/迁移约束，两问题消除，未发现新增实质问题。
+
+### AC → 回归证据
+
+| AC | 检查 | 结果 |
+|---|---|---|
+| AC-FR-SYS-144-01/03 | iOS 真实附件 URL、Android external、ticket body 固定卡片/期间/版本、无 Web Share、重试新 ticket、拒绝不下载 | reports + helper 专项通过；浏览器通过 |
+| AC-FR-SYS-144-02/05 | RFC4180 引号、50 非空行、完整文本去 BOM、面板内 copy command/clipboard、失败保留提示 | 专项通过；浏览器实际剪贴板检查通过 |
+| AC-FR-SYS-144-04 | 发布/取消发布/租户/离页的迟到 CSV 和 ticket；同版本权限撤销已准备/待票据两条回归 | 专项通过；新增红测试 2 failed 后转绿 |
+| AC-FR-SYS-107-01/06/07、FR-SYS-116 | 首次点击附件、Android 提示、缺失/抛错 Web Share 不影响、失败重试、租户切换取消 | final + helper 专项通过；浏览器通过 |
+| AC-FR-SYS-107-02/03/04/05 | 无权限/待复核限制、额外字段只读、页面可见不扩展导出 | 既有回归保持通过 |
+| AC-FR-SYS-107-08、AC-FR-ENTRY-015-03/04 | 同事分别创建和复用、无 cookie 取票下载、owner 仍复用原文件、禁止交叉签票、60 秒过期/注销/篡改 | 隔离库 XLSX 集成通过；多人红测试 1 failed 后转绿 |
+| FR-REPORT-016 | 服务端 CSV 内容/期间/发布版本/范围、导出权限、ticket 过期及撤销 | 隔离库 CSV 集成通过 |
+
+### 最终检查结果
+
+- 三文件导出专项：**95 passed**（helper 13、final 15、reports 67），日志 `temp/xlsx-share/reference-download-targeted-final.log`。
+- line-mini 全量：**34 files / 363 passed**，日志 `reference-download-full-final.log`。
+- line-mini `tsc --noEmit`、全应用 eslint 均 rc=0；最终 Vite build 成功（`reference-download-build-final/`，日志 `reference-download-build-final.log`，主 bundle `index-DmeFbbOK.js`）。
+- 后端只在新建的 **127.0.0.1:25432 / saiflow_test_reference_exports** 顺序执行：`test_exports.py` **10 passed**、`test_report_csv.py` **7 passed**；日志 `reference-backend-green.log`、`reference-backend-csv.log`。使用隔离测试角色与 fake LINE/邮件/OCR/LLM/对象存储，没有访问实际 API/生产数据库或付费识别。两项修改 Python 文件 Ruff check/format --check 通过。未重跑整个后端或其他应用套件。
+- `openspec validate admin-line-feedback-fixes --strict` 与 `git diff --check` 通过。
+
+### 浏览器、附件字节与布局
+
+`temp/xlsx-share/reference-browser.cjs` + `reference-vite.config.mts`：本地 Chrome 移动视口，**16 场景 / 142 PASS / 0 FAIL**，见 `reference-browser-final.log` 和 `reference-browser-shots/checks.json`。涵盖两格式各 iOS/Android × zh390/en360/th320，以及两格式的票据失败重试和非 LINE 下载。
+
+所有业务 `/api/**` 由 Playwright 完全模拟；真实原生附件下载仅通过 Vite 两条指定 route 代理到 **127.0.0.1:5183 的本地合成附件服务器**。该服务器不连接数据库、云存储或任何第三方。首轮发现 Chrome 原生 anchor 下载绕过 Playwright route，收到了 Vite SPA HTML，而非模拟附件；已改为上述真实本地附件响应，最终逐个保存并核对字节成功。没有把首轮失败当作产品修复成功。
+
+- iOS 模拟路径真正触发 Chrome download，保存的 CSV/XLSX 字节与合成源完全一致；XLSX 是明确标注的 transport 合成字节，真实工作簿格式另由后端 openpyxl 集成检查，不把其当生产文件。
+- Android 检查真实同源 ticket URL 交给外部窗口替身，不证明真实系统浏览器已保存。CSV 再次下载始终取新 ticket、复制取得全部文本（仅去 BOM）、预览 50 行。
+- 分享/能力探测均设为抛错且实际调用次数为 0；选择的租户为 8，业务请求及票据均带正确 tenant，CSV ticket 固定屏幕期间/卡片/版本，没有未处理页面异常或未预期 API 请求。
+- 所有视口无横向溢出、CSV sheet 适配移动宽度；已打开检查中/泰文 CSV 及中/泰文 Excel 截图。浏览器和本次 Vite/附件服务器均关闭，5182/5183 已复查不再监听，没有停止其他开发服务。
+
+### 仍未验证
+
+真实 iPhone/Android LINE 的原生附件保存仍需发布后由负责人真机复测；本地 Chrome 下载不证明 LINE 保存能力。Android 按参考版本可能询问允许打开手机浏览器，不能承诺消除此系统询问。没有线上换票/下载检查，生产 DOWNLOAD_TICKET_SECRET 的当前可用性未在本轮验证；本次未新增或修改该凭据。未提交部署，不宣称生产已经修复。

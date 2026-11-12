@@ -220,6 +220,30 @@ async def test_download_needs_export_and_ticket_is_own(api, line, mail, store, d
     assert (await other.post(f"/api/v1/exports/{xid}/ticket", headers=h)).status_code == 404
     assert (await other.get(f"/api/v1/exports/{xid}/download", headers=h)).status_code == 200
     assert (await owner.post(f"/api/v1/exports/{xid}/ticket", headers=h)).status_code == 200
+    # FR-SYS-107-01: each authorized colleague must create/reuse an export they can ticket.
+    await db.execute(
+        text(
+            "update ocr_jobs set status='SUCCEEDED', review_status='CONFIRMED', "
+            "confirmed_version_id=:v where id=:j"
+        ),
+        {"v": vid, "j": job["id"]},
+    )
+    await db.commit()
+    own = await other.post(f"{JOBS}/{job['id']}/exports", headers=h)
+    assert own.status_code == 201, own.text
+    own_id = own.json()["id"]
+    assert own_id != xid
+    again = await other.post(f"{JOBS}/{job['id']}/exports", headers=h)
+    assert again.status_code == 200 and again.json()["id"] == own_id
+    ticket = await other.post(f"/api/v1/exports/{own_id}/ticket", headers=h)
+    assert ticket.status_code == 200, ticket.text
+    download = await client_like(api).get(ticket.json()["url"])
+    assert download.status_code == 200
+    load_workbook(io.BytesIO(download.content))
+    # Creating a colleague's file must not break reuse or authorization of the owner's.
+    reused = await owner.post(f"{JOBS}/{job['id']}/exports", headers=h)
+    assert reused.status_code == 200 and reused.json()["id"] == xid
+    assert (await owner.post(f"/api/v1/exports/{own_id}/ticket", headers=h)).status_code == 404
 
 
 async def test_get_export(api, line, mail, store, sm, ai_settings, llm, db):

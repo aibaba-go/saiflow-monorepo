@@ -74,6 +74,8 @@ async def create(
             select(Export).where(
                 Export.job_id == job.id,
                 Export.result_version_id == job.confirmed_version_id,
+                # Ticket issuance is restricted to the creator (FR-SYS-107, FR-ENTRY-015).
+                Export.created_by_user_id == ctx.user_id,
                 Export.status == "READY",
                 Export.expires_at > now,
                 Export.storage_path.like(f"%.{lang}.xlsx"),

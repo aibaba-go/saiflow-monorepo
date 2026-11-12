@@ -5,6 +5,7 @@ import type { Liff } from "../services/liffTypes";
 export interface FakeLiffOptions {
   loggedIn?: boolean;
   inClient?: boolean;
+  os?: "ios" | "android" | "web";
   idToken?: string | null;
   /** init never settles (for the 20 s timeout) when "never". */
   init?: "ok" | "never" | Error;
@@ -28,6 +29,7 @@ export function fakeLiff(options: FakeLiffOptions = {}): FakeLiff {
     }),
     isLoggedIn: () => state.loggedIn,
     isInClient: () => options.inClient ?? true,
+    getOS: () => options.os ?? "ios",
     login: vi.fn(() => {
       state.loggedIn = true;
     }),

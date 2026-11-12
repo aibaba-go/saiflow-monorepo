@@ -13,6 +13,7 @@ export function realLiff(liffId: string): Liff {
     init: () => liff.init({ liffId }),
     isLoggedIn: () => liff.isLoggedIn(),
     isInClient: () => liff.isInClient(),
+    getOS: () => liff.getOS(),
     login: (redirectUri) => liff.login({ redirectUri }),
     logout: () => liff.logout(),
     getIDToken: () => liff.getIDToken(),

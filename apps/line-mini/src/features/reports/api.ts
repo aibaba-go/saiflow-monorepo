@@ -3,6 +3,7 @@ import type { QueryResult, ReportConfig } from "@saiflow/ui";
 import { useQuery } from "@tanstack/react-query";
 
 import { api, call } from "../../services/api";
+import { deliverDownload } from "../../services/download";
 import type { Liff } from "../../services/liffTypes";
 import { useCurrentTenant } from "../tenants/useCurrentTenant";
 
@@ -50,9 +51,9 @@ export function configOf(raw: Record<string, unknown> | null | undefined): Repor
   return { ...(raw ?? {}), version: 1, cards } as ReportConfig;
 }
 
-/** How an export went: saved directly, or prepared inside LINE (the caller shares or
- * copies it from a tap). `text` is the CSV without its BOM, for the preview and clipboard.
- * LINE never opens an external browser, including when sharing fails (FR-SYS-144). */
+/** How an export went: saved directly outside LINE, or downloaded via a server ticket
+ * inside LINE with the authenticated file retained for preview and copy (FR-SYS-144,
+ * FR-REPORT-016). `text` is the CSV without its BOM, for the preview and clipboard. */
 export type CsvOutcome = { how: "saved" } | { how: "prepared"; file: File; text: string };
 
 /** The CSV as rows of cells (RFC 4180 quoting), for the in-LINE preview (FR-SYS-144). */
@@ -129,9 +130,9 @@ export async function copyText(text: string, host: HTMLElement = document.body):
 }
 
 /** One card's aggregated rows as CSV (view + export; FR-REPORT-016) for the page period on
- * screen. Inside LINE the file is fetched with the session and prepared for the "CSV ready"
- * panel, which shares or copies it without leaving LINE (FR-SYS-144). Elsewhere the file
- * is fetched with the tenant header and saved through an object URL. */
+ * screen. Inside LINE validate the authenticated CSV first, then request a fresh ticket
+ * for server-link delivery and retain the bytes for preview/copy (FR-SYS-144). Elsewhere
+ * save the authenticated blob through an object URL without requesting a ticket. */
 export async function downloadCsv(
   liff: Liff,
   id: number,
@@ -157,6 +158,13 @@ export async function downloadCsv(
     signal?.throwIfAborted();
     // TextDecoder drops the byte-order mark the server adds for Excel; the file keeps it.
     const text = new TextDecoder("utf-8").decode(bytes);
+    const ticket = await call(api.POST("/api/v1/reports/{report_id}/csv/ticket", {
+      ...rid(id),
+      signal,
+      body: { card_id: cardId, period, report_version: reportVersion },
+    }));
+    signal?.throwIfAborted(); // a late ticket must not download after a tenant/version change
+    deliverDownload(liff, ticket.url, "/api/v1/report-downloads/");
     return { how: "prepared", file: new File([bytes], name, { type: "text/csv" }), text };
   }
   const url = URL.createObjectURL(blob);
