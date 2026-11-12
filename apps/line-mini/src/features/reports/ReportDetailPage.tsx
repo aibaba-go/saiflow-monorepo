@@ -8,7 +8,7 @@ import {
   type ReportCard,
 } from "@saiflow/ui";
 import { RotateCw } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { BrandLoading } from "../../components/BrandLoading";
@@ -24,7 +24,18 @@ import { authLiff } from "../auth/session";
 import { PageHeader } from "../scan/components/PageHeader";
 import theme from "../scan/theme.module.css";
 import { useCurrentTenant } from "../tenants/useCurrentTenant";
-import { configOf, downloadCsv, reportData, useReport, type Period, type Published, type ReportDetail } from "./api";
+import {
+  canShareFiles,
+  configOf,
+  copyText,
+  downloadCsv,
+  parseCsv,
+  reportData,
+  useReport,
+  type Period,
+  type Published,
+  type ReportDetail,
+} from "./api";
 import { useReportLabels } from "./labels";
 import s from "./reports.module.css";
 
@@ -39,6 +50,8 @@ interface DataState {
  * default) plus room for the source line and the card actions below it. */
 const FOOTER = 64;
 const stackHeight = (card: ReportCard) => Math.min(420, Math.max(200, card.layout.h * 56)) + FOOTER;
+/** Rows shown in the in-LINE CSV preview; the copied or shared file always has them all. */
+const PREVIEW_ROWS = 50;
 
 function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Published }; onStale(): void }) {
   const t = useT();
@@ -54,8 +67,14 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
   const [data, setData] = useState<DataState>({ result: null, error: null, loading: true });
   const [exporting, setExporting] = useState<string | null>(null);
   const [sheet, setSheet] = useState<ReportCard | null>(null);
-  // a CSV fetched inside LINE, waiting for a tap to open the share sheet (FR-SYS-144)
-  const [prepared, setPrepared] = useState<{ card: ReportCard; file: File; period: Period } | null>(null);
+  // a CSV fetched inside LINE, waiting for a tap to share or copy it (FR-SYS-144)
+  const [prepared, setPrepared] = useState<{ card: ReportCard; file: File; text: string; period: Period } | null>(null);
+  const preview = useMemo(() => {
+    if (!prepared) return null;
+    const rows = parseCsv(prepared.text).filter((r) => r.some((c) => c !== ""));
+    return { rows: rows.slice(0, PREVIEW_ROWS), total: rows.length };
+  }, [prepared]);
+  const shareable = useMemo(() => prepared !== null && canShareFiles(), [prepared]);
   const seq = useRef(0);
   const active = useRef(true);
   const currentPeriod = useRef<Period | null>(null);
@@ -158,7 +177,7 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
       const shown = result.period;
       const out = await downloadCsv(authLiff(), detail.id, card.id, shown, version, controller.signal, external);
       if (!active.current || controller.signal.aborted) return;
-      if (out.how === "share") setPrepared({ card, file: out.file, period: shown });
+      if (out.how === "prepared") setPrepared({ card, file: out.file, text: out.text, period: shown });
       else showToast(t(out.how === "external" ? "rpt.csvExternal" : "rpt.csvReady"));
     } catch (e) {
       if (!active.current || controller.signal.aborted) return;
@@ -205,6 +224,13 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
         showToast(t("rpt.csvShareFailed"));
       },
     );
+  };
+  // Also straight from the tap: iOS only lets the clipboard be written with user activation.
+  const copyPrepared = (e: MouseEvent<HTMLButtonElement>) => {
+    if (!prepared) return;
+    void copyText(prepared.text, e.currentTarget.parentElement ?? document.body).then((ok) => {
+      if (active.current) showToast(t(ok ? "rpt.csvCopied" : "rpt.csvCopyFailed"));
+    });
   };
   const inBrowser = () => {
     const card = prepared?.card;
@@ -381,15 +407,45 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
           <>
             <h2 className={s["sheet-title"]}>{t("rpt.csvPrepared")}</h2>
             <p className={s["sheet-body"]}>
-              {t("rpt.csvPreparedBody", { title: titleOf(prepared.card), from: prepared.period.from, to: prepared.period.to })}
+              {t(shareable ? "rpt.csvPreparedBody" : "rpt.csvPreparedCopy", {
+                title: titleOf(prepared.card),
+                from: prepared.period.from,
+                to: prepared.period.to,
+              })}
             </p>
+            {preview && preview.rows.length > 0 && (
+              <>
+                <div className={s["csv-preview"]} role="region" aria-label={t("rpt.csvPreview")} tabIndex={0}>
+                  <table>
+                    <tbody>
+                      {preview.rows.map((row, i) => (
+                        <tr key={i}>
+                          {row.map((cell, j) => (
+                            <td key={j}>{cell}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {preview.total > preview.rows.length && (
+                  <p className={s.note}>{t("rpt.csvPreviewMore", { n: preview.rows.length, total: preview.total })}</p>
+                )}
+              </>
+            )}
             <div className={s["sheet-actions"]}>
-              <Button variant="primary" block onClick={sharePrepared}>
-                {t("rpt.csvShare")}
+              {shareable && (
+                <Button variant="primary" block onClick={sharePrepared}>
+                  {t("rpt.csvShare")}
+                </Button>
+              )}
+              <Button variant={shareable ? "outline" : "primary"} block onClick={copyPrepared}>
+                {t("rpt.csvCopy")}
               </Button>
               <Button block onClick={inBrowser}>
                 {t("rpt.csvInBrowser")}
               </Button>
+              <p className={s.note}>{t("rpt.csvBrowserHint")}</p>
               <Button variant="ghost" block onClick={() => setPrepared(null)}>
                 {t("common.close")}
               </Button>

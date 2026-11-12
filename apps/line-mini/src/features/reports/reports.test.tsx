@@ -271,22 +271,29 @@ describe("LINE report detail (FR-REPORT-018, -010, -015, -016)", () => {
     ]);
   });
 
-  it("CSV in LINE opens a 60-second ticket in the phone browser with the page period (016)", async () => {
+  it("CSV in LINE stays inside LINE; only Download in browser opens a 60-second ticket (016, 144)", async () => {
     const liff = testAuth(fakeLiff({ loggedIn: true, inClient: true }));
     inOrg();
     const api = mockApi({
       [ONE]: () => json(200, detail()),
       [DATA]: () => json(200, RESULT()),
+      [CSV]: () => new Response("category,value\nChiang Mai,1500.5\n", { status: 200, headers: { "Content-Type": "text/csv" } }),
       [TICKET]: () => json(200, { url: "/api/v1/report-downloads/abc.def" }),
     });
     pages("/report/31");
     await userEvent.click(await screen.findByRole("button", { name: "Download CSV of B sales" }));
+    const sheet = await screen.findByRole("dialog", { name: "CSV ready" });
+    // nothing leaves LINE until the viewer asks for the browser
+    expect(liff.openWindow).not.toHaveBeenCalled();
+    expect(api.count(TICKET)).toBe(0);
+    expect(within(sheet).getByText(/LINE will ask whether to open another app/)).toBeInTheDocument();
+    await userEvent.click(within(sheet).getByRole("button", { name: "Download in browser" }));
     await waitFor(() => expect(liff.openWindow).toHaveBeenCalled());
     const arg = liff.openWindow.mock.calls[0]![0] as { url: string; external: boolean };
     expect(arg).toEqual({ url: "http://localhost/api/v1/report-downloads/abc.def", external: true });
     expect(await api.bodies(TICKET)).toEqual([{ card_id: "c_b", period: RESULT().period, report_version: 2 }]);
     expect(await screen.findByText(/Opening your phone browser to download/)).toBeInTheDocument();
-    expect(api.count(CSV)).toBe(0);
+    expect(api.count(CSV)).toBe(1);
   });
 
   it("CSV outside LINE saves the file; a refused export says why (016)", async () => {
@@ -315,7 +322,7 @@ describe("LINE report detail (FR-REPORT-018, -010, -015, -016)", () => {
     expect(await screen.findByText(/The CSV could not be created\. .+/)).toBeInTheDocument();
   });
 
-  describe("saving the CSV inside LINE through the share sheet (FR-SYS-144)", () => {
+  describe("keeping the CSV inside LINE: share, copy or browser on request (FR-SYS-144)", () => {
     let share: ReturnType<typeof vi.fn>;
     beforeEach(() => {
       share = vi.fn(async () => {});
@@ -352,20 +359,101 @@ describe("LINE report detail (FR-REPORT-018, -010, -015, -016)", () => {
       expect(liff.openWindow).not.toHaveBeenCalled();
     });
 
-    it("without file sharing it falls back to the ticket in the phone browser (144-02)", async () => {
+    it("without file sharing it previews the CSV and copies it, never opening the browser (144-02)", async () => {
       Object.defineProperty(navigator, "canShare", { configurable: true, value: () => false });
+      const writeText = vi.fn<(text: string) => Promise<void>>(async () => {});
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
       const liff = testAuth(fakeLiff({ loggedIn: true, inClient: true }));
       inOrg();
+      const body = "\ufeffReport,Sales overview\r\n\r\ncategory,value\r\n\"Chiang Mai, North\",1500.5\r\n";
       const api = mockApi({
         [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()),
-        [TICKET]: () => json(200, { url: "/api/v1/report-downloads/abc.def" }),
+        [CSV]: () => new Response(body, { status: 200, headers: { "Content-Type": "text/csv" } }),
       });
-      pages("/report/31");
-      await userEvent.click(await screen.findByRole("button", { name: "Download CSV of A sales" }));
-      await waitFor(() => expect(liff.openWindow).toHaveBeenCalled());
-      expect(await screen.findByText(/Opening your phone browser to download/)).toBeInTheDocument();
-      expect(api.count(CSV)).toBe(0);
-      expect(screen.queryByRole("dialog")).toBeNull();
+      try {
+        pages("/report/31");
+        await userEvent.click(await screen.findByRole("button", { name: "Download CSV of A sales" }));
+        const sheet = await screen.findByRole("dialog", { name: "CSV ready" });
+        expect(within(sheet).queryByRole("button", { name: "Save or share" })).toBeNull();
+        expect(within(sheet).getByText(/Copy it and paste it/)).toBeInTheDocument();
+        // the preview parses quoted cells and skips the blank separator row
+        const preview = within(sheet).getByRole("region", { name: "Preview" });
+        expect(within(preview).getByText("Chiang Mai, North")).toBeInTheDocument();
+        expect(within(preview).getAllByRole("row")).toHaveLength(3);
+        await userEvent.click(within(sheet).getByRole("button", { name: "Copy CSV" }));
+        await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+        // the whole file, without the byte-order mark the server adds for Excel
+        expect(writeText.mock.calls[0]![0]).toBe(body.slice(1));
+        expect(await screen.findByText(/CSV copied/)).toBeInTheDocument();
+        expect(screen.getByRole("dialog", { name: "CSV ready" })).toBeInTheDocument();
+        expect(api.count(TICKET)).toBe(0);
+        expect(liff.openWindow).not.toHaveBeenCalled();
+      } finally {
+        Reflect.deleteProperty(navigator, "clipboard");
+      }
+    });
+
+    it("copies with the copy command inside the sheet and shows only the first 50 rows (144-02)", async () => {
+      Object.defineProperty(navigator, "canShare", { configurable: true, value: () => false });
+      const writeText = vi.fn<(text: string) => Promise<void>>(async () => {});
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+      let copied = "";
+      const exec = vi.fn((cmd: string) => {
+        // the box must be focused inside the dialog, or the sheet's focus trap would steal it
+        const box = document.querySelector("textarea");
+        copied = cmd === "copy" && box && document.activeElement === box && box.closest("[role=dialog]") ? box.value : "";
+        return copied !== "";
+      });
+      Object.defineProperty(document, "execCommand", { configurable: true, value: exec });
+      testAuth(fakeLiff({ loggedIn: true, inClient: true }));
+      inOrg();
+      const body = ["category,value", ...Array.from({ length: 60 }, (_, i) => `City ${i + 1},${i}`)].join("\n") + "\n";
+      mockApi({
+        [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()),
+        [CSV]: () => new Response(body, { status: 200, headers: { "Content-Type": "text/csv" } }),
+      });
+      try {
+        pages("/report/31");
+        await userEvent.click(await screen.findByRole("button", { name: "Download CSV of A sales" }));
+        const sheet = await screen.findByRole("dialog", { name: "CSV ready" });
+        expect(within(within(sheet).getByRole("region", { name: "Preview" })).getAllByRole("row")).toHaveLength(50);
+        expect(within(sheet).getByText("Showing the first 50 of 61 rows.")).toBeInTheDocument();
+        await userEvent.click(within(sheet).getByRole("button", { name: "Copy CSV" }));
+        expect(await screen.findByText(/CSV copied/)).toBeInTheDocument();
+        expect(exec).toHaveBeenCalledWith("copy");
+        expect(copied).toBe(body);
+        expect(writeText).not.toHaveBeenCalled();
+        expect(document.querySelector("textarea")).toBeNull();
+        expect(within(sheet).getByRole("button", { name: "Copy CSV" })).toHaveFocus();
+      } finally {
+        Reflect.deleteProperty(navigator, "clipboard");
+        Reflect.deleteProperty(document, "execCommand");
+      }
+    });
+
+    it("says so when neither copy path works, keeping the sheet open (144-05)", async () => {
+      Object.defineProperty(navigator, "canShare", { configurable: true, value: () => false });
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true, value: { writeText: vi.fn(async () => { throw new DOMException("denied", "NotAllowedError"); }) },
+      });
+      Object.defineProperty(document, "execCommand", { configurable: true, value: () => false });
+      testAuth(fakeLiff({ loggedIn: true, inClient: true }));
+      inOrg();
+      mockApi({
+        [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()),
+        [CSV]: () => new Response("category,value\nChiang Mai,1500.5\n", { status: 200 }),
+      });
+      try {
+        pages("/report/31");
+        await userEvent.click(await screen.findByRole("button", { name: "Download CSV of A sales" }));
+        const sheet = await screen.findByRole("dialog", { name: "CSV ready" });
+        await userEvent.click(within(sheet).getByRole("button", { name: "Copy CSV" }));
+        expect(await screen.findByText(/could not be copied/)).toBeInTheDocument();
+        expect(screen.getByRole("dialog", { name: "CSV ready" })).toBeInTheDocument();
+      } finally {
+        Reflect.deleteProperty(navigator, "clipboard");
+        Reflect.deleteProperty(document, "execCommand");
+      }
     });
 
     it("a cancelled share says nothing and keeps the sheet; the browser stays available (144-03)", async () => {
@@ -437,7 +525,7 @@ describe("LINE report detail (FR-REPORT-018, -010, -015, -016)", () => {
     let finishCsv!: (response: Response) => void;
     const api = mockApi({
       [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()),
-      [inClient ? TICKET : CSV]: () => new Promise<Response>((resolve) => { finishCsv = resolve; }),
+      [CSV]: () => new Promise<Response>((resolve) => { finishCsv = resolve; }),
     });
     const { queryClient } = pages("/report/31");
     await screen.findByText("Bangkok");
@@ -454,11 +542,10 @@ describe("LINE report detail (FR-REPORT-018, -010, -015, -016)", () => {
     await waitFor(() => expect(finishData).toBeTypeOf("function"));
     expect(screen.queryByText("Bangkok")).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
-    await act(async () => { finishCsv(inClient
-      ? json(200, { url: "/api/v1/reports/csv/download/old-version" })
-      : new Response("category,value\nOld snapshot,100\n", { status: 200 })); });
+    await act(async () => { finishCsv(new Response("category,value\nOld snapshot,100\n", { status: 200 })); });
     expect(created).not.toHaveBeenCalled();
     expect(liff.openWindow).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: "CSV ready", hidden: true })).toBeNull();
     await act(async () => { finishData(json(503, { code: "unavailable", message_key: "error.unavailable" })); });
     await screen.findByText("The report data could not be loaded");
     expect(screen.queryByText("Bangkok")).toBeNull();
@@ -488,7 +575,7 @@ describe("LINE report detail (FR-REPORT-018, -010, -015, -016)", () => {
     await userEvent.type(screen.getByLabelText("To"), "2026-03-31");
     await userEvent.click(screen.getByRole("button", { name: "Apply" }));
     await screen.findByText("2026-03-01 – 2026-03-31");
-    const endpoint = inClient ? TICKET : CSV;
+    const endpoint = CSV;
     api.set(endpoint, () => new Promise<Response>((resolve) => { finishOldCsv = resolve; }));
     await userEvent.click(screen.getByRole("button", { name: "Download CSV of A sales" }));
     await waitFor(() => expect(finishOldCsv).toBeTypeOf("function"));
@@ -510,17 +597,22 @@ describe("LINE report detail (FR-REPORT-018, -010, -015, -016)", () => {
     await userEvent.click(csv);
     await waitFor(() => expect(finishNewCsv).toBeTypeOf("function"));
     await act(async () => {
-      finishOldCsv(inClient ? json(200, { url: "/api/v1/report-downloads/old-version" }) : new Response("category,value\nOld snapshot,100\n", { status: 200 }));
+      finishOldCsv(new Response("category,value\nOld snapshot,100\n", { status: 200 }));
       finishOldData(json(200, RESULT()));
     });
     expect(created).not.toHaveBeenCalled();
     expect(liff.openWindow).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: "CSV ready" })).toBeNull();
     expect(csv).toBeDisabled();
     expect(screen.getByText("2026-03-01 – 2026-03-31")).toBeInTheDocument();
-    await act(async () => { finishNewCsv(inClient ? json(200, { url: "/api/v1/report-downloads/new-version" }) : new Response("category,value\nNew snapshot,200\n", { status: 200 })); });
+    await act(async () => { finishNewCsv(new Response("category,value\nNew snapshot,200\n", { status: 200 })); });
     await waitFor(() => expect(csv).toBeEnabled());
-    if (inClient) expect(liff.openWindow).toHaveBeenCalledTimes(1);
-    else expect(created).toHaveBeenCalledTimes(1);
+    if (inClient) {
+      const sheet = await screen.findByRole("dialog", { name: "CSV ready" });
+      expect(within(sheet).getByText("New snapshot")).toBeInTheDocument();
+      expect(within(sheet).queryByText("Old snapshot")).toBeNull();
+      expect(liff.openWindow).not.toHaveBeenCalled();
+    } else expect(created).toHaveBeenCalledTimes(1);
   });
 
   it.each([false, true])("pins CSV to the displayed actual period even when the default year has changed (in LINE: %s)", async (inClient) => {
@@ -529,18 +621,17 @@ describe("LINE report detail (FR-REPORT-018, -010, -015, -016)", () => {
     const displayed = { from: "2025-01-01", to: "2025-12-31" };
     const api = mockApi({
       [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT({ period: displayed })),
-      [inClient ? TICKET : CSV]: () => json(409, { code: "report_export_failed", message_key: "error.report_export_failed" }),
+      [CSV]: () => json(409, { code: "report_export_failed", message_key: "error.report_export_failed" }),
     });
     pages("/report/31");
     await screen.findByText("Bangkok");
     await userEvent.click(screen.getByRole("button", { name: "Download CSV of A sales" }));
-    await waitFor(() => expect(api.count(inClient ? TICKET : CSV)).toBe(1));
-    if (inClient) expect((await api.bodies(TICKET))[0]).toMatchObject({ period: displayed, report_version: 2 });
-    else {
-      const url = new URL(api.calls.find((c) => c.url.includes("/csv"))!.url);
-      expect(url.searchParams.get("from")).toBe(displayed.from);
-      expect(url.searchParams.get("to")).toBe(displayed.to);
-    }
+    await waitFor(() => expect(api.count(CSV)).toBe(1));
+    const url = new URL(api.calls.find((c) => c.url.includes("/csv"))!.url);
+    expect(url.searchParams.get("from")).toBe(displayed.from);
+    expect(url.searchParams.get("to")).toBe(displayed.to);
+    expect(url.searchParams.get("report_version")).toBe("2");
+    expect(api.count(TICKET)).toBe(0);
     expect((await api.bodies(DATA))[0]).toEqual({ period: null, refresh: false });
   });
 
@@ -553,8 +644,8 @@ describe("LINE report detail (FR-REPORT-018, -010, -015, -016)", () => {
     let requestedVersion: unknown = null;
     const api = mockApi({
       [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()),
-      [inClient ? TICKET : CSV]: async (r) => {
-        requestedVersion = inClient ? (await r.json()).report_version : new URL(r.url).searchParams.get("report_version");
+      [CSV]: async (r) => {
+        requestedVersion = new URL(r.url).searchParams.get("report_version");
         return json(409, { code: "revision_conflict", message_key: "error.revision_conflict" });
       },
     });
@@ -563,8 +654,8 @@ describe("LINE report detail (FR-REPORT-018, -010, -015, -016)", () => {
     api.set(ONE, () => json(200, detail({ published: { ...detail().published!, name: "New published overview", version: 3 } })));
     api.set(DATA, () => json(200, RESULT({ report_version: 3 })));
     await userEvent.click(screen.getByRole("button", { name: "Download CSV of A sales" }));
-    await waitFor(() => expect(api.count(inClient ? TICKET : CSV)).toBe(1));
-    expect(requestedVersion).toBe(inClient ? 2 : "2");
+    await waitFor(() => expect(api.count(CSV)).toBe(1));
+    expect(requestedVersion).toBe("2");
     expect(await screen.findByRole("heading", { name: "New published overview" })).toBeInTheDocument();
     expect(created).not.toHaveBeenCalled();
     expect(liff.openWindow).not.toHaveBeenCalled();
@@ -673,7 +764,7 @@ describe("LINE report detail (FR-REPORT-018, -010, -015, -016)", () => {
     let finishRefresh!: (response: Response) => void;
     const api = mockApi({
       [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()),
-      [inClient ? TICKET : CSV]: () => new Promise<Response>((resolve) => { finishCsv = resolve; }),
+      [CSV]: () => new Promise<Response>((resolve) => { finishCsv = resolve; }),
     });
     pages("/report/31");
     await screen.findByText("Bangkok");
@@ -687,12 +778,11 @@ describe("LINE report detail (FR-REPORT-018, -010, -015, -016)", () => {
     await act(async () => { finishRefresh(json(409, { code: "report_not_published", message_key: "error.report_not_published" })); });
     expect(await screen.findByText("This report was unpublished meanwhile.")).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).toBeNull();
-    await act(async () => { finishCsv(inClient
-      ? json(200, { url: "/api/v1/report-downloads/unpublished" })
-      : new Response("category,value\nOld publication,100\n", { status: 200 })); });
+    await act(async () => { finishCsv(new Response("category,value\nOld publication,100\n", { status: 200 })); });
     expect(created).not.toHaveBeenCalled();
     expect(liff.openWindow).not.toHaveBeenCalled();
     expect(screen.queryByText("CSV downloaded")).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "CSV ready" })).toBeNull();
   });
 
   it.each([false, true])("does not deliver a late CSV or ticket after a tenant switch (in LINE: %s)", async (inClient) => {
@@ -706,7 +796,7 @@ describe("LINE report detail (FR-REPORT-018, -010, -015, -016)", () => {
       [ONE]: (r) => r.headers.get("X-Tenant-Id") === "5"
         ? json(200, detail()) : json(404, { code: "not_found", message_key: "error.not_found" }),
       [DATA]: () => json(200, RESULT()),
-      [inClient ? TICKET : CSV]: () => new Promise<Response>((resolve) => { finish = resolve; }),
+      [CSV]: () => new Promise<Response>((resolve) => { finish = resolve; }),
     });
     pages("/report/31");
     await screen.findByText("Bangkok");
@@ -714,12 +804,11 @@ describe("LINE report detail (FR-REPORT-018, -010, -015, -016)", () => {
     await waitFor(() => expect(finish).toBeTypeOf("function"));
     act(() => useTenantChoice.getState().choose(OTHER.tenant_id));
     await screen.findByText("This report does not exist or is not in the current account.");
-    await act(async () => { finish(inClient
-      ? json(200, { url: "/api/v1/reports/csv/download/old-context" })
-      : new Response("category,value\nOld tenant,100\n", { status: 200, headers: { "Content-Type": "text/csv" } })); });
+    await act(async () => { finish(new Response("category,value\nOld tenant,100\n", { status: 200, headers: { "Content-Type": "text/csv" } })); });
     expect(created).not.toHaveBeenCalled();
     expect(liff.openWindow).not.toHaveBeenCalled();
     expect(screen.queryByText("CSV downloaded")).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "CSV ready" })).toBeNull();
   });
 
   it("without export there is no CSV; details open in a sheet", async () => {

@@ -98,7 +98,14 @@ export const reportsEn = {
   "rpt.csvPreparedBody": "{title} · {from} – {to}. Save it to Files or send it to another app.",
   "rpt.csvShare": "Save or share",
   "rpt.csvInBrowser": "Download in browser",
-  "rpt.csvShareFailed": "The share sheet could not be opened. Try Download in browser.",
+  "rpt.csvShareFailed": "The share sheet could not be opened. Try Copy CSV instead.",
+  "rpt.csvPreparedCopy": "{title} · {from} – {to}. Copy it and paste it into Notes, a spreadsheet or a chat.",
+  "rpt.csvCopy": "Copy CSV",
+  "rpt.csvCopied": "CSV copied — paste it into Notes, a spreadsheet or a chat.",
+  "rpt.csvCopyFailed": "The CSV could not be copied. Try Download in browser.",
+  "rpt.csvBrowserHint": "LINE will ask whether to open another app. Choose “Allow” to download.",
+  "rpt.csvPreview": "Preview",
+  "rpt.csvPreviewMore": "Showing the first {n} of {total} rows.",
   "rpt.periodOrder": "Choose a start and an end date, the end not before the start.",
 } as const;
 

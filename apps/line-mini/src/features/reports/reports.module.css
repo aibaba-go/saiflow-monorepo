@@ -293,6 +293,34 @@
   margin-top: 16px;
 }
 
+/* the in-LINE CSV preview (FR-SYS-144): scrolls both ways inside the sheet */
+.csv-preview {
+  max-height: 240px;
+  margin: 12px 0 6px;
+  overflow: auto;
+  border: 1px solid var(--brand-border);
+  border-radius: var(--control-radius);
+  -webkit-overflow-scrolling: touch;
+}
+
+.csv-preview table {
+  border-collapse: collapse;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text);
+  min-width: 100%;
+}
+
+.csv-preview td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--brand-border);
+  white-space: nowrap;
+}
+
+.csv-preview tr:nth-child(even) td {
+  background: var(--surface-muted);
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

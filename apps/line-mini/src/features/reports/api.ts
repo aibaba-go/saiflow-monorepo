@@ -62,14 +62,88 @@ export function canShareFiles(): boolean {
   }
 }
 
-/** How an export went: opened in the phone browser, saved directly, or prepared for the
- * share sheet (the caller shares it from a tap, which the browser requires). */
-export type CsvOutcome = { how: "external" } | { how: "saved" } | { how: "share"; file: File };
+/** How an export went: opened in the phone browser, saved directly, or prepared inside LINE
+ * (the caller shares or copies it from a tap, which the browser requires). `text` is the
+ * CSV without its byte-order mark, for the preview and the clipboard. */
+export type CsvOutcome = { how: "external" } | { how: "saved" } | { how: "prepared"; file: File; text: string };
+
+/** The CSV as rows of cells (RFC 4180 quoting), for the in-LINE preview (FR-SYS-144). */
+export function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]!;
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') {
+        cell += '"';
+        i++;
+      } else if (c === '"') quoted = false;
+      else cell += c;
+    } else if (c === '"') quoted = true;
+    else if (c === ",") {
+      row.push(cell);
+      cell = "";
+    } else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+    } else cell += c;
+  }
+  if (cell !== "" || row.length > 0) {
+    row.push(cell);
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** Put text on the clipboard from a tap: the older copy command on a hidden text box, else
+ * the Clipboard API (FR-SYS-144). `host` should be inside the open
+ * sheet, whose focus trap would otherwise pull focus away from a box on the page body. */
+export async function copyText(text: string, host: HTMLElement = document.body): Promise<boolean> {
+  const legacy = () => {
+    const back = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const box = document.createElement("textarea");
+    box.value = text;
+    box.setAttribute("readonly", "");
+    box.setAttribute("aria-hidden", "true");
+    box.style.position = "fixed";
+    box.style.top = "0";
+    box.style.left = "0";
+    box.style.opacity = "0";
+    host.appendChild(box);
+    box.focus({ preventScroll: true });
+    box.select();
+    box.setSelectionRange(0, text.length);
+    let ok: boolean;
+    try {
+      ok = typeof document.execCommand === "function" && document.execCommand("copy");
+    } catch {
+      ok = false;
+    }
+    box.remove();
+    back?.focus({ preventScroll: true });
+    return ok;
+  };
+  // The copy command runs first, synchronously inside the tap; the Clipboard API is then still
+  // called within the same user activation (iOS refuses either one after an await).
+  if (legacy()) return true;
+  if (typeof navigator.clipboard?.writeText !== "function") return false;
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** One card's aggregated rows as CSV (view + export; FR-REPORT-016) for the page period on
- * screen. Inside LINE the file is fetched with the session and prepared for the system
- * share sheet when the browser supports it (FR-SYS-144); otherwise, or when `external` is
- * asked for, a 60-second ticket stands in for the session in the system browser (as
+ * screen. Inside LINE the file is fetched with the session and prepared for the "CSV ready"
+ * panel, which shares or copies it without leaving LINE (FR-SYS-144); only when `external`
+ * is asked for does a 60-second ticket stand in for the session in the system browser (as
  * FR-ENTRY-015). Elsewhere the file is fetched with the tenant header and saved through an
  * object URL. */
 export async function downloadCsv(
@@ -82,7 +156,7 @@ export async function downloadCsv(
   external = false,
 ): Promise<CsvOutcome> {
   const name = `report-${id}-${cardId}.csv`;
-  if (liff.isInClient() && (external || !canShareFiles())) {
+  if (liff.isInClient() && external) {
     const ticket = await call(
       api.POST("/api/v1/reports/{report_id}/csv/ticket", { ...rid(id), signal, body: { card_id: cardId, period, report_version: reportVersion } }),
     );
@@ -104,7 +178,9 @@ export async function downloadCsv(
   if (liff.isInClient()) {
     const bytes = await blob.arrayBuffer();
     signal?.throwIfAborted();
-    return { how: "share", file: new File([bytes], name, { type: "text/csv" }) };
+    // TextDecoder drops the byte-order mark the server adds for Excel; the file keeps it.
+    const text = new TextDecoder("utf-8").decode(bytes);
+    return { how: "prepared", file: new File([bytes], name, { type: "text/csv" }), text };
   }
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
