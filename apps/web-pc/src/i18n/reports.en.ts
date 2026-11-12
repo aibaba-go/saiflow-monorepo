@@ -1,7 +1,12 @@
 /** English texts of the report pages and the shared report components (FR-SYS-141,
  * FR-REPORT-*); spread into en.ts. th/zh mirror the keys (i18n.test.ts). */
 export const reportsEn = {
-  "nav.reports": "Reports",
+  "nav.reports": "Manage reports",
+  "nav.reportView": "View reports",
+  "eyebrow.reportView": "Published reports",
+  "layout.desc.reportView": "Open the reports published in this organization; each shows the data you may see.",
+  "rpt.viewCount": "{n} published",
+  "rpt.viewCardHint": "Open report",
   "eyebrow.reports": "Operations reports",
   "layout.desc.reports": "Statistics from formal documents, designed and published in this organization.",
 

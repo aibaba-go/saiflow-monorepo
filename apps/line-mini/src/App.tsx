@@ -13,6 +13,7 @@ import { HealthPage } from "./pages/HealthPage";
 import { HistoryPage } from "./features/scan/HistoryPage";
 import { HomePage } from "./pages/HomePage";
 import { MyPage } from "./pages/MyPage";
+import { LoginSheet } from "./features/auth/LoginSheet";
 import { RegisterDialog } from "./features/auth/RegisterDialog";
 import { ProfilePage } from "./features/profile/ProfilePage";
 import { ApplyOrgPage } from "./features/orgs/ApplyOrgPage";
@@ -182,6 +183,7 @@ function MainShell() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {TAB_PATHS.has(pathname) && <TabBar showReport={report} />}
+      <LoginSheet />
       <RegisterDialog />
     </>
   );

@@ -3,8 +3,8 @@ doc_id: PRD-001
 title: "SaiFlow — 泰国 SME 制造企业单据数字化录入系统（PRD）"
 type: prd
 status: active
-version: 3.13.0
-updated: 2026-11-07
+version: 3.14.0
+updated: 2026-11-13
 owner: Product
 source: "PRD-SaiFlow.md v2.2.2; 2026-10-20 ~ 2026-10-21 业务流程重新梳理（多入口录入 + 大模型模板匹配与结构化转换 + 存储边界调整）"
 tags: [ocr, llm, data-entry, excel-import, thai-sme, erp, document-digitization, reporting, review]
@@ -521,9 +521,11 @@ flowchart TB
 
 | 入口 | 登录方式 |
 |------|----------|
-| LINE 小程序 | LINE 登录（游客可免登录试用） |
-| web-pc 企业版 | LINE 登录 |
+| LINE 小程序 | LINE 登录（游客可免登录试用）；已注册用户还可用邮箱 + 密码、邮箱验证码登录 |
+| web-pc 企业版 | LINE 登录；已注册用户还可用邮箱 + 密码、邮箱验证码登录 |
 | web-pc admin 后台 | 独立账号（用户名 + 密码），与客户账号隔离；接入短信平台后再增加短信 OTP（NFR-SEC-011） |
+
+- **邮箱密码与验证码（负责人 2026-11-12，变更 `customer-email-login`）：** 注册时设置密码（8–64 位，至少含一个字母和一个数字，输入两次确认）。只有已注册的邮箱可以用邮箱登录，未注册的邮箱提示“该邮箱未注册”。连续输错 5 次密码锁定 5 分钟，锁定期间仍可用邮箱验证码登录。忘记密码时用邮箱验证码重置；重置后该用户的其他会话全部失效，当前设备直接登录。
 
 #### 角色与权限
 
@@ -731,6 +733,7 @@ flowchart TB
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 3.14.0 | 2026-11-13 | Product Engineering | `customer-email-login`（负责人 2026-11-12）：LINE 小程序与 web-pc 增加邮箱 + 密码、邮箱验证码登录（仅已注册用户）；注册设置密码；邮箱验证码重置密码；错 5 次锁 5 分钟 |
 | 3.7.0 | 2026-11-05 | Product Engineering | B-5a（负责人 2026-11-05）：界面默认语言改为英语；套餐价格由平台 admin 维护并在套餐页显示；LINE 小程序底部导航与“报表”标签的显示条件 |
 | 3.8.0 | 2026-11-06 | Product Engineering | B-5b（变更 `web-admin-console`）：admin 后台界面语言为中文（默认）/ 英文；OCR 与大模型参数的默认值；admin 后台增加查询用户、查看操作日志与修改本人口令 |
 | 3.9.0 | 2026-11-06 | Product Engineering | B-5c（变更 `web-pc-account`）：web-pc 企业版不提供注册，未注册用户引导到 LINE 小程序注册；web-pc 没有游客 |

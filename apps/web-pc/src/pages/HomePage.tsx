@@ -60,7 +60,7 @@ function MetricStrip() {
   return (
     <nav className="pc-metrics" aria-label={t("home.metrics")} data-testid="metric-strip">
       {METRICS.map((m, i) => (
-        <Link key={m.stage} to={`/library?stage=${m.stage}`} className="pc-metric">
+        <Link key={m.stage} to={`/library?stage=${m.stage}`} className="pc-metric" data-stage={m.stage}>
           <span className="pc-metric__symbol">
             <Icon name={m.icon} />
           </span>

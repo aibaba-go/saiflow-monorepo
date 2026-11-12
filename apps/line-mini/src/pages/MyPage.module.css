@@ -207,3 +207,59 @@ button.row:active {
     transition: none;
   }
 }
+
+/* ---- Colour pass (FR-SYS-132): a gradient avatar, a toned workspace chip and one colour
+ * chip per settings row (data-tone set by SettingsRow). Tokens only. ---- */
+.avatar {
+  background: linear-gradient(135deg, var(--brand-blue), var(--accent-violet));
+  color: var(--on-primary);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-violet) 30%, var(--brand-border)),
+    0 8px 18px -8px color-mix(in srgb, var(--accent-violet) 60%, transparent);
+}
+
+.ws-icon {
+  background: linear-gradient(135deg, var(--accent-indigo-soft), var(--brand-teal-soft));
+  color: var(--accent-indigo);
+}
+
+.row-icon {
+  --tone: var(--brand-blue);
+  --tone-soft: var(--brand-blue-soft);
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--tone-soft);
+  color: var(--tone);
+}
+
+.row-icon[data-tone="violet"] {
+  --tone: var(--accent-violet);
+  --tone-soft: var(--accent-violet-soft);
+}
+
+.row-icon[data-tone="amber"] {
+  --tone: var(--accent-amber);
+  --tone-soft: var(--accent-amber-soft);
+}
+
+.row-icon[data-tone="teal"] {
+  --tone: var(--brand-teal-ink);
+  --tone-soft: var(--brand-teal-soft);
+}
+
+.row-icon[data-tone="emerald"] {
+  --tone: var(--accent-emerald);
+  --tone-soft: var(--accent-emerald-soft);
+}
+
+.row-icon[data-tone="cyan"] {
+  --tone: var(--accent-cyan);
+  --tone-soft: var(--accent-cyan-soft);
+}
+
+.row-icon svg {
+  width: 18px;
+  height: 18px;
+}

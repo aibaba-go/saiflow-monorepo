@@ -126,17 +126,31 @@ afterEach(() => {
 
 describe("report menu and gate (FR-SYS-141)", () => {
   it(
-    "shows the menu item and the published list to a report_view holder on Starter",
+    "sends a report_view holder without report_manage from /reports to the view menu (AC-FR-SYS-159-02)",
     async () => {
       inOrg(VIEWER, { [LIST]: () => json(200, { items: [summary()] }) });
+      renderAt("/reports");
+      const card = (await screen.findByText("Sales overview", {}, WAIT)).closest("a") as HTMLElement;
+      expect(card).toHaveAttribute("href", "/report-view/31");
+      const links = await menuLinks();
+      expect(links).toContain(en("nav.reportView"));
+      expect(links).not.toContain(en("nav.reports"));
+      expect(screen.queryByRole("button", { name: en("rpt.new") })).toBeNull();
+    },
+    LONG,
+  );
+
+  it(
+    "shows the management list with status and actions to a designer",
+    async () => {
+      inOrg(DESIGNER, { [LIST]: () => json(200, { items: [summary({ can_manage: true })] }) });
       renderAt("/reports");
       const row = (await screen.findByText("Sales overview", {}, WAIT)).closest("tr") as HTMLElement;
       expect(await menuLinks()).toContain(en("nav.reports"));
       expect(within(row).getByText(en("rpt.status.published"))).toBeInTheDocument();
       expect(within(row).getByText(/v2/)).toBeInTheDocument();
       expect(within(row).getByRole("button", { name: en("rpt.open") })).toBeInTheDocument();
-      expect(within(row).queryByRole("button", { name: en("rpt.design") })).toBeNull();
-      expect(screen.queryByRole("button", { name: en("rpt.new") })).toBeNull();
+      expect(within(row).getByRole("button", { name: en("rpt.design") })).toBeInTheDocument();
     },
     LONG,
   );
@@ -209,6 +223,135 @@ describe("report menu and gate (FR-SYS-141)", () => {
       await userEvent.click(within(dialog).getByRole("button", { name: en("rpt.create") }));
       expect(await api.bodies("POST /api/v1/reports")).toEqual([{ name: "Q4" }]);
       expect(await screen.findByRole("region", { name: en("rpt.designer") }, WAIT)).toBeInTheDocument();
+    },
+    LONG,
+  );
+});
+
+describe("view reports menu (FR-SYS-159, FR-SYS-160)", () => {
+  const selectedItem = () => document.querySelector(".ant-menu-item-selected")?.textContent;
+
+  it(
+    "shows a viewer only the view menu, and a designer both (AC-FR-SYS-159-01)",
+    async () => {
+      inOrg(VIEWER, { [LIST]: () => json(200, { items: [summary()] }) });
+      renderAt("/report-view");
+      await screen.findByText("Sales overview", {}, WAIT);
+      const links = await menuLinks();
+      expect(links).toContain(en("nav.reportView"));
+      expect(links).not.toContain(en("nav.reports"));
+      // in the workspace group, right after Reviews' position (Reviews is hidden for this viewer)
+      expect(links.indexOf(en("nav.reportView"))).toBe(links.indexOf(en("nav.library")) + 1);
+    },
+    LONG,
+  );
+
+  it(
+    "gives a designer both menus",
+    async () => {
+      inOrg(DESIGNER, { [LIST]: () => json(200, { items: [summary({ can_manage: true })] }) });
+      renderAt("/report-view");
+      await screen.findByText("Sales overview", {}, WAIT);
+      const links = await menuLinks();
+      expect(links).toContain(en("nav.reportView"));
+      expect(links).toContain(en("nav.reports"));
+    },
+    LONG,
+  );
+
+  it(
+    "lists only published reports as cards, without create or design (AC-FR-SYS-160-01)",
+    async () => {
+      inOrg(DESIGNER, {
+        [LIST]: () =>
+          json(200, {
+            items: [
+              summary({ can_manage: true }),
+              summary({ id: 32, name: "Draft only", status: "draft", published_version: null, published_at: null, can_manage: true }),
+            ],
+          }),
+      });
+      renderAt("/report-view");
+      const list = await screen.findByRole("list", { name: en("nav.reportView") }, WAIT);
+      expect(within(list).getAllByRole("link")).toHaveLength(1);
+      const card = within(list).getByRole("link");
+      expect(card).toHaveAttribute("href", "/report-view/31");
+      expect(within(card).getByText("Sales overview")).toBeInTheDocument();
+      expect(within(card).getByText(en("rpt.version", { n: 2 }))).toBeInTheDocument();
+      expect(screen.queryByText("Draft only")).toBeNull();
+      expect(screen.getByText(en("rpt.viewCount", { n: 1 }))).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: en("rpt.new") })).toBeNull();
+      expect(screen.queryByRole("button", { name: en("rpt.design") })).toBeNull();
+      expect(selectedItem()).toBe(en("nav.reportView"));
+    },
+    LONG,
+  );
+
+  it(
+    "opens a card read-only under the view menu and comes back to the list (AC-FR-SYS-160-01)",
+    async () => {
+      inOrg(VIEWER, {
+        [LIST]: () => json(200, { items: [summary()] }),
+        [ONE]: () => json(200, detail()),
+        [DATA]: () => json(200, RESULT()),
+      });
+      renderAt("/report-view");
+      await userEvent.click(await screen.findByRole("link", { name: /Sales overview/ }, WAIT));
+      expect(await screen.findByRole("rowheader", { name: "Bangkok" }, WAIT)).toBeInTheDocument();
+      expect(selectedItem()).toBe(en("nav.reportView"));
+      expect(screen.queryByRole("button", { name: en("rpt.design") })).toBeNull();
+      await userEvent.click(screen.getByRole("button", { name: new RegExp(`${en("rpt.backToList")}$`) }));
+      expect(await screen.findByRole("list", { name: en("nav.reportView") }, WAIT)).toBeInTheDocument();
+      expect(selectedItem()).toBe(en("nav.reportView"));
+    },
+    LONG,
+  );
+
+  it(
+    "shows an empty state when nothing is published (AC-FR-SYS-160-02)",
+    async () => {
+      inOrg(VIEWER, { [LIST]: () => json(200, { items: [summary({ published_version: null, published_at: null, status: "draft" })] }) });
+      renderAt("/report-view");
+      expect(await screen.findByText(en("rpt.emptyView"), {}, WAIT)).toBeInTheDocument();
+      expect(screen.queryByRole("list", { name: en("nav.reportView") })).toBeNull();
+    },
+    LONG,
+  );
+
+  it(
+    "hides and refuses the view menu without report_view (AC-FR-SYS-159-03)",
+    async () => {
+      const api = inOrg({ ...ORG, permissions: ["report_manage"] }, { [LIST]: () => json(200, { items: [] }) });
+      renderAt("/report-view");
+      expect(await screen.findByText(en("rpt.noView"), {}, WAIT)).toBeInTheDocument();
+      expect(await menuLinks()).not.toContain(en("nav.reportView"));
+      expect(api.count(LIST)).toBe(0);
+    },
+    LONG,
+  );
+
+  it(
+    "hides and refuses it below Starter (AC-FR-SYS-159-03)",
+    async () => {
+      const api = inOrg(VIEWER, { [LIST]: () => json(200, { items: [] }) }, KINDER);
+      renderAt("/report-view");
+      expect(await screen.findByText(en("rpt.unavailableBody"), {}, WAIT)).toBeInTheDocument();
+      expect(await menuLinks()).not.toContain(en("nav.reportView"));
+      expect(api.count(LIST)).toBe(0);
+    },
+    LONG,
+  );
+
+  it(
+    "hides and refuses it for the personal account (AC-FR-SYS-159-03)",
+    async () => {
+      localStorage.clear();
+      useTenantChoice.getState().reset();
+      const api = signedIn({ [LIST]: () => json(200, { items: [] }) });
+      renderAt("/report-view");
+      expect(await screen.findByText(en("rpt.unavailable"), {}, WAIT)).toBeInTheDocument();
+      expect(await menuLinks()).not.toContain(en("nav.reportView"));
+      expect(api.count(LIST)).toBe(0);
     },
     LONG,
   );

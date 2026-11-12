@@ -8,6 +8,7 @@ import { useT } from "../../i18n";
 import { api, call } from "../../services/api";
 import { useSession, type Me } from "../../stores/session";
 import { EmailCodeButton } from "../profile/EmailCodeButton";
+import { checkNewPassword } from "./passwordRule";
 import { loadIdentity } from "./session";
 import { Button } from "../../components/ui/button";
 import { BottomSheet } from "../../components/ui/sheet";
@@ -16,16 +17,21 @@ function RegisterForm({ me }: { me: Me }) {
   const t = useT();
   const [email, setEmail] = useState(me.email_suggestion ?? me.email ?? "");
   const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [phone, setPhone] = useState(me.phone ?? "");
   const [name, setName] = useState(me.display_name ?? "");
   const [error, setError] = useState<unknown>(null);
 
   const submit = useSubmit(async () => {
-    setError(null);
+    // AC-FR-SYS-042-05: the rule and the confirmation are checked before anything is sent.
+    const problem = checkNewPassword(password, confirm);
+    setError(problem);
+    if (problem) return;
     try {
       await call(
         api.POST("/api/v1/me/registration", {
-          body: { email, code, display_name: name, phone },
+          body: { email, code, password, display_name: name, phone },
         }),
       );
       await loadIdentity();
@@ -56,6 +62,25 @@ function RegisterForm({ me }: { me: Me }) {
         error={error}
         field="code"
       />
+      <Field
+        id="reg-password"
+        label={t("login.password")}
+        value={password}
+        onChange={setPassword}
+        error={error}
+        field="password"
+        type="password"
+      />
+      <Field
+        id="reg-password-confirm"
+        label={t("login.passwordConfirm")}
+        value={confirm}
+        onChange={setConfirm}
+        error={error}
+        field="password_confirm"
+        type="password"
+      />
+      <p className="field__hint">{t("login.passwordRule")}</p>
       <Field
         id="reg-phone"
         label={t("profile.phoneOptional")}

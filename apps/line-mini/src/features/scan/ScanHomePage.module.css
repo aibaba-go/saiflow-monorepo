@@ -1365,3 +1365,88 @@
     transition: none;
   }
 }
+
+/* ---- Colour pass (FR-SYS-132): richer tones on the navy band, the input methods and the
+ * section furniture. Tokens only; nothing here changes layout or behaviour. ---- */
+.welcome {
+  background:
+    radial-gradient(48% 62% at 92% 58%, color-mix(in srgb, var(--accent-violet) 28%, transparent), transparent 100%),
+    radial-gradient(42% 58% at 4% 100%, color-mix(in srgb, var(--brand-teal) 16%, transparent), transparent 100%),
+    var(--brand-navy);
+}
+
+.entry-card {
+  background: linear-gradient(120deg, var(--brand-blue), var(--accent-indigo));
+  box-shadow: 0 10px 24px -10px color-mix(in srgb, var(--brand-blue) 70%, transparent), var(--shadow-card);
+}
+
+.entry-card:active {
+  background: linear-gradient(120deg, var(--brand-blue-hover), var(--accent-indigo));
+}
+
+.plan-tag {
+  padding: 2px 9px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent-indigo-soft);
+  color: var(--accent-indigo);
+  font-weight: 600;
+}
+
+.quota-card {
+  box-shadow: var(--shadow-card);
+}
+
+.method {
+  --tone: var(--accent-amber);
+  --tone-soft: var(--accent-amber-soft);
+  justify-content: flex-start;
+  gap: 9px;
+  padding: 7px 10px;
+  color: var(--text);
+  font-weight: 500;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--brand-navy) 6%, transparent);
+}
+
+.scan-methods > .method:nth-child(2) {
+  --tone: var(--accent-cyan);
+  --tone-soft: var(--accent-cyan-soft);
+}
+
+.method svg {
+  box-sizing: content-box;
+  padding: 6px;
+  border-radius: 9px;
+  background: var(--tone-soft);
+  color: var(--tone);
+}
+
+.method:active,
+.method.active {
+  border-color: var(--tone);
+  background: color-mix(in srgb, var(--tone-soft) 60%, var(--surface));
+  color: var(--text);
+}
+
+.section-head .section-title::before {
+  content: "";
+  width: 4px;
+  height: 15px;
+  margin-right: 8px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--brand-blue), var(--accent-violet));
+}
+
+.count-badge {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent-indigo-soft);
+  color: var(--accent-indigo);
+  font-weight: 600;
+}
+
+.pending-state,
+.task-list {
+  border-color: color-mix(in srgb, var(--brand-border) 70%, transparent);
+  box-shadow: var(--shadow-card);
+}

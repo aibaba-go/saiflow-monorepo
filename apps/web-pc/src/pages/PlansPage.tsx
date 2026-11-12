@@ -59,7 +59,7 @@ function PlanCard({
   const t = useT();
   const org = plan.tenant_kind === "organization";
   return (
-    <article className={current ? "pc-plan pc-plan--current" : "pc-plan"} data-testid={`plan-${plan.code}`}>
+    <article className={current ? "pc-plan pc-plan--current" : "pc-plan"} data-plan={plan.code} data-testid={`plan-${plan.code}`}>
       {current && <span className="pc-plan__current">{t("plans.current")}</span>}
       <header className="pc-plan__head">
         <span className="pc-plan__badge" aria-hidden="true">

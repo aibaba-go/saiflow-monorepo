@@ -1,7 +1,7 @@
 import { api, call } from "../../services/api";
 import { ApiError } from "../../services/errors";
 import { useSession } from "../../stores/session";
-import { startLogin } from "../auth/session";
+import { openLogin } from "../auth/session";
 import type { ResultOut } from "./ResultPage";
 import type { Json } from "./structured";
 
@@ -46,7 +46,7 @@ export async function confirmResult(jobId: string, version: number, structured: 
   if (!(me?.kind === "user" && me.registered)) {
     rememberConfirm(jobId);
     if (me?.kind === "user") set({ registerOpen: true });
-    else await startLogin(`/scan/jobs/${jobId}/result`);
+    else openLogin(`/scan/jobs/${jobId}/result`);
     return { kind: "login" };
   }
   try {

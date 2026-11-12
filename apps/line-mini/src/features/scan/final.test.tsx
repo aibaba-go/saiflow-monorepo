@@ -10,6 +10,7 @@ import { testAuth } from "../../test/auth";
 import { fakeLiff } from "../../test/fakeLiff";
 import { GUEST, ORG, PERSONAL, signedIn, USER } from "../../test/fixtures";
 import { json, mockApi } from "../../test/mockApi";
+import { useSession } from "../../stores/session";
 import { renderWithProviders } from "../../test/render";
 import { useTenantChoice } from "../tenants/useCurrentTenant";
 import { FinalResultPage } from "./FinalResultPage";
@@ -72,8 +73,8 @@ beforeEach(() => {
 
 describe("confirm (FR-SYS-106)", () => {
   it("guest confirm after login keeps the edit (106-01)", async () => {
-    // outside LINE: a guest is sent to LINE login (inside LINE the page reopens instead)
-    const liff = testAuth(fakeLiff({ loggedIn: false, inClient: false }));
+    // a guest gets the login panel (FR-SYS-153), returning to this result page
+    testAuth(fakeLiff({ loggedIn: false, inClient: false }));
     let stored = result(1, { document: { invoice_no: "IV1", invoice_date: "2026-10-01" } });
     const api = mockApi({
       [`GET ${JOB}`]: () => json(200, job("VERIFYING")),
@@ -90,7 +91,8 @@ describe("confirm (FR-SYS-106)", () => {
     await userEvent.clear(no);
     await userEvent.type(no, "IV9");
     await userEvent.click(screen.getByRole("button", { name: "Continue" }));
-    await waitFor(() => expect(liff.login).toHaveBeenCalled()); // sent to LINE login
+    await waitFor(() => expect(useSession.getState().loginOpen).toBe(true));
+    expect(useSession.getState().loginReturnTo).toBe("/scan/jobs/j1/result");
     const [draft] = (await api.bodies(`PATCH ${JOB}/result`)) as { confirm: boolean; structured: { document: { invoice_no: string } } }[];
     expect(draft!.confirm).toBe(false); // the edit was saved before leaving
     expect(draft!.structured.document.invoice_no).toBe("IV9");

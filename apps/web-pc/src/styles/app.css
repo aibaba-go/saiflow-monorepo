@@ -2185,6 +2185,327 @@ tr:hover .pc-file__name {
   color: var(--pc-ink);
 }
 
+/* Split login and reset pages (FR-SYS-090, 155; FR-SYS-132): a brand panel and the form. */
+.pc-auth--split {
+  display: grid;
+  grid-template-columns: minmax(380px, 46%) 1fr;
+  place-items: stretch;
+  background: var(--surface);
+}
+.pc-auth__hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 44px 52px;
+  color: var(--brand-on-navy);
+  background:
+    radial-gradient(120% 70% at 100% 100%, color-mix(in srgb, var(--brand-blue) 72%, transparent) 0%, transparent 60%),
+    radial-gradient(70% 50% at 0% 0%, color-mix(in srgb, var(--accent-violet) 30%, transparent) 0%, transparent 70%),
+    linear-gradient(160deg, var(--brand-navy) 0%, var(--brand-navy-2) 52%, var(--brand-blue-hover) 100%);
+}
+.pc-auth__hero::after {
+  content: "";
+  position: absolute;
+  right: -120px;
+  top: 32%;
+  width: 360px;
+  height: 360px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--brand-on-navy) 14%, transparent);
+  box-shadow: 0 0 0 48px color-mix(in srgb, var(--brand-on-navy) 4%, transparent);
+  pointer-events: none;
+}
+.pc-auth__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+.pc-auth__mark {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  font-weight: 800;
+  color: var(--brand-on-navy);
+  background: linear-gradient(135deg, var(--brand-teal) 0%, var(--brand-blue) 100%);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--brand-teal) 40%, transparent);
+}
+.pc-auth__pitch {
+  position: relative;
+  z-index: 1;
+  max-width: 460px;
+}
+.pc-auth__hero-title {
+  margin: 0 0 14px;
+  font-size: 32px;
+  line-height: 42px;
+  font-weight: 700;
+  color: var(--brand-on-navy);
+}
+.pc-auth__hero-lead {
+  margin: 0 0 28px;
+  font-size: 15px;
+  line-height: 24px;
+  color: var(--brand-on-navy-muted);
+}
+.pc-auth__points {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 14px;
+}
+.pc-auth__points li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--brand-on-navy);
+}
+.pc-auth__chip {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--brand-on-navy) 12%, transparent);
+}
+.pc-auth__chip--teal {
+  color: var(--brand-teal);
+}
+.pc-auth__chip--emerald {
+  color: color-mix(in srgb, var(--accent-emerald) 50%, var(--brand-on-navy));
+}
+.pc-auth__chip--amber {
+  color: color-mix(in srgb, var(--accent-amber) 60%, var(--brand-on-navy));
+}
+.pc-auth__foot {
+  margin: 0;
+  font-size: 12px;
+  color: var(--brand-on-navy-muted);
+}
+.pc-auth__main {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 64px 24px 40px;
+  background: linear-gradient(180deg, var(--surface) 0%, var(--brand-bg) 100%);
+}
+.pc-auth__lang {
+  position: absolute;
+  top: 20px;
+  right: 28px;
+}
+.pc-auth__panel {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.pc-auth__head .ant-typography + .ant-typography,
+.pc-auth__head h3.ant-typography.pc-auth__title {
+  margin-bottom: 4px;
+}
+.pc-line-button.ant-btn {
+  height: 46px;
+  border: none;
+  font-weight: 600;
+  color: var(--brand-on-navy);
+  background: var(--line-green);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--line-green) 28%, transparent);
+}
+.pc-line-button.ant-btn:not(:disabled):hover {
+  color: var(--brand-on-navy);
+  background: var(--line-green-pressed);
+}
+.pc-auth__divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--pc-muted);
+}
+.pc-auth__divider::before,
+.pc-auth__divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--pc-line);
+}
+.pc-login-form .ant-form-item {
+  margin-bottom: 16px;
+}
+.pc-login-form .ant-btn-primary {
+  height: 46px;
+  font-weight: 600;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--brand-blue) 26%, transparent);
+}
+.pc-login-switch.ant-segmented {
+  margin-bottom: 16px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--pc-quiet-bg);
+}
+.pc-login-switch .ant-segmented-item-selected {
+  color: var(--brand-blue);
+  font-weight: 600;
+}
+.pc-login-form > .ant-alert {
+  margin-bottom: 14px;
+}
+.pc-login-label {
+  display: inline-flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+}
+.pc-login-form .ant-form-item-label > label {
+  width: 100%;
+}
+.pc-login-forgot,
+.pc-login-links a {
+  font-weight: 500;
+  font-size: 13px;
+}
+.pc-login-links {
+  margin-top: 14px;
+  text-align: center;
+}
+.pc-auth__note {
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--pc-muted);
+}
+.pc-auth__dev {
+  display: grid;
+  gap: 6px;
+}
+@media (max-width: 860px) {
+  .pc-auth--split {
+    grid-template-columns: 1fr;
+  }
+  .pc-auth__hero {
+    display: none;
+  }
+}
+
+/* ---------- View reports (FR-SYS-160): one coloured card per published report ---------- */
+.pc-report-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+.pc-report-card {
+  --tone: var(--brand-teal-ink);
+  --tone-soft: var(--brand-teal-soft);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 20px 20px 16px;
+  border: 1px solid var(--pc-line);
+  border-radius: 14px;
+  background: linear-gradient(160deg, var(--tone-soft) 0%, var(--surface) 46%);
+  color: var(--pc-ink);
+  text-decoration: none;
+  overflow: hidden;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+.pc-report-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--tone);
+}
+.pc-report-card:hover {
+  border-color: color-mix(in srgb, var(--tone) 45%, var(--pc-line));
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--tone) 14%, transparent);
+  transform: translateY(-2px);
+  color: var(--pc-ink);
+}
+.pc-report-card:focus-visible {
+  outline: 2px solid var(--tone);
+  outline-offset: 2px;
+}
+.pc-report-card--indigo { --tone: var(--accent-indigo); --tone-soft: var(--accent-indigo-soft); }
+.pc-report-card--amber { --tone: var(--accent-amber); --tone-soft: var(--accent-amber-soft); }
+.pc-report-card--violet { --tone: var(--accent-violet); --tone-soft: var(--accent-violet-soft); }
+.pc-report-card--emerald { --tone: var(--accent-emerald); --tone-soft: var(--accent-emerald-soft); }
+.pc-report-card--rose { --tone: var(--accent-rose); --tone-soft: var(--accent-rose-soft); }
+.pc-report-card__chip {
+  display: inline-grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--tone);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 22%, transparent);
+}
+.pc-report-card__chip .pc-icon {
+  width: 22px;
+  height: 22px;
+}
+.pc-report-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+.pc-report-card__name {
+  font-size: 16px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.pc-report-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+}
+.pc-report-card__version {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--tone-soft);
+  color: var(--tone);
+  font-weight: 600;
+}
+.pc-report-card__open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--pc-line);
+  color: var(--tone);
+  font-weight: 600;
+  font-size: 13px;
+}
+.pc-report-card__open .pc-icon {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.18s ease;
+}
+.pc-report-card:hover .pc-report-card__open .pc-icon {
+  transform: translateX(3px);
+}
+
 /* Line-item tables (FR-SYS-129): a heading row with the row count and an expand button; the
  * expanded table opens in a wide dialog that can be dragged by its title bar. */
 .pc-rows-block__head {
@@ -2542,4 +2863,395 @@ tr:hover .pc-file__name {
 .pc-report-details {
   max-width: 360px;
   font-size: 12px;
+}
+
+/* =====================================================================================
+ * Colour pass (FR-SYS-132): toned navigation chips, separate stat cards, pastel pills and
+ * soft shadows. Every colour is a brand or accent variable, mixed with color-mix().
+ * ===================================================================================== */
+:root {
+  --pc-shadow-card: 0 1px 2px color-mix(in srgb, var(--brand-navy) 5%, transparent),
+    0 4px 14px color-mix(in srgb, var(--brand-navy) 5%, transparent);
+  --pc-shadow-lift: 0 2px 4px color-mix(in srgb, var(--brand-navy) 6%, transparent),
+    0 12px 28px color-mix(in srgb, var(--brand-navy) 10%, transparent);
+  --pc-grad-primary: linear-gradient(135deg, var(--brand-blue),
+      color-mix(in srgb, var(--brand-blue) 62%, var(--accent-indigo)));
+}
+.pc-workspace {
+  background:
+    radial-gradient(900px 420px at 100% 0, color-mix(in srgb, var(--accent-indigo-soft) 70%, transparent), transparent 70%),
+    radial-gradient(700px 360px at 0 100%, color-mix(in srgb, var(--brand-teal-soft) 55%, transparent), transparent 70%),
+    var(--brand-bg);
+}
+
+/* ---- sidebar: a toned chip per item, the selected item a gradient pill ---- */
+.pc-shell .pc-sidebar .ant-menu-item {
+  height: 42px;
+  line-height: 42px;
+  margin-bottom: 3px;
+  padding-inline: 8px !important;
+  border-radius: 9px;
+  transition: background 0.15s ease-out, color 0.15s ease-out;
+}
+.pc-nav-icon {
+  --tone: var(--brand-blue);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--tone) 34%, var(--brand-navy));
+  color: color-mix(in srgb, var(--tone) 40%, var(--brand-on-navy));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 30%, transparent);
+  transition: background 0.15s ease-out, color 0.15s ease-out;
+}
+.pc-shell .pc-sidebar .ant-menu-item .pc-nav-icon .pc-icon {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+}
+.pc-nav-icon--cyan { --tone: var(--accent-cyan); }
+.pc-nav-icon--amber { --tone: var(--accent-amber); }
+.pc-nav-icon--emerald { --tone: var(--accent-emerald); }
+.pc-nav-icon--violet { --tone: var(--accent-violet); }
+.pc-nav-icon--rose { --tone: var(--accent-rose); }
+.pc-nav-icon--indigo { --tone: var(--accent-indigo); }
+.pc-nav-icon--teal { --tone: var(--brand-teal); }
+.pc-shell .pc-sidebar .ant-menu-item:not(.ant-menu-item-selected):hover {
+  background: color-mix(in srgb, var(--brand-on-navy) 7%, transparent);
+}
+.pc-shell .pc-sidebar .ant-menu-item:not(.ant-menu-item-selected):hover .pc-nav-icon {
+  background: color-mix(in srgb, var(--tone) 50%, var(--brand-navy));
+  color: var(--brand-on-navy);
+}
+.pc-shell .pc-sidebar .ant-menu-item-selected {
+  background: var(--pc-grad-primary);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--brand-blue) 34%, transparent);
+}
+.pc-shell .pc-sidebar .ant-menu-item-selected::before {
+  display: none;
+}
+.pc-shell .pc-sidebar .ant-menu-item-selected .pc-nav-icon {
+  background: color-mix(in srgb, var(--brand-on-navy) 20%, transparent);
+  color: var(--brand-on-navy);
+  box-shadow: none;
+}
+.pc-content .pc-panel > h2.pc-section-title.ant-typography {
+  margin: 0;
+  padding: 19px 20px 0;
+  font-size: 17px;
+  line-height: 26px;
+  font-weight: 600;
+  color: var(--pc-ink);
+}
+.pc-content .pc-panel > h2.pc-section-title + .ant-typography {
+  margin: 4px 0 0;
+  padding: 0 20px 14px;
+  font-size: 12px;
+  line-height: 18px;
+}
+.pc-content .pc-panel > h2.pc-section-title + .ant-list,
+.pc-content .pc-panel > h2.pc-section-title ~ .ant-list {
+  padding: 8px 20px 12px;
+}
+
+/* ---- page-level results (not found, no access, switch to an organization) as a card ---- */
+.pc-content .ant-result:not(.ant-card *):not(.pc-panel *) {
+  padding: 48px 32px 44px;
+  border: 1px solid color-mix(in srgb, var(--pc-line) 80%, var(--surface));
+  border-radius: 12px;
+  background:
+    radial-gradient(420px 200px at 50% 0, color-mix(in srgb, var(--accent-indigo-soft) 80%, transparent), transparent 75%),
+    var(--surface);
+  box-shadow: var(--pc-shadow-card);
+}
+.pc-content .ant-result .ant-result-title {
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 600;
+  color: var(--pc-ink);
+}
+.pc-content .ant-result .ant-result-subtitle {
+  color: var(--pc-muted);
+}
+.pc-content .ant-result-info .ant-result-icon > .anticon {
+  font-size: 56px;
+}
+
+/* ---- tags: pastel pills without a border ---- */
+.pc-content .ant-tag {
+  border-color: transparent;
+  border-radius: 999px;
+  padding-inline: 9px;
+  font-weight: 500;
+}
+.pc-content .ant-tag:not([class*="ant-tag-"]) {
+  background: color-mix(in srgb, var(--brand-bg) 50%, var(--brand-border));
+  color: var(--pc-ink-2);
+}
+.pc-content .pc-count {
+  display: inline-block;
+  margin-inline-start: 4px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--brand-blue-soft);
+  color: var(--brand-blue-hover);
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: 600;
+  vertical-align: 2px;
+}
+.pc-shell .pc-sidebar .ant-menu-item-selected .pc-icon {
+  color: var(--brand-on-navy);
+}
+.pc-sidebar__mark {
+  background: linear-gradient(135deg, var(--brand-blue), var(--accent-violet));
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--brand-blue) 40%, transparent);
+}
+.pc-avatar {
+  border-color: color-mix(in srgb, var(--accent-indigo-soft) 70%, var(--surface));
+  background: linear-gradient(135deg, var(--brand-blue), var(--accent-violet));
+  color: var(--surface);
+}
+
+/* ---- page heading: a short gradient bar before the eyebrow ---- */
+.pc-page__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--brand-blue-hover);
+}
+.pc-page__eyebrow::before {
+  content: "";
+  width: 18px;
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--brand-blue), var(--brand-teal));
+}
+
+/* ---- primary buttons (workspace and the login / reset pages) ---- */
+.pc-content .ant-btn-primary:not(.ant-btn-background-ghost):not(.ant-btn-dangerous):not(:disabled),
+.pc-auth .ant-btn-primary:not(.ant-btn-background-ghost):not(.ant-btn-dangerous):not(:disabled) {
+  background: var(--pc-grad-primary);
+  border-color: transparent;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--brand-blue) 26%, transparent);
+}
+.pc-content .ant-btn-primary:not(.ant-btn-background-ghost):not(.ant-btn-dangerous):not(:disabled):hover,
+.pc-auth .ant-btn-primary:not(.ant-btn-background-ghost):not(.ant-btn-dangerous):not(:disabled):hover {
+  background: linear-gradient(135deg, var(--brand-blue-hover),
+      color-mix(in srgb, var(--brand-blue-hover) 55%, var(--accent-indigo)));
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--brand-blue) 34%, transparent);
+}
+.pc-dropzone__button {
+  background: var(--pc-grad-primary);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--brand-blue) 26%, transparent);
+}
+
+/* ---- cards, panels, tables: radius 12 and a soft shadow ---- */
+.pc-content .ant-card,
+.pc-panel:not(.ant-card):not(.ant-descriptions),
+.pc-content .ant-table-wrapper:not(.pc-panel *):not(.ant-card *):not(.pc-editor *) {
+  border-radius: 12px;
+  border-color: color-mix(in srgb, var(--pc-line) 80%, var(--surface));
+  box-shadow: var(--pc-shadow-card);
+}
+.pc-content .ant-descriptions-bordered .ant-descriptions-view {
+  border-radius: 12px;
+  border-color: color-mix(in srgb, var(--pc-line) 80%, var(--surface));
+  background: var(--surface);
+  box-shadow: var(--pc-shadow-card);
+}
+.pc-content .ant-descriptions-bordered .ant-descriptions-item-label {
+  background: var(--pc-head-bg);
+  color: var(--pc-muted);
+  font-weight: 500;
+}
+.pc-hero {
+  border-radius: 12px;
+  box-shadow: var(--pc-shadow-lift);
+}
+.pc-content .ant-table-wrapper .ant-table-thead > tr > th {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--pc-muted);
+}
+.pc-content .ant-table-wrapper .ant-table-tbody > tr.ant-table-row:hover > td {
+  background: color-mix(in srgb, var(--accent-indigo-soft) 60%, var(--surface));
+}
+
+/* ---- stage tones, shared by the metric cards and the library tabs ---- */
+[data-stage] {
+  --tone: var(--accent-indigo);
+  --tone-soft: var(--accent-indigo-soft);
+}
+[data-stage="VERIFYING"] { --tone: var(--brand-blue); --tone-soft: var(--brand-blue-soft); }
+[data-stage="OCR_PROCESSING"] { --tone: var(--accent-amber); --tone-soft: var(--accent-amber-soft); }
+[data-stage="TEMPLATE_MATCHING"] { --tone: var(--accent-cyan); --tone-soft: var(--accent-cyan-soft); }
+[data-stage="PENDING_REVIEW"] { --tone: var(--accent-violet); --tone-soft: var(--accent-violet-soft); }
+[data-stage="CONFIRMED"] { --tone: var(--accent-emerald); --tone-soft: var(--accent-emerald-soft); }
+[data-stage="OCR_FAILED"] { --tone: var(--accent-rose); --tone-soft: var(--accent-rose-soft); }
+[data-stage] {
+  --tone-ink: color-mix(in srgb, var(--tone) 78%, var(--brand-navy));
+}
+
+/* ---- metric strip: four separate cards ---- */
+.pc-metrics {
+  gap: 16px;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
+.pc-metric {
+  position: relative;
+  overflow: hidden;
+  padding: 18px 18px 18px 20px;
+  border: 1px solid color-mix(in srgb, var(--pc-line) 80%, var(--surface));
+  border-right: 1px solid color-mix(in srgb, var(--pc-line) 80%, var(--surface));
+  border-radius: 12px;
+  background:
+    radial-gradient(140px 100px at 100% 0, color-mix(in srgb, var(--tone-soft) 90%, transparent), transparent 75%),
+    var(--surface);
+  box-shadow: var(--pc-shadow-card);
+  transition: box-shadow 0.15s ease-out, transform 0.15s ease-out, border-color 0.15s ease-out;
+}
+.pc-metric:last-child {
+  border-right: 1px solid color-mix(in srgb, var(--pc-line) 80%, var(--surface));
+}
+.pc-metric::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 16px;
+  bottom: 16px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--tone);
+}
+.pc-metric:hover {
+  border-color: color-mix(in srgb, var(--tone) 35%, var(--pc-line));
+  box-shadow: var(--pc-shadow-lift);
+  transform: translateY(-2px);
+}
+.pc-metric:hover .pc-metric__number,
+.pc-metric:hover .pc-metric__end {
+  color: var(--tone-ink);
+}
+.pc-metric__symbol {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--tone-soft);
+  color: var(--tone);
+}
+
+/* ---- library tabs: a toned count pill, the active tab filled ---- */
+.pc-tab b {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--tone-soft);
+  color: var(--tone-ink);
+  font-weight: 600;
+}
+.pc-tab.is-active {
+  color: var(--tone-ink);
+  border-bottom-color: var(--tone);
+  font-weight: 600;
+}
+.pc-tab.is-active b {
+  background: var(--tone);
+  color: var(--surface);
+}
+
+/* ---- usage card ---- */
+.pc-usage__bar > span {
+  background: linear-gradient(90deg, var(--brand-blue), var(--brand-teal));
+}
+.pc-usage__plan {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border-color: transparent;
+  background: var(--accent-indigo-soft);
+  color: var(--accent-indigo);
+  font-weight: 600;
+}
+
+/* ---- upload ---- */
+.pc-content .pc-dropzone .ant-upload-drag {
+  background:
+    radial-gradient(520px 220px at 50% 0, color-mix(in srgb, var(--brand-blue-soft) 85%, transparent), transparent 75%),
+    var(--surface);
+}
+.pc-dropzone__art {
+  border: 0;
+  background: linear-gradient(135deg, var(--brand-blue-soft), var(--accent-violet-soft));
+  color: var(--brand-blue);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--brand-blue) 18%, transparent);
+}
+.pc-steps__item {
+  --tone: var(--brand-blue);
+  position: relative;
+  padding: 16px 20px 16px 22px;
+  border: 1px solid color-mix(in srgb, var(--pc-line) 80%, var(--surface));
+  border-radius: 12px;
+  background:
+    radial-gradient(160px 90px at 100% 0, color-mix(in srgb, var(--tone) 9%, transparent), transparent 75%),
+    var(--surface);
+  box-shadow: var(--pc-shadow-card);
+  overflow: hidden;
+}
+.pc-steps__item:nth-child(2) { --tone: var(--accent-violet); }
+.pc-steps__item:nth-child(3) { --tone: var(--accent-emerald); }
+.pc-steps__item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 14px;
+  bottom: 14px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--tone);
+}
+.pc-steps__code {
+  color: color-mix(in srgb, var(--tone) 82%, var(--brand-navy));
+  font-weight: 600;
+}
+
+/* ---- plans: one tone per plan ---- */
+.pc-plan {
+  --tone: var(--brand-blue);
+  --tone-soft: var(--brand-blue-soft);
+  background:
+    radial-gradient(220px 120px at 100% 0, color-mix(in srgb, var(--tone-soft) 85%, transparent), transparent 75%),
+    var(--surface);
+  box-shadow: var(--pc-shadow-card);
+}
+.pc-plan[data-plan="kinder"] { --tone: var(--brand-teal-ink); --tone-soft: var(--brand-teal-soft); }
+.pc-plan[data-plan="intermediate"] { --tone: var(--accent-violet); --tone-soft: var(--accent-violet-soft); }
+.pc-plan[data-plan="advance"] { --tone: var(--accent-amber); --tone-soft: var(--accent-amber-soft); }
+.pc-plan::before {
+  background: linear-gradient(90deg, var(--tone), color-mix(in srgb, var(--tone) 40%, var(--brand-teal)));
+  opacity: 0.85;
+}
+.pc-plan:hover {
+  border-color: color-mix(in srgb, var(--tone) 40%, var(--pc-line));
+  box-shadow: var(--pc-shadow-lift);
+}
+.pc-plan.pc-plan--current {
+  border-color: var(--tone);
+  box-shadow: 0 0 0 1px var(--tone), var(--pc-shadow-lift);
+}
+.pc-plan.pc-plan--current .pc-plan__current {
+  background: var(--tone);
+}
+.pc-plan__badge {
+  background: var(--tone-soft);
+  color: var(--tone);
+}
+.pc-plan__features li > svg {
+  color: var(--tone);
 }

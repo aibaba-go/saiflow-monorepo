@@ -77,3 +77,13 @@
 - 手动触发 Deploy（run 42590823976，`VPS_HOST` 为 38.60.156.234）：分支门禁、CI 门禁、镜像构建推送、拉取/迁移/重启、三站健康检查、5432 端口外部不可达全部通过。
 - 部署后只读复查：`saiflow-app`、`saiflow-admin`、`saiflow-line2` 三站 `/api/v1/health` 均为 `{"status":"ok","version":"4fa028e…","database":"ok"}`，首页 200；三站入口脚本中不含开发登录保留 token。
 - 未在线上做任何写操作；新界面的线上走查待负责人确认。
+
+## 8. 第三轮色彩与细节美化（2026-11-13，未提交、未部署）
+
+负责人要求参考 saiflow-demo 再美化 PC 用户端和移动端，过程中不再询问，按推荐方式完成。本轮只改样式和图标色调，没有改动行为、接口或文案；代码中以 `Colour pass (FR-SYS-132)` 标注。
+
+- 小程序：首页欢迎区加了柔和光晕；入口卡、套餐标签和统计徽标用蓝到靛的渐变；扫描方式按琥珀色和青色区分；"我的"页各设置行用不同色调的图标底；底部导航激活项改为渐变图标并做磨砂处理；任务列表按 PDF（玫红）和图片（青色）给缩略图上色；状态标签、筛选胶囊、分区标题渐变条、卡片阴影统一调整；输入框去掉了重复的下划线。
+- web-pc：登录页和重置密码页的主按钮也用统一渐变；LINE 按钮保持绿色。
+- 守卫：样式守卫 `guards.test.ts` 仍然通过（没有十六进制颜色，没有 `prefers-color-scheme`，没有浅底同色主文字的组合）。
+- 结果：line-mini 397 passed、web-pc 249 passed；tsc、`pnpm -r lint` 和 `pnpm -r build` 全部通过。
+- 截图：美化前在 `temp/beautify/before/`、`temp/beautify/mobile-before/`，美化后在 `temp/beautify/after/`、`temp/beautify/mobile-after/`。

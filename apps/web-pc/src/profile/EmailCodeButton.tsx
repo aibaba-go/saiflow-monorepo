@@ -11,12 +11,15 @@ export const RESEND_SECONDS = 60;
 export interface EmailCodeButtonProps {
   email: string;
   onError(error: unknown): void;
-  size?: "small" | "middle";
+  size?: "small" | "middle" | "large";
+  /** How to send the code; by default the signed-in user's /me/email-code (FR-SYS-095).
+   * The login and reset pages send login or reset codes (FR-SYS-150, 155). */
+  send?(email: string): Promise<void>;
 }
 
 /** "Send code" with a 60 s countdown after each successful send (FR-SYS-095, 020); a new email
  * address can get a code at once. */
-export function EmailCodeButton({ email, onError, size = "small" }: EmailCodeButtonProps) {
+export function EmailCodeButton({ email, onError, size = "small", send: sendCode }: EmailCodeButtonProps) {
   const t = useT();
   const [left, setLeft] = useState(0);
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -31,7 +34,8 @@ export function EmailCodeButton({ email, onError, size = "small" }: EmailCodeBut
   const send = useSubmit(async () => {
     onError(null);
     try {
-      await call(api.POST("/api/v1/me/email-code", { body: { email } }));
+      if (sendCode) await sendCode(email);
+      else await call(api.POST("/api/v1/me/email-code", { body: { email } }));
       setSentTo(email);
       setLeft(RESEND_SECONDS);
     } catch (error) {

@@ -55,11 +55,13 @@ describe("registration (FR-SYS-042)", () => {
     expect(screen.getByLabelText("Nickname")).toHaveValue("New User");
     await userEvent.click(screen.getByRole("button", { name: "Send code" }));
     await userEvent.type(screen.getByLabelText("Verification code"), "123456");
+    await userEvent.type(screen.getByLabelText("Password"), "abcd1234");
+    await userEvent.type(screen.getByLabelText("Confirm password"), "abcd1234");
     await userEvent.click(screen.getByRole("button", { name: "Register" }));
     await waitFor(() => expect(useSession.getState().registerOpen).toBe(false));
     expect(useSession.getState().me?.registered).toBe(true);
     expect(await api.bodies("POST /api/v1/me/registration")).toEqual([
-      { email: "line@example.com", code: "123456", display_name: "New User", phone: "" },
+      { email: "line@example.com", code: "123456", password: "abcd1234", display_name: "New User", phone: "" },
     ]);
   });
 
@@ -93,10 +95,31 @@ describe("registration (FR-SYS-042)", () => {
     await userEvent.type(await screen.findByLabelText("Phone (optional)"), "0899999999");
     await userEvent.click(screen.getByRole("button", { name: "Send code" }));
     await userEvent.type(screen.getByLabelText("Verification code"), "000000");
+    await userEvent.type(screen.getByLabelText("Password"), "abcd1234");
+    await userEvent.type(screen.getByLabelText("Confirm password"), "abcd1234");
     await userEvent.click(screen.getByRole("button", { name: "Register" }));
     expect(await screen.findByText("The code is wrong or has expired.")).toBeInTheDocument();
     expect(screen.getByLabelText("Phone (optional)")).toHaveValue("0899999999");
     expect(screen.getByLabelText("Email")).toHaveValue("line@example.com");
+  });
+
+  it("checks the password rule and the confirmation before sending (042-05)", async () => {
+    const api = mockApi({ "POST /api/v1/me/registration": () => json(200, USER) });
+    openDialog();
+    await userEvent.type(await screen.findByLabelText("Verification code"), "123456");
+    await userEvent.type(screen.getByLabelText("Password"), "abcdefgh");
+    await userEvent.type(screen.getByLabelText("Confirm password"), "abcdefgh");
+    await userEvent.click(screen.getByRole("button", { name: "Register" }));
+    expect(await screen.findByText("Use 8–64 characters with at least one letter and one digit.")).toBeInTheDocument();
+    await userEvent.clear(screen.getByLabelText("Password"));
+    await userEvent.type(screen.getByLabelText("Password"), "abcd1234");
+    await userEvent.clear(screen.getByLabelText("Confirm password"));
+    await userEvent.type(screen.getByLabelText("Confirm password"), "abcd12345");
+    await userEvent.click(screen.getByRole("button", { name: "Register" }));
+    expect(await screen.findByText("The two passwords don't match.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Verification code")).toHaveValue("123456");
+    expect(screen.getByLabelText("Password")).toHaveAttribute("type", "password");
+    expect(api.count("POST /api/v1/me/registration")).toBe(0);
   });
 
   it("reopens when a registered-only action is tried (042-04)", async () => {
@@ -119,6 +142,8 @@ describe("registration (FR-SYS-042)", () => {
     openDialog();
     await userEvent.click(await screen.findByRole("button", { name: "Send code" }));
     await userEvent.type(screen.getByLabelText("Verification code"), "123456");
+    await userEvent.type(screen.getByLabelText("Password"), "abcd1234");
+    await userEvent.type(screen.getByLabelText("Confirm password"), "abcd1234");
     const submit = screen.getByRole("button", { name: "Register" });
     await userEvent.click(submit);
     await userEvent.click(submit);

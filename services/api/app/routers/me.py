@@ -74,6 +74,7 @@ async def register(
         req.code,
         req.display_name,
         req.phone,  # type: ignore[arg-type]
+        req.password,
         invalid_fields=req.invalid_fields,
     )
     return await me_service.me(db, principal)

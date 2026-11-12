@@ -64,6 +64,22 @@ export const BRAND_COLORS = {
   "brand-bg": "#F5F7FA",
   "brand-on-navy": "#FFFFFF",
   "brand-on-navy-muted": "#B9C6D8",
+  // LINE login and the colourful icon chips, badges and charts (FR-SYS-132, demo-style polish)
+  "line-green": "#06C755",
+  "line-green-pressed": "#05A847",
+  "brand-teal-soft": "#E3FAF5",
+  "accent-indigo": "#4F46E5",
+  "accent-indigo-soft": "#EEF0FF",
+  "accent-violet": "#7C3AED",
+  "accent-violet-soft": "#F3EDFF",
+  "accent-amber": "#D97706",
+  "accent-amber-soft": "#FFF4E0",
+  "accent-rose": "#E11D48",
+  "accent-rose-soft": "#FFEDF2",
+  "accent-cyan": "#0891B2",
+  "accent-cyan-soft": "#E3F6FA",
+  "accent-emerald": "#059669",
+  "accent-emerald-soft": "#E6F7F0",
 } as const;
 
 export type BrandColorToken = keyof typeof BRAND_COLORS;

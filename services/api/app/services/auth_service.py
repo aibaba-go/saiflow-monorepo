@@ -1,5 +1,6 @@
 """LINE login (FR-SYS-001): find or create the user and personal tenant, claim a guest's
-data (FR-SYS-010), and open a user session."""
+data (FR-SYS-010), and open a user session. Email logins (email_auth_service) open their
+sessions through the same `open_user_session`."""
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -88,10 +89,19 @@ async def login_with_identity(
     """Open a user session for a verified identity: the LINE login path, and the local
     dev login with its one fixed reserved identity (NFR-DEV-002)."""
     user, personal_tenant_id = await ensure_user(db, identity)
+    user.avatar_url = identity.picture  # the avatar always follows LINE
+    if user.registered_at is None:
+        user.line_email = identity.email
+    return await open_user_session(db, user, personal_tenant_id, current, "customer.login")
+
+
+async def open_user_session(
+    db: AsyncSession, user: User, personal_tenant_id: int, current: Principal | None, action: str
+) -> tuple[str, Principal]:
+    """Every login method ends here (FR-SYS-001): claim this device's guest data
+    (FR-SYS-010) or replace its user session, open the new session, log `action` (which
+    names the method) and commit everything the caller changed with it."""
     try:
-        user.avatar_url = identity.picture  # the avatar always follows LINE
-        if user.registered_at is None:
-            user.line_email = identity.email
         if current is not None and current.kind == "guest":
             await claim_service.claim_guest_tenant(db, current.tenant_id, personal_tenant_id)
             await session_service.revoke(db, current.session_id)
@@ -104,9 +114,7 @@ async def login_with_identity(
         elif current is not None:  # a user session on this device is replaced (AC-001-09)
             await session_service.revoke(db, current.session_id)
         token = await session_service.create_user_session(db, user.id, personal_tenant_id)
-        await record(
-            db, AuditEvent("user", str(user.id), "customer.login", "user", str(user.id), "success")
-        )
+        await record(db, AuditEvent("user", str(user.id), action, "user", str(user.id), "success"))
         await db.commit()
     except Exception:
         await db.rollback()

@@ -10,6 +10,7 @@ import { fakeLiff } from "../../test/fakeLiff";
 import { GUEST, ORG, PERSONAL, signedIn, UNREGISTERED, USER } from "../../test/fixtures";
 import { json, mockApi } from "../../test/mockApi";
 import { renderWithProviders } from "../../test/render";
+import { LoginSheet } from "../auth/LoginSheet";
 import { RegisterDialog } from "../auth/RegisterDialog";
 import { useTenantChoice } from "../tenants/useCurrentTenant";
 import { INVITE_KEY, InvitePage } from "./InvitePage";
@@ -69,13 +70,17 @@ describe("invitations (FR-SYS-052)", () => {
     renderWithProviders(
       <>
         <InvitePage />
+        <LoginSheet />
         <RegisterDialog />
       </>,
     );
     await userEvent.click(await screen.findByRole("button", { name: "Join" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Log in with LINE" }));
     await waitFor(() => expect(useSession.getState().registerOpen).toBe(true));
     await userEvent.click(await screen.findByRole("button", { name: "Send code" }));
     await userEvent.type(screen.getByLabelText("Verification code"), "123456");
+    await userEvent.type(screen.getByLabelText("Password"), "abcd1234");
+    await userEvent.type(screen.getByLabelText("Confirm password"), "abcd1234");
     await userEvent.click(screen.getByRole("button", { name: "Register" }));
     await waitFor(() => expect(api.count("POST /api/v1/invitations/accept")).toBe(1));
     await waitFor(() => expect(useTenantChoice.getState().id).toBe(5));

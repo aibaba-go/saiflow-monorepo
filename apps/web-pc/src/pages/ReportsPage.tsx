@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Button, Form, Input, Modal, Space, Table, Typography } from "antd";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 
 import { ErrorText } from "../components/ErrorText";
 import { Page } from "../components/Page";
@@ -66,6 +66,8 @@ function ReportList() {
   const reports = useReports();
   const { access } = useReportAccess();
   const [creating, setCreating] = useState(false);
+  // "Manage reports" is for designers; a viewer only reads them under "View reports" (FR-SYS-159)
+  if (!access.manage) return <Navigate to="/report-view" replace />;
   return (
     <Page
       name="reports"
@@ -131,8 +133,8 @@ function ReportList() {
   );
 }
 
-/** The reports of the current organization (FR-SYS-141, FR-REPORT-001): designers see every
- * report with its status; viewers see the published ones under their published names. */
+/** "Manage reports" of the current organization (FR-SYS-141, FR-SYS-159, FR-REPORT-001):
+ * designers see every report with its status; a viewer is sent to "View reports". */
 export function ReportsPage() {
   return (
     <ReportGate need="any">

@@ -10,6 +10,8 @@ from app.clock import utcnow
 
 GUEST_LIMIT = 30  # guest sessions per source IP (AC-FR-SYS-010-07)
 GUEST_WINDOW = timedelta(seconds=60)
+AUTH_LIMIT = 30  # session-less email logins, resets and codes per source IP (FR-SYS-157)
+AUTH_WINDOW = timedelta(minutes=10)
 
 
 class SlidingWindowLimiter:

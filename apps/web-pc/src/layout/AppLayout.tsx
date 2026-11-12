@@ -30,6 +30,7 @@ export const MENU: MenuItem[] = [
   { key: "verify", path: "/verify", label: "nav.verify" },
   { key: "library", path: "/library", label: "nav.library" },
   { key: "reviews", path: "/reviews", label: "nav.reviews" },
+  { key: "reportView", path: "/report-view", label: "nav.reportView" },
   { key: "reviewSettings", path: "/review-settings", label: "nav.reviewSettings" },
   { key: "org", path: "/org", label: "nav.org" },
   { key: "roles", path: "/roles", label: "nav.roles" },
@@ -51,7 +52,7 @@ export function selected(pathname: string): string {
 export const AIBABA_URL = "https://www.aibaba.asia/";
 
 /** Menu keys under the "workspace" heading; the rest sit under "organization & settings". */
-const WORKSPACE = new Set(["home", "upload", "verify", "library", "reviews"]);
+const WORKSPACE = new Set(["home", "upload", "verify", "library", "reviews", "reportView"]);
 
 const ICONS: Record<string, IconName> = {
   home: "home",
@@ -63,10 +64,29 @@ const ICONS: Record<string, IconName> = {
   org: "org",
   roles: "users",
   templates: "file",
-  reports: "chart",
+  reportView: "chart",
+  reports: "report",
   plans: "plan",
   notifications: "bell",
   profile: "user",
+};
+
+/** The colour of each menu item's icon chip (FR-SYS-132): neighbouring items differ. */
+const TONES: Record<string, string> = {
+  home: "blue",
+  upload: "cyan",
+  verify: "amber",
+  library: "emerald",
+  reviews: "violet",
+  reportView: "rose",
+  reviewSettings: "cyan",
+  org: "indigo",
+  roles: "violet",
+  templates: "amber",
+  reports: "rose",
+  plans: "emerald",
+  notifications: "amber",
+  profile: "teal",
 };
 
 /** The topbar title of a page: its menu item, or "Document detail"; none for unknown paths. */
@@ -126,13 +146,19 @@ export function AppLayout() {
     ...(org && tenant.is_owner ? [] : ["reviewSettings"]),
     // Templates for the personal account and template_manage holders (FR-SYS-140)
     ...(canManageTemplates(tenant) ? [] : ["templates"]),
-    // Reports for report_manage / report_view holders on a Starter+ plan (FR-SYS-141)
-    ...(reports.manage || reports.view ? [] : ["reports"]),
+    // On a Starter+ plan: View reports for report_view holders, Manage reports for
+    // report_manage holders; the owner holds both (FR-SYS-141, FR-SYS-159)
+    ...(reports.view ? [] : ["reportView"]),
+    ...(reports.manage ? [] : ["reports"]),
   ];
   // The same items, order and permission filter as before; only grouped under two headings.
   const item = (m: MenuItem) => ({
     key: m.key,
-    icon: <Icon name={ICONS[m.key] ?? "file"} />,
+    icon: (
+      <span className={`pc-nav-icon pc-nav-icon--${TONES[m.key] ?? "blue"}`} aria-hidden="true">
+        <Icon name={ICONS[m.key] ?? "file"} />
+      </span>
+    ),
     label: <Link to={m.path}>{t(m.label)}</Link>,
   });
   const visible = MENU.filter((m) => !hidden.includes(m.key));

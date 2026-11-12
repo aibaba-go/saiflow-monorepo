@@ -1,12 +1,14 @@
-"""Email verification codes (FR-SYS-020) for registration and email change.
+"""Email codes (FR-SYS-020): `verify` for registration and email change, `login` for
+email-code login (FR-SYS-150) and `reset` for password reset (FR-SYS-151).
 
 A code is 6 digits, valid 10 minutes from a successful send, single-use, bound to the
-user and the email, voided by a newer code or by 5 wrong entries. Only a hash is
-stored; the code never appears in responses or logs."""
+user, the email and the purpose, voided by a newer code of any purpose or by 5 wrong
+entries. Only a hash is stored; the code never appears in responses or logs."""
 
 import hashlib
 import secrets
 from datetime import timedelta
+from typing import Literal
 
 from email_validator import EmailNotValidError, validate_email
 from sqlalchemy import select, text, update
@@ -21,8 +23,15 @@ from app.services.audit_service import AuditEvent, record
 CODE_TTL = timedelta(minutes=10)
 RESEND_INTERVAL = timedelta(seconds=60)
 MAX_FAILED = 5
-SUBJECT = "SaiFlow verification code"
 SEND_LOCK_NS = 4207002
+
+Purpose = Literal["verify", "login", "reset"]
+_MAIL: dict[str, tuple[str, str]] = {  # subject, what the code is for
+    "verify": ("SaiFlow verification code", "verify your email address"),
+    "login": ("SaiFlow login code", "log in to SaiFlow"),
+    "reset": ("SaiFlow password reset code", "reset your SaiFlow password"),
+}
+SUBJECT = _MAIL["verify"][0]
 
 
 def normalize_email(raw: str | None, field: str = "email") -> str:
@@ -42,7 +51,9 @@ def _invalid() -> AppError:
     return AppError(400, "email_code_invalid", "error.email_code_invalid", ["code"])
 
 
-async def send_code(db: AsyncSession, sender: SmtpSender, user_id: int, email: str) -> None:
+async def send_code(
+    db: AsyncSession, sender: SmtpSender, user_id: int, email: str, purpose: Purpose = "verify"
+) -> None:
     # One send at a time per user, held through the SMTP call: a double tap must not pass
     # the 60 s check twice (lock released when this transaction ends).
     await db.execute(
@@ -60,12 +71,13 @@ async def send_code(db: AsyncSession, sender: SmtpSender, user_id: int, email: s
     if last is not None and now - last < RESEND_INTERVAL:
         raise AppError(429, "email_code_too_soon", "error.email_code_too_soon")
     code = f"{secrets.randbelow(10**6):06d}"
+    subject, use = _MAIL[purpose]
     body = (
-        f"Your SaiFlow verification code is {code}.\n"
+        f"Your SaiFlow code is {code}. Use it to {use}.\n"
         "It is valid for 10 minutes. If you did not request it, ignore this email.\n"
     )
     try:
-        await sender.send(email, SUBJECT, body)
+        await sender.send(email, subject, body)
     except EmailRejected:
         raise AppError(400, "email_rejected", "error.email_rejected", ["email"]) from None
     except EmailUnavailable:
@@ -82,6 +94,7 @@ async def send_code(db: AsyncSession, sender: SmtpSender, user_id: int, email: s
         EmailCode(
             user_id=user_id,
             email=email,
+            purpose=purpose,
             code_hash=_hash(user_id, email, code),
             sent_at=sent_at,
             expires_at=sent_at + CODE_TTL,
@@ -94,9 +107,12 @@ async def send_code(db: AsyncSession, sender: SmtpSender, user_id: int, email: s
     await db.commit()
 
 
-async def consume_code(db: AsyncSession, user_id: int, email: str, code: str | None) -> None:
+async def consume_code(
+    db: AsyncSession, user_id: int, email: str, code: str | None, purpose: Purpose = "verify"
+) -> None:
     """Mark the code used in the caller's transaction (the caller commits). A wrong code
-    is counted and committed before the error is raised."""
+    is counted and committed before the error is raised; a code for another purpose is
+    simply invalid and not counted."""
     row = (
         await db.execute(
             select(EmailCode)
@@ -111,7 +127,13 @@ async def consume_code(db: AsyncSession, user_id: int, email: str, code: str | N
         )
     ).scalar_one_or_none()
     now = utcnow()
-    if row is None or row.email != email or now > row.expires_at or not code:
+    if (
+        row is None
+        or row.email != email
+        or row.purpose != purpose
+        or now > row.expires_at
+        or not code
+    ):
         raise _invalid()
     if not secrets.compare_digest(row.code_hash, _hash(user_id, email, code.strip())):
         row.failed_attempts += 1

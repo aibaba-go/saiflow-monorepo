@@ -1,5 +1,5 @@
-"""Customer authentication: guest session, logout, LINE login, and entering as a user
-with an admin's one-time ticket."""
+"""Customer authentication: guest session, logout, LINE login, email logins and password
+reset (customer-email-login), and entering as a user with an admin's one-time ticket."""
 
 from typing import Annotated
 
@@ -10,21 +10,33 @@ from app.config import Settings
 from app.cookies import clear_session_cookie, set_session_cookie
 from app.dependencies import (
     get_db,
+    get_email_sender,
     get_guest_limiter,
     get_line_web_client,
     get_optional_line_client,
     get_optional_principal,
     get_settings,
+    limit_auth_requests,
     require_csrf_header,
 )
 from app.errors import AppError
+from app.integrations.email import SmtpSender
 from app.integrations.line import LineClient
 from app.rate_limit import SlidingWindowLimiter, client_key
-from app.schemas.auth import ImpersonationRedeemRequest, LineLoginRequest, MeResponse
+from app.schemas.auth import (
+    EmailAuthCodeRequest,
+    EmailCodeLoginRequest,
+    ImpersonationRedeemRequest,
+    LineLoginRequest,
+    MeResponse,
+    PasswordLoginRequest,
+    PasswordResetRequest,
+)
 from app.schemas.loose import ensure_text
 from app.services import (
     auth_service,
     dev_login_service,
+    email_auth_service,
     impersonation_service,
     me_service,
     session_service,
@@ -112,6 +124,78 @@ async def login_with_line(
         token, principal = await auth_service.login_with_line(
             db, line, current, req, allowed, web=web
         )
+    set_customer_cookie(response, token)
+    return await me_service.me(db, principal)
+
+
+Current = Annotated[Principal | None, Depends(get_optional_principal)]
+Limited = [Depends(limit_auth_requests)]
+
+
+def _check(req) -> None:
+    """A field of the wrong JSON type is a 400 naming it, like every other loose body."""
+    ensure_text(req)
+
+
+@router.post("/email-code", operation_id="sendAuthEmailCode", status_code=204, dependencies=Limited)
+async def send_auth_email_code(
+    req: EmailAuthCodeRequest,
+    db: Db,
+    sender: Annotated[SmtpSender, Depends(get_email_sender)],
+) -> Response:
+    """A login or reset code to a registered email, without a session (FR-SYS-020)."""
+    if "purpose" in req.invalid_fields:  # not a string: answered like an unknown purpose
+        raise AppError(400, "validation_error", "error.validation", ["purpose"])
+    _check(req)
+    await email_auth_service.send_code(db, sender, req.email, req.purpose)
+    return Response(status_code=204)
+
+
+@router.post(
+    "/password", operation_id="loginWithPassword", response_model=MeResponse, dependencies=Limited
+)
+async def login_with_password(
+    req: PasswordLoginRequest, response: Response, db: Db, current: Current
+) -> MeResponse:
+    """FR-SYS-149, with the wrong-password lock of FR-SYS-156."""
+    _check(req)
+    token, principal = await email_auth_service.login_with_password(
+        db, req.email, req.password, current
+    )
+    set_customer_cookie(response, token)
+    return await me_service.me(db, principal)
+
+
+@router.post(
+    "/email-login",
+    operation_id="loginWithEmailCode",
+    response_model=MeResponse,
+    dependencies=Limited,
+)
+async def login_with_email_code(
+    req: EmailCodeLoginRequest, response: Response, db: Db, current: Current
+) -> MeResponse:
+    """FR-SYS-150."""
+    _check(req)
+    token, principal = await email_auth_service.login_with_code(db, req.email, req.code, current)
+    set_customer_cookie(response, token)
+    return await me_service.me(db, principal)
+
+
+@router.post(
+    "/password-reset",
+    operation_id="resetPassword",
+    response_model=MeResponse,
+    dependencies=Limited,
+)
+async def reset_password(
+    req: PasswordResetRequest, response: Response, db: Db, current: Current
+) -> MeResponse:
+    """FR-SYS-151: every other session of the user ends; this device is logged in."""
+    _check(req)
+    token, principal = await email_auth_service.reset_password(
+        db, req.email, req.code, req.password, current
+    )
     set_customer_cookie(response, token)
     return await me_service.me(db, principal)
 

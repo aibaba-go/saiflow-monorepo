@@ -7,6 +7,7 @@ real LINE verification. Sessions, CSRF, tenancy, registration, plans and audit a
 real ones; customer users are never platform admins (admins are separate accounts)."""
 
 import ipaddress
+import secrets
 from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -121,8 +122,14 @@ async def seed(db: AsyncSession, now: datetime) -> tuple[int, int]:
     if user.registered_at is None:
         sender = _CapturingSender()
         await email_code_service.send_code(db, sender, user.id, DEV_EMAIL)  # type: ignore[arg-type]
-        await user_service.register(
-            db, user.id, DEV_EMAIL, _code_from(sender.body), DEV_DISPLAY_NAME, None
+        await user_service.register(  # a random password: the dev user logs in by dev login
+            db,
+            user.id,
+            DEV_EMAIL,
+            _code_from(sender.body),
+            DEV_DISPLAY_NAME,
+            None,
+            secrets.token_urlsafe(24) + "a1",
         )
     sub = await subscription_service.current(db, tenant_id, now)
     if sub is None or sub.ends_at <= now:  # neither a current nor an upcoming period

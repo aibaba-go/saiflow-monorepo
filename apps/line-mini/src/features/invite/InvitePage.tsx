@@ -9,7 +9,7 @@ import { api, call } from "../../services/api";
 import { ApiError, errorMessage } from "../../services/errors";
 import { useSession } from "../../stores/session";
 import { formatBangkokDate } from "../../utils/format";
-import { INVITE_KEY, JOIN_KEY, loadIdentity, startLogin } from "../auth/session";
+import { INVITE_KEY, JOIN_KEY, loadIdentity, openLogin } from "../auth/session";
 import { useCurrentTenant } from "../tenants/useCurrentTenant";
 import { Button } from "../../components/ui/button";
 import { EmptyState } from "../../components/ui/empty-state";
@@ -86,7 +86,7 @@ export function InvitePage() {
     }
     setSession(JOIN_KEY, token);
     if (me?.kind === "user") useSession.getState().set({ registerOpen: true });
-    else await startLogin("/invite");
+    else openLogin("/invite");
   };
   const joinOnce = useSubmit(join); // one request per tap (minor-fixes-ui)
 

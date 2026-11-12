@@ -54,7 +54,18 @@
 }
 
 .tabbar__tab[aria-selected="true"] .tabbar__icon {
-  background: var(--brand-blue-soft);
+  background: linear-gradient(135deg, var(--brand-blue), var(--accent-indigo));
+  color: var(--on-primary);
+  box-shadow: 0 6px 14px -6px color-mix(in srgb, var(--brand-blue) 70%, transparent);
+}
+
+/* Colour pass (FR-SYS-132): a frosted bar with a soft lift instead of a hard rule. */
+.tabbar {
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: saturate(1.4) blur(12px);
+  -webkit-backdrop-filter: saturate(1.4) blur(12px);
+  border-top-color: color-mix(in srgb, var(--brand-border) 70%, transparent);
+  box-shadow: 0 -6px 20px -12px color-mix(in srgb, var(--brand-navy) 30%, transparent);
 }
 
 .tabbar__tab:focus-visible {

@@ -10,18 +10,25 @@ import {
 import { Alert, App, Button, DatePicker, Popover, Result, Space, Spin, Tag } from "antd";
 import type { Dayjs } from "dayjs";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { ErrorText } from "../components/ErrorText";
 import { Page } from "../components/Page";
 import { formatBangkokDateTime } from "../format";
 import { useT } from "../i18n";
+import { Icon } from "../layout/icons";
 import { configOf, downloadCsv, reportData, useReport, type Period, type ReportDetail } from "../reports/api";
 import { ReportGate } from "../reports/common";
 import { useReportLabels } from "../reports/labels";
 import { ApiError, errorMessage } from "../services/errors";
 
 const DAY = "YYYY-MM-DD";
+
+/** The list this report was opened from: "View reports" (/report-view) or "Manage reports"
+ * (/reports); back links return there and the page keeps its menu item (FR-SYS-160). */
+function useListPath(): string {
+  return useLocation().pathname.startsWith("/report-view") ? "/report-view" : "/reports";
+}
 
 /** The last answer of the data endpoint, and whether a later attempt failed (FR-REPORT-015). */
 interface DataState {
@@ -33,6 +40,7 @@ interface DataState {
 function Viewer({ detail, onStale }: { detail: ReportDetail & { published: NonNullable<ReportDetail["published"]> }; onStale(): void }) {
   const t = useT();
   const navigate = useNavigate();
+  const listPath = useListPath();
   const { message } = App.useApp();
   const labels = useReportLabels();
   const config = useMemo(() => configOf(detail.published.config), [detail.published.config]);
@@ -169,7 +177,7 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: NonNu
       <Result
         status="info"
         title={t("rpt.unpublishedNow")}
-        extra={<Button onClick={() => navigate("/reports")}>{t("rpt.backToList")}</Button>}
+        extra={<Button onClick={() => navigate(listPath)}>{t("rpt.backToList")}</Button>}
       />
     );
   }
@@ -230,12 +238,15 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: NonNu
 
   return (
     <Page
-      name="reports"
+      name={listPath === "/report-view" ? "report-view" : "reports"}
       title={detail.published.name}
       badge={<Tag>{t("rpt.version", { n: version })}</Tag>}
       meta={<span>{t("rpt.publishedAt", { at: formatBangkokDateTime(detail.published.published_at) })}</span>}
       extra={
         <Space wrap>
+          <Button icon={<Icon name="back" />} onClick={() => navigate(listPath)}>
+            {t("rpt.backToList")}
+          </Button>
           {detail.can_manage && <Button onClick={() => navigate(`/reports/${detail.id}/design`)}>{t("rpt.design")}</Button>}
           <Button type="primary" aria-label={t("rpt.refresh")} loading={data.loading && result !== null} onClick={() => void load(period, true)}>
             {t("rpt.refresh")}
@@ -338,6 +349,7 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: NonNu
 function ViewLoader() {
   const t = useT();
   const navigate = useNavigate();
+  const listPath = useListPath();
   const id = Number(useParams().id);
   const report = useReport(id);
   const { refetch } = report;
@@ -355,7 +367,7 @@ function ViewLoader() {
         title={t("rpt.notPublishedYet")}
         extra={
           <Space>
-            <Button onClick={() => navigate("/reports")}>{t("rpt.backToList")}</Button>
+            <Button onClick={() => navigate(listPath)}>{t("rpt.backToList")}</Button>
             {detail.can_manage && (
               <Button type="primary" onClick={() => navigate(`/reports/${detail.id}/design`)}>
                 {t("rpt.design")}

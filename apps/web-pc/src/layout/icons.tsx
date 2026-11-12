@@ -41,6 +41,7 @@ const PATHS = {
   ),
   plan: <path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5" />,
   chart: <path d="M3 3v18h18M8 17v-5m4 5V8m4 9v-7" />,
+  report: <path d="M4 4h7v7H4V4Zm9 0h7v4h-7V4Zm0 7h7v9h-7v-9ZM4 14h7v6H4v-6Z" />,
   bell: <path d="M6 9a6 6 0 0 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9Zm4 12h4" />,
   user: (
     <>

@@ -18,6 +18,9 @@ export interface SessionState {
   /** A one-off message to show as a toast, then cleared. */
   notice: MessageKey | null;
   registerOpen: boolean;
+  /** The login panel (FR-SYS-153) and the page it returns to after login. */
+  loginOpen: boolean;
+  loginReturnTo: string | null;
   set(partial: Partial<SessionState>): void;
   reset(): void;
 }
@@ -30,6 +33,8 @@ const initial = {
   loginError: null,
   notice: null,
   registerOpen: false,
+  loginOpen: false,
+  loginReturnTo: null,
 };
 
 export const useSession = create<SessionState>((set) => ({

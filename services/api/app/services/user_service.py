@@ -10,7 +10,7 @@ from app.clock import utcnow
 from app.errors import AppError
 from app.models import User
 from app.repositories import user_repo
-from app.services import email_code_service
+from app.services import email_code_service, password_service
 from app.services.audit_service import AuditEvent, record
 
 _PHONE_CHARS = re.compile(r"^[+0-9 ().\-]+$")
@@ -74,22 +74,26 @@ async def register(
     code: str | None,
     display_name: str | None,
     phone: str | None,
+    password: str | None,
     invalid_fields: list[str] | None = None,
 ) -> None:
     user = await _load(db, user_id)
     if user.registered_at is not None:  # AC-FR-SYS-014-04: whatever the body contains
         raise AppError(409, "already_registered", "registration.already_done")
-    clean_email, clean_name, clean_phone = _collect(
+    clean_email, clean_name, clean_phone, clean_password = _collect(
         lambda: email_code_service.normalize_email(email),
         lambda: normalize_display_name(display_name),
         lambda: normalize_phone(phone),
+        lambda: password_service.validate_password(password),  # FR-SYS-152
         invalid=invalid_fields or [],
     )
     owner = await _email_owner(db, clean_email)
     if owner is not None and owner != user_id:
         raise _email_taken()
+    password_hash = await password_service.hash_password(clean_password)
     await email_code_service.consume_code(db, user_id, clean_email, code)
     user.email, user.display_name, user.phone = clean_email, clean_name, clean_phone
+    user.password_hash = password_hash  # only the hash is kept (AC-FR-SYS-014-07)
     user.registered_at = utcnow()
     from app.repositories import tenant_repo
     from app.services import free_quota_service  # here: it imports peers of this module

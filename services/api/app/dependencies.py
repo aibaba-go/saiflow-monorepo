@@ -12,7 +12,7 @@ from app.integrations.email import SmtpSender
 from app.integrations.line import LineClient
 from app.integrations.storage import GcsStore, ObjectStore
 from app.models import AdminAccount, AdminSession
-from app.rate_limit import SlidingWindowLimiter
+from app.rate_limit import SlidingWindowLimiter, client_key
 from app.repositories import user_repo
 from app.services import admin_service, session_service, tenant_access
 from app.services.session_service import Principal
@@ -131,6 +131,14 @@ async def require_registered_user(
 
 def get_guest_limiter(request: Request) -> SlidingWindowLimiter:
     return request.app.state.guest_limiter
+
+
+def limit_auth_requests(request: Request) -> None:
+    """FR-SYS-157: one shared per-IP window for email logins, resets and their codes;
+    over the limit nothing is checked, sent or counted."""
+    ip = request.client.host if request.client else "unknown"
+    if not request.app.state.auth_limiter.hit(client_key(ip)):
+        raise AppError(429, "auth_too_many", "error.auth_too_many")
 
 
 def get_line_client(request: Request) -> LineClient:

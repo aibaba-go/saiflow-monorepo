@@ -378,3 +378,57 @@
     transition: none;
   }
 }
+
+/* ---- Colour pass (FR-SYS-132): lifted cards, a gradient eyebrow mark and section bar, and
+ * the primary action in the brand gradient. Tokens only. ---- */
+.tab-top {
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: saturate(1.4) blur(12px);
+  -webkit-backdrop-filter: saturate(1.4) blur(12px);
+  border-bottom-color: color-mix(in srgb, var(--brand-border) 70%, transparent);
+}
+
+.tab-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent-indigo);
+  font-weight: 600;
+}
+
+.tab-eyebrow::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+  background: linear-gradient(135deg, var(--brand-blue), var(--accent-violet));
+}
+
+.section-title h2 {
+  display: flex;
+  align-items: center;
+}
+
+.section-title h2::before {
+  content: "";
+  width: 4px;
+  height: 15px;
+  margin-right: 8px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--brand-blue), var(--accent-violet));
+}
+
+.card {
+  border-color: color-mix(in srgb, var(--brand-border) 70%, transparent);
+  box-shadow: var(--shadow-card);
+}
+
+.btn.primary {
+  border-color: transparent;
+  background: linear-gradient(120deg, var(--brand-blue), var(--accent-indigo));
+  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--brand-blue) 80%, transparent);
+}
+
+.btn.primary:active {
+  background: linear-gradient(120deg, var(--brand-blue-hover), var(--accent-indigo));
+}

@@ -2,7 +2,12 @@ import type { ReportsKey } from "./reports.en";
 
 /** Thai texts of the report pages and the shared report components (FR-SYS-141). */
 export const reportsTh: Record<ReportsKey, string> = {
-  "nav.reports": "รายงาน",
+  "nav.reports": "จัดการรายงาน",
+  "nav.reportView": "ดูรายงาน",
+  "eyebrow.reportView": "Published reports",
+  "layout.desc.reportView": "เปิดรายงานที่เผยแพร่ในองค์กรนี้ แต่ละรายงานแสดงข้อมูลตามสิทธิ์ของคุณ",
+  "rpt.viewCount": "เผยแพร่แล้ว {n} รายการ",
+  "rpt.viewCardHint": "เปิดรายงาน",
   "eyebrow.reports": "Operations reports",
   "layout.desc.reports": "สถิติจากเอกสารที่เป็นทางการ ออกแบบและเผยแพร่โดยองค์กรนี้",
 

@@ -12,7 +12,13 @@ from app.errors import register_error_handlers
 from app.integrations.email import smtp_sender_from
 from app.integrations.line import LineClient
 from app.logging_setup import configure_logging
-from app.rate_limit import GUEST_LIMIT, GUEST_WINDOW, SlidingWindowLimiter
+from app.rate_limit import (
+    AUTH_LIMIT,
+    AUTH_WINDOW,
+    GUEST_LIMIT,
+    GUEST_WINDOW,
+    SlidingWindowLimiter,
+)
 from app.request_context import RequestIdMiddleware
 from app.routers import (
     admin_auth,
@@ -77,6 +83,8 @@ async def lifespan(app: FastAPI):
         app.state.line_web_client = web if settings.line_web_channel_id else app.state.line_client
     if not hasattr(app.state, "guest_limiter"):  # AC-FR-SYS-010-07: 30 per IP per 60 s
         app.state.guest_limiter = SlidingWindowLimiter(GUEST_LIMIT, GUEST_WINDOW)
+    if not hasattr(app.state, "auth_limiter"):  # AC-FR-SYS-157-01: 30 per IP per 10 min
+        app.state.auth_limiter = SlidingWindowLimiter(AUTH_LIMIT, AUTH_WINDOW)
     if not hasattr(app.state, "email_sender"):  # tests may inject a fake first
         app.state.email_sender = smtp_sender_from(settings)
     try:

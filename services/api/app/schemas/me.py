@@ -10,6 +10,7 @@ class RegistrationRequest(_Loose):
     code: str | None = None
     display_name: str | None = None
     phone: str | None = None
+    password: str | None = None  # FR-SYS-152; the confirmation is checked by the page
 
 
 class ProfileUpdate(_Loose):

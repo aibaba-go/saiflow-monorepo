@@ -964,6 +964,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/email-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Auth Email Code
+         * @description A login or reset code to a registered email, without a session (FR-SYS-020).
+         */
+        post: operations["sendAuthEmailCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/email-login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Login With Email Code
+         * @description FR-SYS-150.
+         */
+        post: operations["loginWithEmailCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/guest": {
         parameters: {
             query?: never;
@@ -1033,6 +1073,46 @@ export interface paths {
          * @description Always 204 and clears the cookie, even when the session is already gone (AC-001-10).
          */
         post: operations["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Login With Password
+         * @description FR-SYS-149, with the wrong-password lock of FR-SYS-156.
+         */
+        post: operations["loginWithPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Password
+         * @description FR-SYS-151: every other session of the user ends; this device is logged in.
+         */
+        post: operations["resetPassword"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2993,8 +3073,25 @@ export interface components {
              */
             items: number;
         };
+        /**
+         * EmailAuthCodeRequest
+         * @description A login or reset code for a registered email, without a session (FR-SYS-020).
+         */
+        EmailAuthCodeRequest: {
+            /** Email */
+            email?: string | null;
+            /** Purpose */
+            purpose?: string | null;
+        };
         /** EmailChangeRequest */
         EmailChangeRequest: {
+            /** Code */
+            code?: string | null;
+            /** Email */
+            email?: string | null;
+        };
+        /** EmailCodeLoginRequest */
+        EmailCodeLoginRequest: {
             /** Code */
             code?: string | null;
             /** Email */
@@ -3577,6 +3674,22 @@ export interface components {
             /** Items */
             items: components["schemas"]["OwnerItem"][];
         };
+        /** PasswordLoginRequest */
+        PasswordLoginRequest: {
+            /** Email */
+            email?: string | null;
+            /** Password */
+            password?: string | null;
+        };
+        /** PasswordResetRequest */
+        PasswordResetRequest: {
+            /** Code */
+            code?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Password */
+            password?: string | null;
+        };
         /**
          * PendingConfirmation
          * @description A required/primary/role suggestion from a sample that a person must confirm
@@ -3781,6 +3894,8 @@ export interface components {
             display_name?: string | null;
             /** Email */
             email?: string | null;
+            /** Password */
+            password?: string | null;
             /** Phone */
             phone?: string | null;
         };
@@ -6760,6 +6875,70 @@ export interface operations {
             };
         };
     };
+    sendAuthEmailCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailAuthCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    loginWithEmailCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailCodeLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     createGuestSession: {
         parameters: {
             query?: never;
@@ -6861,6 +7040,72 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    loginWithPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resetPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

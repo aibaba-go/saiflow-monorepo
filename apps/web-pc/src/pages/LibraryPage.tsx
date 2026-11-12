@@ -99,6 +99,7 @@ function Library() {
                 type="button"
                 role="tab"
                 aria-selected={stage === s}
+                data-stage={s ?? "ALL"}
                 className={`pc-tab${stage === s ? " is-active" : ""}`}
                 onClick={() => changed(setStage)(s)}
               >

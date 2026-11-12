@@ -1,5 +1,6 @@
-/** Identity flows of the LINE mini app: boot (FR-SYS-040), LINE login (FR-SYS-041),
- * logout with lock (FR-SYS-043) and session expiry (FR-SYS-055-04). */
+/** Identity flows of the LINE mini app: boot (FR-SYS-040), LINE login (FR-SYS-041), the
+ * login panel with email login and password reset (FR-SYS-153, 154), logout with lock
+ * (FR-SYS-043) and session expiry (FR-SYS-055-04). */
 
 import { api, call, setUnauthenticatedHandler } from "../../services/api";
 import { ApiError } from "../../services/errors";
@@ -168,10 +169,85 @@ async function completeLogin(returnTo: string): Promise<void> {
     if (me.kind === "user" && !me.registered) store().set({ registerOpen: true });
     deps.navigate(returnTo);
   } catch (error) {
-    store().set({ loginError: error });
+    // AC-FR-SYS-041-03: stay on the page as a guest; the panel shows the error and LINE again.
+    store().set({ loginError: error, loginOpen: true, loginReturnTo: returnTo });
   } finally {
     transitioning = false;
   }
+}
+
+/** Keys a login-requiring action leaves behind so it resumes after login (the result page's
+ * confirm, an invitation's join). Closing the panel drops them (AC-FR-SYS-153-05). */
+const RESUME_PREFIXES = ["saiflow.confirm-after-login.", JOIN_KEY];
+
+function dropResumeFlags(): void {
+  safe(() => {
+    for (let i = sessionStorage.length - 1; i >= 0; i -= 1) {
+      const key = sessionStorage.key(i);
+      if (key && RESUME_PREFIXES.some((p) => key.startsWith(p))) sessionStorage.removeItem(key);
+    }
+  });
+}
+
+/** Open the login panel (FR-SYS-153); after login the app returns to `returnTo`. */
+export function openLogin(returnTo: string = deps.currentPath()): void {
+  store().set({ loginOpen: true, loginReturnTo: returnTo, loginError: null });
+}
+
+/** The user closed the panel: keep the identity and the page, cancel the pending action. */
+export function closeLogin(): void {
+  dropResumeFlags();
+  store().set({ loginOpen: false, loginReturnTo: null, loginError: null });
+}
+
+/** "LINE 登录" in the panel (FR-SYS-041): the panel closes while LINE takes over. */
+export async function loginWithLineFromPanel(): Promise<void> {
+  const returnTo = store().loginReturnTo ?? deps.currentPath();
+  store().set({ loginOpen: false, loginReturnTo: null });
+  await startLogin(returnTo);
+}
+
+/** An email login or reset that already holds a session cookie: switch to it and go back. */
+async function switchIdentity(request: () => Promise<unknown>): Promise<void> {
+  const returnTo = store().loginReturnTo ?? deps.currentPath();
+  transitioning = true;
+  try {
+    await request();
+    deps.onIdentityChange();
+    const me = await loadIdentity();
+    store().set({ loginOpen: false, loginReturnTo: null, loginError: null });
+    if (me.kind === "user" && !me.registered) store().set({ registerOpen: true });
+    deps.navigate(returnTo);
+  } finally {
+    transitioning = false;
+  }
+}
+
+/** FR-SYS-149: email and password. Errors are thrown to the panel's form. */
+export function loginWithPassword(email: string, password: string): Promise<void> {
+  return switchIdentity(() =>
+    call(api.POST("/api/v1/auth/password", { body: { email, password } }), { own401: true }),
+  );
+}
+
+/** FR-SYS-150: email and a "login" code. */
+export function loginWithEmailCode(email: string, code: string): Promise<void> {
+  return switchIdentity(() =>
+    call(api.POST("/api/v1/auth/email-login", { body: { email, code } }), { own401: true }),
+  );
+}
+
+/** FR-SYS-151, 154: reset with a "reset" code; the user is then logged in. */
+export async function resetPassword(email: string, code: string, password: string): Promise<void> {
+  await switchIdentity(() =>
+    call(api.POST("/api/v1/auth/password-reset", { body: { email, code, password } }), { own401: true }),
+  );
+  store().set({ notice: "login.resetDone" });
+}
+
+/** A login or reset code to an email (FR-SYS-150, 151). */
+export async function sendAuthEmailCode(email: string, purpose: "login" | "reset"): Promise<void> {
+  await call(api.POST("/api/v1/auth/email-code", { body: { email, purpose } }), { own401: true });
 }
 
 async function finishLogout(): Promise<void> {
@@ -202,7 +278,7 @@ async function revokeAndBecomeGuest(): Promise<void> {
   // back with); only the SaiFlow session ends. Outside LINE the LIFF token is dropped too.
   if (!safe(() => deps.liff.isInClient())) safe(() => deps.liff.logout());
   await loadIdentity();
-  store().set({ status: "ready", registerOpen: false, loginError: null, notice: "my.loggedOut" });
+  store().set({ status: "ready", registerOpen: false, loginOpen: false, loginError: null, notice: "my.loggedOut" });
   deps.navigate("/");
 }
 

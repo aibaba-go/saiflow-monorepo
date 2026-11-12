@@ -2,7 +2,12 @@ import type { ReportsKey } from "./reports.en";
 
 /** Chinese texts of the report pages and the shared report components (FR-SYS-141). */
 export const reportsZh: Record<ReportsKey, string> = {
-  "nav.reports": "运营报表",
+  "nav.reports": "报表管理",
+  "nav.reportView": "报表查看",
+  "eyebrow.reportView": "Published reports",
+  "layout.desc.reportView": "查看本组织已发布的报表，每份报表只显示你有权查看的数据。",
+  "rpt.viewCount": "已发布 {n} 份",
+  "rpt.viewCardHint": "打开报表",
   "eyebrow.reports": "Operations reports",
   "layout.desc.reports": "基于正式单据的统计，由本组织设计并发布。",
 

@@ -13,8 +13,10 @@ export function formatLabel(name: string | null | undefined): string {
 /** The prototype's document thumbnail: a page icon with the format label under it. */
 export function DocThumb({ name, className }: { name?: string | null; className?: string }) {
   const label = formatLabel(name);
+  // the thumbnail's colour by kind (FR-SYS-132): PDF rose, images cyan, others indigo
+  const kind = label === "PDF" ? "pdf" : /^(JPE?G|PNG|WEBP|HEIC|GIF|BMP|TIFF?)$/.test(label) ? "image" : "other";
   return (
-    <span className={[s.icon, className].filter(Boolean).join(" ")} aria-hidden="true">
+    <span className={[s.icon, className].filter(Boolean).join(" ")} data-kind={kind} aria-hidden="true">
       <svg width="15" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
         <path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" />
         <path d="M14 2v6h6" />

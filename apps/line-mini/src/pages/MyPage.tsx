@@ -2,8 +2,7 @@ import { Bell, Building, Building2, ChevronRight, Globe, Layers, Plus, UserRound
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { ErrorText } from "../components/ErrorText";
-import { logout, startLogin } from "../features/auth/session";
+import { logout, openLogin } from "../features/auth/session";
 import { planName } from "../features/billing/UsageCard";
 import { useUsage } from "../features/billing/useUsage";
 import { useUnreadCount } from "../features/notifications/data";
@@ -32,16 +31,19 @@ function SettingsRow({
   icon,
   title,
   value,
+  tone,
   onClick,
 }: {
   icon: ReactNode;
+  /** the colour of the icon chip (FR-SYS-132) */
+  tone: "blue" | "violet" | "amber" | "teal" | "emerald" | "cyan";
   title: string;
   value?: string;
   onClick(): void;
 }) {
   return (
     <button type="button" className={m.row} onClick={onClick}>
-      <span className={m["row-icon"]} aria-hidden="true">
+      <span className={m["row-icon"]} data-tone={tone} aria-hidden="true">
         {icon}
       </span>
       <span className={m["row-title"]}>{title}</span>
@@ -62,8 +64,7 @@ export function MyPage() {
   const requireRegistered = useRequireRegistered();
   const { tenant } = useCurrentTenant();
   const me = useSession((s) => s.me);
-  const loginError = useSession((s) => s.loginError);
-  const login = useSubmit(() => startLogin("/my"));
+  const login = useSubmit(async () => openLogin("/my"));
   const out = useSubmit(logout);
   const usage = useUsage();
   const unread = useUnreadCount();
@@ -131,7 +132,6 @@ export function MyPage() {
             <Button block variant="primary" loading={login.pending} onClick={() => void login.run()}>
               {t("auth.loginRegister")}
             </Button>
-            <ErrorText error={loginError} />
           </>
         )}
         <div className={kit["section-title"]}>
@@ -141,12 +141,14 @@ export function MyPage() {
           {user && (
             <SettingsRow
               icon={<UserRound size={19} strokeWidth={1.75} />}
+              tone="blue"
               title={t("profile.title")}
               onClick={() => navigate("/profile")}
             />
           )}
           <SettingsRow
             icon={<Layers size={19} strokeWidth={1.75} />}
+            tone="violet"
             title={t("my.plans")}
             value={plan}
             onClick={() => navigate("/plans")}
@@ -154,6 +156,7 @@ export function MyPage() {
           {user && (
             <SettingsRow
               icon={<Bell size={19} strokeWidth={1.75} />}
+              tone="amber"
               title={t("notif.title")}
               value={unreadValue}
               onClick={() => navigate("/notifications")}
@@ -162,6 +165,7 @@ export function MyPage() {
           {user && tenant?.kind === "organization" && (
             <SettingsRow
               icon={<Building size={19} strokeWidth={1.75} />}
+              tone="teal"
               title={t("my.organization")}
               value={tenant.name ?? undefined}
               onClick={() => navigate("/org")}
@@ -170,12 +174,13 @@ export function MyPage() {
           {user && (
             <SettingsRow
               icon={<Plus size={19} strokeWidth={1.75} />}
+              tone="emerald"
               title={t("my.createOrg")}
               onClick={() => requireRegistered() && navigate("/orgs/apply")}
             />
           )}
           <div className={`${m.row} ${m["lang-row"]}`}>
-            <span className={m["row-icon"]} aria-hidden="true">
+            <span className={m["row-icon"]} data-tone="cyan" aria-hidden="true">
               <Globe size={19} strokeWidth={1.75} />
             </span>
             <span className={m["row-title"]}>{t("my.language")}</span>

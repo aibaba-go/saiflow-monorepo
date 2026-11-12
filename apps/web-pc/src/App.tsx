@@ -21,6 +21,8 @@ import { LoginPage } from "./pages/LoginPage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { PlansPage } from "./pages/PlansPage";
 import { RegisterGuidePage } from "./pages/RegisterGuidePage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
+import { ReportBrowserPage } from "./pages/ReportBrowserPage";
 import { ReportDesignPage } from "./pages/ReportDesignPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { ReportViewPage } from "./pages/ReportViewPage";
@@ -68,6 +70,7 @@ export function AppRoutes() {
         <SessionWatcher />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/impersonate" element={<ImpersonatePage />} />
           <Route path="/register" element={<RegisterGuidePage />} />
           <Route path="/health" element={<HealthPage />} />
@@ -87,6 +90,8 @@ export function AppRoutes() {
               <Route path="/reports" element={<ReportsPage />} />
               <Route path="/reports/:id/design" element={<ReportDesignPage />} />
               <Route path="/reports/:id" element={<ReportViewPage />} />
+              <Route path="/report-view" element={<ReportBrowserPage />} />
+              <Route path="/report-view/:id" element={<ReportViewPage />} />
               <Route path="/upload" element={<UploadPage />} />
               <Route path="/verify" element={<VerifyPage />} />
               <Route path="/verify/:id" element={<VerifyPage />} />

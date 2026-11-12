@@ -137,6 +137,7 @@ describe("local dev LIFF adapter", () => {
 
     // like inside LINE: starting the app does not log in by itself (AC-FR-SYS-040-03)
     await userEvent.click(await screen.findByRole("button", { name: "Log in / Register" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Log in with LINE" }));
     await waitFor(() => expect(useSession.getState().me?.kind).toBe("user"));
     expect(await screen.findByText("SaiFlow Dev")).toBeInTheDocument();
     expect(await api.bodies("POST /api/v1/auth/line")).toEqual([{ id_token: DEV_LOGIN_TOKEN }]);
@@ -152,6 +153,7 @@ describe("local dev LIFF adapter", () => {
     await screen.findByRole("button", { name: "Refresh" });
     await userEvent.click(await screen.findByRole("tab", { name: "My" }));
     await userEvent.click(await screen.findByRole("button", { name: "Log in / Register" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Log in with LINE" }));
     await waitFor(() => expect(useSession.getState().me?.display_name).toBe("SaiFlow Dev"));
     expect(api.count("POST /api/v1/auth/line")).toBe(2);
   }, 60_000);

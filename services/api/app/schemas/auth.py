@@ -27,6 +27,29 @@ class MeResponse(BaseModel):
     impersonated: bool = False  # a platform admin entered as this user (FR-SYS-148)
 
 
+class EmailAuthCodeRequest(LooseRequest):
+    """A login or reset code for a registered email, without a session (FR-SYS-020)."""
+
+    email: str | None = None
+    purpose: str | None = None  # "login" or "reset"; checked by the service
+
+
+class PasswordLoginRequest(LooseRequest):
+    email: str | None = None
+    password: str | None = None
+
+
+class EmailCodeLoginRequest(LooseRequest):
+    email: str | None = None
+    code: str | None = None
+
+
+class PasswordResetRequest(LooseRequest):
+    email: str | None = None
+    code: str | None = None
+    password: str | None = None
+
+
 class ImpersonationRedeemRequest(LooseRequest):
     """The one-time ticket from an admin's link (FR-SYS-145); checked by the service."""
 

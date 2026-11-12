@@ -5,6 +5,8 @@ from tests.integration.db_fixtures import login
 
 pytestmark = pytest.mark.integration
 
+PASSWORD = "abcd1234"  # meets the customer password rule (FR-SYS-152)
+
 
 async def _code(api, mail, email="e@example.com") -> str:
     assert (await api.post("/api/v1/me/email-code", json={"email": email})).status_code == 204
@@ -12,7 +14,7 @@ async def _code(api, mail, email="e@example.com") -> str:
 
 
 async def _register(api, **fields):
-    body = {"email": "e@example.com", "display_name": "Somchai", **fields}
+    body = {"email": "e@example.com", "display_name": "Somchai", "password": PASSWORD, **fields}
     return await api.post("/api/v1/me/registration", json=body)
 
 
@@ -41,6 +43,11 @@ async def test_register_ok(api, db, line, mail):  # AC-FR-SYS-014-01
     assert row.registered_at is not None and row.line_user_id == "U1"
     used = (await db.execute(text("select used_at from email_codes"))).scalar_one()
     assert used is not None
+    api.cookies.clear()  # then E and P log in (FR-SYS-149)
+    r = await api.post(
+        "/api/v1/auth/password", json={"email": "e@example.com", "password": PASSWORD}
+    )
+    assert r.status_code == 200 and r.json()["user_id"] == user["user_id"]
 
 
 async def test_register_bad_code(api, db, line, mail):  # AC-FR-SYS-014-02
@@ -77,7 +84,37 @@ async def test_register_field_errors(api, line, mail):  # AC-FR-SYS-014-03
     assert set(r.json()["fields"]) == {"email", "display_name", "phone"}
     r = await _register(api, code=code, display_name="   ")
     assert r.status_code == 400 and r.json()["fields"] == ["display_name"]
+    for password in [None, "", "abc1234", "abcdefgh", "12345678", 12345678]:
+        r = await _register(api, code=code, password=password)
+        assert r.status_code == 400 and r.json()["fields"] == ["password"], password
+    r = await _register(api, code=code, email="bad", password="short")
+    assert set(r.json()["fields"]) == {"email", "password"}
     assert (await api.get("/api/v1/me")).json()["registered"] is False
+    assert (await _register(api, code=code)).status_code == 200  # the code was not consumed
+
+
+async def test_register_keeps_only_a_hash(api, db, line, mail, caplog):  # AC-FR-SYS-014-07
+    await login(api, line)
+    code = await _code(api, mail)
+    r = await _register(api, code=code)
+    assert r.status_code == 200 and PASSWORD not in r.text
+    stored = (await db.execute(text("select password_hash from users"))).scalar_one()
+    assert stored.startswith("$argon2") and PASSWORD not in stored
+    audit = repr((await db.execute(text("select * from audit_log"))).all())
+    assert PASSWORD not in audit and PASSWORD not in caplog.text
+
+
+async def test_register_code_must_be_verify_purpose(api, db, line, mail):  # AC-FR-SYS-014-02
+    await register(api, line, mail, "U1", "a@example.com")
+    api.cookies.clear()
+    await login(api, line, "U2")
+    await db.execute(text("update email_codes set sent_at = sent_at - interval '61 seconds'"))
+    await db.commit()
+    code = await _code(api, mail, "b@example.com")
+    await db.execute(text("update email_codes set purpose = 'login' where email = 'b@example.com'"))
+    await db.commit()
+    r = await _register(api, email="b@example.com", code=code)
+    assert r.status_code == 400 and r.json()["fields"] == ["code"]
 
 
 async def test_register_twice_409(api, line, mail):  # AC-FR-SYS-014-04

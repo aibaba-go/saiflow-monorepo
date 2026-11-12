@@ -31,6 +31,14 @@ async def touch(db: AsyncSession, session_id: int, at: datetime) -> None:
     )
 
 
+async def revoke_all_of_user(db: AsyncSession, user_id: int, at: datetime) -> None:
+    await db.execute(
+        update(CustomerSession)
+        .where(CustomerSession.user_id == user_id, CustomerSession.revoked_at.is_(None))
+        .values(revoked_at=at)
+    )
+
+
 async def revoke(db: AsyncSession, session_id: int, at: datetime) -> None:
     await db.execute(
         update(CustomerSession).where(CustomerSession.id == session_id).values(revoked_at=at)

@@ -183,3 +183,34 @@
     transition: none;
   }
 }
+
+/* Colour pass (FR-SYS-132): filter pills on white, the active one in the brand gradient;
+ * the search box and the list card lift slightly. */
+.search-card,
+.task-list {
+  border-color: color-mix(in srgb, var(--brand-border) 70%, transparent);
+  box-shadow: var(--shadow-card);
+}
+
+.search-icon {
+  color: var(--accent-indigo);
+}
+
+.filter-chip {
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--brand-border);
+}
+
+.filter-chip.active {
+  background: linear-gradient(120deg, var(--brand-blue), var(--accent-indigo));
+  color: var(--on-primary);
+  box-shadow: none;
+}
+
+.title-block h2 {
+  background: linear-gradient(90deg, var(--brand-navy), var(--accent-indigo));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}

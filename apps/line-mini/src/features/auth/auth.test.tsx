@@ -115,6 +115,7 @@ describe("LINE login (FR-SYS-041)", () => {
     });
     start(api, fakeLiff({ loggedIn: true, idToken: "tok" }));
     await userEvent.click(await screen.findByRole("button", { name: "Log in / Register" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Log in with LINE" }));
     expect(await screen.findByText("Somchai")).toBeInTheDocument();
     expect(await api.bodies("POST /api/v1/auth/line")).toEqual([{ id_token: "tok" }]);
   });
@@ -124,6 +125,7 @@ describe("LINE login (FR-SYS-041)", () => {
     const liff = fakeLiff({ loggedIn: false, inClient: false });
     start(api, liff);
     await userEvent.click(await screen.findByRole("button", { name: "Log in / Register" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Log in with LINE" }));
     expect(liff.login).toHaveBeenCalledTimes(1);
     expect(JSON.parse(sessionStorage.getItem(INTENT_KEY)!).returnTo).toBe("/my");
   });
@@ -144,8 +146,11 @@ describe("LINE login (FR-SYS-041)", () => {
     const api = mockApi({ ...routes(GUEST), "POST /api/v1/auth/line": () => json(500, { code: "internal_error" }) });
     start(api, fakeLiff({ loggedIn: true }));
     await userEvent.click(await screen.findByRole("button", { name: "Log in / Register" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Log in with LINE" }));
+    // the panel comes back with the error and LINE login to retry; still a guest
     expect(await screen.findByText(/Something went wrong on our side/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Log in / Register" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Log in with LINE" })).toBeInTheDocument();
+    expect(useSession.getState().me?.kind).toBe("guest");
   });
 });
 
@@ -191,6 +196,7 @@ describe("logout (FR-SYS-043)", () => {
     });
     await userEvent.click(await screen.findByRole("tab", { name: "My" }));
     await userEvent.click(await screen.findByRole("button", { name: "Log in / Register" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Log in with LINE" }));
     expect(await screen.findByText("Somchai")).toBeInTheDocument();
   });
 

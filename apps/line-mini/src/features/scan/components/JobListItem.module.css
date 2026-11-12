@@ -115,3 +115,26 @@
     transition: none;
   }
 }
+
+/* Colour pass (FR-SYS-132): the thumbnail is tinted by file kind (data-kind on DocThumb). */
+.icon {
+  --tone: var(--accent-indigo);
+  --tone-soft: var(--accent-indigo-soft);
+  border-color: color-mix(in srgb, var(--tone) 22%, var(--brand-border));
+  background: linear-gradient(180deg, var(--surface), var(--tone-soft));
+  color: var(--tone);
+}
+
+.icon[data-kind="pdf"] {
+  --tone: var(--accent-rose);
+  --tone-soft: var(--accent-rose-soft);
+}
+
+.icon[data-kind="image"] {
+  --tone: var(--accent-cyan);
+  --tone-soft: var(--accent-cyan-soft);
+}
+
+.card:active {
+  background: color-mix(in srgb, var(--accent-indigo-soft) 70%, var(--surface));
+}

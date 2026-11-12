@@ -24,6 +24,23 @@
   --brand-on-navy: #FFFFFF;
   --brand-on-navy-muted: #B9C6D8;
 
+  /* LINE login, icon chips, badges and charts */
+  --line-green: #06C755;
+  --line-green-pressed: #05A847;
+  --brand-teal-soft: #E3FAF5;
+  --accent-indigo: #4F46E5;
+  --accent-indigo-soft: #EEF0FF;
+  --accent-violet: #7C3AED;
+  --accent-violet-soft: #F3EDFF;
+  --accent-amber: #D97706;
+  --accent-amber-soft: #FFF4E0;
+  --accent-rose: #E11D48;
+  --accent-rose-soft: #FFEDF2;
+  --accent-cyan: #0891B2;
+  --accent-cyan-soft: #E3F6FA;
+  --accent-emerald: #059669;
+  --accent-emerald-soft: #E6F7F0;
+
   --shadow-card: 0 1px 2px rgb(10 37 64 / 0.05), 0 4px 16px rgb(10 37 64 / 0.06);
   --shadow-raised: 0 10px 30px rgb(10 37 64 / 0.14);
 }

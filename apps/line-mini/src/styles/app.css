@@ -62,6 +62,12 @@ body {
   border-bottom: 1px solid var(--border);
   padding: 4px 0;
 }
+.field__hint {
+  margin: -4px 0 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-tertiary);
+}
 .field-error {
   color: var(--danger-text);
   font-size: 12px;
@@ -429,4 +435,38 @@ body {
 .history__end {
   text-align: center;
   padding: 8px 0;
+}
+
+/* Colour pass (FR-SYS-132): generic rows lift like the kit cards; selected pills are filled. */
+.card-row {
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  box-shadow: var(--shadow-card);
+}
+.pill {
+  border-radius: 999px;
+}
+.pill--active {
+  border-color: transparent;
+  background: linear-gradient(120deg, var(--brand-blue), var(--accent-indigo));
+  color: var(--on-primary);
+}
+.page__title {
+  background: linear-gradient(90deg, var(--brand-navy), var(--accent-indigo));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+/* plan tiers in the same hues as web-pc (FR-SYS-053, 132) */
+.plan[data-plan="intermediate"] {
+  --tier: var(--accent-violet);
+  --tier-soft: var(--accent-violet-soft);
+}
+.plan[data-plan="advance"] {
+  --tier: var(--accent-amber);
+  --tier-soft: var(--accent-amber-soft);
+}
+/* the input is already boxed (components/ui/input): no second hairline under it (FR-SYS-132) */
+.field__row {
+  border-bottom: 0;
+  padding: 0;
 }
