@@ -2,7 +2,7 @@
 
 ## 授权与边界
 
-负责人 2026-11-11 反馈 LINE 三项（退出遮罩、套餐页、CSV 导出提示）与管理后台用户页一项，另含折线图孤立点修正；指示"按推荐的方式直接全部开发完成并测试完成"。该指示**不含**提交、推送或部署授权；本变更全部改动未提交、未发布。
+负责人 2026-11-11 反馈 LINE 三项（退出遮罩、套餐页、CSV 导出提示）与管理后台用户页一项，另含折线图孤立点修正；指示"按推荐的方式直接全部开发完成并测试完成"。该指示**不含**提交、推送或部署授权；本地交付阶段未提交、未发布；随后的发布授权与结果见文末"正式发布"节。
 
 验证只在本机隔离环境进行：API `127.0.0.1:8010`（`saiflow_dev`）、line-mini `:5173`、web-admin `:5175`；集成测试只连 `127.0.0.1:25432/saiflow_test_full1`。未触碰生产 `38.60.156.234` 或 `81.68.72.120`，未调用付费 OCR。后端改动后重启了本机 API（此前进程运行旧代码，管理端用户页首屏曾返回"输入无效"）。
 
@@ -42,3 +42,7 @@
 - 真实 LINE 客户端（iPhone/Android）中的系统分享面板未验证：本机 devLiff 的 `isInClient` 恒为 false。上线后需在真机确认。
 - 部分 Android LINE WebView 不支持文件分享（`navigator.canShare({ files })` 为 false），此时仍走下载凭证，可能继续出现"打开外部应用"提示。
 - Excel 导出未改动。
+
+## 正式发布（2026-11-12，已完成）
+
+负责人随后明确回复 **"提交并部署"**。本变更与 admin-impersonate-user 合并提交并发布：生产版本 **`78e144425f069bc23679359fd3c429903de35067`**，[CI 43124397561](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43124397561) 与 [Deploy 43125365719](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43125365719) 均 success；迁移前备份、迁移与健康检查细节见 `openspec/changes/admin-impersonate-user/verification.md` 的"正式发布"节。只读检查：LINE 入口 `index-CbAB76wT.js` 含确认框层级 `z-[51]`、`canShare` 文件分享与折线图 `showAllSymbol`；三站健康版本一致。真实 LINE 客户端中的退出、套餐页与 CSV 分享仍待真机确认。

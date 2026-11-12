@@ -2,7 +2,7 @@
 
 ## 授权与边界
 
-负责人 2026-11-12 要求在管理后台"用户"页每条记录上增加按钮，点击后无需用户名密码即以该用户身份进入系统；并指示"按推荐的方式直接全部开发完成并测试完成"。该指示**不含**提交、推送或部署授权；本变更全部改动未提交、未发布。
+负责人 2026-11-12 要求在管理后台"用户"页每条记录上增加按钮，点击后无需用户名密码即以该用户身份进入系统；并指示"按推荐的方式直接全部开发完成并测试完成"。该指示**不含**提交、推送或部署授权；本地交付阶段未提交、未发布；随后的发布授权与结果见文末"正式发布"节。
 
 验证只在本机隔离环境进行：API `127.0.0.1:8010`（`saiflow_dev`，已迁移到 0018）、web-admin `:5175`、web-pc `:5174`；集成测试只连 `127.0.0.1:25432/saiflow_test_full1`。未触碰生产 `38.60.156.234` 或 `81.68.72.120`，未调用付费 OCR。
 
@@ -41,3 +41,17 @@
 - 新增迁移 0018（`impersonation_tickets` 表、`customer_sessions.impersonated_by_admin_id` 列）尚未在生产执行；执行前须先备份数据库。已部署的 0015–0017 未改动。
 - 生产 `WEB_PC_ORIGIN` 由 compose 从 `APP_HOST` 生成（`https://${APP_HOST}`），无需新增密钥。
 - `MeResponse.impersonated` 为必填字段，web-pc 与 line-mini 需与 API 同批发布。
+
+## 正式发布（2026-11-12，已完成）
+
+负责人在本地交付后明确回复 **"提交并部署"**，授权本变更与 admin-line-feedback-fixes 的提交、推送和既有 GitHub Actions 正式发布。只操作发布分支 `chore/ai-workflow-v2` 与生产 `38.60.156.234`，未手动 SSH，未做登录后业务写入，未调用付费 OCR。
+
+- 代码提交 `fb1a5ee`（73 文件，两个变更合并提交；`.qoder/` 与 `docs/10-product/user-manuals/` 排除）。其 [CI 43123434871](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43123434871) 的 scripts 作业因 shellcheck SC2016（新增 compose 检查用了单引号中的 `${APP_HOST:?}`）失败；改为与相邻检查一致的双引号转义写法，本机 compose 测试仍 79 passed，另作提交 **`78e144425f069bc23679359fd3c429903de35067`**。
+- [CI 43124397561](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43124397561) 对 `78e1444` completed/success：backend、frontend、contract、scripts、stack 五项全部 success（00:10:01Z）。
+- [Deploy 43125365719](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43125365719) 以 workflow_dispatch 于 00:10:44Z 触发，headSha 为 `78e1444`，completed/success（00:15:39Z）；CI 门禁、镜像构建推送、迁移重启、三站健康、外部 5432 关闭、runner SSH key 清理全部 success。
+- 生产日志：00:15:00Z 写入 `saiflow-20261112T001459Z.dump`（292,131 bytes），00:15:04Z 上传 `gs://saiflow-db-backup/` 成功后才迁移；实际 **0017 → 0018**；00:15:20Z remote-deploy done。日志存 `temp/impersonate/deploy.log`。
+- 只读线上检查：三站 `/api/v1/health` 均 status/database ok、version `78e1444…`；web-pc `/impersonate` 返回 200，入口 `index-BNe3jkX3.js` 含 `/api/v1/auth/impersonation`，CSS 含 `pc-impersonation`；web-admin 入口 `index-CMxpLoNg.js` 含签发接口；匿名 `/me` 401。
+
+### 未验证
+
+生产上未实际点击"以此用户登录"或兑换票据（会产生代登录会话与审计记录，属于真实业务写入）。该流程的证据为本机隔离环境的集成测试与浏览器 26 项检查；上线后可由管理员对测试账号实际试用一次确认。未做生产备份恢复演练。
