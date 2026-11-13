@@ -40,8 +40,15 @@ async def test_verify_ok_returns_identity():
     client, calls, _ = make(lambda r: httpx.Response(200, json=GOOD))
     identity = await client.verify_id_token("tok")
     assert identity == LineIdentity("U123", "Somchai", GOOD["picture"], "s@example.com")
+    assert identity.phone is None  # most channels never receive phone_number
     assert str(calls[0].url) == "https://api.line.me/oauth2/v2.1/verify"
     assert parse_qs(calls[0].content.decode()) == {"id_token": ["tok"], "client_id": [CHANNEL]}
+
+
+async def test_verify_reads_phone_number_when_line_shares_it():  # AC-FR-SYS-014-08
+    claims = {**GOOD, "phone_number": "+66812345678"}
+    client, _, _ = make(lambda r: httpx.Response(200, json=claims))
+    assert (await client.verify_id_token("tok")).phone == "+66812345678"
 
 
 @pytest.mark.parametrize("field,value", [("aud", "999"), ("iss", "https://evil.example")])

@@ -9,8 +9,16 @@ class FakeLineClient:
         self.codes: dict[str, str] = {}
         self.fail_with: Exception | None = None
 
-    def add(self, token: str, sub: str, name: str | None = "LINE Name", picture=None, email=None):
-        self.tokens[token] = LineIdentity(sub, name, picture, email)
+    def add(
+        self,
+        token: str,
+        sub: str,
+        name: str | None = "LINE Name",
+        picture=None,
+        email=None,
+        phone=None,
+    ):
+        self.tokens[token] = LineIdentity(sub, name, picture, email, phone)
 
     async def verify_id_token(self, id_token: str) -> LineIdentity:
         if self.fail_with:

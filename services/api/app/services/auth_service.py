@@ -2,6 +2,8 @@
 data (FR-SYS-010), and open a user session. Email logins (email_auth_service) open their
 sessions through the same `open_user_session`."""
 
+import logging
+
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +16,8 @@ from app.schemas.auth import LineLoginRequest
 from app.services import claim_service, session_service, subscription_service
 from app.services.audit_service import AuditEvent, record
 from app.services.session_service import Principal
+
+logger = logging.getLogger("app.auth")
 
 
 async def _identity(
@@ -92,6 +96,16 @@ async def login_with_identity(
     user.avatar_url = identity.picture  # the avatar always follows LINE
     if user.registered_at is None:
         user.line_email = identity.email
+        if identity.phone:  # AC-FR-SYS-014-08: the prefill; a later token without it keeps it
+            user.phone = identity.phone
+    # Whether LINE shared each prefill value, never the values themselves: tells a missing
+    # channel permission or scope apart from a fault on our side.
+    logger.info(
+        "line_login_claims email=%s phone=%s registered=%s",
+        identity.email is not None,
+        identity.phone is not None,
+        user.registered_at is not None,
+    )
     return await open_user_session(db, user, personal_tenant_id, current, "customer.login")
 
 

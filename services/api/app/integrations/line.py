@@ -22,6 +22,8 @@ class LineIdentity:
     name: str | None
     picture: str | None
     email: str | None
+    # `phone_number` is only issued to channels LINE has approved for it (FR-SYS-014).
+    phone: str | None = None
 
 
 class LineInvalidToken(Exception):
@@ -84,6 +86,7 @@ class LineClient:
             name=claims.get("name"),
             picture=claims.get("picture"),
             email=claims.get("email"),
+            phone=str(claims["phone_number"])[:32] if claims.get("phone_number") else None,
         )
 
     async def exchange_code(self, code: str, redirect_uri: str) -> str:

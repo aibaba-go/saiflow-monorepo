@@ -158,6 +158,21 @@ describe("LINE login (FR-SYS-041)", () => {
     expect(phone).toHaveAttribute("inputmode", "tel");
   });
 
+  it("registration prefills the phone LINE shared, still editable (AC-FR-SYS-014-08)", async () => {
+    const unregistered = { ...USER, registered: false, email: null, phone: "+66812345678" };
+    const api = mockApi(routes(GUEST));
+    api.set("POST /api/v1/auth/line", () => {
+      api.set("GET /api/v1/me", () => json(200, unregistered));
+      return json(200, unregistered);
+    });
+    start(api, fakeLiff({ loggedIn: true }), "?entry=register");
+    const phone = await screen.findByDisplayValue("+66812345678");
+    expect(phone).toHaveAttribute("id", "reg-phone");
+    await userEvent.clear(phone);
+    await userEvent.type(phone, "0899999999");
+    expect(phone).toHaveValue("0899999999");
+  });
+
   it("stays a guest and offers retry when login fails (041-03)", async () => {
     const api = mockApi({ ...routes(GUEST), "POST /api/v1/auth/line": () => json(500, { code: "internal_error" }) });
     start(api, fakeLiff({ loggedIn: true }));

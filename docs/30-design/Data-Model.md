@@ -3,7 +3,7 @@ doc_id: DES-002
 title: "SaiFlow — 数据模型"
 type: data-model
 status: active
-version: 2.15.1
+version: 2.15.2
 updated: 2026-11-13
 owner: Product Engineering
 source: "PRD-001 v3.3 §3, §4, §4.9; ADR-008"
@@ -99,7 +99,7 @@ erDiagram
 - 报表采用方式 A（实时查询正式业务数据）；方式 B 的报表汇总表（OQ-8）未实现，不登记实体。
 - **`admin-impersonate-user`（迁移 0018）：** 平台 admin 以用户身份进入 web-pc 用的一次性票据（`impersonation_tickets`：只存摘要、60 秒、单次）与登录会话上的代登录标记（`customer_sessions.impersonated_by_admin_id`；闲置 30 分钟、最长 2 小时、管理员停用即失效）。二者同属短期技术数据，不登记实体；签发与进入记入 `DM-OperationLog`。
 - **`customer-email-login`（迁移 0019）：** `DM-User` 增加可选的密码（argon2 哈希；8–64 位、至少一个字母和一个数字）、连续输错次数与锁定截止时间（错 5 次锁 5 分钟，锁定不影响邮箱验证码登录）；邮箱验证码增加用途（验证邮箱 / 登录 / 重置密码），不同用途的验证码互不通用。邮箱验证码仍属短期技术数据，不登记实体；密码登录、验证码登录、重置密码与锁定记入 `DM-OperationLog`。
-- 数据库备份文件（VPS 本地 7 天、GCS 备份桶 30 天）是运维数据，不作为实体登记（ADR-008）。
+- **`line-register-prefill`（无迁移）：** 未注册用户的 `DM-User.phone` 在 LINE 登录时取服务端验证的 LINE token 中的 `phone_number`（仅 LINE 批准的频道会下发），作为注册页手机号预填；token 未带手机号时保留原值，注册后不再被 LINE 覆盖。邮箱预填仍为 `line_email`（需频道 Email 权限与 LIFF `email` scope）。（VPS 本地 7 天、GCS 备份桶 30 天）是运维数据，不作为实体登记（ADR-008）。
 
 ### 2.1 v1 实体去向
 
@@ -155,6 +155,7 @@ erDiagram
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.15.2 | 2026-11-13 | Product Engineering | `line-register-prefill`：未注册 `DM-User.phone` 预填取自服务端验证的 LINE `phone_number`（结构不变） |
 | 2.15.1 | 2026-11-13 | Product Engineering | `line-result-table-admin-lock`：`DM-AdminAccount` 连续 5 次错误锁定改为 5 分钟（与客户账号相同；结构不变） |
 | 2.15.0 | 2026-11-13 | Product Engineering | `customer-email-login`：用户密码、错误次数与锁定；邮箱验证码用途（迁移 0019） |
 | 2.14.0 | 2026-11-12 | Product Engineering | `admin-impersonate-user`：代登录票据与会话代登录标记（短期技术数据，不登记实体） |

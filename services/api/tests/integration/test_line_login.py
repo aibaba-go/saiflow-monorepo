@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 import pytest
 from sqlalchemy import text
@@ -109,6 +110,41 @@ async def test_login_without_optional_claims(api, line):  # Review Focus 5
     r = await api.post("/api/v1/auth/line", json={"id_token": "tok"})
     assert r.status_code == 200
     assert r.json()["display_name"] is None and r.json()["email_suggestion"] is None
+    assert r.json()["phone"] is None
+
+
+async def test_line_phone_prefills_registration(api, line):  # AC-FR-SYS-014-08
+    line.add("tok", "U1", phone="+66812345678")
+    body = (await api.post("/api/v1/auth/line", json={"id_token": "tok"})).json()
+    assert body["registered"] is False and body["phone"] == "+66812345678"
+    line.add("tok", "U1")  # a later token without phone_number keeps the prefill
+    assert (await api.post("/api/v1/auth/line", json={"id_token": "tok"})).json()["phone"] == (
+        "+66812345678"
+    )
+
+
+async def test_line_phone_never_replaces_a_registered_phone(api, db, line):  # AC-FR-SYS-014-06
+    line.add("tok", "U1")
+    uid = (await api.post("/api/v1/auth/line", json={"id_token": "tok"})).json()["user_id"]
+    await db.execute(
+        text("update users set phone = '0812345678', registered_at = now() where id = :u"),
+        {"u": uid},
+    )
+    await db.commit()
+    line.add("tok", "U1", phone="+66899999999")
+    assert (await api.post("/api/v1/auth/line", json={"id_token": "tok"})).json()["phone"] == (
+        "0812345678"
+    )
+
+
+async def test_login_logs_only_which_claims_line_shared(api, line, caplog):  # FR-SYS-001
+    line.add("tok", "U1", email="s@example.com", phone="+66812345678")
+    with caplog.at_level(logging.INFO, logger="app.auth"):
+        assert (await api.post("/api/v1/auth/line", json={"id_token": "tok"})).status_code == 200
+    lines = [r.getMessage() for r in caplog.records if r.name == "app.auth"]
+    assert lines == ["line_login_claims email=True phone=True registered=False"]
+    logged = " ".join(r.getMessage() for r in caplog.records)
+    assert "s@example.com" not in logged and "66812345678" not in logged and "U1" not in logged
 
 
 async def test_login_writes_audit(api, db, line):
