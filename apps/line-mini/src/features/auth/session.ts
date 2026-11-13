@@ -132,7 +132,7 @@ export async function boot(): Promise<void> {
     }
     if (intent && deps.liff.isLoggedIn()) {
       await completeLogin(intent.returnTo);
-    } else if (params.get("entry") === "register" && me.kind !== "user") {
+    } else if (params.get("entry") === "register" && !(me.kind === "user" && me.registered)) {
       await startLogin("/my");
     }
   } catch (error) {
@@ -140,21 +140,51 @@ export async function boot(): Promise<void> {
   }
 }
 
+/** A failed verification is not an unregistered identity (FR-SYS-001-03). On explicit
+ * retry only, discard the rejected SDK authorization instead of sending the same token. */
+function needsFreshLineToken(error: unknown): boolean {
+  return error instanceof ApiError && (error.code === "line_token_invalid" || error.code === "line_token_required");
+}
+
+function rememberLogin(returnTo: string): void {
+  safe(() => sessionStorage.setItem(INTENT_KEY, JSON.stringify({ returnTo, at: Date.now() })));
+}
+
+function reopenLine(returnTo: string): void {
+  rememberLogin(returnTo);
+  // Native LIFF cannot call login directly: boot runs init and consumes the intent once.
+  if (safe(() => deps.liff.isInClient())) window.location.reload();
+  else deps.liff.login(window.location.href);
+}
+
 /** LINE login (FR-SYS-041): inside LINE the token is already there; outside, redirect. */
 export async function startLogin(returnTo: string = deps.currentPath()): Promise<void> {
+  const { me, loginError } = store();
+  if (me?.kind === "user" && !me.registered) {
+    openLogin(returnTo); // FR-SYS-042: this server-authenticated user needs registration only
+    deps.navigate(returnTo);
+    return;
+  }
   store().set({ loginError: null });
   try {
+    if (needsFreshLineToken(loginError)) {
+      if (deps.liff.reauthorize) {
+        rememberLogin(returnTo);
+        deps.liff.reauthorize(window.location.href);
+      } else {
+        // Local/test adapters without real LINE authorization keep their existing flow.
+        if (!safe(() => deps.liff.isInClient())) deps.liff.logout();
+        reopenLine(returnTo);
+      }
+      return;
+    }
     if (deps.liff.isLoggedIn()) {
       await completeLogin(returnTo);
       return;
     }
-    safe(() => sessionStorage.setItem(INTENT_KEY, JSON.stringify({ returnTo, at: Date.now() })));
-    // liff.login() cannot be used in the LIFF browser: there LIFF logs in when it starts, so
-    // reopen the page and let boot complete the login from the intent.
-    if (safe(() => deps.liff.isInClient())) window.location.reload();
-    else deps.liff.login(window.location.href);
+    reopenLine(returnTo);
   } catch (error) {
-    store().set({ loginError: error });
+    store().set({ loginError: error, loginOpen: true, loginReturnTo: returnTo });
   }
 }
 
@@ -166,7 +196,10 @@ async function completeLogin(returnTo: string): Promise<void> {
     await call(api.POST("/api/v1/auth/line", { body: { id_token: token } }), { own401: true });
     deps.onIdentityChange();
     const me = await loadIdentity();
-    if (me.kind === "user" && !me.registered) store().set({ registerOpen: true });
+    store().set({
+      loginOpen: false, loginReturnTo: null, loginError: null,
+      registerOpen: me.kind === "user" && !me.registered,
+    });
     deps.navigate(returnTo);
   } catch (error) {
     // AC-FR-SYS-041-03: stay on the page as a guest; the panel shows the error and LINE again.
@@ -189,9 +222,13 @@ function dropResumeFlags(): void {
   });
 }
 
-/** Open the login panel (FR-SYS-153); after login the app returns to `returnTo`. */
+/** Open login (FR-SYS-153), or registration for a server-authenticated unregistered user
+ * (FR-SYS-042). LIFF's logged-in flag alone never decides which identity to show. */
 export function openLogin(returnTo: string = deps.currentPath()): void {
-  store().set({ loginOpen: true, loginReturnTo: returnTo, loginError: null });
+  const me = store().me;
+  if (me?.kind === "user" && !me.registered) {
+    store().set({ registerOpen: true, loginOpen: false, loginReturnTo: null, loginError: null });
+  } else store().set({ loginOpen: true, loginReturnTo: returnTo, loginError: null });
 }
 
 /** The user closed the panel: keep the identity and the page, cancel the pending action. */

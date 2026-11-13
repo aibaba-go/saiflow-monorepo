@@ -1,14 +1,15 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEventLib from "@testing-library/user-event";
 import { act } from "react";
 import { Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { Shell } from "../../App";
 import { apiBaseUrl } from "../../config";
 import { useLanguage } from "../../stores/language";
 import { testAuth } from "../../test/auth";
 import { fakeLiff } from "../../test/fakeLiff";
-import { GUEST, ORG, PERSONAL, signedIn, USER } from "../../test/fixtures";
+import { GUEST, ORG, PERSONAL, signedIn, UNREGISTERED, USER } from "../../test/fixtures";
 import { json, mockApi } from "../../test/mockApi";
 import { useSession } from "../../stores/session";
 import { renderWithProviders } from "../../test/render";
@@ -102,6 +103,55 @@ describe("confirm (FR-SYS-106)", () => {
     const bodies = (await api.bodies(`PATCH ${JOB}/result`)) as { confirm: boolean; structured: { document: { invoice_no: string } } }[];
     expect(bodies.at(-1)!.confirm).toBe(true);
     expect(bodies.at(-1)!.structured.document.invoice_no).toBe("IV9");
+  });
+
+  it("new LINE users see registration on Verify result, then confirm the saved draft (041-02, 042-01, 106-01)", async () => {
+    useSession.getState().reset();
+    let me = GUEST;
+    let stored = result(1, { document: { invoice_no: "IV1", invoice_date: "2026-10-01" } });
+    const api = mockApi({
+      "GET /api/v1/me": () => json(200, me),
+      "GET /api/v1/me/tenants": () => json(200, [PERSONAL]),
+      "GET /api/v1/billing/usage": () => json(404, { code: "not_found" }),
+      "POST /api/v1/auth/line": () => { me = UNREGISTERED; return json(200, me); },
+      "POST /api/v1/me/registration": () => { me = USER; return json(200, me); },
+      [`GET ${JOB}`]: () => json(200, job(stored.confirmed ? "CONFIRMED" : "VERIFYING")),
+      [`GET ${JOB}/result`]: () => json(200, stored),
+      [`PATCH ${JOB}/result`]: async (r) => {
+        const body = (await r.json()) as { structured: unknown; confirm: boolean };
+        stored = result(stored.version + 1, body.structured, body.confirm) as typeof stored;
+        return json(200, stored);
+      },
+    });
+    renderWithProviders(<Shell liff={fakeLiff({ loggedIn: true })} search="" liffTimeoutMs={50} />, {
+      route: "/scan/jobs/j1/result",
+    });
+    const no = await screen.findByRole("textbox", { name: "Tax Invoice No." });
+    await userEvent.clear(no);
+    await userEvent.type(no, "IV9");
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Log in with LINE" }));
+    const registration = await screen.findByRole("dialog", { name: "Complete your registration" });
+    expect(screen.queryByRole("dialog", { name: "Log in" })).toBeNull();
+    expect(screen.queryByText("LINE login failed. Please try again.")).toBeNull();
+    expect(useSession.getState().me?.registered).toBe(false);
+    expect(await api.bodies(`PATCH ${JOB}/result`)).toEqual([
+      { expected_version: 1, structured: { document: { invoice_no: "IV9", invoice_date: "2026-10-01" } }, confirm: false },
+    ]); // no final submission until registration is complete
+    expect(within(registration).getByLabelText("Email")).toHaveValue("line@example.com");
+    await userEvent.type(within(registration).getByLabelText("Verification code"), "123456");
+    await userEvent.type(within(registration).getByLabelText("Password"), "abcd1234");
+    await userEvent.type(within(registration).getByLabelText("Confirm password"), "abcd1234");
+    await userEvent.click(within(registration).getByRole("button", { name: "Register" }));
+    // The confirmed result briefly offers a "Final result" button before navigation;
+    // wait for the destination's heading, not that transient button.
+    expect(await screen.findByRole("heading", { name: "Final result" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(useSession.getState().me?.registered).toBe(true);
+    expect(sessionStorage.getItem("saiflow.confirm-after-login.j1")).toBeNull();
+    const bodies = (await api.bodies(`PATCH ${JOB}/result`)) as { confirm: boolean; structured: unknown }[];
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1]).toMatchObject({ confirm: true, structured: { document: { invoice_no: "IV9" } } });
   });
 
   it("missing required scrolls and marks (106-02)", async () => {

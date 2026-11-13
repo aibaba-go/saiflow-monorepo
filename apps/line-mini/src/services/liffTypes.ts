@@ -8,6 +8,8 @@ export interface Liff {
   getOS?(): string | undefined;
   login(redirectUri: string): void;
   logout(): void;
+  /** Discard a rejected SDK token and start fresh authorization (real SDK adapter). */
+  reauthorize?(redirectUri: string): void;
   getIDToken(): string | null;
   isApiAvailable(api: string): boolean;
   shareTargetPicker(messages: { type: "text"; text: string }[]): Promise<unknown>;

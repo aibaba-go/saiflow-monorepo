@@ -1,13 +1,15 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEventLib from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { act } from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Shell } from "../../App";
 import { useSession } from "../../stores/session";
 import { fakeLiff, type FakeLiff } from "../../test/fakeLiff";
 import { json, mockApi, type MockApi } from "../../test/mockApi";
 import { renderWithProviders } from "../../test/render";
-import { INTENT_KEY, LOGOUT_FLAG } from "./session";
+import { ApiError } from "../../services/errors";
+import { configureAuth, INTENT_KEY, loginWithLineFromPanel, LOGOUT_FLAG, openLogin } from "./session";
 
 const USER = {
   kind: "user",
@@ -19,6 +21,7 @@ const USER = {
   phone: null,
   avatar_url: null,
   registered: true,
+  impersonated: false,
 };
 const GUEST = { ...USER, kind: "guest", user_id: null, tenant_id: 90, display_name: null, email: null, registered: false };
 // dialogs set pointer-events on the body while open; skip the pointer-events check
@@ -140,6 +143,95 @@ describe("LINE login (FR-SYS-041)", () => {
     start(api, fakeLiff({ loggedIn: true }), "?entry=register");
     await waitFor(() => expect(api.count("POST /api/v1/auth/line")).toBe(1));
     await waitFor(() => expect(useSession.getState().registerOpen).toBe(true));
+  });
+
+  it("the OA register entry reopens registration for an existing unregistered session (041-02, 042-04)", async () => {
+    const unregistered = { ...USER, registered: false, email: null };
+    const api = mockApi(routes(unregistered));
+    start(api, fakeLiff({ loggedIn: true }), "?entry=register");
+    expect(await screen.findByRole("dialog", { name: "Complete your registration" })).toBeInTheDocument();
+    expect(useSession.getState().loginOpen).toBe(false);
+    expect(api.count("POST /api/v1/auth/line")).toBe(0);
+  });
+
+  it("a login prompt for a known unregistered user shows registration, not another LINE login (042-04)", async () => {
+    const unregistered = { ...USER, registered: false, email: null };
+    const api = mockApi(routes(unregistered));
+    start(api, fakeLiff({ loggedIn: true }));
+    await waitFor(() => expect(useSession.getState().status).toBe("ready"));
+    act(() => openLogin("/my"));
+    expect(await screen.findByRole("dialog", { name: "Complete your registration" })).toBeInTheDocument();
+    expect(useSession.getState().loginOpen).toBe(false);
+    expect(api.count("POST /api/v1/auth/line")).toBe(0);
+  });
+
+  it("refreshes a rejected external-browser LINE token on explicit retry, retaining the confirm (041-03, 106-01)", async () => {
+    const api = mockApi({ ...routes(GUEST), "POST /api/v1/auth/line": () => json(401, { code: "line_token_invalid" }) });
+    const liff = fakeLiff({ loggedIn: true, inClient: false, idToken: "old-token" });
+    start(api, liff);
+    await userEvent.click(await screen.findByRole("button", { name: "Log in / Register" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Log in with LINE" }));
+    expect(await screen.findByText("LINE login failed. Please try again.")).toBeInTheDocument();
+    expect(useSession.getState().me?.kind).toBe("guest");
+    expect(useSession.getState().registerOpen).toBe(false);
+    expect(liff.login).not.toHaveBeenCalled(); // no automatic redirect loop
+    sessionStorage.setItem("saiflow.confirm-after-login.j1", "1");
+    useSession.getState().set({ loginReturnTo: "/scan/jobs/j1/result" });
+    await userEvent.click(screen.getByRole("button", { name: "Log in with LINE" }));
+    expect(liff.logout).toHaveBeenCalledTimes(1);
+    expect(liff.login).toHaveBeenCalledTimes(1);
+    expect(api.count("POST /api/v1/auth/line")).toBe(1); // never send the rejected token again
+    expect(JSON.parse(sessionStorage.getItem(INTENT_KEY)!).returnTo).toBe("/scan/jobs/j1/result");
+    expect(sessionStorage.getItem("saiflow.confirm-after-login.j1")).toBe("1");
+  });
+
+  it.each(["line_token_invalid", "line_token_required"])("reauthorizes native LIFF on explicit %s retry, retaining the return page (041-03)", async (code) => {
+    const liff = fakeLiff({ loggedIn: true, inClient: true });
+    const reauthorize = vi.fn();
+    liff.reauthorize = reauthorize;
+    configureAuth({
+      liff, search: "", liffTimeoutMs: 50, logoutTimeoutMs: 50,
+      navigate: vi.fn(), currentPath: () => "/scan/jobs/j1/result", onIdentityChange: vi.fn(),
+    });
+    const api = mockApi(routes(GUEST));
+    useSession.getState().set({
+      me: { ...GUEST, kind: "guest" }, status: "ready", loginOpen: true, loginReturnTo: "/scan/jobs/j1/result",
+      loginError: new ApiError(401, code, []),
+    });
+    await loginWithLineFromPanel();
+    expect(reauthorize).toHaveBeenCalledWith(window.location.href);
+    expect(liff.login).not.toHaveBeenCalled();
+    expect(api.count("POST /api/v1/auth/line")).toBe(0);
+    expect(JSON.parse(sessionStorage.getItem(INTENT_KEY)!).returnTo).toBe("/scan/jobs/j1/result");
+  });
+
+  it("opens registration when fresh authorization returns with an unregistered LINE user (041-02, 042-01)", async () => {
+    sessionStorage.setItem(INTENT_KEY, JSON.stringify({ returnTo: "/my", at: Date.now() }));
+    const api = mockApi(routes(GUEST));
+    api.set("POST /api/v1/auth/line", () => {
+      const unregistered = { ...USER, registered: false, email: null };
+      api.set("GET /api/v1/me", () => json(200, unregistered));
+      return json(200, unregistered);
+    });
+    const liff = fakeLiff({ loggedIn: true, inClient: true, idToken: "fresh-token" });
+    start(api, liff);
+    expect(await screen.findByRole("dialog", { name: "Complete your registration" })).toBeInTheDocument();
+    expect(await api.bodies("POST /api/v1/auth/line")).toEqual([{ id_token: "fresh-token" }]);
+    expect(useSession.getState().loginOpen).toBe(false);
+    expect(useSession.getState().loginError).toBeNull();
+    expect(sessionStorage.getItem(INTENT_KEY)).toBeNull();
+  });
+
+  it("keeps a refreshed-token failure retryable rather than repeatedly redirecting (041-03)", async () => {
+    sessionStorage.setItem(INTENT_KEY, JSON.stringify({ returnTo: "/my", at: Date.now() }));
+    const api = mockApi({ ...routes(GUEST), "POST /api/v1/auth/line": () => json(401, { code: "line_token_invalid" }) });
+    const liff = fakeLiff({ loggedIn: true, inClient: false });
+    start(api, liff);
+    expect(await screen.findByText("LINE login failed. Please try again.")).toBeInTheDocument();
+    expect(api.count("POST /api/v1/auth/line")).toBe(1);
+    expect(liff.login).not.toHaveBeenCalled();
+    expect(useSession.getState().registerOpen).toBe(false);
+    expect(sessionStorage.getItem(INTENT_KEY)).toBeNull();
   });
 
   it("registration prefills the LINE email and hints autofill for email and phone (FR-SYS-020)", async () => {

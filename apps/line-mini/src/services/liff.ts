@@ -17,6 +17,14 @@ export function realLiff(liffId: string): Liff {
     getOS: () => liff.getOS(),
     login: (redirectUri) => liff.login({ redirectUri }),
     logout: () => liff.logout(),
+    reauthorize: (redirectUri) => {
+      // FR-SYS-041-03: init/reload alone can reuse a rejected token. logout clears only
+      // the SDK's authorization, not the SaiFlow cookie, draft or pending action.
+      const inClient = liff.isInClient();
+      liff.logout();
+      if (inClient) window.location.replace(`https://liff.line.me/${liffId}`);
+      else liff.login({ redirectUri });
+    },
     getIDToken: () => liff.getIDToken(),
     isApiAvailable: (api) => liff.isApiAvailable(api),
     shareTargetPicker: (messages) => liff.shareTargetPicker(messages),
