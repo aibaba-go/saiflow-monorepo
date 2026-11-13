@@ -1,6 +1,6 @@
 # Verification：line-result-table-admin-lock
 
-日期：2026-11-13。本地验证，尚未提交与发布。
+日期：2026-11-13。本地验证见前几节；负责人要求"提交部署"后已正式发布，见"正式发布"。
 
 ## 规格
 
@@ -30,3 +30,13 @@
 
 - 真机 LINE 内的邮箱预填取决于 LINE Developers 控制台的 Email 权限与 LIFF `email` scope，本地无法验证。
 - 手机键盘对 `autocomplete="tel"` 的提示依赖 iOS / Android 自动填充设置，未在真机验证。
+
+## 正式发布（2026-11-13）
+
+- 提交 `2b5b878`，推送到 `chore/ai-workflow-v2`；只提交本变更的文件，工作区里原有的部署脚本改动未提交。
+- CI run 43334497786：contract、stack、frontend、scripts、backend 全部通过。
+- Deploy run 43335461384，目标 `VPS_HOST` = 38.60.156.234。迁移前备份 `saiflow-20261113T001831Z.dump`（256928 字节），本地和 GCS 各一份。本次没有新迁移。三站 smoke-check OK。
+- 部署后只读复查：
+  - `saiflow-app`、`saiflow-admin`、`saiflow-line2` 的 `/api/v1/health` 都返回 `version` = `2b5b878…`、`database` = `ok`。
+  - 线上 LINE 小程序主包 `index-BbudoZSH.js`：不再含 `result.tabJson`、`result.copyJson`；含 `autoComplete:"email"`、`autoComplete:"tel"`、`inputMode:"tel"`。
+- 线上没有做任何写操作；后台锁定 5 分钟未在生产上触发（避免锁住真实账号），由集成测试覆盖。真机 LINE 内的邮箱预填须先在 LINE Developers 开通 Email 权限与 LIFF `email` scope。
