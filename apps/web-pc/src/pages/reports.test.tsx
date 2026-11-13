@@ -1,7 +1,10 @@
+import * as reportUi from "@saiflow/ui";
 import { screen, waitFor, within } from "@testing-library/react";
-import { act } from "react";
+import { act, Children, isValidElement, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { formatBangkokDateTime } from "../format";
+import { translate } from "../i18n";
 import type { ReportDetail, ReportSummary } from "../reports/api";
 import { useLanguage } from "../stores/language";
 import { en, renderAt, signedIn, userEvent } from "../test/app";
@@ -357,6 +360,454 @@ describe("view reports menu (FR-SYS-159, FR-SYS-160)", () => {
   );
 });
 
+describe("PC report presentation (FR-SYS-161, -163, -164)", () => {
+  it("keeps first list loading, failure and empty mutually exclusive, with retry (164-01)", async () => {
+    let finish!: (response: Response) => void;
+    const api = inOrg(VIEWER, { [LIST]: () => new Promise<Response>((resolve) => { finish = resolve; }) });
+    renderAt("/report-view");
+    await waitFor(() => expect(finish).toBeTypeOf("function"), WAIT);
+    const page = screen.getByTestId("page-report-view");
+    expect(within(page).getByRole("status")).toHaveTextContent(en("rpc.loading"));
+    expect(screen.queryByText(en("rpt.emptyView"))).toBeNull();
+    await act(async () => { finish(json(503, { code: "unavailable", message_key: "error.unavailable" })); });
+    const alert = await screen.findByRole("alert", {}, WAIT);
+    expect(alert).toHaveTextContent("The published reports could not be loaded");
+    expect(screen.queryByText(en("rpt.emptyView"))).toBeNull();
+    expect(within(page).queryByRole("status")).toBeNull();
+    api.set(LIST, () => json(200, { items: [] }));
+    await userEvent.click(within(alert).getByRole("button", { name: en("common.retry") }));
+    expect(await screen.findByText(en("rpt.emptyView"), {}, WAIT)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(api.count(LIST)).toBe(2);
+  }, LONG);
+
+  it("hides cached published links after a refused list refetch (164-03)", async () => {
+    const api = inOrg(VIEWER, { [LIST]: () => json(200, { items: [summary()] }) });
+    const { queryClient } = renderAt("/report-view");
+    await screen.findByRole("link", { name: /Sales overview/ }, WAIT);
+    api.set(LIST, () => json(403, { code: "permission_denied", message_key: "error.permission_denied" }));
+    await act(async () => { await queryClient.refetchQueries({ queryKey: ["reports", 5], exact: true }); });
+    await screen.findByRole("alert", {}, WAIT); // React Query notifies observers after the refetch promise settles.
+    expect(screen.queryByRole("link", { name: /Sales overview/ })).toBeNull();
+    expect(screen.queryByText(en("rpt.viewCount", { n: 1 }))).toBeNull();
+    expect(screen.queryByText(en("rpt.emptyView"))).toBeNull();
+  }, LONG);
+
+  it.each(["en", "th", "zh"] as const)("keeps long Thai names and Bangkok publication readable and opens the entire card by keyboard in %s (161-01/02)", async (lang) => {
+    const name = "รายงานยอดขายและการจัดส่งสำหรับทุกสาขาขององค์กรในประเทศไทย".repeat(2);
+    useLanguage.getState().setLang(lang);
+    inOrg(VIEWER, {
+      [LIST]: () => json(200, { items: [summary({ name, published_at: "2026-11-10T20:30:00Z" })] }),
+      [ONE]: () => json(200, detail({ published: { ...detail().published!, name } })),
+      [DATA]: () => json(200, RESULT()),
+    });
+    renderAt("/report-view");
+    const card = await screen.findByRole("link", { name: new RegExp(name) }, WAIT);
+    expect(within(card).getByText(name)).toHaveAttribute("title", name);
+    expect(within(card).getByText(translate(lang, "rpt.viewCardHint"))).toBeInTheDocument();
+    expect(within(card).getByText(translate(lang, "rpt.version", { n: 2 }))).toBeInTheDocument();
+    const time = card.querySelector("time");
+    expect(time).toHaveAttribute("datetime", "2026-11-10T20:30:00Z");
+    expect(time).toHaveTextContent("2026-11-11 03:30");
+    expect(time).toHaveTextContent(translate(lang, "rpt.publishedAt", { at: "2026-11-11 03:30" }));
+    for (let n = 0; n < 30 && document.activeElement !== card; n += 1) await userEvent.tab();
+    expect(card).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    expect(await screen.findByRole("heading", { name }, WAIT)).toBeInTheDocument();
+    expect(await screen.findByRole("rowheader", { name: "Bangkok" }, WAIT)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: new RegExp(`${translate(lang, "rpt.backToList")}$`) }));
+    expect(await screen.findByRole("list", { name: translate(lang, "nav.reportView") }, WAIT)).toBeInTheDocument();
+  }, LONG);
+
+  it.each([true, false])("never offers design to an owner on /report-view (published=%s), but management keeps it (163-02)", async (published) => {
+    const api = inOrg({ ...ORG, is_owner: true }, {
+      [ONE]: () => json(200, detail({ can_manage: true, ...(published ? {} : { published: null, status: "draft" }) })),
+      [DATA]: () => json(200, RESULT()),
+    });
+    const view = renderAt("/report-view/31");
+    if (published) await screen.findByRole("rowheader", { name: "Bangkok" }, WAIT);
+    else await screen.findByText(en("rpt.notPublishedYet"), {}, WAIT);
+    for (const key of ["rpt.design", "rpt.new", "rpt.publish", "rpt.unpublish", "rpt.delete"] as const) {
+      expect(screen.queryByRole("button", { name: en(key) })).toBeNull();
+    }
+    if (!published) expect(api.count(DATA)).toBe(0);
+    view.unmount();
+    renderAt("/reports/31");
+    expect(await screen.findByRole("button", { name: en("rpt.design") }, WAIT)).toBeInTheDocument();
+  }, LONG);
+
+  it("makes detail loading visible and retries a metadata error before requesting statistics (164-01)", async () => {
+    let finish!: (response: Response) => void;
+    const api = inOrg(VIEWER, { [ONE]: () => new Promise<Response>((resolve) => { finish = resolve; }), [DATA]: () => json(200, RESULT()) });
+    renderAt("/report-view/31");
+    await waitFor(() => expect(finish).toBeTypeOf("function"), WAIT);
+    expect(screen.getByRole("status")).toHaveTextContent(en("rpc.loading"));
+    expect(api.count(DATA)).toBe(0);
+    await act(async () => { finish(json(503, { code: "unavailable", message_key: "error.unavailable" })); });
+    const alert = await screen.findByRole("alert", {}, WAIT);
+    expect(screen.queryByRole("rowheader", { name: "Bangkok" })).toBeNull();
+    api.set(ONE, () => json(200, detail()));
+    await userEvent.click(within(alert).getByRole("button", { name: en("common.retry") }));
+    expect(await screen.findByRole("rowheader", { name: "Bangkok" }, WAIT)).toBeInTheDocument();
+    expect(api.count(ONE)).toBe(2);
+    expect(api.count(DATA)).toBe(1);
+  }, LONG);
+
+  it("provides a visible fallback while the published grid code loads (163-01)", async () => {
+    const grid = vi.spyOn(reportUi, "ReportGrid").mockImplementation(({ fallback }) => <>{fallback}</>);
+    try {
+      inOrg(VIEWER, { [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()) });
+      renderAt("/report-view/31");
+      const loading = await screen.findByRole("status", { name: en("rpg.grid") }, WAIT);
+      expect(loading).toHaveTextContent(en("rpc.loading"));
+      expect(loading).not.toHaveClass("sf-visually-hidden");
+    } finally {
+      grid.mockRestore();
+    }
+  }, LONG);
+
+  it("does not duplicate first statistics requests or confuse data failure with no charts (164-01/02)", async () => {
+    let finish!: (response: Response) => void;
+    const api = inOrg(VIEWER, {
+      [ONE]: () => json(200, detail({ published: { ...detail().published!, config: { ...CONFIG, cards: [] } } })),
+      [DATA]: () => new Promise<Response>((resolve) => { finish = resolve; }),
+    });
+    renderAt("/report-view/31");
+    await waitFor(() => expect(finish).toBeTypeOf("function"), WAIT);
+    const refresh = screen.getByRole("button", { name: en("rpt.refresh") });
+    expect(refresh).toBeDisabled();
+    await userEvent.click(refresh);
+    expect(api.count(DATA)).toBe(1);
+    expect(screen.queryByText(en("rpt.noCards"))).toBeNull();
+    await act(async () => { finish(json(503, { code: "unavailable", message_key: "error.unavailable" })); });
+    await screen.findByText(en("rpt.loadFailed"), {}, WAIT);
+    expect(screen.queryByText(en("rpt.noCards"))).toBeNull();
+    api.set(DATA, () => json(200, RESULT({ cards: [] })));
+    await userEvent.click(screen.getByRole("button", { name: en("common.retry") }));
+    expect(await screen.findByText(en("rpt.noCards"), {}, WAIT)).toBeInTheDocument();
+  }, LONG);
+
+  it("keeps the actual query time and readable stale notice after one in-flight refresh fails (164-02)", async () => {
+    let finish!: (response: Response) => void;
+    const api = inOrg(VIEWER, { [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()) });
+    renderAt("/report-view/31");
+    await screen.findByRole("rowheader", { name: "Bangkok" }, WAIT);
+    const bar = screen.getByRole("region", { name: en("rpt.periodBar") });
+    const at = formatBangkokDateTime(RESULT().generated_at);
+    expect(within(bar).getByText(at)).toBeInTheDocument();
+    api.set(DATA, () => new Promise<Response>((resolve) => { finish = resolve; }));
+    const refresh = screen.getByRole("button", { name: en("rpt.refresh") });
+    await userEvent.click(refresh);
+    await waitFor(() => expect(finish).toBeTypeOf("function"), WAIT);
+    expect(refresh).toBeDisabled();
+    await userEvent.click(refresh);
+    expect(api.count(DATA)).toBe(2);
+    expect(screen.getByRole("button", { name: en("rpt.csvOf", { title: "Sales by branch" }) })).toBeDisabled();
+    await act(async () => { finish(json(503, { code: "unavailable", message_key: "error.unavailable" })); });
+    const alert = await screen.findByRole("alert", {}, WAIT);
+    expect(alert).toHaveTextContent(en("rpt.staleBody", { at }));
+    expect(within(bar).getByText(at)).toBeInTheDocument();
+    expect(screen.getByRole("rowheader", { name: "Bangkok" })).toBeInTheDocument();
+  }, LONG);
+
+  it("applies one period to dated cards, explains the undated card and pins CSV before resetting (163-03)", async () => {
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: () => "blob:period", revokeObjectURL: vi.fn() }));
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    try {
+      const cards = [
+        CONFIG.cards[0],
+        { ...CONFIG.cards[0], id: "c2", title: "Other dated chart", layout: { x: 6, y: 0, w: 6, h: 4 } },
+        { ...CONFIG.cards[0], id: "c3", title: "Undated chart", layout: { x: 0, y: 4, w: 12, h: 4 }, data: { ...CONFIG.cards[0]!.data, date_field: undefined } },
+      ];
+      const api = inOrg(VIEWER, {
+        [ONE]: () => json(200, detail({ published: { ...detail().published!, config: { ...CONFIG, cards } } })),
+        [DATA]: async (r) => {
+          const body = await r.json() as { period: { from: string; to: string } | null };
+          return json(200, RESULT({
+            scope: "all",
+            ...(body.period ? { period: body.period } : {}),
+            cards: cards.map((c, i) => ({ ...RESULT().cards[0], card_id: c!.id, status: i === 2 ? "not_applicable" : "ok", period_applied: i !== 2 })),
+          }));
+        },
+        [CSV]: () => new Response("category,value\nBangkok,1500.50\n", { status: 200 }),
+      });
+      renderAt("/report-view/31");
+      await screen.findAllByRole("rowheader", { name: "Bangkok" }, WAIT);
+      const bar = screen.getByRole("region", { name: en("rpt.periodBar") });
+      expect(within(bar).getByText(en("rpt.scope.all"))).toBeInTheDocument();
+      await userEvent.click(within(bar).getByPlaceholderText(en("rpt.periodFrom")));
+      await userEvent.keyboard("2026-03-01{Enter}");
+      await userEvent.keyboard("2026-03-31{Enter}");
+      await userEvent.click(within(bar).getByRole("button", { name: en("rpt.applyPeriod") }));
+      await screen.findByText("2026-03-01 – 2026-03-31", {}, WAIT);
+      expect(screen.getByText(en("rpc.notApplicable"))).toBeInTheDocument();
+      const tables = screen.getAllByRole("region", { name: /Sales by branch|Other dated chart|Undated chart/ });
+      expect(tables).toHaveLength(3);
+      for (const table of tables) expect(table).toHaveAttribute("tabindex", "0");
+      await userEvent.click(screen.getByRole("button", { name: en("rpt.csvOf", { title: "Sales by branch" }) }));
+      await waitFor(() => expect(click).toHaveBeenCalledOnce(), WAIT);
+      const url = new URL(api.calls.find((c) => c.url.includes("/csv"))!.url);
+      expect(url.searchParams.get("from")).toBe("2026-03-01");
+      expect(url.searchParams.get("to")).toBe("2026-03-31");
+      expect(url.searchParams.get("report_version")).toBe("2");
+      expect((await api.bodies(DATA)).at(-1)).toEqual({ period: { from: "2026-03-01", to: "2026-03-31" }, refresh: false });
+      await userEvent.click(within(bar).getByRole("button", { name: en("rpt.resetPeriod") }));
+      await screen.findByText(/2026-01-01 – 2026-12-31/, {}, WAIT);
+      expect((await api.bodies(DATA)).at(-1)).toEqual({ period: null, refresh: false });
+    } finally {
+      click.mockRestore();
+    }
+  }, LONG);
+
+  it.each([
+    ["manage only", { ...ORG, permissions: ["report_manage"] }, USAGE, "rpt.noView"],
+    ["expired plan", VIEWER, { ...USAGE, active: false }, "rpt.unavailable"],
+    ["Kinder", VIEWER, KINDER, "rpt.unavailable"],
+  ] as const)("does not request statistics on direct view access with %s (161-03)", async (_name, tenant, usage, key) => {
+    const api = inOrg(tenant as UsableTenant, { [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()) }, usage);
+    renderAt("/report-view/31");
+    await screen.findByText(en(key), {}, WAIT);
+    expect(api.count(ONE)).toBe(0);
+    expect(api.count(DATA)).toBe(0);
+    expect(await menuLinks()).not.toContain(en("nav.reportView"));
+  }, LONG);
+
+  it("clears statistics and ignores a late answer after switching tenants (164-03)", async () => {
+    let finish!: (response: Response) => void;
+    const api = inOrg(VIEWER, { [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()) });
+    renderAt("/report-view/31");
+    await screen.findByRole("rowheader", { name: "Bangkok" }, WAIT);
+    api.set(DATA, () => new Promise<Response>((resolve) => { finish = resolve; }));
+    await userEvent.click(screen.getByRole("button", { name: en("rpt.refresh") }));
+    await waitFor(() => expect(finish).toBeTypeOf("function"), WAIT);
+    act(() => useTenantChoice.getState().choose(PERSONAL.tenant_id));
+    await screen.findByText(en("rpt.unavailable"), {}, WAIT);
+    await act(async () => { finish(json(200, RESULT())); });
+    expect(screen.queryByRole("rowheader", { name: "Bangkok" })).toBeNull();
+    expect(screen.queryByText(/4 documents · 1 excluded/)).toBeNull();
+  }, LONG);
+
+  it("rechecks publication and clears the old charts on a data version conflict (164-03)", async () => {
+    let finish!: (response: Response) => void;
+    const api = inOrg(VIEWER, { [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()) });
+    renderAt("/report-view/31");
+    await screen.findByRole("rowheader", { name: "Bangkok" }, WAIT);
+    api.set(ONE, () => new Promise<Response>((resolve) => { finish = resolve; }));
+    api.set(DATA, () => json(409, { code: "revision_conflict", message_key: "error.revision_conflict" }));
+    await userEvent.click(screen.getByRole("button", { name: en("rpt.refresh") }));
+    await waitFor(() => expect(finish).toBeTypeOf("function"), WAIT);
+    expect(screen.queryByRole("rowheader", { name: "Bangkok" })).toBeNull();
+    expect(screen.queryByText(en("rpt.staleTitle"))).toBeNull();
+    api.set(DATA, () => json(200, RESULT({ report_version: 3 })));
+    await act(async () => { finish(json(200, detail({ published: { ...detail().published!, version: 3 } }))); });
+    expect(await screen.findByRole("rowheader", { name: "Bangkok" }, WAIT)).toBeInTheDocument();
+    expect(screen.getByText(en("rpt.version", { n: 3 }))).toBeInTheDocument();
+  }, LONG);
+
+  it.each([
+    [402, "plan_required"],
+    [403, "permission_denied"],
+    [409, "report_not_published"],
+    [409, "revision_conflict"],
+  ] as const)("honours an older refresh refusal %s/%s over a pending date request and CSV (164-03)", async (status, code) => {
+    const created = vi.fn(() => "blob:refused-refresh");
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: created, revokeObjectURL: vi.fn() }));
+    let finishCsv!: (response: Response) => void;
+    let csvSignal!: AbortSignal;
+    const api = inOrg(VIEWER, {
+      [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()),
+      [CSV]: (r) => new Promise<Response>((resolve) => { finishCsv = resolve; csvSignal = r.signal; }),
+    });
+    renderAt("/report-view/31");
+    await screen.findByRole("rowheader", { name: "Bangkok" }, WAIT);
+    await userEvent.click(screen.getByRole("button", { name: en("rpt.csvOf", { title: "Sales by branch" }) }));
+    await waitFor(() => expect(finishCsv).toBeTypeOf("function"), WAIT);
+    const finishes: ((response: Response) => void)[] = [];
+    api.set(DATA, () => new Promise<Response>((resolve) => { finishes.push(resolve); }));
+    await userEvent.click(screen.getByRole("button", { name: en("rpt.refresh") }));
+    await waitFor(() => expect(finishes).toHaveLength(1), WAIT);
+    const bar = screen.getByRole("region", { name: en("rpt.periodBar") });
+    await userEvent.click(within(bar).getByPlaceholderText(en("rpt.periodFrom")));
+    await userEvent.keyboard("2026-03-01{Enter}");
+    await userEvent.keyboard("2026-03-31{Enter}");
+    await userEvent.click(within(bar).getByRole("button", { name: en("rpt.applyPeriod") }));
+    await waitFor(() => expect(finishes).toHaveLength(2), WAIT);
+    expect((await api.bodies(DATA)).slice(-2)).toEqual([
+      { period: null, refresh: true },
+      { period: { from: "2026-03-01", to: "2026-03-31" }, refresh: false },
+    ]);
+    await act(async () => { finishes[0]!(json(status, { code, message_key: `error.${code}` })); });
+    await screen.findByText(en(code === "report_not_published" ? "rpt.unpublishedNow" : "rpt.loadFailed"), {}, WAIT);
+    expect(screen.queryByRole("rowheader", { name: "Bangkok" })).toBeNull();
+    expect(screen.queryByText(/4 documents · 1 excluded/)).toBeNull();
+    expect(screen.queryByText(en("rpt.staleTitle"))).toBeNull();
+    expect(csvSignal.aborted).toBe(true);
+    expect(api.count(ONE)).toBe(code === "revision_conflict" ? 2 : 1);
+    await act(async () => {
+      finishes[1]!(json(200, RESULT({ period: { from: "2026-03-01", to: "2026-03-31" } })));
+      finishCsv(new Response("category,value\nLate data,100\n", { status: 200 }));
+    });
+    expect(screen.queryByRole("rowheader", { name: "Bangkok" })).toBeNull();
+    expect(screen.queryByText(/4 documents · 1 excluded/)).toBeNull();
+    expect(screen.queryByRole("button", { name: en("rpt.csvOf", { title: "Sales by branch" }) })).toBeNull();
+    expect(created).not.toHaveBeenCalled();
+    if (code !== "report_not_published") {
+      api.set(DATA, () => json(200, RESULT({ period: { from: "2026-03-01", to: "2026-03-31" } })));
+      await userEvent.click(screen.getByRole("button", { name: en("common.retry") }));
+      await screen.findByRole("rowheader", { name: "Bangkok" }, WAIT);
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect((await api.bodies(DATA)).at(-1)).toEqual({ period: { from: "2026-03-01", to: "2026-03-31" }, refresh: true });
+    }
+  }, LONG);
+
+  it.each(["permission_denied", "revision_conflict"] as const)("ignores a late old-publication %s without clearing or rechecking the new viewer (164-03)", async (code) => {
+    let finishOld!: (response: Response) => void;
+    const api = inOrg(VIEWER, { [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()) });
+    const { queryClient } = renderAt("/report-view/31");
+    await screen.findByRole("rowheader", { name: "Bangkok" }, WAIT);
+    api.set(DATA, () => new Promise<Response>((resolve) => { finishOld = resolve; }));
+    await userEvent.click(screen.getByRole("button", { name: en("rpt.refresh") }));
+    await waitFor(() => expect(finishOld).toBeTypeOf("function"), WAIT);
+    api.set(ONE, () => json(200, detail({ published: { ...detail().published!, name: "New overview", version: 3 } })));
+    api.set(DATA, () => json(200, RESULT({ report_version: 3 })));
+    await act(async () => { await queryClient.refetchQueries({ queryKey: ["report", 5, 31], exact: true }); });
+    await screen.findByRole("heading", { name: "New overview" }, WAIT);
+    await screen.findByRole("rowheader", { name: "Bangkok" }, WAIT);
+    await act(async () => { finishOld(json(code === "revision_conflict" ? 409 : 403, { code, message_key: `error.${code}` })); });
+    expect(screen.getByRole("rowheader", { name: "Bangkok" })).toBeInTheDocument();
+    expect(screen.getByText(/4 documents · 1 excluded/)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(api.count(ONE)).toBe(2);
+    expect(api.count(DATA)).toBe(3);
+  }, LONG);
+
+  it("ignores a departed component's refusal even after the same publication is reopened (164-03)", async () => {
+    let finishOld!: (response: Response) => void;
+    const api = inOrg(VIEWER, {
+      [LIST]: () => json(200, { items: [summary()] }),
+      [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()),
+    });
+    renderAt("/report-view/31");
+    await screen.findByRole("rowheader", { name: "Bangkok" }, WAIT);
+    api.set(DATA, () => new Promise<Response>((resolve) => { finishOld = resolve; }));
+    await userEvent.click(screen.getByRole("button", { name: en("rpt.refresh") }));
+    await waitFor(() => expect(finishOld).toBeTypeOf("function"), WAIT);
+    await userEvent.click(screen.getByRole("button", { name: new RegExp(`${en("rpt.backToList")}$`) }));
+    await screen.findByRole("list", { name: en("nav.reportView") }, WAIT);
+    api.set(DATA, () => json(200, RESULT()));
+    await userEvent.click(screen.getByRole("link", { name: /Sales overview/ }));
+    await screen.findByRole("rowheader", { name: "Bangkok" }, WAIT);
+    expect(api.count(ONE)).toBe(2); // React Query rechecks stale metadata on reopening.
+    await act(async () => { finishOld(json(409, { code: "revision_conflict", message_key: "error.revision_conflict" })); });
+    expect(screen.getByRole("rowheader", { name: "Bangkok" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(api.count(ONE)).toBe(2);
+    expect(api.count(DATA)).toBe(3);
+  }, LONG);
+
+  it.each([200, 403])("cancels CSV on same-version metadata export revocation before a late %s, retaining view access (163-03/164-03)", async (status) => {
+    const created = vi.fn(() => "blob:export-revoked");
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: created, revokeObjectURL: vi.fn() }));
+    const info = vi.spyOn(reportUi, "ReportCardInfo");
+    try {
+      let finishCsv!: (response: Response) => void;
+      let csvSignal!: AbortSignal;
+      const api = inOrg(VIEWER, {
+        [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()),
+        [CSV]: (r) => new Promise<Response>((resolve) => { finishCsv = resolve; csvSignal = r.signal; }),
+      });
+      const { queryClient } = renderAt("/report-view/31");
+      await screen.findByRole("rowheader", { name: "Bangkok" }, WAIT);
+      const csvName = en("rpt.csvOf", { title: "Sales by branch" });
+      const actions = info.mock.calls.at(-1)![0].actions;
+      if (!isValidElement<{ children?: ReactNode }>(actions)) throw new Error("Expected card actions");
+      const exportButton = Children.toArray(actions.props.children).find((child) =>
+        isValidElement<{ "aria-label"?: string }>(child) && child.props["aria-label"] === csvName);
+      if (!isValidElement<{ onClick(): void }>(exportButton)) throw new Error("Expected CSV action");
+      await userEvent.click(screen.getByRole("button", { name: csvName }));
+      await waitFor(() => expect(finishCsv).toBeTypeOf("function"), WAIT);
+      api.set(ONE, () => json(200, detail({ can_export: false })));
+      await act(async () => { await queryClient.refetchQueries({ queryKey: ["report", 5, 31], exact: true }); });
+      await waitFor(() => expect(screen.queryByRole("button", { name: csvName })).toBeNull(), WAIT);
+      expect(csvSignal.aborted).toBe(true);
+      expect(screen.getByRole("rowheader", { name: "Bangkok" })).toBeInTheDocument();
+      expect(screen.getByText(/4 documents · 1 excluded/)).toBeInTheDocument();
+      expect(screen.getByText(en("rpt.version", { n: 2 }))).toBeInTheDocument();
+      expect(api.count(DATA)).toBe(1);
+      await act(async () => {
+        finishCsv(status === 200
+          ? new Response("category,value\nLate file,100\n", { status: 200 })
+          : json(403, { code: "permission_denied", message_key: "error.permission_denied" }));
+      });
+      // A retained old action must not bypass today's metadata permission either.
+      act(() => exportButton.props.onClick());
+      expect(api.count(CSV)).toBe(1);
+      expect(api.count(ONE)).toBe(2);
+      expect(api.count(DATA)).toBe(1);
+      expect(created).not.toHaveBeenCalled();
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.getByRole("rowheader", { name: "Bangkok" })).toBeInTheDocument();
+      // Export-only revocation must not disable a subsequent authorized data refresh.
+      await userEvent.click(screen.getByRole("button", { name: en("rpt.refresh") }));
+      await waitFor(() => expect(api.count(DATA)).toBe(2), WAIT);
+      await waitFor(() => expect(screen.getByRole("button", { name: en("rpt.refresh") })).toBeEnabled(), WAIT);
+    } finally {
+      info.mockRestore();
+    }
+  }, LONG);
+
+  it("labels retained results by their successful period source through failed apply and reset (163-03/164-02)", async () => {
+    let finish!: (response: Response) => void;
+    const api = inOrg(VIEWER, { [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()) });
+    renderAt("/report-view/31");
+    await screen.findByRole("rowheader", { name: "Bangkok" }, WAIT);
+    const bar = screen.getByRole("region", { name: en("rpt.periodBar") });
+    const hint = new RegExp(en("rpt.periodAsPublished"));
+    expect(within(bar).getByText(hint)).toBeInTheDocument();
+    await userEvent.click(within(bar).getByPlaceholderText(en("rpt.periodFrom")));
+    // Identical dates can come from either source; the result period alone cannot tell.
+    await userEvent.keyboard("2026-01-01{Enter}");
+    await userEvent.keyboard("2026-12-31{Enter}");
+    await userEvent.click(within(bar).getByRole("button", { name: en("rpt.applyPeriod") }));
+    await waitFor(() => expect(api.count(DATA)).toBe(2), WAIT);
+    await waitFor(() => expect(screen.getByRole("button", { name: en("rpt.refresh") })).toBeEnabled(), WAIT);
+    expect(within(bar).queryByText(hint)).toBeNull();
+    expect((await api.bodies(DATA)).at(-1)).toEqual({ period: RESULT().period, refresh: false });
+    let finishReset!: (response: Response) => void;
+    api.set(DATA, () => new Promise<Response>((resolve) => { finishReset = resolve; }));
+    await userEvent.click(within(bar).getByRole("button", { name: en("rpt.resetPeriod") }));
+    await waitFor(() => expect(finishReset).toBeTypeOf("function"), WAIT);
+    expect(within(bar).queryByText(hint)).toBeNull();
+    await act(async () => { finishReset(json(503, { code: "unavailable", message_key: "error.unavailable" })); });
+    const alert = await screen.findByRole("alert", {}, WAIT);
+    expect(alert).toHaveTextContent(en("rpt.staleBody", { at: formatBangkokDateTime(RESULT().generated_at) }));
+    expect(screen.getByRole("rowheader", { name: "Bangkok" })).toBeInTheDocument();
+    expect(within(bar).getByText(/2026-01-01 – 2026-12-31/)).toBeInTheDocument();
+    expect(within(bar).queryByText(hint)).toBeNull();
+    expect(screen.getByRole("button", { name: en("rpt.csvOf", { title: "Sales by branch" }) })).toBeDisabled();
+    api.set(DATA, () => json(200, RESULT()));
+    await userEvent.click(within(alert).getByRole("button", { name: en("common.retry") }));
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull(), WAIT);
+    expect(within(bar).getByText(hint)).toBeInTheDocument();
+    expect((await api.bodies(DATA)).at(-1)).toEqual({ period: null, refresh: true });
+    await userEvent.click(within(bar).getByPlaceholderText(en("rpt.periodFrom")));
+    await userEvent.keyboard("2026-01-01{Enter}");
+    await userEvent.keyboard("2026-12-31{Enter}");
+    api.set(DATA, () => new Promise<Response>((resolve) => { finish = resolve; }));
+    await userEvent.click(within(bar).getByRole("button", { name: en("rpt.applyPeriod") }));
+    await waitFor(() => expect(finish).toBeTypeOf("function"), WAIT);
+    expect(within(bar).getByText(hint)).toBeInTheDocument();
+    await act(async () => { finish(json(503, { code: "unavailable", message_key: "error.unavailable" })); });
+    await screen.findByText(en("rpt.staleTitle"), {}, WAIT);
+    expect(within(bar).getByText(hint)).toBeInTheDocument();
+    api.set(DATA, () => json(200, RESULT()));
+    await userEvent.click(screen.getByRole("button", { name: en("common.retry") }));
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull(), WAIT);
+    expect(within(bar).queryByText(hint)).toBeNull();
+    expect((await api.bodies(DATA)).at(-1)).toEqual({ period: RESULT().period, refresh: true });
+  }, LONG);
+});
+
 describe("published report view (FR-REPORT-002, -010, -015, -016)", () => {
   it(
     "queries on open and shows the period, scope, source and counts",
@@ -403,7 +854,7 @@ describe("published report view (FR-REPORT-002, -010, -015, -016)", () => {
     LONG,
   );
 
-  it.each([401, 403, 404])(
+  it.each([401, 402, 403, 404])(
     "clears previous statistics after a refresh is refused with %s (003, SYS-141-03)",
     async (status) => {
       const api = inOrg(VIEWER, { [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()) });
@@ -583,7 +1034,7 @@ describe("published report view (FR-REPORT-002, -010, -015, -016)", () => {
     expect(created).not.toHaveBeenCalled();
   }, LONG);
 
-  it.each([401, 403, 404, 409])("clears values when a CSV refusal reveals revoked report access (%s)", async (status) => {
+  it.each([401, 402, 403, 404, 409])("clears values when a CSV refusal reveals revoked report access (%s)", async (status) => {
     const api = inOrg(VIEWER, { [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()) });
     renderAt("/reports/31");
     await screen.findByRole("rowheader", { name: "Bangkok" }, WAIT);

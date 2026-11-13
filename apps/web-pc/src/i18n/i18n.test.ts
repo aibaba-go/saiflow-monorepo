@@ -29,4 +29,17 @@ describe("i18n resources (AC-FR-SYS-093-03)", () => {
   it("substitutes variables", () => {
     expect(translate("en", "common.secondsLeft", { n: 42 })).toBe(en["common.secondsLeft"].replace("{n}", "42"));
   });
+
+  it("has localized report loading, Bangkok publication and read-only guidance (FR-SYS-161/163/164)", () => {
+    for (const dict of [en, th, zh] as Record<string, string>[]) {
+      for (const key of ["rpt.listLoadFailed", "rpt.readOnlyNote", "rpt.publishedAt", "rpc.loading", "rpt.staleTitle", "rpt.staleBody"]) {
+        expect(dict[key], key).toBeTruthy();
+      }
+    }
+    expect(en["rpt.publishedAt"]).toContain("Bangkok");
+    expect(th["rpt.publishedAt"]).toContain("กรุงเทพฯ");
+    expect(zh["rpt.publishedAt"]).toContain("曼谷");
+    expect(th["eyebrow.reportView"]).not.toBe(en["eyebrow.reportView"]);
+    expect(zh["eyebrow.reportView"]).not.toBe(en["eyebrow.reportView"]);
+  });
 });

@@ -4,10 +4,12 @@ import type { ReportsKey } from "./reports.en";
 export const reportsZh: Record<ReportsKey, string> = {
   "nav.reports": "报表管理",
   "nav.reportView": "报表查看",
-  "eyebrow.reportView": "Published reports",
+  "eyebrow.reportView": "已发布报表",
   "layout.desc.reportView": "查看本组织已发布的报表，每份报表只显示你有权查看的数据。",
   "rpt.viewCount": "已发布 {n} 份",
   "rpt.viewCardHint": "打开报表",
+  "rpt.listLoadFailed": "无法加载已发布报表",
+  "rpt.readOnlyNote": "基于正式业务数据的只读报表，图表沿用发布设置并按你有权查看的数据范围查询。",
   "eyebrow.reports": "Operations reports",
   "layout.desc.reports": "基于正式单据的统计，由本组织设计并发布。",
 
@@ -70,7 +72,7 @@ export const reportsZh: Record<ReportsKey, string> = {
   "rpt.notPublishedYet": "该报表尚未发布。",
   "rpt.unpublishedNow": "该报表刚刚被撤销发布。",
   "rpt.backToList": "返回报表列表",
-  "rpt.publishedAt": "发布于 · {at}",
+  "rpt.publishedAt": "发布于 · 曼谷 · {at}",
   "rpt.refresh": "刷新",
   "rpt.refreshing": "正在刷新…",
   "rpt.periodBar": "期间与数据范围",

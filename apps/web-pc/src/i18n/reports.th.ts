@@ -4,10 +4,12 @@ import type { ReportsKey } from "./reports.en";
 export const reportsTh: Record<ReportsKey, string> = {
   "nav.reports": "จัดการรายงาน",
   "nav.reportView": "ดูรายงาน",
-  "eyebrow.reportView": "Published reports",
+  "eyebrow.reportView": "รายงานที่เผยแพร่แล้ว",
   "layout.desc.reportView": "เปิดรายงานที่เผยแพร่ในองค์กรนี้ แต่ละรายงานแสดงข้อมูลตามสิทธิ์ของคุณ",
   "rpt.viewCount": "เผยแพร่แล้ว {n} รายการ",
   "rpt.viewCardHint": "เปิดรายงาน",
+  "rpt.listLoadFailed": "โหลดรายงานที่เผยแพร่แล้วไม่ได้",
+  "rpt.readOnlyNote": "รายงานแบบอ่านอย่างเดียวจากเอกสารที่เป็นทางการ กราฟใช้การตั้งค่าที่เผยแพร่และขอบเขตข้อมูลของคุณ",
   "eyebrow.reports": "Operations reports",
   "layout.desc.reports": "สถิติจากเอกสารที่เป็นทางการ ออกแบบและเผยแพร่โดยองค์กรนี้",
 
@@ -70,7 +72,7 @@ export const reportsTh: Record<ReportsKey, string> = {
   "rpt.notPublishedYet": "รายงานนี้ยังไม่ได้เผยแพร่",
   "rpt.unpublishedNow": "รายงานนี้เพิ่งถูกยกเลิกการเผยแพร่",
   "rpt.backToList": "กลับไปที่รายงาน",
-  "rpt.publishedAt": "เผยแพร่ · {at}",
+  "rpt.publishedAt": "เผยแพร่ · กรุงเทพฯ · {at}",
   "rpt.refresh": "รีเฟรช",
   "rpt.refreshing": "กำลังรีเฟรช…",
   "rpt.periodBar": "ช่วงเวลาและขอบเขตข้อมูล",

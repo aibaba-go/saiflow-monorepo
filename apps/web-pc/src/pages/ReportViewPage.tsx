@@ -12,7 +12,6 @@ import type { Dayjs } from "dayjs";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
-import { ErrorText } from "../components/ErrorText";
 import { Page } from "../components/Page";
 import { formatBangkokDateTime } from "../format";
 import { useT } from "../i18n";
@@ -30,9 +29,10 @@ function useListPath(): string {
   return useLocation().pathname.startsWith("/report-view") ? "/report-view" : "/reports";
 }
 
-/** The last answer of the data endpoint, and whether a later attempt failed (FR-REPORT-015). */
+/** The last answer and its selection source, even if a later attempt failed (FR-SYS-163/164). */
 interface DataState {
   result: QueryResult | null;
+  periodSource: "published" | "override" | null;
   error: unknown;
   loading: boolean;
 }
@@ -45,14 +45,17 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: NonNu
   const labels = useReportLabels();
   const config = useMemo(() => configOf(detail.published.config), [detail.published.config]);
   const version = detail.published.version;
+  const publication = useMemo(() => ({ tenantId: detail.tenant_id, id: detail.id, version }), [detail.tenant_id, detail.id, version]);
 
   // the whole-page period: null = as published (FR-REPORT-010)
   const [period, setPeriod] = useState<Period | null>(null);
   const [range, setRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
-  const [data, setData] = useState<DataState>({ result: null, error: null, loading: true });
+  const [data, setData] = useState<DataState>({ result: null, periodSource: null, error: null, loading: true });
   const [exporting, setExporting] = useState<ReadonlySet<string>>(() => new Set());
   const seq = useRef(0);
   const active = useRef(true);
+  const currentPublication = useRef(publication);
+  const canExport = useRef(detail.can_export);
   const currentPeriod = useRef<Period | null>(null);
   const downloads = useRef(new Map<string, AbortController>());
   const cancelDownloads = useCallback(() => {
@@ -61,34 +64,40 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: NonNu
     setExporting(new Set());
   }, []);
 
-  // Only the latest answer lands. Non-auth failures may retain marked older data;
-  // an authorization refusal clears statistics and diagnostics immediately.
+  // Only the latest ordinary answer lands. A refusal invalidates even newer period
+  // requests, but only within this active viewer's current publication (FR-SYS-164).
   const load = useCallback(
     async (p: Period | null, refresh: boolean) => {
+      if (!active.current || currentPublication.current !== publication) return;
       const n = ++seq.current;
       setData((d) => ({ ...d, loading: true, error: null }));
       try {
         const result = await reportData(detail.id, p, refresh);
-        if (n !== seq.current) return;
+        if (!active.current || currentPublication.current !== publication || n !== seq.current) return;
         if (result.report_version !== version) {
           cancelDownloads();
-          setData({ result: null, error: null, loading: true });
+          setData({ result: null, periodSource: null, error: null, loading: true });
           onStale(); // never draw a new snapshot's values with the old card definitions
           return;
         }
-        setData({ result, error: null, loading: false });
+        setData({ result, periodSource: p === null ? "published" : "override", error: null, loading: false });
       } catch (error) {
-        if (n !== seq.current) return;
+        if (!active.current || currentPublication.current !== publication) return;
+        const conflict = error instanceof ApiError && error.code === "revision_conflict";
         const unavailable = error instanceof ApiError &&
-          ([401, 403, 404].includes(error.status) || error.code === "report_not_published");
+          ([401, 402, 403, 404].includes(error.status) || error.code === "report_not_published" || conflict);
         if (unavailable) {
           seq.current += 1;
           cancelDownloads();
+          setData({ result: null, periodSource: null, error, loading: false });
+          if (conflict) onStale(); // recheck the publication before mixing definitions and values
+          return;
         }
-        setData((d) => ({ result: unavailable ? null : d.result, error, loading: false }));
+        if (n !== seq.current) return;
+        setData((d) => ({ ...d, error, loading: false }));
       }
     },
-    [detail.id, version, onStale, cancelDownloads],
+    [detail.id, version, publication, onStale, cancelDownloads],
   );
 
   useEffect(() => {
@@ -102,10 +111,16 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: NonNu
   useLayoutEffect(() => {
     // Metadata can advance before the data endpoint answers; preserve the selected period,
     // but invalidate old values, requests and downloads before the new definitions paint.
+    currentPublication.current = publication;
     seq.current += 1;
     cancelDownloads();
-    setData({ result: null, error: null, loading: true });
-  }, [version, cancelDownloads]);
+    setData({ result: null, periodSource: null, error: null, loading: true });
+  }, [publication, cancelDownloads]);
+
+  useLayoutEffect(() => {
+    canExport.current = detail.can_export;
+    if (!detail.can_export) cancelDownloads(); // export can be revoked without a new publication
+  }, [detail.can_export, cancelDownloads]);
 
   useLayoutEffect(() => {
     active.current = true;
@@ -136,7 +151,7 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: NonNu
   };
 
   const exportCard = async (card: ReportCard) => {
-    if (!result || downloads.current.has(card.id)) return;
+    if (!active.current || currentPublication.current !== publication || !canExport.current || !result || downloads.current.has(card.id)) return;
     const controller = new AbortController();
     downloads.current.set(card.id, controller);
     setExporting((ids) => new Set(ids).add(card.id));
@@ -147,10 +162,10 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: NonNu
       if (!active.current || controller.signal.aborted) return;
       // A refresh changes the data sequence, not the authority of a pending CSV refusal.
       if (e instanceof ApiError &&
-        ([401, 403, 404].includes(e.status) || e.code === "report_not_published" || e.code === "revision_conflict")) {
+        ([401, 402, 403, 404].includes(e.status) || e.code === "report_not_published" || e.code === "revision_conflict")) {
         seq.current += 1;
         cancelDownloads();
-        setData({ result: null, error: e, loading: false });
+        setData({ result: null, periodSource: null, error: e, loading: false });
         onStale();
         // Recheck view separately, with today's selection rather than the export's old period.
         void load(currentPeriod.current, true);
@@ -230,25 +245,33 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: NonNu
         loading={!result && data.loading}
         labels={labels.chart}
         locale={t("format.locale")}
-        onRetry={() => void load(period, true)}
+        onRetry={data.loading ? undefined : () => void load(period, true)}
         footer={info}
       />
     );
   };
 
+  const gridLoading = (
+    <div className="pc-panel pc-report-status" role="status" aria-label={t("rpg.grid")} aria-busy="true">
+      <Spin aria-hidden="true" />
+      <span>{t("rpc.loading")}</span>
+    </div>
+  );
+
   return (
     <Page
       name={listPath === "/report-view" ? "report-view" : "reports"}
       title={detail.published.name}
-      badge={<Tag>{t("rpt.version", { n: version })}</Tag>}
-      meta={<span>{t("rpt.publishedAt", { at: formatBangkokDateTime(detail.published.published_at) })}</span>}
+      description={t("rpt.readOnlyNote")}
+      badge={<Tag className="pc-report-version">{t("rpt.version", { n: version })}</Tag>}
+      meta={<time dateTime={detail.published.published_at}>{t("rpt.publishedAt", { at: formatBangkokDateTime(detail.published.published_at) })}</time>}
       extra={
         <Space wrap>
           <Button icon={<Icon name="back" />} onClick={() => navigate(listPath)}>
             {t("rpt.backToList")}
           </Button>
-          {detail.can_manage && <Button onClick={() => navigate(`/reports/${detail.id}/design`)}>{t("rpt.design")}</Button>}
-          <Button type="primary" aria-label={t("rpt.refresh")} loading={data.loading && result !== null} onClick={() => void load(period, true)}>
+          {listPath === "/reports" && detail.can_manage && <Button onClick={() => navigate(`/reports/${detail.id}/design`)}>{t("rpt.design")}</Button>}
+          <Button type="primary" aria-label={t("rpt.refresh")} loading={data.loading} disabled={data.loading} onClick={() => void load(period, true)}>
             {t("rpt.refresh")}
           </Button>
         </Space>
@@ -276,7 +299,7 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: NonNu
               <dt>{t("rpt.actualPeriod")}</dt>
               <dd>
                 {result.period.from} – {result.period.to}
-                {period === null && <span className="pc-report-bar__hint"> ({t("rpt.periodAsPublished")})</span>}
+                {data.periodSource === "published" && <span className="pc-report-bar__hint"> ({t("rpt.periodAsPublished")})</span>}
               </dd>
             </div>
             <div>
@@ -285,7 +308,7 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: NonNu
             </div>
             <div>
               <dt>{t("rpt.generatedAt")}</dt>
-              <dd>{formatBangkokDateTime(result.generated_at)}</dd>
+              <dd><time dateTime={result.generated_at}>{formatBangkokDateTime(result.generated_at)}</time></dd>
             </div>
           </dl>
         )}
@@ -303,7 +326,7 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: NonNu
             </>
           }
           action={
-            <Button size="small" onClick={() => void load(period, true)}>
+            <Button size="small" disabled={data.loading} onClick={() => void load(period, true)}>
               {t("common.retry")}
             </Button>
           }
@@ -317,14 +340,14 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: NonNu
           message={t("rpt.loadFailed")}
           description={errorMessage(data.error, t)}
           action={
-            <Button size="small" onClick={() => void load(period, true)}>
+            <Button size="small" disabled={data.loading} onClick={() => void load(period, true)}>
               {t("common.retry")}
             </Button>
           }
         />
       )}
       {config.cards.length === 0 ? (
-        <Result status="info" title={t("rpt.noCards")} />
+        result ? <Result status="info" title={t("rpt.noCards")} /> : data.loading && gridLoading
       ) : (
         (result || data.loading) && (
           <div className={stale ? "pc-report-view is-stale" : "pc-report-view"} aria-busy={data.loading || undefined}>
@@ -334,7 +357,7 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: NonNu
               rowHeight={config.grid?.row_height ?? 80}
               labels={labels.grid}
               renderCard={renderCard}
-              fallback={<Spin />}
+              fallback={gridLoading}
             />
           </div>
         )
@@ -354,10 +377,23 @@ function ViewLoader() {
   const report = useReport(id);
   const { refetch } = report;
   const onStale = useCallback(() => void refetch(), [refetch]);
-  if (report.isPending) return <Spin />;
+  if (report.isPending || (report.error && report.isFetching)) {
+    return <div className="pc-panel pc-report-status" role="status" aria-busy="true"><Spin aria-hidden="true" /><span>{t("rpc.loading")}</span></div>;
+  }
   if (report.error) {
-    if (report.error instanceof ApiError && report.error.status === 404) return <Result status="404" title={t("rpt.notFound")} />;
-    return <ErrorText error={report.error} />;
+    if (report.error instanceof ApiError && report.error.status === 404) {
+      return <Result status="404" title={t("rpt.notFound")} extra={<Button onClick={() => navigate(listPath)}>{t("rpt.backToList")}</Button>} />;
+    }
+    return (
+      <Alert
+        role="alert"
+        type="error"
+        showIcon
+        message={t("rpt.loadFailed")}
+        description={errorMessage(report.error, t)}
+        action={<Button onClick={() => void refetch()}>{t("common.retry")}</Button>}
+      />
+    );
   }
   const detail = report.data;
   if (!detail.published) {
@@ -366,9 +402,9 @@ function ViewLoader() {
         status="info"
         title={t("rpt.notPublishedYet")}
         extra={
-          <Space>
+          <Space wrap>
             <Button onClick={() => navigate(listPath)}>{t("rpt.backToList")}</Button>
-            {detail.can_manage && (
+            {listPath === "/reports" && detail.can_manage && (
               <Button type="primary" onClick={() => navigate(`/reports/${detail.id}/design`)}>
                 {t("rpt.design")}
               </Button>

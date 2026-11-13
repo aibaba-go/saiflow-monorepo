@@ -7,6 +7,8 @@ export const reportsEn = {
   "layout.desc.reportView": "Open the reports published in this organization; each shows the data you may see.",
   "rpt.viewCount": "{n} published",
   "rpt.viewCardHint": "Open report",
+  "rpt.listLoadFailed": "The published reports could not be loaded",
+  "rpt.readOnlyNote": "Read-only report from formal documents. The charts use the published settings and your data scope.",
   "eyebrow.reports": "Operations reports",
   "layout.desc.reports": "Statistics from formal documents, designed and published in this organization.",
 
@@ -70,7 +72,7 @@ export const reportsEn = {
   "rpt.notPublishedYet": "This report is not published yet.",
   "rpt.unpublishedNow": "This report was unpublished meanwhile.",
   "rpt.backToList": "Back to reports",
-  "rpt.publishedAt": "Published · {at}",
+  "rpt.publishedAt": "Published · Bangkok · {at}",
   "rpt.refresh": "Refresh",
   "rpt.refreshing": "Refreshing…",
   "rpt.periodBar": "Period and data scope",
