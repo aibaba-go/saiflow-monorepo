@@ -35,3 +35,13 @@
 - FR-SYS-106：`final.test.tsx` 的完整 DOM 回归覆盖「编辑核验结果 → 保存未确认草稿 → LINE 登录 → 未注册显示注册 → 完成注册 → 自动确认草稿 → Final result」。注册前不确认，返回时仍使用编辑后的数据；测试只使用模拟 API，不发送真实注册邮件或触发 OCR。
 - 最终本地验证：line-mini 全量 vitest **37 个文件、410 项测试通过**（`temp/line-register-prefill/register-flow-full-verified.log`）；eslint、`tsc --noEmit`、Vite 构建通过（`temp/line-register-prefill/register-flow-build.log`，构建产物置于 `temp/line-register-prefill/register-flow-build/`）；`git diff --check` 通过。
 - 限制：原生 LINE 清除 SDK 授权后重新进入、实际令牌刷新及同窗口返回意图保存，仅完成源码/官方文档核对和适配器模拟测试，尚未进行 iPhone 真机验证。本次没有提交、推送或部署；此前已有的部署脚本改动不属于此修复。
+
+## 后续 S 级修复发布核验（2026-11-13）
+
+本节更新上述本地修复的发布状态。用户明确要求「提交并发布」，授权限定本次注册分流、授权重试和草稿续确认修复。
+
+- 业务提交 `fa0e3fc4d3acc02cb2d708018a113144ae8956af` 已推送至 `chore/ai-workflow-v2`，仅包含本次 7 个文件；未提交工作区已有的部署脚本、`.qoder/`、用户手册或 `temp/`。
+- [CI run 43422257181](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43422257181) 对精确 SHA 结论 success：backend、frontend、contract、scripts、stack 全通过。后端 1314 项；前端 api-client 5、ui 162、line-mini 410、web-admin 89、web-pc 249 项测试通过；lint、构建、接口生成一致性、隔离栈及备份恢复演练通过。日志：`temp/line-register-prefill/register-fix-ci-43422257181.log`。
+- CI 成功且远端分支仍为该 SHA 后，触发标准 [Deploy run 43423290149](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43423290149)（workflow_dispatch），精确 SHA 一致、结论 success。迁移前备份 `saiflow-20261113T121705Z.dump`（256531 bytes）已上传 `gs://saiflow-db-backup/`；本次无新迁移。日志包含 `remote-deploy: done (fa0e3fc…)`；三站健康及数据库端口外部关闭步骤通过。证据：`temp/line-register-prefill/register-fix-deploy-43423290149.json`、同名 `.log`。
+- 发布后只读核验（12:18:27 UTC）：三站健康均 HTTP 200、`status=ok`、`database=ok`、版本为完整 `fa0e3fc…`；LINE 首页及引用资源可读取，新脚本 `/assets/index-CPO6ULXA.js` 含 `reauthorize`、正式 LIFF URL、两种 token 错误码及待确认标记。`temp/line-register-prefill/register-fix-production-check.json` 结论 passed。只请求健康接口和静态资源，未创建 guest、注册账号、发送验证码、触发 OCR 或再次清理业务数据；未修改 GitHub 变量、LIFF 或频道配置。
+- 验证边界：本次发布与资源核验不能代替原生 LINE 验收；iPhone 实际未注册分流、重新授权、返回意图保留及注册后续确认仍需用户实机测试。此证据后续仅作独立文档提交，不重新部署文档 SHA。
