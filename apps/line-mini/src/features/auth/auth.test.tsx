@@ -142,6 +142,22 @@ describe("LINE login (FR-SYS-041)", () => {
     await waitFor(() => expect(useSession.getState().registerOpen).toBe(true));
   });
 
+  it("registration prefills the LINE email and hints autofill for email and phone (FR-SYS-020)", async () => {
+    const unregistered = { ...USER, registered: false, email: null, email_suggestion: "line@example.com" };
+    const api = mockApi(routes(GUEST));
+    api.set("POST /api/v1/auth/line", () => {
+      api.set("GET /api/v1/me", () => json(200, unregistered));
+      return json(200, unregistered);
+    });
+    start(api, fakeLiff({ loggedIn: true }), "?entry=register");
+    const email = await screen.findByDisplayValue("line@example.com");
+    expect(email).toHaveAttribute("autocomplete", "email");
+    const phone = document.getElementById("reg-phone");
+    expect(phone).toHaveAttribute("type", "tel");
+    expect(phone).toHaveAttribute("autocomplete", "tel");
+    expect(phone).toHaveAttribute("inputmode", "tel");
+  });
+
   it("stays a guest and offers retry when login fails (041-03)", async () => {
     const api = mockApi({ ...routes(GUEST), "POST /api/v1/auth/line": () => json(500, { code: "internal_error" }) });
     start(api, fakeLiff({ loggedIn: true }));

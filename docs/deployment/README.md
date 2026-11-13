@@ -3,8 +3,8 @@ doc_id: OPS-001
 title: "SaiFlow — 部署与运维说明（dev 环境）"
 type: guide
 status: active
-version: 1.9.0
-updated: 2026-11-06
+version: 1.9.1
+updated: 2026-11-13
 owner: Product Engineering
 related: [ADR-008, FR-PLAT-005, FR-PLAT-006]
 doc_source: manual
@@ -109,7 +109,7 @@ docker compose exec -T saiflow-be-api python -m app.cli admin-reset-password <�
 docker compose exec -T saiflow-be-api python -m app.cli admin-disable <用户名>        # 停用并结束其会话
 ```
 
-连续 5 次输错口令锁定 15 分钟；后台 30 分钟无操作需重新登录。
+连续 5 次输错口令锁定 5 分钟；后台 30 分钟无操作需重新登录。
 
 admin 也可以登录后台，在右上角“修改密码”中修改本人口令（B-5b 起，FR-SYS-061）：须输入当前口令，新口令至少 12 个字符；修改后该账号在其他设备上的会话全部退出，当前会话保持登录；当前口令连续输错同样计入锁定。忘记口令时仍用上面的 `admin-reset-password`。
 
@@ -265,6 +265,7 @@ docker compose exec -T saiflow-be-api python -m app.cli audit-verify   # 操作�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.9.1 | 2026-11-13 | Product Engineering | 后台账号连续 5 次输错口令的锁定时间改为 5 分钟（`line-result-table-admin-lock`，FR-SYS-019） |
 | 1.9.0 | 2026-11-06 | Product Engineering | §2.10 每次部署自动整理 `secrets` 文件夹的所有者与权限（`secrets-perms.sh`）；备份密钥保持 `deploy` 所有，后端读不到 |
 | 1.8.1 | 2026-11-06 | Product Engineering | §2.10 密钥文件夹与文件的所有者改为容器用户 uid 10001（原写法 `deploy` 所有导致容器 `Permission denied`，dev 环境首次配置时发现）；补充传文件与检查的命令 |
 | 1.8.0 | 2026-11-06 | Product Engineering | §2.6 web-pc 改用同一 Provider 下单独的 LINE Login 频道（LINE MINI App 频道没有回调地址）：新增 `LINE_WEB_CHANNEL_ID`、`LINE_WEB_CHANNEL_SECRET`；GitHub 变量 `LINE_CHANNEL_ID` 填 web-pc 的频道 ID |

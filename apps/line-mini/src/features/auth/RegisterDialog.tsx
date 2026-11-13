@@ -15,6 +15,8 @@ import { BottomSheet } from "../../components/ui/sheet";
 
 function RegisterForm({ me }: { me: Me }) {
   const t = useT();
+  // FR-SYS-020: the email LINE shared at login (needs the LIFF `email` scope). A web page
+  // cannot read the device's phone number; autoComplete="tel" lets the keyboard offer it.
   const [email, setEmail] = useState(me.email_suggestion ?? me.email ?? "");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
@@ -52,6 +54,8 @@ function RegisterForm({ me }: { me: Me }) {
         error={error}
         field="email"
         type="email"
+        autoComplete="email"
+        inputMode="email"
         extra={<EmailCodeButton email={email} onError={setError} />}
       />
       <Field
@@ -89,6 +93,8 @@ function RegisterForm({ me }: { me: Me }) {
         error={error}
         field="phone"
         type="tel"
+        autoComplete="tel"
+        inputMode="tel"
       />
       <Field
         id="reg-name"

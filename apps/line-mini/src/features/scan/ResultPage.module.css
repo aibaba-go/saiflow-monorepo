@@ -299,72 +299,8 @@
   font-weight: 600;
 }
 
-/* ours: Table / JSON switch (FR-SYS-114) as the prototype's segmented control */
-.view-tabs {
-  display: flex;
-  gap: 2px;
-  padding: 3px;
-  border-radius: var(--control-radius);
-  background: var(--track);
-}
-
-.view-tab {
-  position: relative;
-  flex: 1 1 0;
-  min-height: 38px;
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  background: transparent;
-  transition: background-color 0.16s ease-out, color 0.16s ease-out;
-}
-
-.view-tab::before {
-  /* the hit area reaches the track padding: 38 + 3 + 3 = 44px (STD-008 touch target) */
-  content: "";
-  position: absolute;
-  inset: -3px -1px;
-}
-
-.view-tab.active {
-  background: var(--surface);
-  color: var(--brand-navy);
-  box-shadow: var(--shadow-card);
-}
-
-.view-tab:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 0;
-}
-
-.json-view {
-  margin: 0;
-  padding: 12px;
-  border-radius: var(--card-radius);
-  background: var(--surface);
-  box-shadow: var(--shadow-card);
-  font-size: 12px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-all;
-  max-height: 60vh;
-  overflow: auto;
-}
-
-.copy-btn {
-  align-self: flex-end;
-  min-height: var(--control-h);
-  padding: 0 4px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--primary);
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .primary-btn,
-  .view-tab {
+  .primary-btn {
     transition: none;
   }
 }

@@ -52,7 +52,7 @@ function tableCount(value: Json): number {
 const cx = (...n: (string | false | undefined)[]) => n.filter(Boolean).map((k) => s[k as string] ?? k).join(" ");
 
 /** main `ResultPage.vue` (FR-SYS-105, 106, 114, 115): chips and meta, the template button
- * and notices, the original, the editor with a Table / JSON switch, Reset and Continue
+ * and notices, the original, the table editor (no JSON view, FR-SYS-114), Reset and Continue
  * (save, then confirm). Free-form with no error when nothing fits (FR-OCR-019). */
 export function ResultPage() {
   const t = useT();
@@ -74,8 +74,6 @@ export function ResultPage() {
   const [switchTo, setSwitchTo] = useState<SwitchTarget | null>(null);
   const [lastApplied, setLastApplied] = useState<SwitchTarget | null>(null);
   const [confirmingReset, setConfirmingReset] = useState(false);
-  const [tab, setTab] = useState<"table" | "json">("table");
-  const [copied, setCopied] = useState<string | null>(null);
   const [pendingExpired, setPendingExpired] = useState(false);
   const autoConfirm = useRef(false);
   const data = result.data;
@@ -190,15 +188,6 @@ export function ResultPage() {
     setSelecting(false);
     if (dirty) setSwitchTo(target);
     else void doSwitch(target);
-  }
-
-  async function copyJson() {
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(value, null, 2));
-      setCopied(t("result.copied"));
-    } catch {
-      setCopied(t("result.copyFailed"));
-    }
   }
 
   const failed = job.data?.stage === "OCR_FAILED";
@@ -329,42 +318,17 @@ export function ResultPage() {
               </div>
             )}
 
-            <div className={s["view-tabs"]} role="tablist">
-              {(["table", "json"] as const).map((k) => (
-                <button
-                  type="button"
-                  key={k}
-                  role="tab"
-                  aria-selected={tab === k}
-                  className={cx("view-tab", tab === k && "active")}
-                  onClick={() => setTab(k)}
-                >
-                  {k === "table" ? t("result.tabTable") : t("result.tabJson")}
-                </button>
-              ))}
-            </div>
-
             <div className={s["data-area"]} aria-busy={pending}>
-              {tab === "table" ? (
-                <StructuredDataView
-                  value={value}
-                  groups={groups}
-                  schemaName={data.template?.name}
-                  missing={new Set(allMissing)}
-                  warnings={new Set((data.warnings ?? []).map((w) => w.path))}
-                  amountIssues={new Map((data.amount_issues ?? []).map((a) => [a.path, a.computed]))}
-                  editable={!locked && !busy && mayEdit}
-                  onChange={(next) => setDraft({ base: data.version, value: next })}
-                />
-              ) : (
-                <>
-                  <button type="button" className={s["copy-btn"]} onClick={() => void copyJson()}>
-                    {t("result.copyJson")}
-                  </button>
-                  {copied && <span role="status">{copied}</span>}
-                  <pre className={s["json-view"]}>{JSON.stringify(value, null, 2)}</pre>
-                </>
-              )}
+              <StructuredDataView
+                value={value}
+                groups={groups}
+                schemaName={data.template?.name}
+                missing={new Set(allMissing)}
+                warnings={new Set((data.warnings ?? []).map((w) => w.path))}
+                amountIssues={new Map((data.amount_issues ?? []).map((a) => [a.path, a.computed]))}
+                editable={!locked && !busy && mayEdit}
+                onChange={(next) => setDraft({ base: data.version, value: next })}
+              />
               {pending && (
                 <div className={s["mapping-mask"]} role="status">
                   <BrandLoading variant="inline" label={t("template.applying")} />

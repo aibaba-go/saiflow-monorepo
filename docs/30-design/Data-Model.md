@@ -3,7 +3,7 @@ doc_id: DES-002
 title: "SaiFlow — 数据模型"
 type: data-model
 status: active
-version: 2.15.0
+version: 2.15.1
 updated: 2026-11-13
 owner: Product Engineering
 source: "PRD-001 v3.3 §3, §4, §4.9; ADR-008"
@@ -94,7 +94,7 @@ erDiagram
 - **B-2d 已实现（`rebuild-notifications`）：** `DM-Notification` 与 `DM-PlanReminder`；提醒由独立的提醒进程定时产生，不写操作日志；两者都不随游客数据归集（游客不收提醒）。
 - **B-2c 已实现（`rebuild-plans-metering`）：** `DM-Plan`、`DM-Subscription`（保留历史）、`DM-FreeQuota`、续费与开通申请；扫描次数的预占记录（所属租户、关联识别、次数、来自免费额度与月配额的拆分、预占与退还时间）按记录逐笔计算用量，不另记操作日志；这些记录都不随游客数据归集。`DM-PlanReminder` 随 B-2d（见上）。
 - **B-2b 已实现（`rebuild-tenant-rbac`）：** `DM-Tenant` 增加组织；组织资料与企业认证存在组织上，建组织申请与企业认证申请各自留有申请记录；`DM-Membership` 每个成员一个角色，owner 不持有角色、拥有全部权限点，每个组织恰好一名 owner（可转让）；`DM-Role` 每个组织一个默认角色；`DM-Invitation` 只存凭据摘要；`DM-SystemSetting` 先有“组织开通套餐前的成员人数上限”一项。这些记录都不随游客数据归集。
-- **B-2a 已实现（`rebuild-identity`）：** `DM-User`（LINE 身份 ID 与邮箱作为唯一的关联身份直接存在用户上，邮箱统一小写；手机号不要求唯一）；`DM-Tenant` 只有个人租户与游客临时租户两类（组织随 B-2b）；`DM-OperationLog` 仅可追加（数据库触发器禁止修改与删除），每条记录带前一条的校验值，服务器命令 `audit-verify` 检查是否被改动；`DM-AdminAccount` 口令为 argon2id 哈希，连续 5 次错误锁定 15 分钟。`DM-UserIdentity` 在接入第三种身份（如 Google）时再拆成独立的表。
+- **B-2a 已实现（`rebuild-identity`）：** `DM-User`（LINE 身份 ID 与邮箱作为唯一的关联身份直接存在用户上，邮箱统一小写；手机号不要求唯一）；`DM-Tenant` 只有个人租户与游客临时租户两类（组织随 B-2b）；`DM-OperationLog` 仅可追加（数据库触发器禁止修改与删除），每条记录带前一条的校验值，服务器命令 `audit-verify` 检查是否被改动；`DM-AdminAccount` 口令为 argon2id 哈希，连续 5 次错误锁定 5 分钟（`line-result-table-admin-lock`，原 15 分钟）。`DM-UserIdentity` 在接入第三种身份（如 Google）时再拆成独立的表。
 - **`template-report-management` 已实现：** 模板（迁移 0014、0016）——`DM-DocumentTemplate` 增加归属（系统 / 个人 / 组织）、可编辑草稿与修订号（保存与生效分离，生效生成新的不可变版本）、系统模板授权对象（`template_grant_targets`）；`DM-TemplateSample` 记录样例生成过程，客户样例按页计量，平台 admin 样例不扣客户配额；样例原件与载荷最长 7 天，不进入长期备份。报表（迁移 0015、0017）——`DM-Report`、`DM-ReportSnapshot`、`DM-ReportTemplateRef`；报表只存配置，每次打开或手动刷新都按发布快照对正式业务数据（已确认结果版本）在数据库内实时聚合，不保存统计结果、不跨用户缓存；CSV 下载凭证为签名令牌，不落库。
 - 报表采用方式 A（实时查询正式业务数据）；方式 B 的报表汇总表（OQ-8）未实现，不登记实体。
 - **`admin-impersonate-user`（迁移 0018）：** 平台 admin 以用户身份进入 web-pc 用的一次性票据（`impersonation_tickets`：只存摘要、60 秒、单次）与登录会话上的代登录标记（`customer_sessions.impersonated_by_admin_id`；闲置 30 分钟、最长 2 小时、管理员停用即失效）。二者同属短期技术数据，不登记实体；签发与进入记入 `DM-OperationLog`。
@@ -155,6 +155,7 @@ erDiagram
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.15.1 | 2026-11-13 | Product Engineering | `line-result-table-admin-lock`：`DM-AdminAccount` 连续 5 次错误锁定改为 5 分钟（与客户账号相同；结构不变） |
 | 2.15.0 | 2026-11-13 | Product Engineering | `customer-email-login`：用户密码、错误次数与锁定；邮箱验证码用途（迁移 0019） |
 | 2.14.0 | 2026-11-12 | Product Engineering | `admin-impersonate-user`：代登录票据与会话代登录标记（短期技术数据，不登记实体） |
 | 2.13.0 | 2026-11-11 | Product Engineering | `template-report-management`：模板归属、草稿与修订号、系统模板授权、`DM-TemplateSample`；报表 `DM-Report`、`DM-ReportSnapshot`、`DM-ReportTemplateRef`（只存配置，实时查询正式业务数据） |

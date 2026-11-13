@@ -1,8 +1,9 @@
 """Platform admin back-office accounts (FR-SYS-019), separate from customer users.
 
 Accounts are managed only by server commands. Passwords are argon2id hashes. Five wrong
-passwords in a row lock the account for 15 minutes; a session ends after 30 idle
-minutes. Every login failure answers the same way, whatever the reason."""
+passwords in a row lock the account for 5 minutes (the same as customers, FR-SYS-156); a
+session ends after 30 idle minutes. Every login failure answers the same way, whatever the
+reason."""
 
 import asyncio
 import re
@@ -22,7 +23,7 @@ from app.services.session_service import hash_token, new_token
 ADMIN_COOKIE = "saiflow_admin_session"
 ADMIN_IDLE = timedelta(minutes=30)
 MAX_FAILED = 5
-LOCK_FOR = timedelta(minutes=15)
+LOCK_FOR = timedelta(minutes=5)
 MIN_PASSWORD = 12
 
 _hasher = PasswordHasher()

@@ -50,6 +50,13 @@ async def test_lock_after_five_failures(api, db, admin):  # AC-FR-SYS-019-03
     for _ in range(5):
         await _login(api, password="wrong-password-x")
     assert (await _login(api)).status_code == 401
+    locked_until = (
+        await db.execute(
+            text("select locked_until from admin_accounts where id = :i"), {"i": admin}
+        )
+    ).scalar_one()
+    # locked for 5 minutes, not 15
+    assert timedelta(minutes=4) < locked_until - utcnow() <= timedelta(minutes=5)
     await db.execute(
         text("update admin_accounts set locked_until = :t"), {"t": utcnow() - timedelta(seconds=1)}
     )

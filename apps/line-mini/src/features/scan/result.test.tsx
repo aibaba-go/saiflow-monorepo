@@ -188,21 +188,17 @@ describe("result page copied from main (FR-SYS-105, 114, 115)", () => {
     expect(screen.getByRole("button", { name: "Use generic result" })).toBeEnabled();
   });
 
-  it("json tab and copy (114-01)", async () => {
-    const writes: string[] = [];
-    Object.defineProperty(navigator, "clipboard", {
-      value: { writeText: (s: string) => (writes.push(s), Promise.resolve()) },
-      configurable: true,
-    });
+  it("only the table view: no Table / JSON switch, no JSON text or Copy (114-01)", async () => {
     mockApi({
       [`GET ${JOB}`]: () => json(200, job("VERIFYING")),
       [`GET ${JOB}/result`]: () => json(200, result(1, { document: { invoice_no: "IV1" } })),
     });
     page("result");
-    await userEvent.click(await screen.findByRole("tab", { name: "JSON" }));
-    await userEvent.click(screen.getByRole("button", { name: "Copy" }));
-    expect(await screen.findByText("Copied")).toBeInTheDocument();
-    expect(JSON.parse(writes[0]!)).toEqual({ document: { invoice_no: "IV1" } });
+    expect(await screen.findByDisplayValue("IV1")).toBeInTheDocument();
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "JSON" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copy" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/"invoice_no"/)).not.toBeInTheDocument();
   });
 
   it("field name checks (114-02)", async () => {
