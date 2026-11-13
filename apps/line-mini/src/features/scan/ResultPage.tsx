@@ -9,8 +9,9 @@ import { api, call } from "../../services/api";
 import { ApiError, errorMessage } from "../../services/errors";
 import { useSession } from "../../stores/session";
 import { formatBangkokDateTime } from "../../utils/format";
+import { handleUnauthenticated } from "../auth/session";
 import { can } from "../tenants/permissions";
-import { useCurrentTenant } from "../tenants/useCurrentTenant";
+import { resolveTenant, useCurrentTenant, useTenantChoice } from "../tenants/useCurrentTenant";
 import { applyTemplate, chooseGeneric, rerunJob, saveResult } from "./api";
 import { ChangeLog } from "./components/ChangeLog";
 import { FormDialog, fd } from "./components/FormDialog";
@@ -19,7 +20,7 @@ import { PageHeader } from "./components/PageHeader";
 import { StatusChip } from "./components/StatusChip";
 import { StructuredDataView } from "./components/StructuredDataView";
 import { TemplatePanel, type SwitchTarget } from "./components/TemplatePanel";
-import { confirmResult, scrollToField, wantsConfirm } from "./confirm";
+import { boundedResultRequest, confirmResult, scrollToField, wantsConfirm } from "./confirm";
 import { failureText, POLL_MS, useJob } from "./ProcessingPage";
 import s from "./ResultPage.module.css";
 import { isTable, type Group, type Json } from "./structured";
@@ -33,7 +34,7 @@ export function useResult(id: string) {
   const { tenant } = useCurrentTenant();
   return useQuery({
     queryKey: ["result", tenant?.tenant_id, id],
-    queryFn: () => call(api.GET("/api/v1/ocr/jobs/{job_id}/result", { params: { path: { job_id: id } } })),
+    queryFn: ({ signal }) => call(api.GET("/api/v1/ocr/jobs/{job_id}/result", { params: { path: { job_id: id } }, signal })),
     refetchInterval: (q) => (q.state.data?.mapping && RUNNING.has(q.state.data.mapping.status) ? POLL_MS : false),
   });
 }
@@ -76,6 +77,21 @@ export function ResultPage() {
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [pendingExpired, setPendingExpired] = useState(false);
   const autoConfirm = useRef(false);
+  const confirming = useRef(false);
+  const mounted = useRef(true);
+  const pageId = useRef(id);
+  useEffect(() => { pageId.current = id; }, [id]);
+  const resultKey = ["result", tenant?.tenant_id, id];
+  const samePage = () => {
+    const current = useSession.getState();
+    const currentTenant = resolveTenant(current.me, current.tenants, useTenantChoice.getState().id);
+    return mounted.current && pageId.current === id && currentTenant?.tenant_id === tenant?.tenant_id &&
+      current.me?.kind === me?.kind && current.me?.user_id === me?.user_id;
+  };
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   const data = result.data;
   const dirty = draft !== null && data !== undefined && draft.base === data.version;
   const value = (dirty ? draft.value : (data?.structured ?? {})) as Json;
@@ -100,45 +116,60 @@ export function ResultPage() {
 
   async function reload() {
     setDraft(null);
-    await client.invalidateQueries({ queryKey: ["result"] });
+    await client.invalidateQueries({ queryKey: resultKey, exact: true });
   }
 
   /** Save the edits as a draft: the version now current, or null when saving failed. */
-  async function saveDraft(): Promise<ResultOut | null> {
+  async function saveDraft(manageBusy = true): Promise<ResultOut | null> {
     if (!data) return null;
     if (!dirty) return data;
-    setSaving(true);
+    if (manageBusy) setSaving(true);
     setError(null);
     setNotice(null);
     try {
-      const saved = await saveResult(id, data.version, draft.value);
-      client.setQueriesData({ queryKey: ["result"] }, (old: ResultOut | undefined) =>
-        old && old.version === data.version ? saved : old,
-      );
+      const saved = await boundedResultRequest((signal) => saveResult(id, data.version, draft.value, false, signal, true));
+      if (!samePage()) return null;
+      await client.cancelQueries({ queryKey: resultKey, exact: true });
+      if (!samePage()) return null;
+      const current = client.getQueryData<ResultOut>(resultKey);
+      if (current && (current.confirmed || current.version > saved.version)) {
+        setNotice(t("scan.conflict"));
+        setDraft(null);
+        return null;
+      }
+      client.setQueryData(resultKey, saved);
       setDraft(null);
       return saved;
     } catch (e) {
+      if (!samePage()) return null;
+      if (e instanceof ApiError && e.status === 401) void handleUnauthenticated();
       if (e instanceof ApiError && e.code === "version_conflict") {
         setNotice(t("scan.conflict"));
         await reload();
       } else setError(e);
       return null;
     } finally {
-      setSaving(false);
+      if (manageBusy && mounted.current) setSaving(false);
     }
   }
 
   async function confirm() {
-    setExpired(false);
-    const saved = await saveDraft();
-    if (!saved) return;
+    if (confirming.current || saving || pending) return;
+    confirming.current = true;
     setSaving(true);
+    setExpired(false);
+    setError(null);
     try {
+      const saved = await saveDraft(false);
+      if (!saved || !samePage()) return;
       const out = await confirmResult(id, saved.version, (saved.structured ?? {}) as Json);
+      if (!samePage()) return;
       if (out.kind === "confirmed") {
+        await client.cancelQueries({ queryKey: resultKey, exact: true });
+        if (!samePage()) return;
+        client.setQueryData(resultKey, out.result);
         void client.invalidateQueries({ queryKey: ["jobs"] });
-        void client.invalidateQueries({ queryKey: ["job"] });
-        client.setQueriesData({ queryKey: ["result"] }, () => out.result);
+        void client.invalidateQueries({ queryKey: ["job", tenant?.tenant_id, id], exact: true });
         void client.invalidateQueries({ queryKey: ["reviewSummary"] });
         // into review: the final page says so (FR-SYS-106)
         const submitted = out.result.review?.stage === "PENDING_L1" || out.result.review?.stage === "PENDING_L2";
@@ -150,15 +181,18 @@ export function ResultPage() {
         if (out.error.code === "plan_expired") setExpired(true);
         setError(out.error);
       }
+    } catch (e) {
+      if (samePage()) setError(e);
     } finally {
-      setSaving(false);
+      confirming.current = false;
+      if (mounted.current) setSaving(false);
     }
   }
 
   // Back from LINE login or registration with a confirm waiting (AC-FR-SYS-106-01).
   const registered = me?.kind === "user" && me.registered;
   useEffect(() => {
-    if (!data || !registered || autoConfirm.current || !wantsConfirm(id)) return;
+    if (!data || !registered || busy || autoConfirm.current || !wantsConfirm(id)) return;
     autoConfirm.current = true;
     void confirm();
   });

@@ -45,3 +45,23 @@
 - CI 成功且远端分支仍为该 SHA 后，触发标准 [Deploy run 43423290149](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43423290149)（workflow_dispatch），精确 SHA 一致、结论 success。迁移前备份 `saiflow-20261113T121705Z.dump`（256531 bytes）已上传 `gs://saiflow-db-backup/`；本次无新迁移。日志包含 `remote-deploy: done (fa0e3fc…)`；三站健康及数据库端口外部关闭步骤通过。证据：`temp/line-register-prefill/register-fix-deploy-43423290149.json`、同名 `.log`。
 - 发布后只读核验（12:18:27 UTC）：三站健康均 HTTP 200、`status=ok`、`database=ok`、版本为完整 `fa0e3fc…`；LINE 首页及引用资源可读取，新脚本 `/assets/index-CPO6ULXA.js` 含 `reauthorize`、正式 LIFF URL、两种 token 错误码及待确认标记。`temp/line-register-prefill/register-fix-production-check.json` 结论 passed。只请求健康接口和静态资源，未创建 guest、注册账号、发送验证码、触发 OCR 或再次清理业务数据；未修改 GitHub 变量、LIFF 或频道配置。
 - 验证边界：本次发布与资源核验不能代替原生 LINE 验收；iPhone 实际未注册分流、重新授权、返回意图保留及注册后续确认仍需用户实机测试。此证据后续仅作独立文档提交，不重新部署文档 SHA。
+
+## 后续 S 级修复：注册后确认完成但停留核验页（2026-11-13）
+
+范围：用户反馈注册后 Continue 长时间等待、页面不变但后台已处理，并明确要求定向清理其测试账号后提交发布。遵循 FR-SYS-106/107、FR-VERIFY-006/009/015；不新增接口、实体、迁移，不改变确认门控或既有 SHALL。
+
+- 只读生产证据（`temp/line-confirm-resume-20261113/production-evidence.json`）：12:25:21 UTC 注册返回 200；12:25:24 首次确认 PATCH 返回 200、33ms，数据库已 CONFIRMED；12:26:10 再次 PATCH 返回 409、15ms。首次确认后未立即出现对应 job/result GET，12:26:52 才再读。可确认后端已完成，不能确认原生客户端为何未收到/应用响应；没有原生 JS 错误或响应交付证据。同租户 claim 与异租户 merge 的完整注册测试均通过，未将缓存清理推断为已证实根因。
+- 失败回归先行：`recovery-red.log` 为 4 failed / 22 passed，分别复现确认响应丢失、重复确认 `result_confirmed` 未进入最终页、无响应无限等待，以及前缀缓存写入污染其他任务/租户。
+- 修复：草稿与确认请求每次最多等待 10 秒（覆盖 fetch 和响应体解析），超时取消本地等待不代表服务器未提交。确认网络错误/超时或 `result_confirmed` 时，仅进行一次同任务只读 GET（也限 10 秒）；只有服务端返回 `confirmed=true` 才进入最终页，待复核保留提交提示。不自动重放 PATCH，不自动确认冲突版本；套餐、权限、必填与注册门控不变。草稿响应不确定时保留编辑并显示错误，不擅自继续确认。
+- 并发与缓存：自动续确认/手动点击共用同步防重入，保存到确认全程保持 busy；模板处理结束后仍可自动续确认。只更新精确 tenant/job 的结果缓存，取消迟到 GET；迟到草稿不能覆盖更高版本或已锁定缓存。身份、租户或页面变化后不应用旧响应，草稿/确认/恢复读取的迟到 401 不对新身份触发恢复。
+- 审查：首轮指出草稿未限时、迟到草稿覆盖缓存、busy 时提前消费自动确认、迟到 401 副作用，已补修复及对应测试。第二轮完整只读复核未发现阻止发布的问题。
+- 本地第一轮全量：37 个文件 / 423 项通过（`line-mini-full.log`）。审查补充回归后的最终全量：**37 个文件 / 427 项全部通过**，耗时 216.75 秒（`temp/line-confirm-resume-20261113/line-mini-final-full.log`）；eslint、`tsc --noEmit`、Vite 构建及 `git diff --check` 通过，最终构建产物位于 `temp/line-confirm-resume-20261113/build/`。`openspec validate line-register-prefill --strict` 通过。全部 API 测试均为模拟，不发送真实验证码或触发 OCR。
+
+### 第二次指定测试账号重置
+
+- 重新盘点目标为新注册 user 4 / 个人租户 95，无组织成员关系；未重放首次 user 3 / tenant 91 的清理。独立证据目录：`temp/account-reset-20261113-second/`。
+- 删除范围为 13 张表共 36 行：会话 3、验证码 1、导出 1、文件 5、免费额度 1、OCR 任务 4、原始结果 4、修改记录 1、结果版本 9、套餐 1、模板转换 4、个人租户 1、用户 1。5 个文件曾经游客租户迁移，按当前专属文件的精确 storage_path 选对象，不按旧租户前缀扩大删除。共享模板样例、系统审计、其他租户与配额记录均保留。
+- 独立备份 `/opt/saiflow/backups/account-reset-second-user4-tenant95-20261113T125853Z/`：database.dump 262170 bytes，SHA256 `56291708fcddefe70ad7fe629796bf84a73a3af50d94c390cfaa4e84da517cfd`；objects.tar 包含 11 个对象、1818390 bytes，SHA256 `53f7400d667f55380fa1b855cdb188b0fcf9998d53d8d4cb64833a99a90ec291`。数据库清单、对象逐项长度/摘要、归档读取均校验通过；完整 DELETE 后 ROLLBACK 排练恢复目标摘要。
+- 12:59–13:00 UTC 定向删除已完成。锁内复核归属、FK 闭包、备份后行摘要、对象共享引用及活动状态；提交前 42 张表非目标行数量/内容摘要一致、102 个 FK 完整。原始结果 append-only 绕过仅限该次专属 DELETE，立即恢复 origin，未改变持久权限/触发器。11 个原件/预览/导出对象按 generation 条件删除。
+- 后置只读核验（`verification.json`，13:00:10 UTC）：原 user/tenant、邮箱及 LINE 邮箱账号、验证码、全部旧 scope 与对象均为 0；非目标数据与对象状态未变，schema 0019、trigger_mode origin，三站健康 200/ok。验证没有重建账号或游客会话；受限备份保留供回滚。
+- 原生验收边界：自动化与静态/健康核验不能代替 iPhone LINE 实际注册和 Continue。需在本次发布后由用户关闭重开 LINE 再测。

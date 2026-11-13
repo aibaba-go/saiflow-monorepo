@@ -34,12 +34,14 @@ export const rerunJob = (jobId: string) => call(api.POST("/api/v1/ocr/jobs/{job_
 export const getResult = (jobId: string) =>
   call(api.GET("/api/v1/ocr/jobs/{job_id}/result", job(jobId)));
 
-export function saveResult(jobId: string, expectedVersion: number, structured: unknown, confirm = false) {
+export function saveResult(jobId: string, expectedVersion: number, structured: unknown, confirm = false, signal?: AbortSignal, own401 = false) {
   return call(
     api.PATCH("/api/v1/ocr/jobs/{job_id}/result", {
       ...job(jobId),
       body: { expected_version: expectedVersion, structured, confirm },
+      signal,
     }),
+    { own401 },
   );
 }
 

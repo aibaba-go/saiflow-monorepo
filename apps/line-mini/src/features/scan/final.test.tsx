@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEventLib from "@testing-library/user-event";
 import { act } from "react";
 import { Route, Routes } from "react-router-dom";
@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Shell } from "../../App";
 import { apiBaseUrl } from "../../config";
+import { setUnauthenticatedHandler } from "../../services/api";
 import { useLanguage } from "../../stores/language";
 import { testAuth } from "../../test/auth";
 import { fakeLiff } from "../../test/fakeLiff";
@@ -16,6 +17,7 @@ import { renderWithProviders } from "../../test/render";
 import { useTenantChoice } from "../tenants/useCurrentTenant";
 import { FinalResultPage } from "./FinalResultPage";
 import { ResultPage } from "./ResultPage";
+import { confirmResult } from "./confirm";
 
 const userEvent = userEventLib.setup({ pointerEventsCheck: 0 });
 const JOB = "/api/v1/ocr/jobs/j1";
@@ -105,16 +107,22 @@ describe("confirm (FR-SYS-106)", () => {
     expect(bodies.at(-1)!.structured.document.invoice_no).toBe("IV9");
   });
 
-  it("new LINE users see registration on Verify result, then confirm the saved draft (041-02, 042-01, 106-01)", async () => {
+  it.each([
+    ["claims the same guest tenant", GUEST.tenant_id],
+    ["merges into another personal tenant", USER.tenant_id],
+  ])("new LINE user %s, registers and confirms the saved draft (010, 041-02, 042-01, 106-01)", async (_flow, personalTenantId) => {
     useSession.getState().reset();
+    const registeredUser = { ...USER, tenant_id: personalTenantId };
+    const unregisteredUser = { ...UNREGISTERED, tenant_id: personalTenantId };
+    const personal = { ...PERSONAL, tenant_id: personalTenantId };
     let me = GUEST;
     let stored = result(1, { document: { invoice_no: "IV1", invoice_date: "2026-10-01" } });
     const api = mockApi({
       "GET /api/v1/me": () => json(200, me),
-      "GET /api/v1/me/tenants": () => json(200, [PERSONAL]),
+      "GET /api/v1/me/tenants": () => json(200, [personal]),
       "GET /api/v1/billing/usage": () => json(404, { code: "not_found" }),
-      "POST /api/v1/auth/line": () => { me = UNREGISTERED; return json(200, me); },
-      "POST /api/v1/me/registration": () => { me = USER; return json(200, me); },
+      "POST /api/v1/auth/line": () => { me = unregisteredUser; return json(200, me); },
+      "POST /api/v1/me/registration": () => { me = registeredUser; return json(200, me); },
       [`GET ${JOB}`]: () => json(200, job(stored.confirmed ? "CONFIRMED" : "VERIFYING")),
       [`GET ${JOB}/result`]: () => json(200, stored),
       [`PATCH ${JOB}/result`]: async (r) => {
@@ -152,6 +160,245 @@ describe("confirm (FR-SYS-106)", () => {
     const bodies = (await api.bodies(`PATCH ${JOB}/result`)) as { confirm: boolean; structured: unknown }[];
     expect(bodies).toHaveLength(2);
     expect(bodies[1]).toMatchObject({ confirm: true, structured: { document: { invoice_no: "IV9" } } });
+  });
+
+  it.each(["network", "result_confirmed"])("reads back a committed confirmation after %s and enters final without replay (106)", async (failure) => {
+    let stored = result(1, { document: { invoice_no: "IV1", invoice_date: "2026-10-01" } });
+    const api = mockApi({
+      [`GET ${JOB}`]: () => json(200, job(stored.confirmed ? "CONFIRMED" : "VERIFYING")),
+      [`GET ${JOB}/result`]: () => json(200, stored),
+      [`PATCH ${JOB}/result`]: () => {
+        stored = { ...stored, confirmed: true };
+        if (failure === "network") throw new TypeError("response lost after commit");
+        return json(409, { code: "result_confirmed" });
+      },
+    });
+    signedIn(USER, [PERSONAL]);
+    pages("/scan/jobs/j1/result");
+    await userEvent.click(await screen.findByRole("button", { name: "Continue" }));
+    expect(await screen.findByRole("heading", { name: "Final result" })).toBeInTheDocument();
+    expect(api.count(`PATCH ${JOB}/result`)).toBe(1);
+    expect(sessionStorage.getItem("saiflow.confirm-after-login.j1")).toBeNull();
+  });
+
+  it("confirmation only updates this tenant and job's cache (106, 015)", async () => {
+    let stored = result(1, { document: { invoice_no: "IV1", invoice_date: "2026-10-01" } });
+    mockApi({
+      [`GET ${JOB}`]: () => json(200, job(stored.confirmed ? "CONFIRMED" : "VERIFYING")),
+      [`GET ${JOB}/result`]: () => json(200, stored),
+      [`PATCH ${JOB}/result`]: () => {
+        stored = { ...stored, confirmed: true };
+        return json(200, stored);
+      },
+    });
+    signedIn(USER, [PERSONAL]);
+    const { queryClient } = pages("/scan/jobs/j1/result");
+    const other = result(1, { document: { invoice_no: "OTHER" } });
+    queryClient.setQueryData(["result", USER.tenant_id, "j2"], other);
+    queryClient.setQueryData(["result", ORG.tenant_id, "j1"], other);
+    // Keep the initial result editable so this is a real confirmation.
+    queryClient.setQueryData(["result", USER.tenant_id, "j1"], stored);
+    await userEvent.click(await screen.findByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Final result" });
+    expect(queryClient.getQueryData(["result", USER.tenant_id, "j2"])).toEqual(other);
+    expect(queryClient.getQueryData(["result", ORG.tenant_id, "j1"])).toEqual(other);
+  });
+
+  it("registration auto-confirm and manual Continue share one in-flight submission (106-01)", async () => {
+    signedIn(USER, [PERSONAL]);
+    sessionStorage.setItem("saiflow.confirm-after-login.j1", "1");
+    let finish!: (response: Response) => void;
+    const stored = result(1, { document: { invoice_no: "IV1", invoice_date: "2026-10-01" } });
+    const api = mockApi({
+      [`GET ${JOB}`]: () => json(200, job("CONFIRMED")),
+      [`GET ${JOB}/result`]: () => json(200, stored),
+      [`PATCH ${JOB}/result`]: () => new Promise<Response>((resolve) => { finish = resolve; }),
+    });
+    pages("/scan/jobs/j1/result");
+    await waitFor(() => expect(api.count(`PATCH ${JOB}/result`)).toBe(1));
+    const button = screen.getByRole("button", { name: "Saving…" });
+    expect(button).toBeDisabled();
+    await userEvent.click(button);
+    expect(api.count(`PATCH ${JOB}/result`)).toBe(1);
+    await act(async () => finish(json(200, { ...stored, confirmed: true })));
+    await screen.findByRole("heading", { name: "Final result" });
+  });
+
+  it("cancels a stale result read before installing the confirmed cache (106, 006)", async () => {
+    signedIn(USER, [PERSONAL]);
+    const stored = result(1, { document: { invoice_no: "IV1", invoice_date: "2026-10-01" } });
+    let finish!: (response: Response) => void;
+    let staleSignal!: AbortSignal;
+    let reads = 0;
+    const api = mockApi({
+      [`GET ${JOB}`]: () => json(200, job("CONFIRMED")),
+      [`GET ${JOB}/result`]: (request) => {
+        reads += 1;
+        if (reads === 2) {
+          staleSignal = request.signal;
+          return new Promise<Response>((resolve) => { finish = resolve; });
+        }
+        return json(200, reads === 1 ? stored : { ...stored, confirmed: true });
+      },
+      [`PATCH ${JOB}/result`]: () => json(200, { ...stored, confirmed: true }),
+    });
+    const { queryClient } = pages("/scan/jobs/j1/result");
+    await screen.findByRole("button", { name: "Continue" });
+    act(() => { void queryClient.refetchQueries({ queryKey: ["result", USER.tenant_id, "j1"], exact: true }); });
+    await waitFor(() => expect(api.count(`GET ${JOB}/result`)).toBe(2));
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Final result" });
+    expect(staleSignal.aborted).toBe(true);
+    await act(async () => finish(json(200, stored)));
+    expect(queryClient.getQueryData(["result", USER.tenant_id, "j1"])).toMatchObject({ confirmed: true });
+  });
+
+  it("does not read back under a different tenant after a late network failure (106)", async () => {
+    signedIn(USER, [PERSONAL, ORG]);
+    let fail!: (reason: Error) => void;
+    const api = mockApi({ [`PATCH ${JOB}/result`]: () => new Promise<Response>((_resolve, reject) => { fail = reject; }) });
+    const pending = confirmResult("j1", 1, {});
+    await waitFor(() => expect(fail).toBeTypeOf("function"));
+    useTenantChoice.getState().choose(ORG.tenant_id);
+    fail(new TypeError("late response loss"));
+    expect(await pending).toMatchObject({ kind: "error" });
+    expect(api.count(`GET ${JOB}/result`)).toBe(0);
+  });
+
+  it("resumes registration confirmation after template processing finishes (106-01)", async () => {
+    signedIn(USER, [PERSONAL]);
+    sessionStorage.setItem("saiflow.confirm-after-login.j1", "1");
+    const stored = result(1, { document: { invoice_no: "IV1", invoice_date: "2026-10-01" } });
+    const api = mockApi({
+      [`GET ${JOB}`]: () => json(200, job("CONFIRMED")),
+      [`GET ${JOB}/result`]: () => json(200, { ...stored, mapping: { status: "CONVERTING" } }),
+      [`PATCH ${JOB}/result`]: () => json(200, { ...stored, confirmed: true }),
+    });
+    const { queryClient } = pages("/scan/jobs/j1/result");
+    expect(await screen.findByRole("button", { name: "Continue" })).toBeDisabled();
+    expect(api.count(`PATCH ${JOB}/result`)).toBe(0);
+    act(() => { queryClient.setQueryData(["result", USER.tenant_id, "j1"], stored); });
+    await screen.findByRole("heading", { name: "Final result" });
+    expect(api.count(`PATCH ${JOB}/result`)).toBe(1);
+  });
+
+  it("a late draft cannot overwrite a newer locked result or confirm it (015, 006)", async () => {
+    signedIn(USER, [PERSONAL]);
+    const structured = { document: { invoice_no: "IV1", invoice_date: "2026-10-01" } };
+    let finish!: (response: Response) => void;
+    const api = mockApi({
+      [`GET ${JOB}`]: () => json(200, job("VERIFYING")),
+      [`GET ${JOB}/result`]: () => json(200, result(1, structured)),
+      [`PATCH ${JOB}/result`]: () => new Promise<Response>((resolve) => { finish = resolve; }),
+    });
+    const { queryClient } = pages("/scan/jobs/j1/result");
+    await userEvent.type(await screen.findByRole("textbox", { name: "Tax Invoice No." }), "9");
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(finish).toBeTypeOf("function"));
+    const newer = result(3, { document: { invoice_no: "NEWER" } }, true);
+    act(() => { queryClient.setQueryData(["result", USER.tenant_id, "j1"], newer); });
+    await act(async () => finish(json(200, result(2, structured))));
+    expect(queryClient.getQueryData(["result", USER.tenant_id, "j1"])).toEqual(newer);
+    expect(api.count(`PATCH ${JOB}/result`)).toBe(1);
+    expect(screen.queryByRole("textbox")).toBeNull();
+  });
+
+  it("a stalled draft ends waiting and never submits confirmation (106, 015)", async () => {
+    signedIn(USER, [PERSONAL]);
+    let signal!: AbortSignal;
+    const api = mockApi({
+      [`GET ${JOB}`]: () => json(200, job("VERIFYING")),
+      [`GET ${JOB}/result`]: () => json(200, result(1, { document: { invoice_no: "IV1" } })),
+      [`PATCH ${JOB}/result`]: (request) => { signal = request.signal; return new Promise<Response>(() => {}); },
+    });
+    pages("/scan/jobs/j1/result");
+    await userEvent.type(await screen.findByRole("textbox", { name: "Tax Invoice No." }), "9");
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+      expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
+      expect(screen.getByRole("textbox", { name: "Tax Invoice No." })).toHaveValue("IV19");
+      expect(api.count(`PATCH ${JOB}/result`)).toBe(1);
+      expect(signal.aborted).toBe(true);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("a late 401 never invokes recovery for a different identity (106, 055)", async () => {
+    signedIn(USER, [PERSONAL]);
+    let finish!: (response: Response) => void;
+    mockApi({ [`PATCH ${JOB}/result`]: () => new Promise<Response>((resolve) => { finish = resolve; }) });
+    const recover = vi.fn();
+    setUnauthenticatedHandler(recover);
+    try {
+      const pending = confirmResult("j1", 1, {});
+      await waitFor(() => expect(finish).toBeTypeOf("function"));
+      const another = { ...USER, user_id: 8, tenant_id: 80 };
+      signedIn(another, [{ ...PERSONAL, tenant_id: 80 }]);
+      finish(json(401, { code: "unauthenticated" }));
+      expect(await pending).toMatchObject({ kind: "error" });
+      expect(recover).not.toHaveBeenCalled();
+      expect(useSession.getState().me).toEqual(another);
+    } finally { testAuth(); }
+  });
+
+  it("a confirmation with no delivered response has a bounded read-only recovery (106)", async () => {
+    vi.useFakeTimers();
+    try {
+      signedIn(USER, [PERSONAL]);
+      let patchSignal: AbortSignal | undefined;
+      const api = mockApi({
+        [`PATCH ${JOB}/result`]: (request) => {
+          patchSignal = request.signal;
+          return new Promise<Response>(() => {});
+        },
+        [`GET ${JOB}/result`]: () => json(200, result(1, {}, true)),
+      });
+      const finished = vi.fn();
+      void confirmResult("j1", 1, {}).then(finished);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(finished).toHaveBeenCalledWith(expect.objectContaining({ kind: "confirmed" }));
+      expect(patchSignal?.aborted).toBe(true);
+      expect(api.count(`PATCH ${JOB}/result`)).toBe(1);
+      expect(api.count(`GET ${JOB}/result`)).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a stalled recovery also stops waiting without claiming success (106)", async () => {
+    vi.useFakeTimers();
+    try {
+      signedIn(USER, [PERSONAL]);
+      mockApi({
+        [`PATCH ${JOB}/result`]: () => { throw new TypeError("network down"); },
+        [`GET ${JOB}/result`]: () => new Promise<Response>(() => {}),
+      });
+      const finished = vi.fn();
+      void confirmResult("j1", 1, {}).then(finished);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(finished).toHaveBeenCalledWith(expect.objectContaining({ kind: "error" }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(["version_conflict", "plan_expired", "permission_denied"])("does not reconcile or replay the rejected %s confirmation (009, 015)", async (code) => {
+    signedIn(USER, [PERSONAL]);
+    const api = mockApi({ [`PATCH ${JOB}/result`]: () => json(code === "plan_expired" ? 402 : 409, { code }) });
+    expect(await confirmResult("j1", 1, {})).toMatchObject({ kind: "error", error: { code } });
+    expect(api.count(`GET ${JOB}/result`)).toBe(0);
+    expect(api.count(`PATCH ${JOB}/result`)).toBe(1);
+  });
+
+  it("does not navigate when read-back says the result is still unconfirmed (106)", async () => {
+    signedIn(USER, [PERSONAL]);
+    const api = mockApi({
+      [`PATCH ${JOB}/result`]: () => { throw new TypeError("network down"); },
+      [`GET ${JOB}/result`]: () => json(200, result(1, {}, false)),
+    });
+    expect(await confirmResult("j1", 1, {})).toMatchObject({ kind: "error", error: { code: "network" } });
+    expect(api.count(`PATCH ${JOB}/result`)).toBe(1);
   });
 
   it("missing required scrolls and marks (106-02)", async () => {
