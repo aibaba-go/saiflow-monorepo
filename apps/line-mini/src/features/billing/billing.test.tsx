@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEventLib from "@testing-library/user-event";
+import { Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { translate } from "../../i18n";
@@ -83,6 +84,22 @@ function plansApi(over: Record<string, (r: Request) => Response | Promise<Respon
 const card = (name: string) => screen.getByText(name).closest("[data-plan]") as HTMLElement;
 
 describe("plans page (FR-SYS-053)", () => {
+  it("links back to home, for guests too (there is no tab bar here)", async () => {
+    plansApi();
+    signedIn(GUEST, []);
+    renderWithProviders(
+      <Routes>
+        <Route path="/plans" element={<PlansPage />} />
+        <Route path="/" element={<div>home page</div>} />
+      </Routes>,
+      { route: "/plans" },
+    );
+    const back = await screen.findByRole("link", { name: "Back to home" });
+    expect(back).toHaveAttribute("href", "/");
+    await userEvent.click(back);
+    expect(await screen.findByText("home page")).toBeInTheDocument();
+  });
+
   it("shows prices or contact us (053-05)", async () => {
     plansApi();
     signedIn(USER, [PERSONAL, OWNER_ORG]);

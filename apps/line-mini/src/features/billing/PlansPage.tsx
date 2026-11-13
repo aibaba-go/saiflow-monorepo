@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Check, UserRound } from "lucide-react";
+import { Building2, Check, House, UserRound } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 import { BrandLoading } from "../../components/BrandLoading";
 import { ErrorText } from "../../components/ErrorText";
@@ -95,6 +96,19 @@ function PlanCard({
   );
 }
 
+/** Plans has no tab bar and is often opened straight from a link: a way back home. */
+function BackHome() {
+  const t = useT();
+  return (
+    <nav className="plans__nav">
+      <Link to="/" className="back-home">
+        <House size={16} strokeWidth={2.25} aria-hidden="true" />
+        <span>{t("plans.backHome")}</span>
+      </Link>
+    </nav>
+  );
+}
+
 /** Plans with prices, the current plan and renewal or upgrade applications (FR-SYS-053). */
 export function PlansPage() {
   const t = useT();
@@ -134,13 +148,20 @@ export function PlansPage() {
   };
 
   if (catalog.isPending || usage.isPending) return <BrandLoading label={t("common.loading")} />;
-  if (catalog.isError) return <ErrorText error={catalog.error} />;
+  if (catalog.isError)
+    return (
+      <div className="page">
+        <BackHome />
+        <ErrorText error={catalog.error} />
+      </div>
+    );
   const pending = applications.data?.find((a) => a.status === "pending");
   const current = usage.data?.active ? usage.data.plan?.code : null;
   const mayApply = isUser && can(tenant, "plan_apply");
 
   return (
     <div className="page">
+      <BackHome />
       <div>
         <h1 className="page__title plans__title">{t("plans.title")}</h1>
         <p className="plans__subtitle">{t(isUser ? "plans.subtitle" : "plans.guestNote")}</p>

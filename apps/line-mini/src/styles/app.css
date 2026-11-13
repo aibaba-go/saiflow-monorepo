@@ -138,6 +138,35 @@ body {
 .plans__title {
   margin-bottom: 2px;
 }
+/* Back to home (FR-SYS-053): a quiet pill above the title, 40px tall for the thumb. */
+.plans__nav {
+  display: flex;
+  margin: -4px 0 -2px;
+}
+.back-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 14px 0 12px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--brand-blue) 22%, transparent);
+  background: var(--brand-blue-soft);
+  color: var(--brand-navy);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+.back-home:active {
+  transform: scale(0.97);
+  background: color-mix(in srgb, var(--brand-blue) 16%, var(--surface));
+}
+.back-home:focus-visible {
+  outline: 2px solid var(--brand-blue);
+  outline-offset: 2px;
+}
 .plans__subtitle {
   margin: 0;
   font-size: 13px;

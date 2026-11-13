@@ -206,6 +206,7 @@ export const zh: Record<MessageKey, string> = {
   "invite.join": "加入",
   "my.plans": "套餐",
   "plans.title": "套餐",
+  "plans.backHome": "返回首页",
   "plans.contactUs": "联系我们",
   "plans.perMonth": "{price} / 月",
   "plans.perYear": "{price} / 年",

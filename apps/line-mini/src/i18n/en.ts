@@ -205,6 +205,7 @@ export const en = {
   "invite.join": "Join",
   "my.plans": "Plans",
   "plans.title": "Plans",
+  "plans.backHome": "Back to home",
   "plans.contactUs": "Contact us",
   "plans.perMonth": "{price} / month",
   "plans.perYear": "{price} / year",

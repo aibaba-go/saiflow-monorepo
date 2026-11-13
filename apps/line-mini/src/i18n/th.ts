@@ -206,6 +206,7 @@ export const th: Record<MessageKey, string> = {
   "invite.join": "เข้าร่วม",
   "my.plans": "แพ็กเกจ",
   "plans.title": "แพ็กเกจ",
+  "plans.backHome": "กลับหน้าหลัก",
   "plans.contactUs": "ติดต่อเรา",
   "plans.perMonth": "{price} / เดือน",
   "plans.perYear": "{price} / ปี",
