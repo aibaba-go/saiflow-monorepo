@@ -2,20 +2,51 @@
 FR-OCR-019, FR-OCR-020, FR-OCR-023; Review Focus 2 and 4). The LLM is faked over httpx."""
 
 import json
+from copy import deepcopy
 
 import httpx
 import pytest
 from pydantic import SecretStr
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 
 from app.db import create_sessionmaker
 from app.ocr import mapping_worker, worker
+from app.ocr.engines import EngineResult
 from tests.integration.db_fixtures import login
 from tests.integration.test_ocr_jobs import new_job
 from tests.integration.test_ocr_worker import FakeEngine
+from tests.integration.test_uploads import pdf
 
 JOBS = "/api/v1/ocr/jobs"
 RAW = {"เลขที่": "IV00000001", "วันที่": "01/10/2569", "ผู้ขาย": "บริษัท ตัวอย่าง จำกัด"}
+VISION_TEXT = "  ใบกำกับภาษี IV00000001\n中文原文 English\n12345678901234567890\n฿ 16,050.40\n"
+VISION_RAW = {
+    "pages": [
+        {"fullTextAnnotation": {"text": VISION_TEXT, "pages": [{"width": 100, "height": 200}]}},
+        {},
+    ]
+}
+FALLBACK = {"ocr_text": {"page_1": VISION_TEXT, "page_2": ""}}
+# Real HTTP JSON numbers: parsing and the worker must preserve these without a float hop.
+GENERIC_JSON = """{
+    "invoice_no": "IV1", "big": 12345678901234567890, "negative": -12345678901234567890,
+    "safe_max": 9007199254740991, "safe_min": -9007199254740991,
+    "above_max": 9007199254740992, "below_min": -9007199254740992, "zero": 0, "flag": false,
+    "seller": {"name": "บริษัท ตัวอย่าง จำกัด", "big": 12345678901234567890,
+        "negative": -12345678901234567890, "safe_max": 9007199254740991,
+        "safe_min": -9007199254740991, "above_max": 9007199254740992,
+        "below_min": -9007199254740992, "zero": 0, "flag": false, "optional": null},
+    "items": [{"big": 12345678901234567890, "negative": -12345678901234567890,
+        "safe_max": 9007199254740991, "safe_min": -9007199254740991,
+        "above_max": 9007199254740992, "below_min": -9007199254740992,
+        "zero": 0, "flag": false, "amount": 123456789012.30}],
+    "summary": {"net_total": "123456789012.30", "lines": []}
+}"""
+GENERIC_OUTPUT = json.loads(GENERIC_JSON, parse_float=str)
+for _node in (GENERIC_OUTPUT, GENERIC_OUTPUT["seller"], GENERIC_OUTPUT["items"][0]):
+    for _key in ("big", "negative", "above_max", "below_min"):
+        _node[_key] = str(_node[_key])
 TAX_OUTPUT = {
     "document": {"invoice_no": "IV00000001", "invoice_date": "01/10/2569", "stray": "x"},
     "seller": {"name": "บริษัท ตัวอย่าง จำกัด", "tax_id": "0105500000001"},
@@ -35,10 +66,12 @@ class FakeLlm:
     def __init__(self):
         self.replies: dict[str, list] = {"match": [], "convert": [], "generic": []}
         self.calls: list[str] = []
+        self.requests: list[tuple[str, dict]] = []
         self.transport = httpx.MockTransport(self._handle)
 
     def _handle(self, request: httpx.Request) -> httpx.Response:
-        system = json.loads(request.content)["messages"][0]["content"]
+        body = json.loads(request.content)
+        system = body["messages"][0]["content"]
         stage = (
             "match"
             if "单据分类助手" in system
@@ -47,11 +80,110 @@ class FakeLlm:
             else "convert"
         )
         self.calls.append(stage)
+        self.requests.append((stage, body))
         if not self.replies[stage]:
             raise AssertionError(f"unexpected {stage} call")
         reply = self.replies[stage].pop(0)
+        if isinstance(reply, Exception):
+            raise reply
+        if isinstance(reply, httpx.Response):
+            return reply
         content = reply if isinstance(reply, str) else json.dumps(reply, ensure_ascii=False)
         return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
+
+
+class PayloadEngine:
+    """Vendor-shaped synthetic payloads, never a TextIn llm_json stand-in for Vision."""
+
+    def __init__(self, name, raw=None):
+        self.name, self.calls = name, 0
+        self.raw = deepcopy(VISION_RAW if name == "google_vision" else RAW) if raw is None else raw
+
+    def run(self, *, kind, content, filename, pages):
+        self.calls += 1
+        return EngineResult(
+            engine=self.name,
+            raw=deepcopy(self.raw),
+            structured=None if self.name == "google_vision" else deepcopy(self.raw),
+            page_count=pages,
+        )
+
+
+async def raw_result(db, job_id):
+    return (
+        await db.execute(
+            text("select engine, payload from ocr_raw_results where job_id=:j"), {"j": job_id}
+        )
+    ).one()
+
+
+def assert_document_input(llm, stage, raw):
+    requests = [body for name, body in llm.requests if name == stage]
+    assert requests, llm.calls
+    for body in requests:
+        user = body["messages"][1]["content"]
+        document = user.split("<<<DOCUMENT\n", 1)[1].split("\nDOCUMENT>>>", 1)[0]
+        assert json.loads(document) == raw
+
+
+async def select_primary(db, primary):
+    backup = "textin" if primary == "google_vision" else "google_vision"
+    for key, value in (("ocr_primary_engine", primary), ("ocr_backup_engine", backup)):
+        await db.execute(
+            text(
+                "insert into system_settings (key, value) values (:k, to_jsonb(cast(:v as text))) "
+                "on conflict (key) do update set value=excluded.value"
+            ),
+            {"k": key, "v": value},
+        )
+    await db.commit()
+
+
+async def vision_job(
+    api,
+    store,
+    sm,
+    settings,
+    llm,
+    db,
+    *,
+    output=GENERIC_JSON,
+    no_llm=False,
+    disable_templates=True,
+    headers=None,
+):
+    """Real Vision pages -> actual MockTransport refine call -> worker persistence."""
+    await select_primary(db, "google_vision")
+    if disable_templates:
+        await db.execute(text("update document_templates set status='DISABLED'"))
+        await db.commit()
+    if no_llm:
+        settings = settings.model_copy(update={"llm_api_key": None})
+    else:
+        llm.replies["generic"] = [output]
+    response = await new_job(api, pdf(2), "synthetic.pdf", headers=headers)
+    assert response.status_code == 201, response.text
+    job = response.json()
+    vision, textin = PayloadEngine("google_vision"), PayloadEngine("textin")
+    assert await worker.run_once(
+        sm,
+        store,
+        settings,
+        engines={vision.name: vision, textin.name: textin},
+        sleep=_no_sleep,
+        llm_transport=llm.transport,
+    )
+    assert (vision.calls, textin.calls) == (1, 0)
+    assert tuple(await raw_result(db, job["id"])) == ("google_vision", VISION_RAW)
+    if no_llm:
+        assert llm.calls == []
+    else:
+        assert llm.calls == ["generic"]
+        body = llm.requests[0][1]
+        assert "response_format" not in body
+        user = body["messages"][1]["content"]
+        assert json.loads(user.split("\n\n", 1)[1]) == {"pages": [VISION_TEXT, ""]}
+    return job
 
 
 @pytest.fixture
@@ -86,12 +218,16 @@ async def _no_sleep(_s):
 async def recognised(api, store, sm, settings, llm, structured=None, engine="textin"):
     """A job recognised by a fake engine; returns the job JSON."""
     job = (await new_job(api)).json()
-    fake = FakeEngine(engine, structured=RAW if structured is None else structured)
-    if structured == {}:
-        fake.structured = None
-    await worker.run_once(
+    if engine == "google_vision":
+        fake = PayloadEngine(engine)
+    else:
+        fake = FakeEngine(engine, structured=RAW if structured is None else structured)
+        if structured == {}:
+            fake.structured = None
+    assert await worker.run_once(
         sm, store, settings, engines={engine: fake}, sleep=_no_sleep, llm_transport=llm.transport
     )
+    assert fake.calls == 1
     return job
 
 
@@ -364,11 +500,20 @@ async def test_generic_result_textin(api, line, store, sm, ai_settings, llm, db)
 
 
 async def test_vision_generic_built_by_llm(api, line, store, sm, ai_settings, llm, db):
+    # AC-FR-OCR-025-01/03/05: actual Vision pages and actual JSON decoding.
     await login(api, line)
-    llm.replies["generic"] = ['{"document": {"invoice_no": "IV9", "total": 12.50}}']  # as sent
-    job = await recognised(api, store, sm, ai_settings, llm, structured={}, engine="google_vision")
-    _, structured, _, _, _ = await _current(db, job["id"])
-    assert structured == {"document": {"invoice_no": "IV9", "total": "12.50"}}  # decimals as text
+    job = await vision_job(api, store, sm, ai_settings, llm, db)
+    _, structured, mapping_id, _, pending = await _current(db, job["id"])
+    assert structured == GENERIC_OUTPUT and mapping_id is None and pending is None
+    response = await api.get(f"{JOBS}/{job['id']}/result")
+    assert response.status_code == 200, response.text
+    assert response.json()["structured"] == GENERIC_OUTPUT
+    for node in (structured, structured["seller"], structured["items"][0]):
+        assert type(node["safe_max"]) is int and type(node["safe_min"]) is int
+        assert type(node["zero"]) is int and node["flag"] is False
+        for key in ("big", "negative", "above_max", "below_min"):
+            assert type(node[key]) is str
+    assert await _stage(api, job["id"]) == "VERIFYING"
 
 
 async def test_version_records_template_version(api, line, store, sm, ai_settings, llm, db):
@@ -528,3 +673,165 @@ async def test_failure_card_clears_after_recovering(api, line, store, sm, ai_set
     llm.replies["convert"] = [{"document": {"invoice_no": "X"}}]  # no net_total: fails
     await mapping_pass(sm, ai_settings, llm)
     assert (await api.get(f"{JOBS}/{job['id']}/result")).json()["mapping"]["status"] == "FAILED"
+
+
+@pytest.mark.parametrize(
+    "output",
+    [
+        None,
+        '"text"',
+        "42",
+        "false",
+        {},
+        [],
+        {"group": {"empty": "", "optional": None}},
+        {"items": ["not-an-object"]},
+        {"group": {"nested": {"name": "A"}}},
+        {"items": [{"cell": {"nested": "A"}}]},
+        {"items": [{"cell": [1]}]},
+        "not JSON",
+        httpx.Response(503, text="synthetic outage"),
+        httpx.ReadTimeout("synthetic timeout"),
+    ],
+    ids=[
+        "null",
+        "string",
+        "number",
+        "boolean",
+        "empty-object",
+        "root-array",
+        "empty-group",
+        "invalid-row",
+        "nested-group",
+        "nested-cell",
+        "array-cell",
+        "parse",
+        "http",
+        "timeout",
+    ],
+)
+async def test_vision_invalid_llm_uses_original_pages_no_extra_ocr(
+    api, line, store, sm, ai_settings, llm, db, output
+):
+    # AC-FR-OCR-025-02, AC-FR-OCR-026-01/02.
+    await login(api, line)
+    job = await vision_job(api, store, sm, ai_settings, llm, db, output=output)
+    response = await api.get(f"{JOBS}/{job['id']}/result")
+    assert response.status_code == 200, response.text
+    assert response.json()["structured"] == FALLBACK
+    assert response.json()["template"] is None
+    assert await _stage(api, job["id"]) == "VERIFYING"
+    assert tuple(await raw_result(db, job["id"])) == ("google_vision", VISION_RAW)
+
+
+async def test_vision_without_llm_key_uses_original_pages(
+    api, line, store, sm, app_settings, llm, db
+):
+    # AC-FR-OCR-026-01: no LLM key does not discard OCR text or ask another OCR engine.
+    await login(api, line)
+    job = await vision_job(api, store, sm, app_settings, llm, db, no_llm=True)
+    response = await api.get(f"{JOBS}/{job['id']}/result")
+    assert response.status_code == 200, response.text
+    assert response.json()["structured"] == FALLBACK and llm.calls == []
+
+
+@pytest.mark.parametrize("date", ["01/10/2569", "01.10.2026"])
+async def test_both_primary_engines_convert_same_template_using_unchanged_raw(
+    api, line, store, sm, ai_settings, llm, db, app_role_db, date
+):
+    # AC-FR-OCR-025-04, FR-OCR-016/018: the same synthetic PDF, distinct vendor raw.
+    await login(api, line)
+    versions = await _versions(db)
+    outputs = []
+    document = pdf(2)
+    for engine in ("textin", "google_vision"):
+        await select_primary(db, engine)
+        primary = PayloadEngine(engine)
+        other = PayloadEngine("google_vision" if engine == "textin" else "textin")
+        llm.replies["generic"] = [GENERIC_JSON] if engine == "google_vision" else []
+        job = (await new_job(api, document, "same-synthetic.pdf")).json()
+        assert await worker.run_once(
+            sm,
+            store,
+            ai_settings,
+            engines={engine: primary, other.name: other},
+            sleep=_no_sleep,
+            llm_transport=llm.transport,
+        )
+        assert (primary.calls, other.calls) == (1, 0)
+        llm.replies["match"] = [
+            {"ranking": [{"template_version_id": versions["tax_invoice"], "score": 0.93}]}
+        ]
+        converted = deepcopy(TAX_OUTPUT)
+        converted["document"]["invoice_date"] = date
+        converted["summary"]["net_total"] = "฿ 16,050.4"
+        llm.replies["convert"] = [converted]
+        request_start = len(llm.requests)
+        assert await mapping_pass(sm, ai_settings, llm)
+        calls = FakeLlm()
+        calls.requests = llm.requests[request_start:]
+        expected_raw = RAW if engine == "textin" else VISION_RAW
+        assert_document_input(calls, "match", expected_raw)
+        assert_document_input(calls, "convert", expected_raw)
+        response = await api.get(f"{JOBS}/{job['id']}/result")
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["template"]["template_version_id"] == versions["tax_invoice"]
+        assert body["structured"]["document"]["invoice_date"] == "2026-10-01"
+        assert body["structured"]["summary"]["net_total"] == "16050.40"
+        assert body["structured"]["goods"]["line_items"][0]["quantity"] == "1200"
+        assert body["structured"]["goods"]["line_items"][0]["seq"] == 1
+        outputs.append(body["structured"])
+        assert tuple(await raw_result(db, job["id"])) == (engine, expected_raw)
+        for sql in (
+            "update ocr_raw_results set payload='{}' where job_id=:j",
+            "delete from ocr_raw_results where job_id=:j",
+        ):
+            with pytest.raises(DBAPIError):
+                await app_role_db.execute(text(sql), {"j": job["id"]})
+            await app_role_db.rollback()
+        assert tuple(await raw_result(db, job["id"])) == (engine, expected_raw)
+    assert outputs[0] == outputs[1]  # identical paths and normalization, not vendor OCR quality
+
+
+async def test_fallback_edit_then_manual_template_uses_raw_not_edited_text(
+    api, line, store, sm, ai_settings, llm, db, app_role_db
+):
+    # AC-FR-OCR-026-03: a fallback is not the input to a later template conversion.
+    await login(api, line)
+    versions = await _versions(db)
+    job = await vision_job(
+        api, store, sm, ai_settings, llm, db, output="null", disable_templates=False
+    )
+    llm.replies["match"] = [
+        {"ranking": [{"template_version_id": versions["tax_invoice"], "score": 0.40}]}
+    ]
+    assert await mapping_pass(sm, ai_settings, llm)
+    assert_document_input(llm, "match", VISION_RAW)
+    body = (await api.get(f"{JOBS}/{job['id']}/result")).json()
+    edited = {"ocr_text": {"page_1": "edited, not vendor OCR", "page_2": ""}}
+    saved = await api.patch(
+        f"{JOBS}/{job['id']}/result",
+        json={"expected_version": body["version"], "structured": edited},
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["version"] == body["version"] + 1
+    response = await api.post(
+        f"{JOBS}/{job['id']}/template", json={"template_version_id": versions["tax_invoice"]}
+    )
+    assert response.status_code == 202, response.text
+    llm.replies["convert"] = [TAX_OUTPUT]
+    assert await mapping_pass(sm, ai_settings, llm)
+    assert_document_input(llm, "convert", VISION_RAW)
+    assert tuple(await raw_result(db, job["id"])) == ("google_vision", VISION_RAW)
+    for sql in (
+        "update ocr_raw_results set payload='{}' where job_id=:j",
+        "delete from ocr_raw_results where job_id=:j",
+    ):
+        with pytest.raises(DBAPIError):
+            await app_role_db.execute(text(sql), {"j": job["id"]})
+        await app_role_db.rollback()
+    assert (await api.post(f"{JOBS}/{job['id']}/generic")).status_code == 200
+    restored = (await api.get(f"{JOBS}/{job['id']}/result")).json()
+    assert restored["structured"] == edited and restored["version"] == saved.json()["version"]
+    assert llm.calls == ["generic", "match", "convert"]

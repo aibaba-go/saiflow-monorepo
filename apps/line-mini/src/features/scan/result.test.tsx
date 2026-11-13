@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEventLib from "@testing-library/user-event";
 import { Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -328,6 +328,138 @@ describe("result page copied from main (FR-SYS-105, 114, 115)", () => {
     await act(() => vi.advanceTimersByTimeAsync(10 * 60_000 + 10));
     expect(await screen.findByText(/Still processing after 10 minutes/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Use generic result" })).toBeInTheDocument();
+  });
+});
+
+describe("OCR text fallback and generic JSON (FR-OCR-025/026)", () => {
+  const original = "ภาษาไทย 中文 English\n12345678901234567890.00\n  unchanged  ";
+  it.each(["en", "th", "zh"] as const)("%s: multiline fallback saves and reopens, with explicit empty page", async (lang) => {
+    useLanguage.getState().setLang(lang);
+    const tr = (key: Parameters<typeof translate>[1], vars?: Record<string, string | number>) => translate(lang, key, vars);
+    let stored = result(1, { ocr_text: { page_1: original, page_2: "", page_3: "last\npage" } }, { template: null });
+    const api = mockApi({
+      [`GET ${JOB}`]: () => json(200, job("VERIFYING")),
+      [`GET ${JOB}/result`]: () => json(200, stored),
+      [`PATCH ${JOB}/result`]: async (r) => {
+        const body = (await r.json()) as { structured: unknown };
+        stored = result(2, body.structured, { template: null });
+        return json(200, stored);
+      },
+    });
+    const view = page("result");
+    const first = await screen.findByRole("textbox", { name: tr("result.rawPage", { n: 1 }) });
+    expect(first.tagName).toBe("TEXTAREA");
+    expect(first).toHaveValue(original);
+    expect(screen.getByText(tr("result.rawTitle"))).toBeInTheDocument();
+    expect(screen.getByText(tr("result.rawNote"))).toBeInTheDocument();
+    expect(screen.getByText(tr("result.rawEmptyPage"))).toBeInTheDocument();
+    expect(screen.getAllByRole("textbox").map((el) => (el as HTMLTextAreaElement).value)).toEqual([original, "", "last\npage"]);
+    fireEvent.change(first, { target: { value: `${original}\nnew line` } });
+    await userEvent.click(screen.getByRole("button", { name: tr("result.saveDraft") }));
+    await waitFor(() => expect(api.count(`PATCH ${JOB}/result`)).toBe(1));
+    expect(await api.bodies(`PATCH ${JOB}/result`)).toEqual([
+      { expected_version: 1, structured: { ocr_text: { page_1: `${original}\nnew line`, page_2: "", page_3: "last\npage" } }, confirm: false },
+    ]);
+    view.unmount();
+    const reopened = page("result");
+    expect(await screen.findByRole("textbox", { name: tr("result.rawPage", { n: 1 }) })).toHaveValue(`${original}\nnew line`);
+    reopened.unmount();
+    stored = { ...stored, confirmed: true };
+    page("result");
+    const readonly = await screen.findByLabelText(tr("result.rawPage", { n: 1 }));
+    expect(readonly.textContent).toBe(`${original}\nnew line`);
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.getByText(tr("result.rawNote"))).toBeInTheDocument();
+  });
+
+  it.each([{ ocr_text: {} }, { ocr_text: { page_1: "", page_2: " \n " } }])("no readable text is explicit, never invented: %j", async (data) => {
+    mockApi({
+      [`GET ${JOB}`]: () => json(200, job("VERIFYING")),
+      [`GET ${JOB}/result`]: () => json(200, result(1, data, { template: null })),
+    });
+    const view = page("result");
+    expect(await screen.findByText(translate("en", "result.rawEmpty"))).toBeInTheDocument();
+    view.unmount();
+    mockApi({
+      [`GET ${JOB}`]: () => json(200, job("CONFIRMED")),
+      [`GET ${JOB}/result`]: () => json(200, result(1, data, { template: null, confirmed: true })),
+    });
+    page("result");
+    expect(await screen.findByText(translate("en", "result.rawEmpty"))).toBeInTheDocument();
+  });
+
+  it.each([
+    { ocr_text: { page_1: "ordinary" }, seller: "A" },
+    { ocr_text: { notes: "ordinary" } },
+    { ocr_text: { page_1: 12 } },
+    { ocr_text: "ordinary" },
+  ])("ordinary fields get no fallback note or multiline control: %j", async (data) => {
+    mockApi({
+      [`GET ${JOB}`]: () => json(200, job("VERIFYING")),
+      [`GET ${JOB}/result`]: () => json(200, result(1, data, { template: null })),
+    });
+    page("result");
+    await screen.findAllByRole("textbox");
+    expect(screen.queryByText(translate("en", "result.rawNote"))).toBeNull();
+    expect(document.querySelector("textarea")).toBeNull();
+  });
+
+  it("does not treat template fields as fallback", async () => {
+    const groups = [{ key: "ocr_text", name: "Template", items: [{ kind: "field", key: "page_1", name: "Original" }] }];
+    mockApi({
+      [`GET ${JOB}`]: () => json(200, job("VERIFYING")),
+      [`GET ${JOB}/result`]: () => json(200, result(1, { ocr_text: { page_1: original } }, { template: { template_version_id: 3, name: "Template", groups } })),
+    });
+    page("result");
+    expect((await screen.findByRole("textbox", { name: "Original" })).tagName).toBe("INPUT");
+    expect(screen.queryByText(translate("en", "result.rawNote"))).toBeNull();
+  });
+
+  it("real JSON keeps safe integers, exact big strings, false and null in read/edit/save body", async () => {
+    const data = JSON.parse('{"safe":9007199254740991,"safe_negative":-9007199254740991,"big":"12345678901234567890","outside":"9007199254740992","negative_outside":"-9007199254740992","zero":0,"flag":false,"optional":null,"root_rows":[{"root_large":"-12345678901234567890","root_safe":9007199254740991,"root_flag":false,"root_optional":null}],"summary":{"big_negative":"-12345678901234567890","safe":9007199254740991,"outside":"9007199254740992","flag":false,"optional":null,"lines":[{"large":"12345678901234567890","negative":"-9007199254740992","safe":-9007199254740991,"flag":false,"optional":null}]}}');
+    let stored = result(1, data, { template: null, confirmed: true });
+    const api = mockApi({
+      [`GET ${JOB}`]: () => json(200, job("VERIFYING")),
+      [`GET ${JOB}/result`]: () => json(200, stored),
+      [`PATCH ${JOB}/result`]: async (r) => {
+        const body = (await r.json()) as { structured: unknown };
+        stored = result(2, body.structured, { template: null });
+        return json(200, stored);
+      },
+    });
+    const readonly = page("result");
+    expect(await screen.findByLabelText("big")).toHaveTextContent("12345678901234567890");
+    expect(screen.getByLabelText("safe_negative")).toHaveTextContent("-9007199254740991");
+    expect(screen.getByLabelText("negative_outside")).toHaveTextContent("-9007199254740992");
+    expect(screen.getByLabelText("big_negative")).toHaveTextContent("-12345678901234567890");
+    expect(screen.getByLabelText("large")).toHaveTextContent("12345678901234567890");
+    expect(screen.getByLabelText("root_large")).toHaveTextContent("-12345678901234567890");
+    expect(screen.getByLabelText("root_safe")).toHaveTextContent("9007199254740991");
+    expect(screen.getByLabelText("root_flag")).toHaveTextContent("false");
+    expect(screen.getAllByLabelText("flag").every((el) => el.textContent === "false")).toBe(true);
+    readonly.unmount();
+    stored = { ...stored, confirmed: false };
+    page("result");
+    const big = await screen.findByRole("textbox", { name: "big" });
+    expect(big).toHaveValue("12345678901234567890");
+    expect(screen.getByRole("textbox", { name: "safe_negative" })).toHaveValue("-9007199254740991");
+    expect(screen.getByRole("textbox", { name: "root_optional" })).toHaveValue("");
+    expect(screen.getAllByRole("textbox", { name: "safe" }).map((el) => (el as HTMLInputElement).value)).toEqual(["9007199254740991", "9007199254740991", "-9007199254740991"]);
+    fireEvent.change(big, { target: { value: "12345678901234567891" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "big_negative" }), { target: { value: "-12345678901234567891" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "large" }), { target: { value: "12345678901234567892" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "root_large" }), { target: { value: "-12345678901234567892" } });
+    await userEvent.tab();
+    await userEvent.click(screen.getByRole("button", { name: "Save draft" }));
+    await waitFor(() => expect(api.count(`PATCH ${JOB}/result`)).toBe(1));
+    const [body] = (await api.bodies(`PATCH ${JOB}/result`)) as { structured: Record<string, unknown> }[];
+    expect(body!.structured).toEqual({
+      ...data, big: "12345678901234567891",
+      root_rows: [{ ...data.root_rows[0], root_large: "-12345678901234567892" }],
+      summary: { ...data.summary, big_negative: "-12345678901234567891", lines: [{ ...data.summary.lines[0], large: "12345678901234567892" }] },
+    });
+    expect(body!.structured.flag).toBe(false);
+    expect(body!.structured.safe).toBe(9007199254740991);
   });
 });
 

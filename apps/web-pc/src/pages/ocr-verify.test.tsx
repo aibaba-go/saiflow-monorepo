@@ -267,6 +267,78 @@ describe("verify (FR-SYS-129)", () => {
   });
 });
 
+describe("verify: generic JSON and OCR text (FR-OCR-025/026)", () => {
+  it("edits multiline fallback, saves, reopens and confirms without changing empty pages", async () => {
+    const initial = { ocr_text: { page_1: "ภาษาไทย 中文 English\n12345678901234567890.00", page_2: "" } };
+    const { api, state } = verifyApi();
+    state.results.A = result(initial, { template: null });
+    api.set("PATCH /api/v1/ocr/jobs/A/result", async (r) => {
+      const body = (await r.json()) as { structured: Res | null; confirm: boolean };
+      state.results.A = result(body.structured ?? (state.results.A!.structured as Res), {
+        template: null, version: body.confirm ? 3 : 2, confirmed: body.confirm,
+        review: { stage: body.confirm ? "CONFIRMED" : "NONE", required_level: null, records: [], last_return: null },
+      });
+      if (body.confirm) state.list = state.list.filter((j) => j.id !== "A");
+      return json(200, state.results.A);
+    });
+    const view = renderAt("/verify/A");
+    const text = await field("Page 1");
+    expect(text.tagName).toBe("TEXTAREA");
+    expect(screen.getByText(en("ocr.rawNote"))).toBeInTheDocument();
+    fireEvent.change(text, { target: { value: `${initial.ocr_text.page_1}\n  edited  ` } });
+    await userEvent.click(screen.getByRole("button", { name: en("ocr.saveDraft") }));
+    await waitFor(() => expect(api.count("PATCH /api/v1/ocr/jobs/A/result")).toBe(1));
+    const expected = { ocr_text: { page_1: `${initial.ocr_text.page_1}\n  edited  `, page_2: "" } };
+    expect(await api.bodies("PATCH /api/v1/ocr/jobs/A/result")).toEqual([
+      { expected_version: 1, structured: expected, confirm: false },
+    ]);
+    await waitFor(() => expect(state.results.A!.version).toBe(2));
+    view.unmount();
+    renderAt("/verify/A");
+    expect(await field("Page 1")).toHaveValue(expected.ocr_text.page_1);
+    expect(await field("Page 2")).toHaveValue("");
+    await userEvent.click(screen.getByRole("button", { name: en("ocr.confirm") }));
+    await screen.findByText(en("ocr.confirmed"));
+    expect(await api.bodies("PATCH /api/v1/ocr/jobs/A/result")).toEqual([
+      { expected_version: 1, structured: expected, confirm: false },
+      { expected_version: 2, structured: null, confirm: true },
+    ]);
+    expect(state.results.A!.structured).toEqual(expected);
+  });
+
+  it("real JSON decoding keeps safe numbers, exact large strings, bool and null across root/group/table edits", async () => {
+    const data = JSON.parse('{"safe":9007199254740991,"safe_negative":-9007199254740991,"big":"12345678901234567890","outside":"9007199254740992","negative_outside":"-9007199254740992","zero":0,"flag":false,"optional":null,"root_rows":[{"root_large":"-12345678901234567890","root_safe":9007199254740991,"root_flag":false,"root_optional":null}],"summary":{"big_negative":"-12345678901234567890","safe":9007199254740991,"outside":"9007199254740992","flag":false,"optional":null,"lines":[{"large":"12345678901234567890","negative":"-9007199254740992","safe":-9007199254740991,"flag":false,"optional":null}]}}');
+    const { api, state } = verifyApi();
+    state.results.A = result(data, { template: null });
+    renderAt("/verify/A");
+    expect(await field("big")).toHaveValue("12345678901234567890");
+    expect(await field("safe_negative")).toHaveValue("-9007199254740991");
+    expect(await field("negative_outside")).toHaveValue("-9007199254740992");
+    expect(await field("large 1")).toHaveValue("12345678901234567890");
+    expect(await field("safe 1")).toHaveValue("-9007199254740991");
+    expect(await field("flag 1")).toHaveValue("false");
+    expect(await field("zero")).toHaveValue("0");
+    expect(await field("root_large 1")).toHaveValue("-12345678901234567890");
+    expect(await field("root_safe 1")).toHaveValue("9007199254740991");
+    expect(await field("root_flag 1")).toHaveValue("false");
+    expect(await field("root_optional 1")).toHaveValue("");
+    fireEvent.change(await field("big"), { target: { value: "12345678901234567891" } });
+    fireEvent.change(await field("big_negative"), { target: { value: "-12345678901234567891" } });
+    fireEvent.change(await field("large 1"), { target: { value: "12345678901234567892" } });
+    fireEvent.change(await field("root_large 1"), { target: { value: "-12345678901234567892" } });
+    await userEvent.click(screen.getByRole("button", { name: en("ocr.saveDraft") }));
+    await waitFor(() => expect(api.count("PATCH /api/v1/ocr/jobs/A/result")).toBe(1));
+    const [body] = (await api.bodies("PATCH /api/v1/ocr/jobs/A/result")) as { structured: Res }[];
+    expect(body!.structured).toEqual({
+      ...data, big: "12345678901234567891",
+      root_rows: [{ ...data.root_rows[0], root_large: "-12345678901234567892" }],
+      summary: { ...data.summary, big_negative: "-12345678901234567891", lines: [{ ...data.summary.lines[0], large: "12345678901234567892" }] },
+    });
+    expect(body!.structured.flag).toBe(false);
+    expect(body!.structured.safe).toBe(9007199254740991);
+  });
+});
+
 describe("verify: template extra fields (FR-SYS-129-06, 08, 09)", { timeout: 60_000 }, () => {
   // the first render of a file can be slow on a loaded machine
   const slow = (name: string) => screen.findByRole("textbox", { name }, { timeout: 20_000 });

@@ -100,26 +100,84 @@ async def _cancel_requested(sm: async_sessionmaker[AsyncSession], job_id: str) -
 
 
 def _page_texts(raw) -> dict:
-    """What a generic result is built from when the engine gave no structure (Vision):
-    the text of each page, not the coordinates."""
+    """FR-OCR-026: read only page text; malformed/empty pages retain their position."""
     pages = raw.get("pages") if isinstance(raw, dict) else None
-    texts = [((p or {}).get("fullTextAnnotation") or {}).get("text", "") for p in (pages or [])]
+    texts = []
+    for page in pages if isinstance(pages, list) else []:
+        annotation = page.get("fullTextAnnotation") if isinstance(page, dict) else None
+        value = annotation.get("text") if isinstance(annotation, dict) else None
+        texts.append(value if isinstance(value, str) else "")
     return {"pages": texts}
 
 
-async def _generic(raw, llm: dict, transport) -> dict | None:
-    """The generic result from the LLM (FR-OCR-023); None when the LLM is unavailable."""
+def _usable_generic(node) -> bool:
+    """FR-OCR-025: the existing editors support fields, groups and scalar-cell tables.
+    Parseable JSON alone is not extraction. Empty optional fields/tables are allowed,
+    but at least one leaf must contain text, an integer (including zero), or a bool.
+    This boundary is only for newly generated results, never vendor or historical JSON.
+    """
+    has_content = False
+
+    def scalar(value) -> bool:
+        nonlocal has_content
+        if value is None:
+            return True
+        if isinstance(value, str):
+            has_content = has_content or bool(value.strip())
+            return True
+        if isinstance(value, (int, bool)):
+            has_content = True
+            return True
+        return False
+
+    def field_or_table(value) -> bool:
+        if isinstance(value, list):
+            return all(
+                isinstance(row, dict) and all(scalar(cell) for cell in row.values())
+                for row in value
+            )
+        return scalar(value)
+
+    if not isinstance(node, dict) or not node:
+        return False
+    for value in node.values():
+        if isinstance(value, dict):
+            if not all(field_or_table(field) for field in value.values()):
+                return False
+        elif not field_or_table(value):
+            return False
+    return has_content
+
+
+def _browser_exact(node):
+    """AC-FR-OCR-025-05: protect large integer digits before JavaScript/Excel sees them."""
+    if isinstance(node, bool):
+        return node
+    if isinstance(node, int):
+        return str(node) if abs(node) > 9007199254740991 else node
+    if isinstance(node, dict):
+        return {key: _browser_exact(value) for key, value in node.items()}
+    if isinstance(node, list):
+        return [_browser_exact(value) for value in node]
+    return node
+
+
+async def _generic(raw, llm: dict, transport) -> dict:
+    """FR-OCR-025/026: usable LLM extraction or readable original pages, never a scalar."""
     from app.ocr import deepseek
 
+    pages = _page_texts(raw)
+    fallback = {"ocr_text": {f"page_{i + 1}": value for i, value in enumerate(pages["pages"])}}
     if not deepseek.is_configured(llm):
-        return None
+        return fallback
     try:
-        return await asyncio.to_thread(
-            deepseek.refine_json, _page_texts(raw), llm, transport=transport
-        )
-    except Exception:  # noqa: BLE001  no generic structure: the person still sees the job
+        result = await asyncio.to_thread(deepseek.refine_json, pages, llm, transport=transport)
+        if _usable_generic(result):
+            return _browser_exact(result)
+        log.warning("generic result has no usable extraction")
+    except Exception:  # noqa: BLE001  preserve the original without another OCR call
         log.warning("generic result could not be built")
-        return None
+    return fallback
 
 
 async def _save(sm, job_id: str, result, started: datetime, structured=None) -> None:

@@ -64,6 +64,13 @@ function OcrForm({ current }: { current: OcrSettings }) {
   });
   const [error, setError] = useState<unknown>(null);
 
+  // FR-SYS-162: only swap when the new default is the current backup; keep none and other drafts.
+  function changePrimary(next: OcrSettings["primary_engine"]) {
+    const oldPrimary = primary;
+    setPrimary(next);
+    if (next === backup) setBackup(oldPrimary);
+  }
+
   function changes(): OcrChanges {
     const body: Record<string, unknown> = {};
     if (primary !== current.primary_engine) body.primary_engine = primary;
@@ -112,10 +119,10 @@ function OcrForm({ current }: { current: OcrSettings }) {
   return (
     <Card>
       <Form data-testid="ocr-form" layout="vertical">
-        <Form.Item label={t("ocr.primary")} htmlFor="ocr-primary" {...item("primary_engine")}>
-          <Select id="ocr-primary" value={primary} onChange={setPrimary} options={engines} />
+        <Form.Item label={t("ocr.primary")} htmlFor="ocr-primary" extra={t("ocr.primaryNote")} {...item("primary_engine")}>
+          <Select id="ocr-primary" value={primary} onChange={changePrimary} options={engines} />
         </Form.Item>
-        <Form.Item label={t("ocr.backup")} htmlFor="ocr-backup" {...item("backup_engine")}>
+        <Form.Item label={t("ocr.backup")} htmlFor="ocr-backup" extra={t("ocr.backupNote")} {...item("backup_engine")}>
           <Select
             id="ocr-backup"
             value={backup}

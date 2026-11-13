@@ -4,6 +4,7 @@ import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { translate, type MessageKey } from "../i18n";
+import { ReadonlyResult } from "../reviews/ReadonlyResult";
 import { type Lang, useLanguage } from "../stores/language";
 import { json, mockApi } from "../test/mockApi";
 import { renderWithProviders } from "../test/render";
@@ -347,6 +348,85 @@ describe("template extra header fields (FR-SYS-129-06..10)", { timeout: 60_000 }
     expect(await within(dialog).findByText(tr("ocr.fieldNameTaken", lang))).toBeInTheDocument();
     await cancel(dialog, lang);
     expect(current()).toEqual(SAVED);
+  });
+});
+
+describe("OCR original text fallback (FR-OCR-026)", () => {
+  beforeEach(() => useLanguage.getState().setLang("en"));
+  afterEach(() => useLanguage.getState().setLang("en"));
+  const original = "ภาษาไทย 中文 English\n12345678901234567890.00\n  unchanged  ";
+
+  it.each(["en", "th", "zh"] as const)("%s explains fallback, preserves page order and multiline edits", async (lang) => {
+    useLanguage.getState().setLang(lang);
+    const tr = (key: MessageKey, vars?: Record<string, string | number>) => translate(lang, key, vars);
+    const data = { ocr_text: { page_1: original, page_2: "", page_3: "last\npage" } };
+    const view = renderWithProviders(<Harness initial={data} groups={null} />);
+    expect(screen.getByText(tr("ocr.rawTitle"))).toBeInTheDocument();
+    expect(screen.getByText(tr("ocr.rawNote"))).toBeInTheDocument();
+    const inputs = screen.getAllByRole("textbox");
+    expect(inputs.map((el) => (el as HTMLTextAreaElement).value)).toEqual([original, "", "last\npage"]);
+    expect(inputs.every((el) => el.tagName === "TEXTAREA")).toBe(true);
+    expect(screen.getByText(tr("ocr.rawEmptyPage"))).toBeInTheDocument();
+    fireEvent.change(inputs[0]!, { target: { value: `${original}\nnew line` } });
+    expect(current()).toEqual({ ocr_text: { ...data.ocr_text, page_1: `${original}\nnew line` } });
+    view.unmount();
+    const locked = renderWithProviders(<Harness initial={data} groups={null} editable={false} />);
+    expect(screen.getByLabelText(tr("ocr.rawPage", { n: 1 })).textContent).toBe(original);
+    expect(screen.queryByRole("textbox")).toBeNull();
+    locked.unmount();
+    renderWithProviders(<ReadonlyResult value={data} groups={null} lang={lang} t={tr} />);
+    expect(screen.getByText(tr("ocr.rawNote"))).toBeInTheDocument();
+    const page = screen.getByLabelText(tr("ocr.rawPage", { n: 1 }));
+    expect(page.textContent).toBe(original);
+    expect(page).toHaveStyle({ whiteSpace: "pre-wrap", overflowWrap: "anywhere" });
+    expect(screen.getByText(tr("ocr.rawEmptyPage"))).toBeInTheDocument();
+  });
+
+  it.each<Json>([{ ocr_text: {} }, { ocr_text: { page_1: "", page_2: " \n " } }])("clearly reports no readable text: %j", (data) => {
+    const tr = (key: MessageKey) => translate("en", key);
+    const view = renderWithProviders(<Harness initial={data} groups={null} />);
+    expect(screen.getByText(tr("ocr.rawEmpty"))).toBeInTheDocument();
+    expect(current()).toEqual(data);
+    view.unmount();
+    renderWithProviders(<ReadonlyResult value={data} groups={null} lang="en" t={tr} />);
+    expect(screen.getByText(tr("ocr.rawEmpty"))).toBeInTheDocument();
+  });
+
+  it.each<Json>([
+    { ocr_text: { page_1: "normal" }, seller: "A" },
+    { ocr_text: { notes: "normal" } },
+    { ocr_text: { page_1: 12 } },
+    { ocr_text: "normal" },
+  ])("does not mistake ordinary fields for fallback: %j", (data) => {
+    const tr = (key: MessageKey) => translate("en", key);
+    const view = renderWithProviders(<Harness initial={data} groups={null} />);
+    expect(screen.queryByText(tr("ocr.rawNote"))).toBeNull();
+    // Ignore Ant Design's aria-hidden textarea used to measure autoSize, outside the rendered fields.
+    expect(screen.getAllByRole("textbox").every((el) => el.tagName === "INPUT")).toBe(true);
+    view.unmount();
+    renderWithProviders(<ReadonlyResult value={data} groups={null} lang="en" t={tr} />);
+    expect(screen.queryByText(tr("ocr.rawNote"))).toBeNull();
+  });
+
+  it("does not change a template with an ocr_text group", () => {
+    const groups: Group[] = [{ key: "ocr_text", name: "Template", items: [{ kind: "field", key: "page_1", name: "Original" }] }];
+    const data = { ocr_text: { page_1: original } };
+    const tr = (key: MessageKey) => translate("en", key);
+    const view = renderWithProviders(<Harness initial={data} groups={groups} />);
+    expect(screen.queryByText(tr("ocr.rawNote"))).toBeNull();
+    expect(screen.getByRole("textbox", { name: "Original" }).tagName).toBe("INPUT");
+    view.unmount();
+    renderWithProviders(<ReadonlyResult value={data} groups={groups} lang="en" t={tr} />);
+    expect(screen.queryByText(tr("ocr.rawNote"))).toBeNull();
+    expect(screen.getByText("Template")).toBeInTheDocument();
+  });
+
+  it("read-only generic values from real JSON keep safe integers, exact strings and false (025-05)", () => {
+    const data = JSON.parse('{"safe":9007199254740991,"negative":-9007199254740991,"big":"12345678901234567890","group":{"outside":"-9007199254740992","zero":0,"flag":false,"items":[{"large":"-12345678901234567890","positive":"9007199254740992"}]}}');
+    renderWithProviders(<ReadonlyResult value={data} groups={null} lang="en" t={(key) => translate("en", key)} />);
+    for (const text of ["9007199254740991", "-9007199254740991", "12345678901234567890", "-9007199254740992", "0", "false", "-12345678901234567890", "9007199254740992"]) {
+      expect(screen.getByText(text)).toBeInTheDocument();
+    }
   });
 });
 

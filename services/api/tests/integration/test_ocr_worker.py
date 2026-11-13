@@ -260,3 +260,66 @@ async def test_periodic_recovery_in_the_loop(api, line, store, db, sm, app_setti
     await task
     assert calls[:2] == [True, ("m", True)]
     assert False in calls and ("m", False) in calls
+
+
+@pytest.mark.parametrize("end_state", ["CANCEL_REQUESTED", "FAILED"])
+async def test_generic_llm_cannot_overwrite_cancelled_or_finished_job(
+    api, line, store, db, sm, app_settings, end_state
+):
+    """FR-OCR-022/026: an LLM finishing after cancel/recovery cannot save a result."""
+    import httpx
+    from pydantic import SecretStr
+
+    await login(api, line)
+    before = await scans_left(api)
+    job = (await new_job(api)).json()
+    main_loop = asyncio.get_running_loop()
+
+    async def request_cancel():
+        if end_state == "FAILED":
+            await worker._finish(sm, job["id"], "FAILED", error_code="VENDOR_UNCERTAIN")
+            return
+        async with sm() as session:
+            await session.execute(
+                text("update ocr_jobs set status='CANCEL_REQUESTED' where id=:j"),
+                {"j": job["id"]},
+            )
+            await session.commit()
+
+    def handle(_request):
+        asyncio.run_coroutine_threadsafe(request_cancel(), main_loop).result()
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": '{"invoice_no":"IV1"}'}}]}
+        )
+
+    class Vision:
+        name = "google_vision"
+        calls = 0
+
+        def run(self, *, kind, content, filename, pages):
+            self.calls += 1
+            return EngineResult(
+                engine=self.name,
+                raw={"pages": [{"fullTextAnnotation": {"text": "Invoice IV1\n"}}]},
+                structured=None,
+                page_count=pages,
+            )
+
+    engine = Vision()
+    settings = app_settings.model_copy(update={"llm_api_key": SecretStr("fake")})
+    await worker.run_once(
+        sm,
+        store,
+        settings,
+        engines={engine.name: engine},
+        sleep=_no_sleep,
+        llm_transport=httpx.MockTransport(handle),
+    )
+    assert engine.calls == 1
+    expected = "CANCELLED" if end_state == "CANCEL_REQUESTED" else "FAILED"
+    assert tuple(await _status(db, job["id"]))[0] == expected
+    assert (await db.execute(text("select count(*) from result_versions"))).scalar() == 0
+    assert (await db.execute(text("select count(*) from ocr_raw_results"))).scalar() == 0
+    assert await scans_left(api) == before
+    await worker.recover(sm, utcnow() + timedelta(hours=1))
+    assert await scans_left(api) == before

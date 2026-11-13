@@ -478,6 +478,31 @@ export function EditableResult({
   }
 
   const entries = Object.entries(root as Obj);
+  // FR-OCR-026: the exact untemplated fallback shape only; ordinary fields stay unchanged.
+  const pages = (root as Obj).ocr_text;
+  if (entries.length === 1 && isObj(pages) && Object.entries(pages).every(([k, v]) => /^page_[1-9]\d*$/.test(k) && typeof v === "string")) {
+    const texts = Object.entries(pages) as [string, string][];
+    return (
+      <Card size="small" title={t("ocr.rawTitle")}>
+        <Typography.Paragraph type="secondary">{t("ocr.rawNote")}</Typography.Paragraph>
+        {!texts.some(([, text]) => text.trim()) && <Typography.Paragraph>{t("ocr.rawEmpty")}</Typography.Paragraph>}
+        {texts.map(([key, text]) => {
+          const name = t("ocr.rawPage", { n: key.slice(5) });
+          return (
+            <div key={key} data-path={`ocr_text.${key}`} style={{ marginBottom: 12 }}>
+              <Typography.Text style={{ display: "block", marginBottom: 4 }}>{name}</Typography.Text>
+              {editable ? (
+                <Input.TextArea aria-label={name} value={text} autoSize={{ minRows: 4, maxRows: 16 }} onChange={(e) => set(["ocr_text", key], e.target.value)} />
+              ) : (
+                <div aria-label={name} style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{text}</div>
+              )}
+              {!text.trim() && <Typography.Text type="secondary">{t("ocr.rawEmptyPage")}</Typography.Text>}
+            </div>
+          );
+        })}
+      </Card>
+    );
+  }
   if (!entries.length) return <Typography.Text type="secondary">{t("review.noData")}</Typography.Text>;
   return (
     <Space direction="vertical" style={{ width: "100%" }}>

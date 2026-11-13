@@ -200,6 +200,33 @@ export function StructuredDataView({ value, groups, schemaName, missing, warning
     setAdding(next);
   }
 
+  // FR-OCR-026: only the exact untemplated OCR text group gets this presentation.
+  const pages = isObj(value) ? value.ocr_text : null;
+  if (!groups && isObj(value) && Object.keys(value).length === 1 && isObj(pages) && Object.entries(pages).every(([k, v]) => /^page_[1-9]\d*$/.test(k) && typeof v === "string")) {
+    const texts = Object.entries(pages) as [string, string][];
+    return (
+      <section className={s["table-card"]} aria-label={t("result.rawTitle")}>
+        <div className={s["table-title"]}>{t("result.rawTitle")}</div>
+        <p className={s["raw-note"]}>{t("result.rawNote")}</p>
+        {!texts.some(([, text]) => text.trim()) && <p className={s["raw-note"]}>{t("result.rawEmpty")}</p>}
+        {texts.map(([key, text]) => {
+          const name = t("result.rawPage", { n: key.slice(5) });
+          return (
+            <div key={key} className={s["raw-page"]} data-path={`ocr_text.${key}`}>
+              <div className={s["raw-page-label"]}>{name}</div>
+              {editable ? (
+                <textarea className={s["raw-input"]} aria-label={name} rows={6} value={text} onChange={(e) => onChange(setAt(value, ["ocr_text", key], e.target.value))} />
+              ) : (
+                <div className={s["raw-text"]} aria-label={name}>{text}</div>
+              )}
+              {!text.trim() && <p className={s["raw-note"]}>{t("result.rawEmptyPage")}</p>}
+            </div>
+          );
+        })}
+      </section>
+    );
+  }
+
   const empty = views.every((g) => g.sections.every((sec) => (sec.kind === "fields" ? !sec.rows.length && !editable : false)));
   return (
     <div className={cls("structured", Boolean(groups) && "template-view")}>

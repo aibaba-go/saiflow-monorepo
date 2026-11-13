@@ -308,6 +308,54 @@ td.row-actions {
   text-align: center;
 }
 
+/* Original-text fallback only (FR-OCR-026); normal field and template layouts are unchanged. */
+.raw-note {
+  margin: 10px 16px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.raw-page {
+  padding: 12px 16px;
+  border-top: 1px solid var(--brand-border);
+}
+
+.raw-page-label {
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.raw-input,
+.raw-text {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  color: var(--brand-navy);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.raw-input {
+  padding: 10px;
+  border: 1px solid var(--brand-border);
+  border-radius: var(--control-radius);
+  background: var(--surface);
+  resize: vertical;
+}
+
+.raw-input:focus {
+  outline: 2px solid var(--primary);
+}
+
+.raw-page .raw-note {
+  margin: 8px 0 0;
+}
+
 /* ours: an amount that does not add up (FR-OCR-013) */
 .amount-issue {
   background: var(--warning-bg);

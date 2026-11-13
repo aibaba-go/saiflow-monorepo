@@ -87,6 +87,28 @@ export function ReadonlyResult({ value, groups, lang, t }: { value: unknown; gro
     );
   }
   const entries = Object.entries(data);
+  // FR-OCR-026: do not label ordinary groups or template fields as original-text fallback.
+  const pages = data.ocr_text;
+  if (entries.length === 1 && isObj(pages) && Object.entries(pages).every(([k, v]) => /^page_[1-9]\d*$/.test(k) && typeof v === "string")) {
+    const texts = Object.entries(pages) as [string, string][];
+    return (
+      <section className="pc-readonly" aria-label={t("ocr.rawTitle")}>
+        <h3 className="pc-readonly__title">{t("ocr.rawTitle")}</h3>
+        <Typography.Paragraph type="secondary">{t("ocr.rawNote")}</Typography.Paragraph>
+        {!texts.some(([, text]) => text.trim()) && <Typography.Paragraph>{t("ocr.rawEmpty")}</Typography.Paragraph>}
+        {texts.map(([key, text]) => {
+          const name = t("ocr.rawPage", { n: key.slice(5) });
+          return (
+            <div key={key} style={{ marginBottom: 12 }}>
+              <Typography.Text strong>{name}</Typography.Text>
+              <div aria-label={name} style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{text}</div>
+              {!text.trim() && <Typography.Text type="secondary">{t("ocr.rawEmptyPage")}</Typography.Text>}
+            </div>
+          );
+        })}
+      </section>
+    );
+  }
   if (!entries.length) return <Typography.Text type="secondary">{t("review.noData")}</Typography.Text>;
   return (
     <Space direction="vertical" style={{ width: "100%" }} size="middle">

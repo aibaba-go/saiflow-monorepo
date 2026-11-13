@@ -2,6 +2,7 @@
 Review Focus 2)."""
 
 import asyncio
+from copy import deepcopy
 
 import pytest
 from sqlalchemy import text
@@ -10,7 +11,19 @@ from app.db import create_sessionmaker
 from tests.integration.db_fixtures import login
 from tests.integration.tenancy_helpers import add_member, client_like, make_org, make_role, tenant
 from tests.integration.test_ocr_jobs import new_job
-from tests.integration.test_template_mapping import TAX_OUTPUT, FakeLlm, mapping_pass, recognised
+from tests.integration.test_template_mapping import (
+    FALLBACK,
+    GENERIC_JSON,
+    GENERIC_OUTPUT,
+    TAX_OUTPUT,
+    VISION_RAW,
+    FakeLlm,
+    mapping_pass,
+    raw_result,
+    recognised,
+    select_primary,
+    vision_job,
+)
 
 JOBS = "/api/v1/ocr/jobs"
 
@@ -32,8 +45,8 @@ def ai_settings(app_settings):
     return app_settings.model_copy(update={"llm_api_key": SecretStr("llm-key")})
 
 
-async def tax_job(api, store, sm, settings, llm, db):
-    """A job whose current result is a converted Tax Invoice."""
+async def tax_job(api, store, sm, settings, llm, db, engine="textin"):
+    """A job whose current result is a converted Tax Invoice, from either primary."""
     tax = (
         await db.execute(
             text(
@@ -42,7 +55,10 @@ async def tax_job(api, store, sm, settings, llm, db):
             )
         )
     ).scalar()
-    job = await recognised(api, store, sm, settings, llm)
+    await select_primary(db, engine)
+    if engine == "google_vision":
+        llm.replies["generic"] = [GENERIC_JSON]
+    job = await recognised(api, store, sm, settings, llm, engine=engine)
     llm.replies["match"] = [{"ranking": [{"template_version_id": tax, "score": 0.9}]}]
     llm.replies["convert"] = [TAX_OUTPUT]
     await mapping_pass(sm, settings, llm)
@@ -384,3 +400,111 @@ async def test_amount_issues_recheck_after_save(api, line, mail, store, sm, ai_s
     done = await save(api, job["id"], fixed["version"], fixed["structured"], confirm=True)
     assert done.status_code == 200, done.text
     assert done.json()["confirmed"] is True and done.json()["amount_issues"]
+
+
+@pytest.mark.parametrize("fallback", [False, True], ids=["generic", "ocr-text"])
+async def test_vision_result_exact_roundtrip_versions_and_confirm(
+    api, line, mail, store, sm, ai_settings, llm, db, fallback
+):
+    # AC-FR-OCR-025-01/03/05, 026-03; FR-VERIFY-015/009/006.
+    me = await registered(api, line, mail)
+    job = await vision_job(
+        api, store, sm, ai_settings, llm, db, output="null" if fallback else GENERIC_JSON
+    )
+    original = FALLBACK if fallback else GENERIC_OUTPUT
+    body = await result(api, job["id"])
+    assert body["structured"] == original and body["template"] is None
+    assert body["missing_required"] == [] and body["version"] == 1
+    edited = deepcopy(body["structured"])
+    if fallback:
+        edited["ocr_text"]["page_1"] += "\n人工核验 12345678901234567890"
+        assert edited["ocr_text"]["page_2"] == ""
+    else:
+        edited["invoice_no"] = "IV-edited"
+        edited["seller"]["negative"] = "-12345678901234567891"
+        edited["items"][0]["big"] = "12345678901234567891"
+    response = await save(api, job["id"], body["version"], edited)
+    assert response.status_code == 200, response.text
+    saved = response.json()
+    assert saved["structured"] == edited and saved["version"] == 2
+    assert (await result(api, job["id"]))["structured"] == edited
+    if not fallback:
+        for node in (
+            saved["structured"],
+            saved["structured"]["seller"],
+            saved["structured"]["items"][0],
+        ):
+            assert type(node["safe_max"]) is int and type(node["safe_min"]) is int
+            assert node["flag"] is False and type(node["zero"]) is int
+    old = (
+        await db.execute(
+            text("select structured from result_versions where job_id=:j and version=1"),
+            {"j": job["id"]},
+        )
+    ).scalar_one()
+    assert old == original
+    unchanged = await save(api, job["id"], saved["version"], edited)
+    assert unchanged.status_code == 200 and unchanged.json()["version"] == 2
+    stale = await save(api, job["id"], 1, original)
+    assert (stale.status_code, stale.json()["code"]) == (409, "version_conflict")
+    confirmed = await save(api, job["id"], 2, edited, confirm=True)
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["structured"] == edited and confirmed.json()["confirmed"] is True
+    assert (await api.get(f"{JOBS}/{job['id']}")).json()["stage"] == "CONFIRMED"
+    state = (
+        await db.execute(
+            text(
+                "select confirmed_by_user_id, confirmed_version_id, official_at "
+                "from ocr_jobs where id=:j"
+            ),
+            {"j": job["id"]},
+        )
+    ).one()
+    assert state.confirmed_by_user_id == me["user_id"] and state.official_at is not None
+    assert (await save(api, job["id"], 2, original)).status_code == 409
+    assert (await api.post(f"{JOBS}/{job['id']}/generic")).status_code == 409
+    assert tuple(await raw_result(db, job["id"])) == ("google_vision", VISION_RAW)
+    assert llm.calls == ["generic"]
+
+
+@pytest.mark.parametrize("fallback", [False, True], ids=["generic", "ocr-text"])
+@pytest.mark.parametrize("gate", ["guest", "unregistered", "expired"])
+async def test_vision_general_result_keeps_confirmation_gates(
+    api, line, mail, store, sm, ai_settings, llm, db, fallback, gate
+):
+    # AC-FR-OCR-025-01/026-03: free-form has no required-field gate, not no auth/plan gate.
+    if gate == "guest":
+        assert (await api.post("/api/v1/auth/guest")).status_code == 200
+    elif gate == "unregistered":
+        await login(api, line)
+    else:
+        me = await registered(api, line, mail)
+    job = await vision_job(
+        api, store, sm, ai_settings, llm, db, output="null" if fallback else GENERIC_JSON
+    )
+    if gate == "expired":
+        await db.execute(
+            text(
+                "update subscriptions set starts_at=now()-interval '40 days', "
+                "ends_at=now()-interval '10 days' where tenant_id=:t"
+            ),
+            {"t": me["tenant_id"]},
+        )
+        await db.commit()
+    body = await result(api, job["id"])
+    edited = deepcopy(body["structured"])
+    edited["note"] = "saved draft, not confirmed"
+    draft = await save(api, job["id"], body["version"], edited)
+    assert draft.status_code == 200, draft.text
+    denied = await save(
+        api,
+        job["id"],
+        draft.json()["version"],
+        edited | {"another": "must not be saved"},
+        confirm=True,
+    )
+    assert denied.status_code == {"guest": 401, "unregistered": 403, "expired": 402}[gate]
+    current = await result(api, job["id"])
+    assert current["structured"] == edited and current["version"] == draft.json()["version"]
+    assert current["confirmed"] is False
+    assert tuple(await raw_result(db, job["id"])) == ("google_vision", VISION_RAW)

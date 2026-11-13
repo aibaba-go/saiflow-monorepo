@@ -1,6 +1,7 @@
 """Exports of confirmed results and download tickets (FR-ENTRY-015)."""
 
 import io
+from copy import deepcopy
 from datetime import timedelta
 
 import pytest
@@ -14,7 +15,15 @@ from app.services import export_service
 from tests.integration.db_fixtures import login
 from tests.integration.tenancy_helpers import client_like
 from tests.integration.test_results import registered, result, save, tax_job
-from tests.integration.test_template_mapping import FakeLlm
+from tests.integration.test_template_mapping import (
+    FALLBACK,
+    GENERIC_JSON,
+    GENERIC_OUTPUT,
+    VISION_RAW,
+    FakeLlm,
+    raw_result,
+    vision_job,
+)
 
 JOBS = "/api/v1/ocr/jobs"
 
@@ -305,3 +314,245 @@ async def test_get_export(api, line, mail, store, sm, ai_settings, llm, db):
     )
     await db.commit()
     assert (await api.get(f"/api/v1/exports/{export_id}")).status_code == 404
+
+
+async def _download_workbook(api, job_id, headers=None):
+    response = await api.post(f"{JOBS}/{job_id}/exports", headers=headers or {})
+    assert response.status_code == 201, response.text
+    export_id = response.json()["id"]
+    download = await api.get(f"/api/v1/exports/{export_id}/download", headers=headers or {})
+    assert download.status_code == 200, download.text
+    return export_id, load_workbook(io.BytesIO(download.content))
+
+
+def _assert_text_cells(workbook, expected):
+    cells = [cell for row in workbook.worksheets[0].iter_rows() for cell in row]
+    for value in expected:
+        matches = [c for c in cells if c.value == value]
+        assert matches, (value, [c.value for c in cells])
+        assert all(c.data_type == "s" for c in matches)
+
+
+@pytest.mark.parametrize("engine", ["textin", "google_vision"])
+async def test_both_primary_template_save_confirm_export_exact_cells(
+    api, line, mail, store, sm, ai_settings, llm, db, engine
+):
+    # AC-FR-OCR-025-04, FR-OCR-016, FR-ENTRY-015.
+    await registered(api, line, mail)
+    job = await tax_job(api, store, sm, ai_settings, llm, db, engine=engine)
+    vendor = await raw_result(db, job["id"])
+    assert vendor.engine == engine
+    body = await result(api, job["id"])
+    assert body["structured"]["document"]["invoice_date"] == "2026-10-01"
+    assert body["structured"]["goods"]["line_items"][0]["seq"] == 1
+    assert body["structured"]["goods"]["line_items"][0]["quantity"] == "1200"
+    assert body["structured"]["summary"]["net_total"] == "16050.40"
+    body["structured"]["document"]["invoice_no"] = "007123"
+    body["structured"]["goods"]["line_items"][0]["quantity"] = "123456789012.34567890"
+    body["structured"]["goods"]["line_items"][0]["amount"] = "123456789012.30"
+    saved = await save(api, job["id"], body["version"], body["structured"])
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["version"] == body["version"] + 1
+    done = await save(
+        api, job["id"], saved.json()["version"], saved.json()["structured"], confirm=True
+    )
+    assert done.status_code == 200, done.text
+    export_id, workbook = await _download_workbook(api, job["id"])
+    _assert_text_cells(
+        workbook,
+        ["007123", "2026-10-01", "1", "123456789012.34567890", "123456789012.30", "16050.40"],
+    )
+    template_version = body["template"]["template_version_id"]
+    template_id, version = (
+        await db.execute(
+            text("select template_id, version from document_template_versions where id=:v"),
+            {"v": template_version},
+        )
+    ).one()
+    assert workbook["_saiflow"]["A1"].value == f"template:{template_id}:v{version}"
+    assert workbook["_saiflow"].sheet_state == "hidden"
+    export_version = (
+        await db.execute(
+            text(
+                "select v.version from exports e join result_versions v "
+                "on v.id=e.result_version_id where e.id=:e"
+            ),
+            {"e": export_id},
+        )
+    ).scalar_one()
+    assert export_version == saved.json()["version"]
+    assert tuple(await raw_result(db, job["id"])) == tuple(vendor)
+
+
+@pytest.mark.parametrize("mode", ["generic", "invalid-llm", "no-llm"])
+async def test_vision_generic_or_fallback_save_confirm_export_exact_text(
+    api, line, mail, store, sm, ai_settings, llm, db, mode
+):
+    # AC-FR-OCR-025-01/03/05, AC-FR-OCR-026-03: latest confirmed version, not the raw/version 1.
+    await registered(api, line, mail)
+    job = await vision_job(
+        api,
+        store,
+        sm,
+        ai_settings,
+        llm,
+        db,
+        output=GENERIC_JSON if mode == "generic" else "null",
+        no_llm=mode == "no-llm",
+    )
+    body = await result(api, job["id"])
+    expected = GENERIC_OUTPUT if mode == "generic" else FALLBACK
+    assert body["structured"] == expected
+    denied = await api.post(f"{JOBS}/{job['id']}/exports")
+    assert (denied.status_code, denied.json()["code"]) == (409, "result_not_confirmed")
+    assert not any(key.startswith("exports/") for key in store.objects)
+    edited = deepcopy(body["structured"])
+    if mode == "generic":
+        edited["invoice_no"] = "007123"
+        edited["items"][0]["big"] = "12345678901234567891"
+    else:
+        edited["ocr_text"]["page_1"] += "\n已核验 -12345678901234567890"
+    saved = await save(api, job["id"], body["version"], edited)
+    assert saved.status_code == 200 and saved.json()["version"] == 2, saved.text
+    done = await save(api, job["id"], 2, edited, confirm=True)
+    assert done.status_code == 200, done.text
+    assert done.json()["structured"] == edited
+    export_id, workbook = await _download_workbook(api, job["id"])
+    assert workbook["_saiflow"]["A1"].value == "generic"
+    if mode == "generic":
+        _assert_text_cells(
+            workbook,
+            [
+                "007123",
+                "12345678901234567890",
+                "-12345678901234567890",
+                "12345678901234567891",
+                "9007199254740992",
+                "-9007199254740992",
+                "9007199254740991",
+                "-9007199254740991",
+                "0",
+                "False",
+                "123456789012.30",
+            ],
+        )
+    else:
+        _assert_text_cells(workbook, ["ocr_text", "page_1", "page_2", edited["ocr_text"]["page_1"]])
+        sheet = workbook.worksheets[0]
+        blank = next(row for row in sheet.iter_rows() if row[0].value == "page_2")
+        assert blank[1].value in (None, "")  # Excel's empty text cell is decoded as None.
+    version = (
+        await db.execute(
+            text(
+                "select v.version from exports e join result_versions v "
+                "on v.id=e.result_version_id where e.id=:e"
+            ),
+            {"e": export_id},
+        )
+    ).scalar_one()
+    assert version == 2
+    assert tuple(await raw_result(db, job["id"])) == ("google_vision", VISION_RAW)
+    assert llm.calls == ([] if mode == "no-llm" else ["generic"])
+
+
+@pytest.mark.parametrize("fallback", [False, True], ids=["generic", "ocr-text"])
+async def test_vision_general_result_review_and_export_permissions(
+    api, line, mail, store, sm, ai_settings, llm, db, fallback
+):
+    # AC-FR-OCR-025-01/026-03, FR-VERIFY-010/011/012, FR-ENTRY-015, FR-REPORT-007.
+    from app.repositories import report_query
+    from app.services.report_config import CardSpec
+    from tests.integration.review_helpers import review_org, set_level
+    from tests.integration.tenancy_helpers import make_role
+
+    org = await review_org(api, line, mail, db)
+    await set_level(db, org.tenant_id, 2, code=None)
+    client = org.clerk.client
+    job = await vision_job(
+        client,
+        store,
+        sm,
+        ai_settings,
+        llm,
+        db,
+        output="null" if fallback else GENERIC_JSON,
+        headers=org.h,
+    )
+    body = await result(client, job["id"], org.h)
+    edited = deepcopy(body["structured"])
+    edited["note"] = "reviewed version"
+    saved = await save(client, job["id"], body["version"], edited, headers=org.h)
+    assert saved.status_code == 200, saved.text
+    confirmed = await save(client, job["id"], saved.json()["version"], edited, True, org.h)
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["review"]["stage"] == "PENDING_L1"
+    assert confirmed.json()["review"]["required_level"] == 2
+    for level, reviewer in ((1, org.r1), (2, org.r2)):
+        assert (await client.post(f"{JOBS}/{job['id']}/exports", headers=org.h)).status_code == 409
+        assert (
+            await save(
+                client, job["id"], saved.json()["version"], body["structured"], headers=org.h
+            )
+        ).status_code == 409
+        detail = await reviewer.client.get(f"/api/v1/reviews/{job['id']}", headers=org.h)
+        assert detail.status_code == 200, detail.text
+        assert detail.json()["level"] == level
+        readonly = await result(reviewer.client, job["id"], org.h)
+        assert readonly["structured"] == edited and readonly["version"] == saved.json()["version"]
+        approved = await reviewer.client.post(
+            f"/api/v1/reviews/{job['id']}/decision",
+            json={"level": level, "decision": "approve"},
+            headers=org.h,
+        )
+        assert approved.status_code == 200, approved.text
+    assert (await client.get(f"{JOBS}/{job['id']}", headers=org.h)).json()["stage"] == "CONFIRMED"
+    export_id, workbook = await _download_workbook(client, job["id"], org.h)
+    _assert_text_cells(workbook, ["reviewed version"])
+    assert workbook["_saiflow"]["A1"].value == "generic"
+    role = await make_role(db, org.tenant_id, "No export", ["upload_ocr", "verify_own"])
+    await db.execute(
+        text("update memberships set role_id=:r where tenant_id=:t and user_id=:u"),
+        {"r": role, "t": org.tenant_id, "u": org.clerk.user_id},
+    )
+    await db.commit()
+    assert (await client.post(f"{JOBS}/{job['id']}/exports", headers=org.h)).status_code == 403
+    assert (
+        await client.get(f"/api/v1/exports/{export_id}/download", headers=org.h)
+    ).status_code == 403
+    tax_id, tax_version = (
+        await db.execute(
+            text(
+                "select t.id, v.id from document_templates t "
+                "join document_template_versions v on v.template_id=t.id "
+                "where t.code='tax_invoice'"
+            )
+        )
+    ).one()
+    spec = CardSpec(
+        id="count",
+        type="stat",
+        title="Count",
+        template_id=tax_id,
+        version_ids=(tax_version,),
+        grain="document",
+        table=None,
+        columns=(),
+        agg="count",
+        measure=None,
+        dim_kind="none",
+        dim=None,
+        time_grain=None,
+        series=None,
+        date_field=None,
+        unit_mode=None,
+        unit_value=None,
+        unit=None,
+        precision=0,
+    )
+    async with sm() as fresh:
+        diag, rows = await report_query.run(
+            fresh,
+            report_query.build(spec, tenant_id=org.tenant_id, scope_user_id=None, period=None),
+        )
+    assert diag["documents"] == 0 and rows == []  # generic/fallback never become template data
+    assert tuple(await raw_result(db, job["id"])) == ("google_vision", VISION_RAW)

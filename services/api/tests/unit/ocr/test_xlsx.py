@@ -4,6 +4,7 @@ import io
 import json
 from pathlib import Path
 
+import pytest
 from openpyxl import load_workbook
 
 from app.ocr.templates.schema import canonical_groups, parse_template
@@ -70,3 +71,67 @@ def test_text_kept_as_written():
     rows, _, _ = _cells(build_xlsx(STRUCTURED, ("Tax Invoice", GROUPS), "en", (12, 3)))
     flat = [v for r in rows for v in r if v is not None]
     assert "+66 81 234 5678" in flat  # not "'+66 ..."
+
+
+@pytest.mark.parametrize("language", ["zh", "en", "th"])
+@pytest.mark.parametrize("location", ["root", "group", "root-table", "group-table"])
+def test_generic_big_integer_digits_are_text_in_every_location(language, location):
+    # AC-FR-OCR-025-05: the worker has converted unsafe integers to exact decimal strings.
+    values = {
+        "big": "12345678901234567890",
+        "negative": "-12345678901234567890",
+        "above_max": "9007199254740992",
+        "below_min": "-9007199254740992",
+        "safe_max": 9007199254740991,
+        "safe_min": -9007199254740991,
+        "zero": 0,
+        "flag": False,
+        "amount": "123456789012.30",
+        "optional": None,
+    }
+    generic = {
+        "root": values,
+        "group": {"seller": values},
+        "root-table": {"items": [values]},
+        "group-table": {"goods": {"items": [values]}},
+    }[location]
+    _, hidden, sheet = _cells(build_xlsx(generic, None, language, None))
+    cells = [cell for row in sheet.iter_rows() for cell in row]
+    for value in values.values():
+        if value is None:
+            continue
+        text_value = str(value)
+        matches = [c for c in cells if c.value == text_value]
+        assert len(matches) == 1, (text_value, [c.value for c in cells])
+        assert matches[0].data_type == "s"  # Excel must not round 20-digit values.
+        if text_value.startswith("-"):
+            assert not matches[0].quotePrefix  # a negative number is not a formula.
+    assert hidden["_saiflow"]["A1"].value == "generic"
+    assert values["flag"] is False and type(values["safe_max"]) is int
+
+
+@pytest.mark.parametrize("language", ["zh", "en", "th"])
+def test_ocr_text_fallback_keeps_languages_newlines_and_empty_page(language):
+    # AC-FR-OCR-026-02/03: multiline values are not stripped or turned into business fields.
+    original = "  ภาษาไทย\n中文原文 English\n12345678901234567890\n-12345678901234567890\n"
+    fallback = {"ocr_text": {"page_1": original, "page_2": ""}}
+    rows, hidden, sheet = _cells(build_xlsx(fallback, None, language, None))
+    first = next(row for row in sheet.iter_rows() if row[0].value == "page_1")
+    second = next(row for row in sheet.iter_rows() if row[0].value == "page_2")
+    assert first[1].value == original and first[1].data_type == "s"
+    assert second[1].value in (None, "")
+    flat = [v for row in rows for v in row if v is not None]
+    assert flat.index("page_1") < flat.index("page_2")
+    assert "invoice_no" not in flat and "amount" not in flat
+    assert hidden["_saiflow"]["A1"].value == "generic"
+    assert fallback == {"ocr_text": {"page_1": original, "page_2": ""}}
+
+
+def test_generic_empty_tables_do_not_create_line_items():
+    # AC-FR-OCR-025-03: empty root/group tables stay empty; there are no fabricated rows.
+    generic = {"items": [], "summary": {"net_total": "0.00", "lines": []}}
+    rows, _, _ = _cells(build_xlsx(generic, None, "en", None))
+    flat = [v for row in rows for v in row if v is not None]
+    assert "0.00" in flat
+    assert "description" not in flat and "seq" not in flat and "None" not in flat
+    assert generic["items"] == [] and generic["summary"]["lines"] == []

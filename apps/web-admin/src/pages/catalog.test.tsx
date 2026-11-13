@@ -1,6 +1,7 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { translate } from "../i18n";
 import { useLanguage } from "../stores/language";
 import { json } from "../test/mockApi";
 import { renderAt, signedIn, userEvent, zh } from "../test/admin";
@@ -190,5 +191,159 @@ describe("OCR and LLM settings (FR-SYS-072)", () => {
     await confirmSave(form);
     expect(await within(form).findByText(zh("field.backup_engine"))).toBeInTheDocument();
     expect(within(form).getByText(zh("field.llm_base_url"))).toBeInTheDocument();
+  });
+
+  async function choose(id: string, name: string) {
+    await userEvent.click(document.getElementById(id)!);
+    const options = await screen.findAllByText(name, { selector: ".ant-select-item-option-content" });
+    await userEvent.click(options.at(-1)!);
+  }
+  const selected = (id: string) => document.getElementById(id)!.closest(".ant-select")!;
+
+  it.each([false, true])("confirmed unchanged settings do not PATCH, swapped back=%s (162-01/03)", async (swappedBack) => {
+    const current = defaults();
+    const api = signedIn({
+      "GET /api/v1/admin/ocr-settings": () => json(200, current),
+      "PATCH /api/v1/admin/ocr-settings": () => json(200, current),
+    });
+    renderAt("/ocr");
+    const form = await screen.findByTestId("ocr-form");
+    if (swappedBack) {
+      await choose("ocr-primary", "Google Cloud Vision");
+      expect(selected("ocr-backup")).toHaveTextContent("TextIn");
+      await choose("ocr-primary", "TextIn");
+    }
+    expect(selected("ocr-primary")).toHaveTextContent("TextIn");
+    expect(selected("ocr-backup")).toHaveTextContent("Google Cloud Vision");
+    await confirmSave(form);
+    await screen.findByText(zh("plans.noChange"));
+    expect(api.count("PATCH /api/v1/admin/ocr-settings")).toBe(0);
+    expect(current).toEqual(defaults());
+  });
+
+  it.each([
+    ["textin", "google_vision", "Google Cloud Vision", "TextIn"],
+    ["google_vision", "textin", "TextIn", "Google Cloud Vision"],
+  ])("swaps %s to %s atomically, preserves other inputs and reopens (162-01/02)", async (old, next, nextName, oldName) => {
+    const current = { ...defaults(), primary_engine: old, backup_engine: next };
+    const api = signedIn({
+      "GET /api/v1/admin/ocr-settings": () => json(200, current),
+      "PATCH /api/v1/admin/ocr-settings": async (r) => {
+        Object.assign(current, await r.json());
+        return json(200, current);
+      },
+    });
+    const view = renderAt("/ocr");
+    const form = await screen.findByTestId("ocr-form");
+    await retype(within(form).getByLabelText(zh("ocr.llmModel")), "custom-model");
+    await choose("ocr-primary", nextName!);
+    expect(selected("ocr-primary")).toHaveTextContent(nextName!);
+    expect(selected("ocr-backup")).toHaveTextContent(oldName!);
+    expect(within(form).getByLabelText(zh("ocr.llmModel"))).toHaveValue("custom-model");
+    await userEvent.click(within(form).getByRole("button", { name: zh("common.save") }));
+    expect(api.count("PATCH /api/v1/admin/ocr-settings")).toBe(0);
+    await userEvent.click(await screen.findByRole("button", { name: zh("common.confirm") }));
+    await waitFor(async () => expect(await api.bodies("PATCH /api/v1/admin/ocr-settings")).toEqual([
+      { primary_engine: next, backup_engine: old, llm_model: "custom-model" },
+    ]));
+    await screen.findByText(zh("ocr.saved"));
+    view.unmount();
+    renderAt("/ocr");
+    await screen.findByTestId("ocr-form");
+    expect(selected("ocr-primary")).toHaveTextContent(nextName!);
+    expect(selected("ocr-backup")).toHaveTextContent(oldName!);
+    expect(screen.getByLabelText(zh("ocr.llmModel"))).toHaveValue("custom-model");
+    expect(screen.getByLabelText(zh("ocr.retry"))).toHaveValue("3");
+    expect(screen.getByLabelText(zh("ocr.threshold"))).toHaveValue("5");
+    expect(screen.getByLabelText(zh("ocr.probe"))).toHaveValue("300");
+  });
+
+  it("keeps none and the model draft on cancel; saves only changed fields (162-03)", async () => {
+    const current = { ...defaults(), backup_engine: "none" };
+    const api = signedIn({
+      "GET /api/v1/admin/ocr-settings": () => json(200, current),
+      "PATCH /api/v1/admin/ocr-settings": async (r) => {
+        Object.assign(current, await r.json());
+        return json(200, current);
+      },
+    });
+    renderAt("/ocr");
+    const form = await screen.findByTestId("ocr-form");
+    await retype(within(form).getByLabelText(zh("ocr.llmModel")), "draft-model");
+    await choose("ocr-primary", "Google Cloud Vision");
+    await userEvent.click(within(form).getByRole("button", { name: zh("common.save") }));
+    await userEvent.click(await screen.findByRole("button", { name: zh("common.cancel") }));
+    expect(selected("ocr-backup")).toHaveTextContent(zh("ocr.none"));
+    expect(screen.getByLabelText(zh("ocr.llmModel"))).toHaveValue("draft-model");
+    expect(api.count("PATCH /api/v1/admin/ocr-settings")).toBe(0);
+    expect(current.primary_engine).toBe("textin");
+    expect(current.llm_model).toBe("deepseek-flash");
+    await confirmSave(form);
+    await waitFor(async () => expect(await api.bodies("PATCH /api/v1/admin/ocr-settings")).toEqual([
+      { primary_engine: "google_vision", llm_model: "draft-model" },
+    ]));
+  });
+
+  it("keeps conflicting backup and invalid URL on whole-form 400, translated in both languages (162-04/05)", async () => {
+    const current = defaults();
+    const api = signedIn({
+      "GET /api/v1/admin/ocr-settings": () => json(200, current),
+      "PATCH /api/v1/admin/ocr-settings": () => json(400, { code: "validation_error", fields: ["backup_engine", "llm_base_url"] }),
+    });
+    renderAt("/ocr");
+    const form = await screen.findByTestId("ocr-form");
+    await choose("ocr-primary", "Google Cloud Vision");
+    await choose("ocr-backup", "Google Cloud Vision");
+    await retype(screen.getByLabelText(zh("ocr.llmBaseUrl")), "http://invalid.example");
+    await confirmSave(form);
+    expect(await screen.findByText(zh("field.backup_engine"))).toBeInTheDocument();
+    expect(screen.getByText(zh("field.llm_base_url"))).toBeInTheDocument();
+    expect(selected("ocr-primary")).toHaveTextContent("Google Cloud Vision");
+    expect(selected("ocr-backup")).toHaveTextContent("Google Cloud Vision");
+    expect(screen.getByLabelText(zh("ocr.llmBaseUrl"))).toHaveValue("http://invalid.example");
+    await act(() => useLanguage.getState().setLang("en"));
+    expect(screen.getByText(translate("en", "field.backup_engine"))).toBeInTheDocument();
+    expect(screen.getByText(translate("en", "field.llm_base_url"))).toBeInTheDocument();
+    expect(await api.bodies("PATCH /api/v1/admin/ocr-settings")).toEqual([
+      { primary_engine: "google_vision", llm_base_url: "http://invalid.example" },
+    ]);
+    expect(current).toEqual(defaults());
+  });
+
+  it.each(["zh", "en"] as const)("explains default/failure backup in %s, with no secret or duplicate pending write (162-05)", async (lang) => {
+    useLanguage.getState().setLang(lang);
+    const tr = (key: Parameters<typeof translate>[1]) => translate(lang, key);
+    let finish!: () => void;
+    const pending = new Promise<void>((resolve) => { finish = resolve; });
+    const current = defaults();
+    const api = signedIn({
+      "GET /api/v1/admin/ocr-settings": () => json(200, current),
+      "PATCH /api/v1/admin/ocr-settings": async (r) => {
+        await pending;
+        Object.assign(current, await r.json());
+        return json(200, current);
+      },
+    });
+    renderAt("/ocr");
+    const form = await screen.findByTestId("ocr-form");
+    expect(screen.getByText(tr("ocr.primaryNote"))).toBeInTheDocument();
+    expect(screen.getByText(tr("ocr.backupNote"))).toBeInTheDocument();
+    expect(within(screen.getByTestId("ocr-keys")).getAllByText(tr("ocr.keySet"))).toHaveLength(2);
+    await choose("ocr-primary", "Google Cloud Vision");
+    expect(api.count("PATCH /api/v1/admin/ocr-settings")).toBe(0);
+    const saveButton = within(form).getByRole("button", { name: tr("common.save") });
+    await userEvent.click(saveButton);
+    await userEvent.click(await screen.findByRole("button", { name: tr("common.confirm") }));
+    await waitFor(() => expect(api.count("PATCH /api/v1/admin/ocr-settings")).toBe(1));
+    // Ant Design's loading icon changes the accessible name while the same button is pending.
+    await userEvent.click(saveButton);
+    expect(api.count("PATCH /api/v1/admin/ocr-settings")).toBe(1);
+    expect(document.body.textContent).not.toContain("sk-very-secret");
+    finish();
+    await screen.findByText(tr("ocr.saved"));
+    expect(await api.bodies("PATCH /api/v1/admin/ocr-settings")).toEqual([
+      { primary_engine: "google_vision", backup_engine: "textin" },
+    ]);
+    expect(document.body.textContent).not.toContain("sk-very-secret");
   });
 });
