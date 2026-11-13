@@ -2911,6 +2911,13 @@ tr:hover .pc-file__name {
   height: 16px;
   min-width: 16px;
 }
+/* antd's menu icon reset (inline-flex, start-aligned) outranks .pc-nav-icon: centre the glyph
+ * in its chip on both axes with a selector that wins. */
+.pc-shell .pc-sidebar .ant-menu-item .pc-nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .pc-nav-icon--cyan { --tone: var(--accent-cyan); }
 .pc-nav-icon--amber { --tone: var(--accent-amber); }
 .pc-nav-icon--emerald { --tone: var(--accent-emerald); }
