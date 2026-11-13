@@ -47,9 +47,9 @@
 ### P5 — 收尾、提交与发布
 
 - [x] 经验证和审查后，按仓库流程归档/同步 delta，不修改其他未归档 change。按 [AI-WORKFLOW §5–6](../../../../AI-WORKFLOW.md) 不创建 design 或重复任务内容；CLI 在实施入口强制要求 tasks 时，仅保留指向本 plan 的最小链接文件。默认 CLI planningComplete=false 属预期。
-- [ ] 两项均完成后分开提交本 change 的规格、计划、代码和验证证据，具体文件 staging；不加入既有脏 `.github/workflows/deploy.yml`、`scripts/deploy/remote-deploy.sh`、`scripts/tests/remote-deploy.test.sh`、`scripts/tests/workflow-config.test.sh`、`scripts/deploy/line-mini-config.py`、`scripts/tests/line-mini-config.test.py`、`.qoder/`、用户手册或 `temp/`。不 amend、不改 git config、不跳 hooks。
-- [ ] 仅在当前变更实施/提交/发布授权有效时推送；核验目标 SHA 的标准 CI 全部成功后运行标准 Deploy，禁止直接 SSH 写生产或私自修部署配置。若磁盘等环境问题导致失败，检查既有 run 状态后报告，不自动清理生产资源。
-- [ ] 只读核验 PC、admin、LINE 三站健康、数据库状态及精确发布 SHA，PC 索引引用的 CSS/JS 可达且含本次改进；有授权会话时只读查看已有报表，不能为验收创建真实业务记录。静态资源/健康检查与真实报表 UI 验收分别记录，不互相替代。
+- [x] 两项均完成后分开提交本 change 的规格、计划、代码和验证证据，具体文件 staging；不加入既有脏 `.github/workflows/deploy.yml`、`scripts/deploy/remote-deploy.sh`、`scripts/tests/remote-deploy.test.sh`、`scripts/tests/workflow-config.test.sh`、`scripts/deploy/line-mini-config.py`、`scripts/tests/line-mini-config.test.py`、`.qoder/`、用户手册或 `temp/`。不 amend、不改 git config、不跳 hooks。
+- [x] 仅在当前变更实施/提交/发布授权有效时推送；核验目标 SHA 的标准 CI 全部成功后运行标准 Deploy，禁止直接 SSH 写生产或私自修部署配置。若磁盘等环境问题导致失败，检查既有 run 状态后报告，不自动清理生产资源。
+- [x] 只读核验 PC、admin、LINE 三站健康、数据库状态及精确发布 SHA，PC 索引引用的 CSS/JS 可达且含本次改进；有授权会话时只读查看已有报表，不能为验收创建真实业务记录。静态资源/健康检查与真实报表 UI 验收分别记录，不互相替代。
 
 ## 4. 确认点与安全门槛
 

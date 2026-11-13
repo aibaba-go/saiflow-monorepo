@@ -2,7 +2,7 @@
 
 ## 当前状态与边界
 
-后端完整第二轮 **1421 passed、无跳过，3861.16s**，首轮管理员 CLI 连接超时用例及全量均已重跑通过，未修改时限或配置。根前端 lint/test/build 与 994 项测试通过；最后 PC 窄屏 CSS 后根 lint、报表/三语 78 项和三端 TypeScript/build 再次通过。最终隔离浏览器 40/40 场景通过，含 6 个后台与 14 个 OCR 场景，关键截图已实际打开核对。提交与发布尚未执行，未完成步骤不写为成功。
+后端完整第二轮 **1421 passed、无跳过，3861.16s**，首轮管理员 CLI 连接超时用例及全量均已重跑通过，未修改时限或配置。根前端 lint/test/build 与 994 项测试通过；最后 PC 窄屏 CSS 后根 lint、报表/三语 78 项和三端 TypeScript/build 再次通过。最终隔离浏览器 40/40 场景通过，含 6 个后台与 14 个 OCR 场景，关键截图已实际打开核对。PC `440fdd2` 与 OCR `a69a0e3` 已分别提交并推送；代码 SHA `a69a0e35aa0c25357080cd115850ffd97f8aed62` 的标准 CI 全部 5 jobs 成功，唯一标准 Deploy 成功，三站独立只读 GET 核对精确 SHA、数据库 ok、新资产及 OCR 文案。生产默认引擎未自动切换；真实厂商质量、授权后台控件会话与原生 LINE 未验，不写为成功。
 
 起点：`e2ce30e048de14e56b6055a68dc2001f0cfd0c1e`。用户已针对本变更和 pc-report-view-polish 书面授权开发、测试、提交及标准 CI→Deploy。未修改生产默认设置、部署脚本、数据库结构、公开 API 或生成客户端；没有调用付费 OCR/LLM 或使用真实业务记录。
 
@@ -69,7 +69,7 @@ npx --offline --yes pnpm@12.11.2 -r --workspace-concurrency=1 build
 
 完整链 exit 0，源代码最终状态无删减测试；日志 `frontend-full-lint.log`、`frontend-full-test.log`、`frontend-full-build.log`。客户端 **5/1 file**、共享 UI **162/10 files**、LINE **438/37 files**、admin **97/16 files**、PC **292/23 files**，合计 **994 passed/87 files**；覆盖新增 no-op 与根表/null 回归。lint、TypeScript 和三端 Vite 最终构建通过；构建有 bundle 体积/插件耗时提示，不改配置消除提示。
 
-根全量结束后启动完整后端第二轮 `pytest tests -v --tb=short -p no:cacheprovider`，日志 `backend-full-rerun.log`；最终 1421 项全部通过，结果见上文。浏览器使用三端最终 dist、固定 127.0.0.1 静态端口、合成 API/身份与仅内存 LIFF-init shim，新增四个真实 UI 触发的确认/导出场景（下载字节是明确标识的合成 JSON，不是 XLSX 工作簿）。CI/Deploy 尚未执行。
+根全量结束后启动完整后端第二轮 `pytest tests -v --tb=short -p no:cacheprovider`，日志 `backend-full-rerun.log`；最终 1421 项全部通过，结果见上文。浏览器使用三端最终 dist、固定 127.0.0.1 静态端口、合成 API/身份与仅内存 LIFF-init shim，新增四个真实 UI 触发的确认/导出场景（下载字节是明确标识的合成 JSON，不是 XLSX 工作簿）。该轮结束时 CI/Deploy 尚未执行；最终发布结果见下文。
 
 ## 浏览器实际执行记录
 
@@ -87,10 +87,22 @@ npx --offline --yes pnpm@12.11.2 -r --workspace-concurrency=1 build
 
 实际打开最终中文 400 图，备用与地址错误分别有红色提示，未保存输入保留；另核对中文联动、英文 pending loading、PC 多页原文、LINE 泰语只读及 PC 确认后大整数/root-table/null 显示。四个确认/导出场景仍仅合成 JSON blob，真实工作簿由后端 openpyxl 验证；静态 LINE shim 不证明原生设备行为。所有浏览器 API/身份为合成，未知 API 和外网请求拒绝。
 
-两 change 严格校验均通过，全部 32 条本地文件链接可达；完整后端第二轮 1421 项全部通过。最后完整只读范围审查核对 33 个 tracked 差异及新通用测试，无新 P0/P1；只读审查未运行测试或调用外部服务。提交、CI 与 Deploy 尚未执行。
+两 change 严格校验均通过，全部 32 条本地文件链接可达；完整后端第二轮 1421 项全部通过。最后完整只读范围审查核对 33 个 tracked 差异及新通用测试，无新 P0/P1；只读审查未运行测试或调用外部服务。本节记录结束时尚未执行提交、CI 与 Deploy；最终结果见下文。
 
 ## 规格同步与归档
 
 2026-11-14 复用已取得的 specs 规则 snapshot，向 recognition/web-admin 既有 main spec 追加本 change 的 **3 FR/13 AC**，PC change 同步另外 **3 FR/10 AC**。三份原文件的全部字节、标题/Purpose/48 旧需求保持不变，新增内容与三个 pure ADDED delta 逐字一致，共 54 需求且无 delta 操作标题；只读 snapshot 验证通过。`openspec validate --specs` **15 passed/0 failed**，两个 change strict 通过，未修改无关旧规范提示。
 
 两个最小 tasks 链接均 **1/1、state=all_done**；不创建 design，按项目流程仅移动这两个 change 到 `archive/2026-11-14-*`，`.openspec.yaml` 保留，其他 active change 不动。归档相关 23 链接修正后，全部 **32 本地文件链接可达**。发布前三站 unauthenticated health GET 均为旧代码 `e2ce30e048de14e56b6055a68dc2001f0cfd0c1e`、数据库 ok，不把旧代码健康当本次上线。
+
+## 标准 CI 与发布进度
+
+两个独立新提交 `440fdd2` / `a69a0e3` 已正常推送，目标代码 SHA `a69a0e35aa0c25357080cd115850ffd97f8aed62`。目标 [CI 43503353540](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43503353540) 最后完成于 `2026-11-13T20:46:12Z`（曼谷 2026-11-14），backend/frontend/contract/scripts/stack 全部 **5 jobs success**。实际后端 job 日志为 **1421 passed in 451.66s，无 skip**；前端各工作区 **5+162+438+97+292=994 passed/87 files**，lint 与三端 TypeScript/build 成功，覆盖最终 PC CSS。首次监看遇到 `unexpected EOF` 仅是读取连接中断，恢复同 run 监看后成功，没有重跑 CI、修改配置或省略测试。
+
+核对远端 SHA 未变且没有同 SHA 既有 Deploy 后，仅触发一次 [Deploy 43504725409](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43504725409)，最终 **success**，完成于 `2026-11-13T20:51:48Z`（曼谷 2026-11-14 03:51:48）。构建推送镜像、标准上传/迁移/重启、三站健康、数据库端口关闭均成功。Deploy 监看曾遇到 GitHub API HTTP 500，真实 run 仍在运行，恢复同 run 监看后成功；没有重复部署或直接 SSH 修改，没有清理生产资源或修改既有脏部署配置。
+
+## 独立只读生产核验
+
+`2026-11-13T20:52:17Z` 开始独立 unauthenticated GET，实际输出 `temp/ocr-primary-selection/production-check.json` 为 **pass=true**：PC/admin/LINE 三站 health 都严格为 `status=ok/database=ok/version=a69a0e35aa0c25357080cd115850ffd97f8aed62`；HTML 引用的全部 **9 个 JS/CSS 资产 HTTP 200**，字节数和 SHA-256 已记录。PC 的只读报表与原文保底说明、后台默认 OCR 共用/下一任务生效说明、LINE 原文保底/无可读原文说明均在实际线上资产中存在。站点及主资源清单见 [共同发布核验](../2026-11-14-pc-report-view-polish/verification.md#独立只读生产核验)，线上 build hash 不强求等于本机。
+
+未切换生产默认、未写业务记录、未付费调用 OCR/LLM，未登录生产后台进行控件验收。真实厂商识别质量、授权生产 UI 与原生 LINE 身份/设备下载仍未验证。收尾保存计划与部署证据的新提交只改两 change 的 plan/verification，生产代码继续为上述 SHA，不为证据提交重复部署。

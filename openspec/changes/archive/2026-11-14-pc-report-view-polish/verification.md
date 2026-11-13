@@ -2,7 +2,7 @@
 
 ## 当前状态与边界
 
-列表与只读仪表盘实现已完成；三个审查阻断经 TDD 修复并二次审查关闭。根前端 994 项通过；最后窄屏 CSS 后根 lint、报表/三语完整 78 项和三端 TypeScript/build 通过。最终隔离浏览器 40/40 场景通过，主代理已打开最终 dist 的六种宽度/语言组合及关键状态截图核对。专用隔离数据库上的后端完整第二轮 **1421 passed、无跳过**。最后只读范围审查无新 P0/P1，提交及部署尚未完成，不以浏览器合成数据代替真实集成或生产验收。
+列表与只读仪表盘实现已完成；三个审查阻断经 TDD 修复并二次审查关闭。根前端 994 项通过；最后窄屏 CSS 后根 lint、报表/三语完整 78 项和三端 TypeScript/build 通过。最终隔离浏览器 40/40 场景通过，主代理已打开最终 dist 的六种宽度/语言组合及关键状态截图核对。专用隔离数据库上的后端完整第二轮 **1421 passed、无跳过**，最后只读范围审查无新 P0/P1。PC `440fdd2` 与 OCR `a69a0e3` 已分别提交并推送，精确代码 SHA `a69a0e35aa0c25357080cd115850ffd97f8aed62` 的标准 CI 全部 5 jobs 成功，唯一标准 Deploy 成功；三站独立只读 GET 已核对相同 SHA、数据库 ok、9 个 HTML 引用资产可达及新增文案。真实授权生产报表 UI、原生 LINE 和真实厂商识别质量未验，不以合成浏览器或健康检查替代。
 
 起点 `e2ce30e048de14e56b6055a68dc2001f0cfd0c1e`。用户书面授权本 change 与 ocr-primary-selection 开发、测试、提交和标准 CI→Deploy。保留组织/Starter+/report_view 与独立管理、导出权限，不新增菜单、统计接口、依赖、迁移或生产业务记录。不混入既有脏部署文件。
 
@@ -85,7 +85,7 @@ npx --offline --yes pnpm@12.11.2 -r --workspace-concurrency=1 build
 
 报表六组 1024/1440 × 英/泰/中文实际截图已打开：发布六图位置/尺寸保持，长泰文标题换行，日期/范围/版本可读，分类不再竖排。DOM 额外断言页面不超出验收视口、表格最小列宽和表头高度、原 keyboard region 实际 ArrowRight 滚动及鼠标拖动后布局不变。另打开卡片键盘焦点、日期覆盖、旧数据/Retry、中文诊断、列表错误和无统计截图核对互斥状态与提示。fullPage 图片拍摄时已滚动，sticky 顶栏/底栏可能出现在图片中段；不把这种捕获现象当业务遮挡，也不声称每张图证明所有滚动位置无重叠。
 
-两个 change 的严格校验与 32 条本地文件链接检查通过。专用隔离库完整后端第二轮 **1421 passed in 3861.16s，无 skip，exit 0**（`temp/ocr-primary-selection/backend-full-rerun.log`），首轮连接超时用例及完整集合均重新通过。最后只读范围审查完整核对实际增量、三个 delta 和相关测试，无新 P0/P1；没有新增业务改动。提交、CI、Deploy 和三站只读发布核验尚未执行。
+两个 change 的严格校验与 32 条本地文件链接检查通过。专用隔离库完整后端第二轮 **1421 passed in 3861.16s，无 skip，exit 0**（`temp/ocr-primary-selection/backend-full-rerun.log`），首轮连接超时用例及完整集合均重新通过。最后只读范围审查完整核对实际增量、三个 delta 和相关测试，无新 P0/P1；没有新增业务改动。本节记录结束时尚未执行提交、CI、Deploy 和三站发布核验；最终结果见下文。
 
 ## 规格同步与归档
 
@@ -94,3 +94,21 @@ npx --offline --yes pnpm@12.11.2 -r --workspace-concurrency=1 build
 两个最小 tasks 链接均 **1/1、state=all_done**；design 缺失按 AI-WORKFLOW 是预期，不生成。仅将本 change 及 OCR change 移入 `archive/2026-11-14-*`，保留 `.openspec.yaml`，修正 23 条随目录移动的链接；归档后全部 **32 本地文件链接可达**，4 条外部设计参考未重写。其他 active change 未移动或修改。
 
 发布前仅 unauthenticated GET：三站 health 均 `status=ok/database=ok/version=e2ce30e048de14e56b6055a68dc2001f0cfd0c1e`。此时仍未部署本次代码，不将旧版本健康当新版本上线证据。
+
+## 标准 CI 与发布进度
+
+本 change 新提交 `440fdd2`、OCR 新提交 `a69a0e3` 已正常推送，目标代码 SHA 为 `a69a0e35aa0c25357080cd115850ffd97f8aed62`，未加入既有脏部署文件。目标 [CI 43503353540](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43503353540) 全部 **5 jobs success**：backend、frontend、contract、scripts、stack；最后完成于 `2026-11-13T20:46:12Z`（曼谷 2026-11-14）。实际读取 job 日志核对：后端 **1421 passed in 451.66s，无 skip**，前端 **994 passed/87 files**，根 lint、三端 TypeScript/build 成功；该 CI 包含最终 CSS，不以 CSS 前的本机全量代替。
+
+已核对远端分支仍是上述 SHA，且无同 SHA 的既有 Deploy，随后仅触发一次 [Deploy 43504725409](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43504725409)，最终 **success**，完成于 `2026-11-13T20:51:48Z`（曼谷 2026-11-14 03:51:48）。镜像构建/推送、固定 SSH 主机密钥、标准文件上传、VPS 拉取/迁移/重启、三站健康与数据库端口关闭检查全部成功。首次 CI 监看 `unexpected EOF`、Deploy 监看 GitHub API HTTP 500 均为读取连接中断；分别读取真实 run 状态后恢复同 run 监看，未重跑 CI 或重复部署，未直接 SSH 变更、清理磁盘或改已有脏部署文件。
+
+## 独立只读生产核验
+
+`2026-11-13T20:52:17Z` 开始仅 unauthenticated GET，结果 `temp/ocr-primary-selection/production-check.json` 为 **pass=true**。三个站点 health 都严格等于 `status=ok/database=ok/version=a69a0e35aa0c25357080cd115850ffd97f8aed62`。每站 HTML 引用的主 JS、运行时 JS、CSS 全部 HTTP 200，共 9 个资产，记录字节数及 SHA-256；发布环境变量导致线上 hash 可异于本机，不以本机 hash 判错。
+
+| 站点 | 实际在线主 JS / CSS | 新内容检查 |
+|---|---|---|
+| [PC](https://saiflow-app.aibaba.asia) | `index-CWAprZ5D.js` / `index-C3F3QCCf.css` | 只读报表说明及逐页 OCR 原文保底说明存在 |
+| [后台](https://saiflow-admin.aibaba.asia) | `index-DbtRxguF.js` / `index-B6QkNIOJ.css` | 全系统默认 OCR、下一新任务生效说明存在 |
+| [LINE](https://saiflow-line2.aibaba.asia) | `index-AP5FGBSx.js` / `index-B-9ONQ0g.css` | 逐页 OCR 原文保底及无可读原文说明存在 |
+
+未进入生产授权业务会话、未修改 OCR 默认、未创建记录或付费 OCR/LLM。生产报表真实数据 UI、真实厂商识别质量及原生 LINE 身份/设备下载仍未验。此后用于保存计划勾选与发布证据的新提交仅修改两个 change 的 plan/verification，不改变已部署代码；生产代码版本保持上述 SHA，不为验证记录再部署。
