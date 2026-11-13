@@ -65,3 +65,11 @@
 - 12:59–13:00 UTC 定向删除已完成。锁内复核归属、FK 闭包、备份后行摘要、对象共享引用及活动状态；提交前 42 张表非目标行数量/内容摘要一致、102 个 FK 完整。原始结果 append-only 绕过仅限该次专属 DELETE，立即恢复 origin，未改变持久权限/触发器。11 个原件/预览/导出对象按 generation 条件删除。
 - 后置只读核验（`verification.json`，13:00:10 UTC）：原 user/tenant、邮箱及 LINE 邮箱账号、验证码、全部旧 scope 与对象均为 0；非目标数据与对象状态未变，schema 0019、trigger_mode origin，三站健康 200/ok。验证没有重建账号或游客会话；受限备份保留供回滚。
 - 原生验收边界：自动化与静态/健康核验不能代替 iPhone LINE 实际注册和 Continue。需在本次发布后由用户关闭重开 LINE 再测。
+
+### 本次确认恢复修复发布核验
+
+- 业务提交 `7cba269777f477f31be88a8833b9bf32dbf23d5b` 已推送至 `chore/ai-workflow-v2`，仅包含 4 个移动端源码/测试文件及本验证记录。工作区原有部署脚本、`.qoder/`、用户手册与 `temp/` 未提交；未修改 GitHub 变量、LIFF 或频道配置。
+- [CI run 43431779004](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43431779004) 对精确业务 SHA 结论 success：backend、frontend、contract、scripts、stack 全通过。后端 1314 项；前端 api-client 5、ui 162、line-mini 427、web-admin 89、web-pc 249 项通过。lint、构建、生成契约一致性、隔离栈和备份恢复演练通过。证据：`temp/line-confirm-resume-20261113/ci-43431779004.json`、同名 `.log`。
+- CI 成功且 `git ls-remote` 确认远端分支仍为业务 SHA 后，触发标准 [Deploy run 43433093095](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43433093095)（workflow_dispatch）。精确 SHA 一致、结论 success；迁移前备份 `saiflow-20261113T132621Z.dump`（256292 bytes）上传 `gs://saiflow-db-backup/`，本次无新迁移；日志含 `remote-deploy: done (7cba269…)`，三站健康与数据库端口外部关闭步骤通过。证据：`temp/line-confirm-resume-20261113/deploy-43433093095.json`、同名 `.log`。
+- 发布后只读核验（13:28:09 UTC，`temp/line-confirm-resume-20261113/production-check.json`）：三站健康 HTTP 200、`status=ok`、`database=ok`、完整版本为业务 SHA；LINE 首页引用新脚本 `/assets/index-Bx7twV_4.js` 和样式 `/assets/index-igJUDAqE.css` 均可读取，资源长度/摘要已记录，脚本包含确认恢复、取消控制器与登录后确认标记，结论 passed。仅请求健康接口和静态资源，没有创建 guest、注册账号、发送验证码、触发 OCR 或再次删除数据。
+- iPhone 原生 LINE 注册后自动续确认、Continue 等待与最终页跳转仍待用户实机验收；本次自动化/静态核验不冒充实机结果。此发布证据随后仅作独立文档提交，不再次部署文档 SHA。
