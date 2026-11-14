@@ -353,3 +353,14 @@
 - 根工作区 lint 通过；`pnpm -r test` 中 api-client 5、ui 162、line-mini **37 files / 442 passed**、web-admin 97 passed；web-pc 本地单线程在 590s 超时前已完成的 14 个测试文件全部通过、无失败（本次未改 web-pc/packages，完整结果以 CI frontend job 为准）。根工作区 `pnpm -r build` 通过（`temp/android-line-fix/build.log`）。未连接生产数据库、OCR 或付费服务。
 
 单元测试与桌面 Chrome 探针不能证明 Android LINE 真机上外部浏览器能保存 Excel，也不能替代真机触摸拖动；两点均需发布后在 Android LINE 内复测。
+
+## Android 明细表横向拖动与 Android LINE 导出 Excel 发布（2026-11-15）
+
+负责人授权“修复好测试完就提交发布”。
+
+- 业务提交 `8e965dbc3e8486f14e6cffcf43e44b7bdd534a9e` 仅包含上节 6 个 line-mini 文件及本验证记录，已推送并经 `git ls-remote` 确认；暂停的 deploy/scripts 改动、`.qoder/`、用户手册与临时产物未纳入。
+- [CI 43616265551](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43616265551)：**success**，contract、stack、backend、scripts、frontend 五项全部通过（frontend 含 web-pc 全量测试，补足本地超时未完成的部分）。
+- 再次确认远端 SHA 后手动触发一次标准 [Deploy 43617083864](https://github.com/aibaba-go/saiflow-monorepo/actions/runs/43617083864)（workflow_dispatch，SHA 精确一致）：**success**。未直接 SSH 修改生产，未改 GitHub 变量、LIFF/频道配置或 OCR 默认引擎。
+- 发布后只读核验（`temp/android-line-fix/production-check.json`，passed）：三站 `/api/v1/health` HTTP 200、`status=ok`、`database=ok`、版本均为 `8e965db…`；LINE 首页脚本 `/assets/index-yShD8OC5.js` 含 `openExternalBrowser`，样式 `/assets/index-DXRxw-ub.css` 含 `field-sizing`。
+
+核验仅请求公共健康接口、首页与静态资源，没有签发票据、创建导出、修改账号或触发 OCR。Android LINE 真机上 Excel/CSV 是否经手机浏览器实际保存、明细表是否可触摸横向拖动，仍需负责人关闭并重开 LINE 小程序后复测。本证据以仅文档提交推送，不再次部署。
