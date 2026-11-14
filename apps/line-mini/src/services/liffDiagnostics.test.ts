@@ -93,18 +93,19 @@ describe("LIFF diagnostics (FR-SYS-040/107, FR-REPORT-016, FR-PLAT-002/003)", ()
   const IOS_LINE = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile/15E148 Safari Line/15.0.0";
   const ANDROID_LINE = "Mozilla/5.0 (Linux; Android 14) Chrome/130.0 Mobile Safari/537.36 Line/15.0.0";
   it.each([
-    ["LIFF client on PC UA", true, PC, true],
-    ["iPhone LINE browser with isInClient=false (observed in production)", false, IOS_LINE, true],
-    ["Android LINE browser with isInClient=false", false, ANDROID_LINE, true],
-    ["PC browser", false, PC, false],
-    ["iPhone Safari outside LINE", false, SAFARI, false],
-  ])("%s: Excel and CSV use server attachments only inside LINE", async (_name, inClient, ua, attachment) => {
+    ["LIFF client on PC UA", true, PC, true, false],
+    ["iPhone LINE browser with isInClient=false (observed in production)", false, IOS_LINE, true, false],
+    // LINE's in-app browser refuses downloads, so Android hands the ticket to the phone browser.
+    ["Android LINE browser with isInClient=false", false, ANDROID_LINE, true, true],
+    ["PC browser", false, PC, false, false],
+    ["iPhone Safari outside LINE", false, SAFARI, false, false],
+  ])("%s: Excel and CSV use server attachments only inside LINE", async (_name, inClient, ua, attachment, external) => {
     const m = apiMock();
     vi.spyOn(navigator, "userAgent", "get").mockReturnValue(ua);
     const liff = registered({ inClient, loggedIn: true });
     const excel = await exportAndDownload("private-job", "en", liff, "private-name.xlsx");
     const csv = await downloadCsv(liff, 1, "private-card", null, 2);
-    expect(excel.how).toBe("saved");
+    expect(excel.how).toBe(external ? "external" : "saved");
     expect(csv.how).toBe(attachment ? "prepared" : "saved");
     expect(m.count("POST /api/v1/exports/private-export/ticket")).toBe(attachment ? 1 : 0);
     expect(m.count("GET /api/v1/exports/private-export/download")).toBe(attachment ? 0 : 1);
@@ -114,6 +115,7 @@ describe("LIFF diagnostics (FR-SYS-040/107, FR-REPORT-016, FR-PLAT-002/003)", ()
       .map((link) => (link as HTMLAnchorElement).href);
     expect(clicked).toEqual(attachment
       ? ["http://localhost/api/v1/export-downloads/private-ticket", "http://localhost/api/v1/report-downloads/private-ticket"]
+        .map((href) => (external ? `${href}?openExternalBrowser=1` : href))
       : ["blob:private-ticket", "blob:private-ticket"]);
     await vi.waitFor(() => expect(observations(m)).toHaveLength(2));
     expect(observations(m).map((v) => [v.event, v.in_client, v.branch])).toEqual([

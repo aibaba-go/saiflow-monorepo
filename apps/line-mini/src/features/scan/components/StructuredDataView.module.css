@@ -110,6 +110,23 @@
 .table-scroll {
   overflow-x: auto;
   overscroll-behavior-x: contain;
+  /* Android WebViews need an explicit pan permission on the scroller (FR-SYS-105). */
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* A detail-table input sizes to its text (field-sizing; the size attribute where that is
+ * unsupported) so long text widens the table and the scroller pans, instead of the text
+ * being clipped inside an input that swallows the drag on Android. */
+.table-scroll td:has(> .cell-input) {
+  max-width: none;
+}
+
+.table-scroll .cell-input {
+  field-sizing: content;
+  width: auto;
+  min-width: max(100%, 96px);
+  max-width: 320px;
 }
 
 table {

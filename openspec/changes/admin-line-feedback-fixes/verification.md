@@ -341,3 +341,15 @@
 - 发布后只读核验（13:25:49 UTC，`temp/xlsx-share/line-attachment-production-check.json`，passed）：三站健康接口 HTTP 200、`status=ok`、`database=ok`、版本均为 `d0a1f2f…`。LINE 首页脚本 `/assets/index-CyTUOq38.js` 中下载分支函数为 `n=e.isInClient()` 后 `r=n||/\bLine\//i.test(navigator.userAgent)` 并上报实际分支；包含 report/export 附件下载路径与既有 LIFF ID，不含暂停的新 ID。
 
 核验只请求公共健康接口、首页与静态脚本，没有签发票据、创建业务导出、修改账号或触发 OCR。iPhone/Android LINE 内是否实际保存 CSV/Excel 仍未经真机验证，需负责人关闭并重开 LINE 后测试，再按时间检索 `liff_diagnostic` 确认 `branch=ticket` 及附件下载请求。本证据以仅文档提交推送，不再次部署。
+
+## Android 明细表横向拖动与 Android LINE 导出 Excel（2026-11-15，本地验证）
+
+负责人反馈：Android 上核验结果的明细表无法拖动查看；Android LINE 导出结果 Excel 时提示 LINE 内置浏览器不支持下载文件。
+
+- 导出根因（FR-SYS-107、FR-SYS-144、FR-ENTRY-015）：上节已让带 `Line/` UA 的浏览器走服务器附件 ticket，但 `deliverDownload` 对 Android LINE 且 `isInClient()=false`（生产实况）仍按普通附件点击带 `download` 属性的链接，LINE 内置浏览器因此拒绝。修复：Android LINE UA 且 `isInClient()=false` 时，在 ticket URL 上加 `openExternalBrowser=1`，以无 `download` 属性、`rel="noopener noreferrer"` 的链接交给手机浏览器，结果为 `external`；`isInClient()=true`（或抛错且 UA 为 Android LINE）时仍用 `liff.openWindow({external:true})`，失败退回同一外部链接。PC、手机 Safari/Chrome、iPhone LINE 行为不变；CSV 共用同一投递函数。ticket 签发、签名/期限、认证、文件名、LIFF/频道配置均未改。
+- 明细表根因（FR-SYS-105）：表格单元内输入框为百分比宽度，不为自动布局列贡献宽度，且 `td` 有 `max-width: 260px`，长文本被截在输入框内、表格不溢出；Android 上从被截断的输入框开始的拖动被输入框消耗，滚动容器无可滚距离。修复：表格输入框使用 `field-sizing: content`（不支持时以 `size` 属性按文本长度 8–40 字符兜底），宽度 `min-width: max(100%, 96px)`、`max-width: 320px`，解除含输入框单元的 `max-width`；滚动容器加 `touch-action: pan-x pan-y`、`overscroll-behavior-x: contain`。超过约 320px 的单值仍在其输入框内截断（设计取舍）。表头字段输入框不受影响。
+- TDD：新增用例在实现前失败（`temp/android-line-fix/red.log`：download 2 failed；`red-table.log`：result 1 failed）。实现后 download 模块 16 passed；诊断矩阵新增 `external` 列，仅“Android LINE 且 isInClient=false”期望 `external` 与 `?openExternalBrowser=1` 链接，CSV 结果仍为 prepared。
+- 布局探针（Chrome，正文宽 328px，`temp/android-line-fix/before.html`/`after.html`）：修复前表格不溢出；修复后 field-sizing 模式表格 457px、滚动容器 281px，`maxScrollLeft=176`，`size` 兜底模式 229，两种模式单元格均无重叠。
+- 根工作区 lint 通过；`pnpm -r test` 中 api-client 5、ui 162、line-mini **37 files / 442 passed**、web-admin 97 passed；web-pc 本地单线程在 590s 超时前已完成的 14 个测试文件全部通过、无失败（本次未改 web-pc/packages，完整结果以 CI frontend job 为准）。根工作区 `pnpm -r build` 通过（`temp/android-line-fix/build.log`）。未连接生产数据库、OCR 或付费服务。
+
+单元测试与桌面 Chrome 探针不能证明 Android LINE 真机上外部浏览器能保存 Excel，也不能替代真机触摸拖动；两点均需发布后在 Android LINE 内复测。

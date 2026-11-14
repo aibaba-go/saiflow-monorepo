@@ -111,6 +111,9 @@ function genericView(value: Json, docInfo: string): GroupView[] {
 }
 
 const NUMERIC = new Set(["decimal", "amount"]);
+/** Detail-table input width in characters: readable short cells, a capped long text. */
+const TABLE_INPUT_MIN = 8;
+const TABLE_INPUT_MAX = 40;
 
 /** Read-only text: decimals and amounts with thousands separators, never through a float. */
 export function formatCell(value: Json, type?: string): string {
@@ -148,8 +151,9 @@ export function StructuredDataView({ value, groups, schemaName, missing, warning
     };
   };
 
-  function input(path: Path, name: string, type?: string, required?: boolean) {
+  function input(path: Path, name: string, type?: string, required?: boolean, inTable?: boolean) {
     const m = marks(path);
+    const text = asText(getAt(value, path));
     return editable ? (
       <>
         <input
@@ -158,7 +162,11 @@ export function StructuredDataView({ value, groups, schemaName, missing, warning
           aria-required={required || undefined}
           aria-invalid={m.missing || undefined}
           inputMode={type && (NUMERIC.has(type) || type === "integer") ? "decimal" : undefined}
-          value={asText(getAt(value, path))}
+          // A detail-table cell sizes to its text so the table overflows and can be
+          // panned sideways (FR-SYS-105). A percentage-width input contributes no
+          // width to its column, which clipped long descriptions on Android.
+          size={inTable ? Math.min(TABLE_INPUT_MAX, Math.max(TABLE_INPUT_MIN, [...text].length + 2)) : undefined}
+          value={text}
           onChange={(e) => onChange(setAt(value, path, e.target.value))}
           onBlur={() => {
             const text = asText(getAt(value, path));
@@ -376,7 +384,7 @@ export function StructuredDataView({ value, groups, schemaName, missing, warning
                                   className={cls(m.missing && "required-missing", m.warning && "type-warning", m.computed && "amount-issue")}
                                   tabIndex={-1}
                                 >
-                                  {input(path, label(c, lang), c.type, c.required)}
+                                  {input(path, label(c, lang), c.type, c.required, true)}
                                 </td>
                               );
                             })}

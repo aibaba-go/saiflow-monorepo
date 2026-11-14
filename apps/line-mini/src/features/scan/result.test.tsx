@@ -512,6 +512,27 @@ describe("template extra header fields on the result page (FR-SYS-105-05..10)", 
     expect(api.calls.filter((c) => c.method !== "GET")).toHaveLength(0); // nothing written back
   });
 
+  it("sizes detail-table inputs to their text so a long row pans sideways (105, Android)", async () => {
+    const long = "(JOO)DEOMASEUK SEAWEED 4G"; // cut off on Android before the fix
+    const groups = [{ ...XGROUPS[0]!, items: [
+      ...XGROUPS[0]!.items.slice(0, 2),
+      { kind: "table", key: "invoices", name: "Invoices", columns: [{ key: "amount", name: "Amount", type: "amount" }, { key: "description", name: "Description", type: "string" }] },
+    ] }];
+    mockApi({
+      [`GET ${JOB}`]: () => json(200, job("VERIFYING")),
+      [`GET ${JOB}/result`]: () => json(200, result(2, { document: { ...base, invoices: [{ amount: "100.00", description: long }, { amount: "5", description: "" }, { amount: "1", description: "x".repeat(80) }] } },
+        { template: { template_version_id: 3, name: "Billing Note", groups } })),
+    });
+    page("result");
+    const descriptions = await screen.findAllByRole("textbox", { name: "Description" });
+    expect(descriptions[0]).toHaveValue(long);
+    expect(descriptions[0]).toHaveAttribute("size", String(long.length + 2)); // whole text visible
+    expect(descriptions[1]).toHaveAttribute("size", "8"); // empty cell keeps a usable width
+    expect(screen.getAllByRole("textbox", { name: "Amount" })[0]).toHaveAttribute("size", "8");
+    expect(descriptions[2]).toHaveAttribute("size", "40"); // capped; the input still scrolls internally
+    expect(screen.getByRole("textbox", { name: "Billing No." })).not.toHaveAttribute("size"); // field rows unchanged
+  });
+
   it.each([false, true])("edits an extra value and saves a new version (105-06, returned=%s)", async (returned) => {
     const back = { round_no: 1, level: 1, decision: "RETURN", comment: "税额不对", reviewer_name: "Ratana", created_at: "2026-11-06T03:00:00Z" };
     const review = { stage: "NONE", required_level: null, records: returned ? [back] : [], last_return: returned ? back : null };
