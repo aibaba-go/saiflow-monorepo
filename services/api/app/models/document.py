@@ -22,11 +22,11 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
 from app.ocr.states import (
-    ENGINES,
     EXPORT_FORMATS,
     EXPORT_STATUSES,
     FILE_STATUSES,
     JOB_STATUSES,
+    RECORDED_ENGINES,
     REVIEW_STATUSES,
     sql_in,
 )
@@ -70,7 +70,9 @@ class OcrJob(Base):
         CheckConstraint(
             f"review_status in ({sql_in(REVIEW_STATUSES)})", name="ocr_jobs_review_status"
         ),
-        CheckConstraint(f"engine is null or engine in ({sql_in(ENGINES)})", name="ocr_jobs_engine"),
+        CheckConstraint(
+            f"engine is null or engine in ({sql_in(RECORDED_ENGINES)})", name="ocr_jobs_engine"
+        ),
         UniqueConstraint("tenant_id", "idempotency_key", name="uq_ocr_jobs_tenant_idempotency"),
         Index("ix_ocr_jobs_tenant_created", "tenant_id", "created_at"),
         Index("ix_ocr_jobs_status_created", "status", "created_at"),
@@ -136,7 +138,7 @@ class OcrRawResult(Base):
 
     __tablename__ = "ocr_raw_results"
     __table_args__ = (
-        CheckConstraint(f"engine in ({sql_in(ENGINES)})", name="ocr_raw_results_engine"),
+        CheckConstraint(f"engine in ({sql_in(RECORDED_ENGINES)})", name="ocr_raw_results_engine"),
     )
 
     id: Mapped[str] = mapped_column(_ID, primary_key=True)

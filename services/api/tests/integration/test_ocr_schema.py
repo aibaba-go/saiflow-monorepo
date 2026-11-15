@@ -233,3 +233,100 @@ async def test_0011_reseeds_roles(db_engine):
     summary = next(g for g in groups if g["key"] == "summary")
     roles = {i["key"]: i.get("role") for i in summary["items"]}
     assert roles["net_total"] == "grand_total" and roles["vat_amount"] == "tax"
+
+
+def test_0020_moves_vision_to_document_ai_and_keeps_history(db_settings_session):
+    """AC-FR-SYS-005-06: a saved Vision selection becomes Document AI, Vision health goes,
+    and Vision jobs and raw results recorded before the upgrade stay valid (FR-OCR-028)."""
+    import asyncio
+
+    from app.db import create_engine
+
+    async def run(*sqls: str, replica: bool = False):
+        engine = create_engine(db_settings_session)
+        values = []
+        try:
+            async with engine.begin() as conn:
+                if replica:
+                    await conn.execute(text("SET LOCAL session_replication_role = replica"))
+                for sql in sqls:
+                    res = await conn.execute(text(sql))
+                    values.append(res.all() if sql.lstrip().startswith("select") else None)
+        finally:
+            await engine.dispose()
+        return values[-1]
+
+    settings = (
+        f"select key, value #>> '{{}}' from {S}.system_settings where key like 'ocr_%_engine'"
+    )
+    down = _alembic(db_settings_session, "downgrade", "0019")
+    assert down.returncode == 0, down.stderr
+    try:
+        asyncio.run(
+            run(
+                f"insert into {S}.system_settings (key, value) values "
+                "('ocr_primary_engine', '\"google_vision\"'), "
+                "('ocr_backup_engine', '\"textin\"') "
+                "on conflict (key) do update set value = excluded.value",
+                f"insert into {S}.ocr_engine_health (engine, consecutive_failures) "
+                "values ('google_vision', 3), ('textin', 1)",
+                f"insert into {S}.tenants (kind, status) values ('guest', 'active')",
+                f"insert into {S}.files (id, tenant_id, original_name, status, page_count) "
+                f"select 'f-0020', max(id), 'a.png', 'READY', 1 from {S}.tenants",
+                f"insert into {S}.ocr_jobs (id, tenant_id, file_id, status, engine) "
+                f"select 'j-0020', max(id), 'f-0020', 'SUCCEEDED', 'google_vision' "
+                f"from {S}.tenants",
+                f"insert into {S}.ocr_raw_results (id, job_id, engine, payload) "
+                "values ('r-0020', 'j-0020', 'google_vision', '{\"pages\": []}')",
+            )
+        )
+        up = _alembic(db_settings_session, "upgrade", "head")
+        assert up.returncode == 0, up.stderr
+        assert dict(asyncio.run(run(settings))) == {
+            "ocr_primary_engine": "google_docai",
+            "ocr_backup_engine": "textin",
+        }
+        health = asyncio.run(run(f"select engine from {S}.ocr_engine_health"))
+        assert [r[0] for r in health] == ["textin"]
+        history = asyncio.run(
+            run(f"select engine from {S}.ocr_raw_results where job_id = 'j-0020'")
+        )
+        assert history == [("google_vision",)]
+        with pytest.raises(DBAPIError):  # Vision can no longer be selected or tracked
+            asyncio.run(run(f"insert into {S}.ocr_engine_health (engine) values ('google_vision')"))
+        # a Document AI result blocks the downgrade
+        asyncio.run(
+            run(
+                f"insert into {S}.ocr_raw_results (id, job_id, engine, payload) "
+                "values ('r-0020-docai', 'j-0020', 'google_docai', '{\"documents\": []}')"
+            )
+        )
+        refused = _alembic(db_settings_session, "downgrade", "0019")
+        assert refused.returncode != 0 and "Document AI results exist" in refused.stderr
+    finally:
+        asyncio.run(
+            run(
+                f"delete from {S}.ocr_raw_results where job_id = 'j-0020'",
+                f"delete from {S}.ocr_jobs where id = 'j-0020'",
+                f"delete from {S}.files where id = 'f-0020'",
+                f"delete from {S}.tenants",
+                f"delete from {S}.ocr_engine_health",
+                f"delete from {S}.system_settings where key like 'ocr_%_engine'",
+                replica=True,
+            )
+        )
+    # with no Document AI results the downgrade restores Vision, then upgrade again
+    asyncio.run(
+        run(
+            f"insert into {S}.system_settings (key, value) values "
+            "('ocr_backup_engine', '\"google_docai\"')"
+        )
+    )
+    try:
+        down = _alembic(db_settings_session, "downgrade", "0019")
+        assert down.returncode == 0, down.stderr
+        assert dict(asyncio.run(run(settings))) == {"ocr_backup_engine": "google_vision"}
+    finally:
+        up = _alembic(db_settings_session, "upgrade", "head")
+        assert up.returncode == 0, up.stderr
+        asyncio.run(run(f"delete from {S}.system_settings where key like 'ocr_%_engine'"))

@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.clock import utcnow
 from app.config import Settings
 from app.models import DocumentTemplateVersion, OcrJob, OcrRawResult, TemplateMapping
-from app.ocr import states
+from app.ocr import page_text, states
 from app.ocr.templates import converter, matcher, normalize
 from app.ocr.templates.llm import (
     MAPPING_INTERRUPTED,
@@ -117,7 +117,7 @@ async def run_once(
             raw = await db.get(OcrRawResult, mapping.raw_result_id)
             if raw is None:
                 raise MappingError(RAW_RESULT_MISSING, "raw result missing")
-            payload = raw.payload
+            payload = page_text.model_input(raw.engine, raw.payload)  # FR-OCR-028
             job = await db.get(OcrJob, job_id)
             tenant_id = job.tenant_id
             ocr = await ocr_settings_service.get(db)

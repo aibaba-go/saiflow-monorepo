@@ -3,8 +3,8 @@ doc_id: DES-001
 title: "SaiFlow — 系统架构"
 type: design
 status: active
-version: 3.9.0
-updated: 2026-11-11
+version: 3.10.0
+updated: 2026-11-15
 owner: Product Engineering
 source: "PRD-001 v3.3 §3.1, §3.2, §4, §4.9, §5; ADR-008"
 related: [DM-FormDocument, DM-ExtractionPayload, DM-OcrJob, OCR-Pipeline, API-Spec, NFR-SEC, ADR-006, ADR-008]
@@ -32,7 +32,7 @@ doc_source: manual
 | 密钥 | 服务器上的环境变量文件（仅管理员可读）；部署用值在 GitHub Secrets |
 | 镜像与部署 | GHCR；GitHub Actions 手动触发，经 SSH 部署 |
 | 身份与消息入口 | LINE Login、LINE LIFF、LINE Official Account |
-| OCR 引擎 | TextIn、Google Cloud Vision API（首选/备用，可配置） |
+| OCR 引擎 | TextIn、Google Document AI OCR（asia-southeast1 处理器；首选/备用，可配置） |
 | 大模型 | 可配置的大模型服务（地址与 AppKey 由平台 admin 配置） |
 
 ## 1. 架构原则
@@ -174,6 +174,7 @@ v2 中列为 proposed 的 ADR-002（可插拔 OCR 引擎）已由 PRD §4.6 的�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 3.10.0 | 2026-11-15 | Product Engineering | `docai-backup-engine`：OCR 引擎改为 TextIn、Google Document AI OCR（asia-southeast1） |
 | 3.9.0 | 2026-11-11 | Product Engineering | 补充三端报表与模板管理职责、共享组件边界、配置持久化/实时 numeric 查询和 admin 合成预览隔离 |
 | 3.8.0 | 2026-11-07 | Product Engineering | 前端表按 ADR-010：小程序改用 Tailwind CSS + shadcn/ui，三个前端的界面按 STD-008（变更 `ui-restyle`） |
 | 3.7.0 | 2026-11-06 | Product Engineering | B-3（`ocr-scan-flow`）：识别服务 `saiflow-be-ocr` 承担 OCR 调用、引擎切换与大模型匹配转换；原件存私有 GCS 桶，文件由后端代为读取，LINE 内下载用 60 秒下载凭证（取代签名 URL 的设想） |

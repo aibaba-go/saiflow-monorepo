@@ -3,8 +3,8 @@ doc_id: NFR-000
 title: "SaiFlow — 非功能需求"
 type: nfr
 status: active
-version: 1.3.2
-updated: 2026-11-06
+version: 1.3.3
+updated: 2026-11-15
 owner: Product Engineering
 source: "PRD-001 §5"
 ---
@@ -33,7 +33,7 @@ source: "PRD-001 §5"
 |----|------|----------|--------|
 | NFR-SEC-001 | 静态加密 | GCS 中的文档与数据库备份启用静态加密；VPS 上数据库与本地备份文件的静态加密方式按 PRD OQ-30 在投产前确定并启用（ADR-008） | P0 |
 | NFR-SEC-002 | 私有云对象存储 | 文档字节仅存储于私有 GCS Bucket；不得使用公共 Bucket、匿名访问或由浏览器持有服务凭据 | P0 |
-| NFR-SEC-003 | 隔离的操作权限 | 在服务端强制实施 RBAC；访问 GCS 与 Vision 的 GCP 服务账号只授予所需权限（业务桶读写、备份桶写入、Vision 调用）；数据库应用账号只授予所需权限；服务器部署账号只拥有部署所需权限 | P0 |
+| NFR-SEC-003 | 隔离的操作权限 | 在服务端强制实施 RBAC；访问 GCS 与 Document AI 的 GCP 服务账号只授予所需权限（业务桶读写、备份桶写入、Document AI API User）；数据库应用账号只授予所需权限；服务器部署账号只拥有部署所需权限 | P0 |
 | NFR-SEC-009 | TextIn 密钥与跨境控制 | TextIn 等外部服务凭据仅存储于服务器上仅管理员可读的环境变量文件（部署所需的值存于 GitHub Secrets），不进仓库与镜像；生产调用须在 OQ-7 的 PDPA 与跨境评估通过后启用 | P0 |
 | NFR-SEC-010 | 原始识别载荷保护 | 原始 JSON（PostgreSQL jsonb）按载荷版本不可变；浏览器不得直接读写，访问必须经服务端授权 | P0 |
 | NFR-SEC-011 | admin 后台认证 | 平台 admin 后台使用与客户账号隔离的独立账号；口令以强单向哈希存储，连续失败达到阈值后锁定；admin 的每次写操作写入操作日志。短信 OTP 在接入短信平台后补充 | P0 |
@@ -71,7 +71,7 @@ source: "PRD-001 §5"
 
 | ID | 需求 | 详细信息 | 优先级 |
 |----|------|----------|--------|
-| NFR-REL-001 | 云服务依赖反馈 | 当 GCS、OCR 引擎（TextIn、Google Cloud Vision）、大模型或数据库不可用时，系统必须显示可操作的失败状态，不得声称离线完成 | P0 |
+| NFR-REL-001 | 云服务依赖反馈 | 当 GCS、OCR 引擎（TextIn、Google Document AI OCR）、大模型或数据库不可用时，系统必须显示可操作的失败状态，不得声称离线完成 | P0 |
 | NFR-REL-002 | 优雅失败 | 一份失败文档不得中止批次；应标记为失败且可重试 | P0 |
 | NFR-REL-003 | 数据持久性 | 处理期间崩溃不得损坏 GCS 原件、原始载荷或已归档文档 | P0 |
 | NFR-REL-004 | 恢复 | 重启或事件重放后恢复待处理任务，并通过幂等键避免重复的结构化结果 | P1 |
@@ -116,6 +116,7 @@ source: "PRD-001 §5"
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.3.3 | 2026-11-15 | Product Engineering | `docai-backup-engine`：NFR-SEC-003 服务账号权限改为 Document AI API User；NFR-REL-001 引擎名称同步 |
 | 1.3.2 | 2026-11-06 | Product Engineering | NFR-USAB-003：admin 后台为中文（默认）/英文（负责人 2026-11-06，B-5b） |
 | 1.3.1 | 2026-11-05 | Product Engineering | NFR-USAB-003：默认语言改为英语（负责人 2026-11-05，B-5a） |
 | 1.3.0 | 2026-11-02 | Product Engineering | 按 ADR-008（VPS + Docker，表单数据存 PostgreSQL）：改写 SEC-001/003/009/010、REL-001/003、DATA-005（每日备份，提升为 P0）/006 与 PERF-001 中的存储与凭据表述 |

@@ -22,8 +22,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models import OcrEngineHealth
+from app.ocr.docai import DocAIError
 from app.ocr.textin.errors import TextInAPIError
-from app.ocr.vision import VisionError
 from app.services.ocr_settings_service import OcrSettings
 
 Kind = Literal["service", "content"]
@@ -36,7 +36,7 @@ TEXTIN_TRANSIENT = {"408", "429", "458", "459", "30203", "40306", "-1"}
 class EngineResult:
     engine: str
     raw: Any
-    structured: Any  # TextIn's prompt-mode JSON; None for Vision (built later, FR-OCR-023)
+    structured: Any  # TextIn's prompt-mode JSON; None for Document AI (built later, FR-OCR-023)
     page_count: int
     missing_pages: list[int] = field(default_factory=list)
     duration_ms: int = 0
@@ -76,12 +76,12 @@ def classify(err: BaseException) -> Kind:
         if numeric is not None and 500 <= numeric < 600:
             return "service"
         return "content"
-    if isinstance(err, VisionError):
+    if isinstance(err, DocAIError):
         status = err.http_status
         if status is None:
-            return "content"  # an error inside one page's response
-        # throttling, outage, or a key/billing problem: the service, not the document
-        if status in (401, 403, 408, 429) or status >= 500:
+            return "service" if err.service else "content"
+        # throttling, outage, or a credentials/permission/processor problem: not the document
+        if status in (401, 403, 404, 408, 429) or status >= 500:
             return "service"
         return "content"
     if isinstance(err, EngineFailure):
@@ -98,8 +98,8 @@ def error_code(engine: str, err: BaseException) -> str:
         return "VENDOR_TRANSPORT"
     if isinstance(err, TextInAPIError):
         return f"TEXTIN_ERROR_{err.code}"
-    if isinstance(err, VisionError):
-        return f"VISION_ERROR_{err.code}"
+    if isinstance(err, DocAIError):
+        return f"DOCAI_ERROR_{err.code}"
     return "OCR_CONTENT_FAILED"
 
 
@@ -232,32 +232,38 @@ class TextInEngine:
         )
 
 
-class VisionEngine:
-    """Google Vision text detection: raw pages only; the LLM builds the structure later."""
+class DocAIEngine:
+    """Google Document AI OCR: raw documents only; the LLM builds the structure later."""
 
-    name = "google_vision"
+    name = "google_docai"
 
     def __init__(self, client) -> None:
         self._client = client
 
     def run(self, *, kind: str, content: bytes, filename: str, pages: int) -> EngineResult:
-        raw = self._client.annotate(content, kind, pages=pages)
-        return EngineResult(
-            engine=self.name, raw=raw, structured=None, page_count=len(raw["pages"]) or pages
-        )
+        raw = self._client.process(content, kind, pages=pages)
+        read = sum(len(doc.get("pages") or []) for doc in raw["documents"])
+        return EngineResult(engine=self.name, raw=raw, structured=None, page_count=read or pages)
 
 
 def build_engines(settings) -> dict[str, Engine]:
     """The engines whose keys are configured (FR-SYS-005 key status); others are unavailable."""
+    from app.ocr.docai import DocAIClient, docai_configured, token_for
     from app.ocr.textin.client import TextInClient
     from app.ocr.textin.config import textin_settings
-    from app.ocr.vision import VisionClient
 
     engines: dict[str, Engine] = {}
     textin = textin_settings(settings)
     if textin is not None:
         engines["textin"] = TextInEngine(TextInClient(textin))
-    key = settings.google_vision_api_key
-    if key is not None and key.get_secret_value().strip():
-        engines["google_vision"] = VisionEngine(VisionClient(key))
+    if docai_configured(settings):
+        engines["google_docai"] = DocAIEngine(
+            DocAIClient(
+                project=settings.docai_project_id,
+                location=settings.docai_location,
+                processor=settings.docai_processor_id,
+                version=settings.docai_processor_version,
+                token_provider=token_for(settings.gcs_credentials_file.strip()),
+            )
+        )
     return engines

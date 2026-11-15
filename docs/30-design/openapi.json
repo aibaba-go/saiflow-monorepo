@@ -2236,8 +2236,8 @@
       },
       "KeyStatusOut": {
         "properties": {
-          "google_vision": {
-            "title": "Google Vision",
+          "google_docai": {
+            "title": "Google Docai",
             "type": "boolean"
           },
           "llm": {
@@ -2251,7 +2251,7 @@
         },
         "required": [
           "textin",
-          "google_vision",
+          "google_docai",
           "llm"
         ],
         "title": "KeyStatusOut",

@@ -162,7 +162,15 @@ INJECTION = (
 
 
 def test_document_is_fenced_untrusted_data():  # AC-FR-TEMPLATE-014-06
-    text = sw.ocr_text({"pages": [{"fullTextAnnotation": {"text": INJECTION}}]})
+    docai = {
+        "documents": [
+            {
+                "text": INJECTION,
+                "pages": [{"layout": {"textAnchor": {"textSegments": [{"endIndex": "999"}]}}}],
+            }
+        ]
+    }
+    text = sw.ocr_text("google_docai", docai)
     assert "DOCUMENT>>>" not in text and "page 1" in text
     system, user = sw.build_messages(text)
     assert "untrusted" in system["content"] and "no tools" in system["content"]
@@ -172,7 +180,27 @@ def test_document_is_fenced_untrusted_data():  # AC-FR-TEMPLATE-014-06
     # The data block holds exactly one closing marker: the injected one was neutralised.
     assert data.count(sw._CLOSE) == 1 and data.rstrip().endswith(sw._CLOSE)
     assert "169.254.169.254" not in body[:start]  # only inside the data block
-    assert len(sw.ocr_text({"x": "y" * 100_000})) <= sw.MAX_TEXT_CHARS + 20
+    assert len(sw.ocr_text("textin", {"x": "y" * 100_000})) <= sw.MAX_TEXT_CHARS + 20
+
+
+def test_page_texts_by_engine():  # AC-FR-OCR-028-03
+    first = {"layout": {"textAnchor": {"textSegments": [{"endIndex": "3"}]}}}
+    second = {"layout": {"textAnchor": {"textSegments": [{"startIndex": "3", "endIndex": "6"}]}}}
+    docai = {
+        "documents": [
+            {
+                "text": "P1\nP2\n",
+                "pages": [first, second],
+                "entities": [{"type": "layout-json-that-must-not-be-sent"}],
+            }
+        ]
+    }
+    text = sw.ocr_text("google_docai", docai)
+    assert text == "--- page 1 ---\nP1\n\n--- page 2 ---\nP2\n"
+    vision = {"pages": [{"fullTextAnnotation": {"text": "V1"}}]}
+    assert sw.ocr_text("google_vision", vision) == "--- page 1 ---\nV1"
+    textin = {"pages": [{"fullTextAnnotation": {"text": "not textin"}}], "result": {"x": 1}}
+    assert sw.ocr_text("textin", textin).startswith('{"pages"')
 
 
 class _Llm:
@@ -195,7 +223,7 @@ def test_injection_does_not_change_behaviour():  # AC-FR-TEMPLATE-014-06
     evil = dict(ANSWER, tool_calls=[{"url": "http://169.254.169.254"}], exec="rm -rf /")
     llm = _Llm([evil])
     client = LlmClient(CONFIG, transport=llm.transport, sleep=lambda s: None)
-    cand = sw.generate(client, sw.ocr_text({"text": INJECTION}))
+    cand = sw.generate(client, sw.ocr_text("textin", {"text": INJECTION}))
     assert [str(r.url) for r in llm.requests] == ["https://llm.test/chat/completions"]
     sent = json.loads(llm.requests[0].content)
     assert "sk-secret-key" not in json.dumps(sent)

@@ -63,7 +63,11 @@ services:
       # OCR engine and LLM keys (FR-SYS-005); the admin console shows only configured or not
       TEXTIN_APP_ID: ${TEXTIN_APP_ID:-}
       TEXTIN_SECRET_CODE: ${TEXTIN_SECRET_CODE:-}
-      GOOGLE_VISION_API_KEY: ${GOOGLE_VISION_API_KEY:-}
+      # Document AI OCR (backup engine) signs in with GCS_CREDENTIALS_FILE (FR-OCR-027)
+      DOCAI_PROJECT_ID: ${DOCAI_PROJECT_ID:-}
+      DOCAI_LOCATION: ${DOCAI_LOCATION:-asia-southeast1}
+      DOCAI_PROCESSOR_ID: ${DOCAI_PROCESSOR_ID:-}
+      DOCAI_PROCESSOR_VERSION: ${DOCAI_PROCESSOR_VERSION:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
       # Originals, previews and exports (ocr-scan-flow, ADR-008); empty bucket = uploads 503
       GCS_BUCKET: ${GCS_BUCKET:-}
@@ -92,7 +96,11 @@ services:
       GCS_CREDENTIALS_FILE: ${GCS_CREDENTIALS_FILE:-}
       TEXTIN_APP_ID: ${TEXTIN_APP_ID:-}
       TEXTIN_SECRET_CODE: ${TEXTIN_SECRET_CODE:-}
-      GOOGLE_VISION_API_KEY: ${GOOGLE_VISION_API_KEY:-}
+      # Document AI OCR (backup engine) signs in with GCS_CREDENTIALS_FILE (FR-OCR-027)
+      DOCAI_PROJECT_ID: ${DOCAI_PROJECT_ID:-}
+      DOCAI_LOCATION: ${DOCAI_LOCATION:-asia-southeast1}
+      DOCAI_PROCESSOR_ID: ${DOCAI_PROCESSOR_ID:-}
+      DOCAI_PROCESSOR_VERSION: ${DOCAI_PROCESSOR_VERSION:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
       OCR_WORKER_ENABLED: ${OCR_WORKER_ENABLED:-true}
     volumes:

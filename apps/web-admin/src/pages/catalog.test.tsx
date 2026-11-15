@@ -146,9 +146,9 @@ describe("parameters (FR-SYS-069)", () => {
 
 describe("OCR and LLM settings (FR-SYS-072)", () => {
   const defaults = () => ({
-    primary_engine: "textin", backup_engine: "google_vision", retry_per_document: 3, switch_threshold: 5,
+    primary_engine: "textin", backup_engine: "google_docai", retry_per_document: 3, switch_threshold: 5,
     probe_interval_seconds: 300, llm_base_url: "https://api.deepseek.com", llm_model: "deepseek-flash",
-    keys: { textin: true, google_vision: false, llm: true },
+    keys: { textin: true, google_docai: false, llm: true },
     // never shown even if a key ever leaked into the response
     llm_api_key: "sk-very-secret",
   });
@@ -165,7 +165,7 @@ describe("OCR and LLM settings (FR-SYS-072)", () => {
     renderAt("/ocr");
     const form = await screen.findByTestId("ocr-form");
     expect(within(form).getByTitle("TextIn")).toBeInTheDocument();
-    expect(within(form).getByTitle("Google Cloud Vision")).toBeInTheDocument();
+    expect(within(form).getByTitle("Google Document AI OCR")).toBeInTheDocument();
     const keys = screen.getByTestId("ocr-keys");
     expect(within(keys).getAllByText(zh("ocr.keySet"))).toHaveLength(2);
     expect(within(keys).getAllByText(zh("ocr.keyMissing"))).toHaveLength(1);
@@ -209,12 +209,12 @@ describe("OCR and LLM settings (FR-SYS-072)", () => {
     renderAt("/ocr");
     const form = await screen.findByTestId("ocr-form");
     if (swappedBack) {
-      await choose("ocr-primary", "Google Cloud Vision");
+      await choose("ocr-primary", "Google Document AI OCR");
       expect(selected("ocr-backup")).toHaveTextContent("TextIn");
       await choose("ocr-primary", "TextIn");
     }
     expect(selected("ocr-primary")).toHaveTextContent("TextIn");
-    expect(selected("ocr-backup")).toHaveTextContent("Google Cloud Vision");
+    expect(selected("ocr-backup")).toHaveTextContent("Google Document AI OCR");
     await confirmSave(form);
     await screen.findByText(zh("plans.noChange"));
     expect(api.count("PATCH /api/v1/admin/ocr-settings")).toBe(0);
@@ -222,8 +222,8 @@ describe("OCR and LLM settings (FR-SYS-072)", () => {
   });
 
   it.each([
-    ["textin", "google_vision", "Google Cloud Vision", "TextIn"],
-    ["google_vision", "textin", "TextIn", "Google Cloud Vision"],
+    ["textin", "google_docai", "Google Document AI OCR", "TextIn"],
+    ["google_docai", "textin", "TextIn", "Google Document AI OCR"],
   ])("swaps %s to %s atomically, preserves other inputs and reopens (162-01/02)", async (old, next, nextName, oldName) => {
     const current = { ...defaults(), primary_engine: old, backup_engine: next };
     const api = signedIn({
@@ -270,7 +270,7 @@ describe("OCR and LLM settings (FR-SYS-072)", () => {
     renderAt("/ocr");
     const form = await screen.findByTestId("ocr-form");
     await retype(within(form).getByLabelText(zh("ocr.llmModel")), "draft-model");
-    await choose("ocr-primary", "Google Cloud Vision");
+    await choose("ocr-primary", "Google Document AI OCR");
     await userEvent.click(within(form).getByRole("button", { name: zh("common.save") }));
     await userEvent.click(await screen.findByRole("button", { name: zh("common.cancel") }));
     expect(selected("ocr-backup")).toHaveTextContent(zh("ocr.none"));
@@ -280,7 +280,7 @@ describe("OCR and LLM settings (FR-SYS-072)", () => {
     expect(current.llm_model).toBe("deepseek-flash");
     await confirmSave(form);
     await waitFor(async () => expect(await api.bodies("PATCH /api/v1/admin/ocr-settings")).toEqual([
-      { primary_engine: "google_vision", llm_model: "draft-model" },
+      { primary_engine: "google_docai", llm_model: "draft-model" },
     ]));
   });
 
@@ -292,20 +292,20 @@ describe("OCR and LLM settings (FR-SYS-072)", () => {
     });
     renderAt("/ocr");
     const form = await screen.findByTestId("ocr-form");
-    await choose("ocr-primary", "Google Cloud Vision");
-    await choose("ocr-backup", "Google Cloud Vision");
+    await choose("ocr-primary", "Google Document AI OCR");
+    await choose("ocr-backup", "Google Document AI OCR");
     await retype(screen.getByLabelText(zh("ocr.llmBaseUrl")), "http://invalid.example");
     await confirmSave(form);
     expect(await screen.findByText(zh("field.backup_engine"))).toBeInTheDocument();
     expect(screen.getByText(zh("field.llm_base_url"))).toBeInTheDocument();
-    expect(selected("ocr-primary")).toHaveTextContent("Google Cloud Vision");
-    expect(selected("ocr-backup")).toHaveTextContent("Google Cloud Vision");
+    expect(selected("ocr-primary")).toHaveTextContent("Google Document AI OCR");
+    expect(selected("ocr-backup")).toHaveTextContent("Google Document AI OCR");
     expect(screen.getByLabelText(zh("ocr.llmBaseUrl"))).toHaveValue("http://invalid.example");
     await act(() => useLanguage.getState().setLang("en"));
     expect(screen.getByText(translate("en", "field.backup_engine"))).toBeInTheDocument();
     expect(screen.getByText(translate("en", "field.llm_base_url"))).toBeInTheDocument();
     expect(await api.bodies("PATCH /api/v1/admin/ocr-settings")).toEqual([
-      { primary_engine: "google_vision", llm_base_url: "http://invalid.example" },
+      { primary_engine: "google_docai", llm_base_url: "http://invalid.example" },
     ]);
     expect(current).toEqual(defaults());
   });
@@ -329,7 +329,7 @@ describe("OCR and LLM settings (FR-SYS-072)", () => {
     expect(screen.getByText(tr("ocr.primaryNote"))).toBeInTheDocument();
     expect(screen.getByText(tr("ocr.backupNote"))).toBeInTheDocument();
     expect(within(screen.getByTestId("ocr-keys")).getAllByText(tr("ocr.keySet"))).toHaveLength(2);
-    await choose("ocr-primary", "Google Cloud Vision");
+    await choose("ocr-primary", "Google Document AI OCR");
     expect(api.count("PATCH /api/v1/admin/ocr-settings")).toBe(0);
     const saveButton = within(form).getByRole("button", { name: tr("common.save") });
     await userEvent.click(saveButton);
@@ -342,7 +342,7 @@ describe("OCR and LLM settings (FR-SYS-072)", () => {
     finish();
     await screen.findByText(tr("ocr.saved"));
     expect(await api.bodies("PATCH /api/v1/admin/ocr-settings")).toEqual([
-      { primary_engine: "google_vision", backup_engine: "textin" },
+      { primary_engine: "google_docai", backup_engine: "textin" },
     ]);
     expect(document.body.textContent).not.toContain("sk-very-secret");
   });

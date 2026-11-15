@@ -16,7 +16,7 @@ from tests.integration.test_ocr_jobs import new_job, scans_left
 
 SETTINGS = OcrSettings(
     primary_engine="textin",
-    backup_engine="google_vision",
+    backup_engine="google_docai",
     retry_per_document=3,
     switch_threshold=5,
     probe_interval_seconds=300,
@@ -44,10 +44,10 @@ def sm(db_engine):
     return create_sessionmaker(db_engine)
 
 
-@pytest.fixture(params=["textin", "google_vision"])
+@pytest.fixture(params=["textin", "google_docai"])
 def selection(request):
     primary = request.param
-    backup = "google_vision" if primary == "textin" else "textin"
+    backup = "google_docai" if primary == "textin" else "textin"
     return replace(SETTINGS, primary_engine=primary, backup_engine=backup)
 
 

@@ -3391,8 +3391,8 @@ export interface components {
         };
         /** KeyStatusOut */
         KeyStatusOut: {
-            /** Google Vision */
-            google_vision: boolean;
+            /** Google Docai */
+            google_docai: boolean;
             /** Llm */
             llm: boolean;
             /** Textin */

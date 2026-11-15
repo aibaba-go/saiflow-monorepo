@@ -3,8 +3,8 @@ doc_id: STD-005
 title: "SaiFlow Python 后端 — 目录结构"
 type: standard
 status: active
-version: 1.1.0
-updated: 2026-11-02
+version: 1.2.0
+updated: 2026-11-15
 owner: Product Engineering
 doc_source: manual
 ---
@@ -60,7 +60,7 @@ services/api/
 │       ├── __init__.py
 │       ├── gcs.py              # Google Cloud Storage（含签名 URL）
 │       ├── textin.py           # TextIn OCR 服务端调用
-│       └── vision.py           # Google Cloud Vision OCR 服务端调用
+│       └── docai.py            # Google Document AI OCR 服务端调用
 ├── tests/
 │   ├── conftest.py             # pytest fixture：async client、测试 DB
 │   ├── unit/
@@ -82,7 +82,7 @@ services/api/
 | **业务** | `app/services/` | 编排用例、调用 repository 与 integrations、控制事务边界 | 依赖 HTTP 细节、直接依赖路由 |
 | **数据访问** | `app/repositories/` | SQLAlchemy async CRUD、查询封装、分页 | 写业务规则、跨事务 |
 | **ORM** | `app/models/` | 表结构、关系、索引、生命周期钩子 | 混入 Pydantic schema、写查询逻辑 |
-| **外部集成** | `app/integrations/` | GCS / TextIn / Google Cloud Vision 的隔离适配器 | 被 router 直接导入（统一经 service） |
+| **外部集成** | `app/integrations/` | GCS / TextIn / Google Document AI 的隔离适配器 | 被 router 直接导入（统一经 service） |
 | **测试** | `tests/` | unit + integration；API 测试用 FastAPI TestClient 或 httpx | 连生产数据库、含真实密钥 |
 
 ---
@@ -147,5 +147,6 @@ services/api/
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.2.0 | 2026-11-15 | Product Engineering | `docai-backup-engine`：Vision 适配器示例改为 Document AI |
 | 1.1.0 | 2026-11-02 | Product Engineering | 按 ADR-008：去掉 Firestore 与 Secret Manager 适配器，新增 Vision 适配器；数据库只在内部网络可达；凭据来自服务器环境变量文件；容器启动命令不再限定 Cloud Run |
 | 1.0.0 | 2026-10-12 | Product Engineering | 初始 SaiFlow Python 后端目录结构标准 |

@@ -3,8 +3,8 @@ doc_id: OPS-001
 title: "SaiFlow — 部署与运维说明（dev 环境）"
 type: guide
 status: active
-version: 1.9.1
-updated: 2026-11-13
+version: 1.10.0
+updated: 2026-11-15
 owner: Product Engineering
 related: [ADR-008, FR-PLAT-005, FR-PLAT-006]
 doc_source: manual
@@ -120,8 +120,10 @@ admin 也可以登录后台，在右上角“修改密码”中修改本人口�
 | `.env` 变量 | 用途 |
 |------|------|
 | `TEXTIN_APP_ID`、`TEXTIN_SECRET_CODE` | TextIn（两项都填才算已配置） |
-| `GOOGLE_VISION_API_KEY` | Google Cloud Vision API |
+| `DOCAI_PROJECT_ID`、`DOCAI_LOCATION`、`DOCAI_PROCESSOR_ID`、`DOCAI_PROCESSOR_VERSION` | Google Document AI OCR（备用引擎，取代原 Google Cloud Vision）：GCP 项目 ID、处理器地区（默认 `asia-southeast1`）、处理器 ID、处理器版本（留空用处理器的默认版本）。不另设密钥，使用 §2.10 的 `GCS_CREDENTIALS_FILE` 服务账号登录；项目、处理器与该文件都在才算已配置 |
 | `LLM_API_KEY` | 大模型（地址与模型名称在后台配置） |
+
+**Document AI 处理器（一次性，GCP 控制台）：** Document AI → 处理器库 → “Enterprise Document OCR” → 创建处理器，地区选 `asia-southeast1`（新加坡，与曼谷相邻；处理器不能改地区）；创建后在“管理版本”中把默认版本设为 `pretrained-ocr-v2.1.1-2025-01-31`，把处理器 ID 填入 `DOCAI_PROCESSOR_ID`，并在 `.env` 写 `DOCAI_PROCESSOR_VERSION=pretrained-ocr-v2.1.1-2025-01-31`（处理器新建时的默认版本 `pretrained-ocr-v1.0-2020-09-23` 读不出泰文，2026-11-15 实测）。在 IAM 中给 `GCS_CREDENTIALS_FILE` 的服务账号加上角色“Document AI API User”（`roles/documentai.apiUser`）。原 `GOOGLE_VISION_API_KEY` 不再使用，可从 `.env` 删除。
 
 改 `.env` 后执行 `docker compose up -d --force-recreate saiflow-be-api saiflow-be-ocr` 才会生效：后台显示配置状态，识别服务 `saiflow-be-ocr`（§2.10）用它们调用引擎与大模型。
 
@@ -220,6 +222,7 @@ cd /opt/saiflow && echo "DB_MIGRATE_PASSWORD=$(openssl rand -hex 24)" >> .env
 
 - **推荐：** 用 `git revert` 提交一个撤销问题改动的新提交，等 CI 通过后再运行 `Deploy`（工作流总是部署所选分支的最新提交）。
 - **紧急：** 在 VPS 上以 `deploy` 把 `/opt/saiflow/.env` 中的 `IMAGE_TAG` 改回上一个 sha，然后 `cd /opt/saiflow && docker compose up -d`。数据库迁移不会自动回退；含迁移的版本回滚前先确认迁移可逆。
+- **0020 的回退：** 把后台已保存的引擎 `google_docai` 改回 `google_vision`，并恢复 Vision 的健康记录约束。只要已有任何 Document AI 识别结果就主动拒绝执行，不会删除识别结果。需要回到旧版本时一般只回滚镜像：旧镜像不认识 Document AI，会只用 TextIn；回滚期间不要在旧后台把主引擎选为 Google Cloud Vision（数据库已不再接受它的健康记录，识别会失败）。
 - **0009 的回退：** 删除识别相关的表与两个系统模板。只要还有任何上传文件记录就主动拒绝执行，不会删除原件或识别结果。需要回到旧版本时只回滚镜像；旧镜像没有识别服务，先执行 `docker compose stop saiflow-be-ocr`。
 - **0008 的回退：** 删除 OCR 与大模型配置七项（已修改的值随之丢失，重新升级后恢复为默认值）。需要回到旧版本时一般只回滚镜像，不必回退数据库。
 - **0006 的回退：** 有任何通知或提醒记录时主动拒绝执行，不会删除通知。需要回到旧版本时只回滚镜像。
@@ -265,6 +268,7 @@ docker compose exec -T saiflow-be-api python -m app.cli audit-verify   # 操作�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.10.0 | 2026-11-15 | Product Engineering | `docai-backup-engine`：§2.8 以 Document AI OCR 的四个变量取代 `GOOGLE_VISION_API_KEY`，补充 `asia-southeast1` 处理器与服务账号角色的一次性配置；§4 0020 的回退 |
 | 1.9.1 | 2026-11-13 | Product Engineering | 后台账号连续 5 次输错口令的锁定时间改为 5 分钟（`line-result-table-admin-lock`，FR-SYS-019） |
 | 1.9.0 | 2026-11-06 | Product Engineering | §2.10 每次部署自动整理 `secrets` 文件夹的所有者与权限（`secrets-perms.sh`）；备份密钥保持 `deploy` 所有，后端读不到 |
 | 1.8.1 | 2026-11-06 | Product Engineering | §2.10 密钥文件夹与文件的所有者改为容器用户 uid 10001（原写法 `deploy` 所有导致容器 `Permission denied`，dev 环境首次配置时发现）；补充传文件与检查的命令 |

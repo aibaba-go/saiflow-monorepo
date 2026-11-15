@@ -30,6 +30,7 @@ from app.clock import utcnow
 from app.config import Settings
 from app.integrations.storage import ObjectMissing, ObjectStore
 from app.models import TemplateSample
+from app.ocr import page_text
 from app.ocr.engines import (
     Engine,
     EngineFailure,
@@ -166,16 +167,12 @@ OUTPUT_SHAPE = {
 _OPEN, _CLOSE = "<<<DOCUMENT", "DOCUMENT>>>"
 
 
-def ocr_text(raw: Any) -> str:
-    """What the model reads: page texts for Vision, the engine JSON otherwise; capped, and
-    with the data markers neutralised so the document cannot close its own data block."""
-    pages = raw.get("pages") if isinstance(raw, dict) else None
-    texts = [
-        ((p or {}).get("fullTextAnnotation") or {}).get("text", "")
-        for p in (pages or [])
-        if isinstance(p, dict)
-    ]
-    if any(texts):
+def ocr_text(engine: str | None, raw: Any) -> str:
+    """What the model reads (FR-OCR-028): numbered page texts for Document AI and Vision,
+    the engine JSON otherwise; capped, and with the data markers neutralised so the
+    document cannot close its own data block."""
+    texts = page_text.page_texts(engine, raw)
+    if texts and any(texts):
         body = "\n".join(f"--- page {n} ---\n{t}" for n, t in enumerate(texts, 1))
     else:
         body = json.dumps(raw, ensure_ascii=False, separators=(",", ":"), default=str)
@@ -535,8 +532,9 @@ async def _gone(sm, sample_id: str, status: str) -> bool:
         return not _alive(sample, status)
 
 
-async def _ocr(sm, store, settings, sample_id, engines, sleep, now) -> Any | None:
-    """Recognise the original; the raw payload when the sample moved on to GENERATING."""
+async def _ocr(sm, store, settings, sample_id, engines, sleep, now) -> dict | None:
+    """Recognise the original; the stored `{"engine", "raw"}` when the sample moved on to
+    GENERATING."""
     async with sm() as db:
         sample = await db.get(TemplateSample, sample_id)
         ocr = await ocr_settings_service.get(db)
@@ -571,7 +569,8 @@ async def _ocr(sm, store, settings, sample_id, engines, sleep, now) -> Any | Non
         await _fail(sm, sample_id, "OCR", OCR_UNAVAILABLE if err.kind == "service" else OCR_FAILED)
         return None
     name = samples.object_name(sample.tenant_id, sample_id, "ocr")
-    body = json.dumps({"engine": result.engine, "raw": result.raw}, default=str).encode()
+    stored = {"engine": result.engine, "raw": result.raw}
+    body = json.dumps(stored, default=str).encode()
     await store.put(name, body, "application/json")
     async with sm() as db:
         row = await _locked(db, sample_id)
@@ -585,10 +584,10 @@ async def _ocr(sm, store, settings, sample_id, engines, sleep, now) -> Any | Non
         row.status, row.claimed_at, row.updated_at = "GENERATING", at, at
         row.generate_attempts = (row.generate_attempts or 0) + 1
         await db.commit()
-    return result.raw
+    return stored
 
 
-async def _generate(sm, store, settings, sample_id, raw, llm_transport, llm_sleep) -> None:
+async def _generate(sm, store, settings, sample_id, stored, llm_transport, llm_sleep) -> None:
     from app.services import mapping_service
 
     async with sm() as db:
@@ -596,19 +595,22 @@ async def _generate(sm, store, settings, sample_id, raw, llm_transport, llm_slee
         ocr = await ocr_settings_service.get(db)
     if not _alive(sample, "GENERATING"):
         return
-    if raw is None:
+    if stored is None:
         try:
-            raw = json.loads(await store.get(sample.ocr_key or "")).get("raw")
+            stored = json.loads(await store.get(sample.ocr_key or ""))
+            engine, raw = stored.get("engine"), stored.get("raw")
         except (ObjectMissing, ValueError, AttributeError):
             await _fail(sm, sample_id, "GENERATE", OCR_MISSING)
             return
+    else:
+        engine, raw = stored["engine"], stored["raw"]
     config = mapping_service.llm_config(ocr, settings)
     if not config.get("DEEPSEEK_API_KEY"):
         await _fail(sm, sample_id, "GENERATE", LLM_NOT_CONFIGURED)
         return
     client = LlmClient(config, transport=llm_transport, sleep=llm_sleep)
     try:
-        candidate = await asyncio.to_thread(generate, client, ocr_text(raw))
+        candidate = await asyncio.to_thread(generate, client, ocr_text(engine, raw))
     except MappingError as exc:
         await _fail(sm, sample_id, "GENERATE", _LLM_CODES.get(exc.code, "llm_unavailable"), client)
         return
@@ -652,13 +654,13 @@ async def run_once(
         return False
     sample_id, stage = claimed
     try:
-        raw = None
+        stored = None
         if stage == "OCR":
-            raw = await _ocr(sm, store, settings, sample_id, engines, sleep, now)
-            if raw is None:
+            stored = await _ocr(sm, store, settings, sample_id, engines, sleep, now)
+            if stored is None:
                 return True
             stage = "GENERATE"
-        await _generate(sm, store, settings, sample_id, raw, llm_transport, llm_sleep)
+        await _generate(sm, store, settings, sample_id, stored, llm_transport, llm_sleep)
     except Exception:
         log.exception("template sample %s failed unexpectedly", sample_id)
         await _fail(sm, sample_id, stage, WORKER_ERROR)

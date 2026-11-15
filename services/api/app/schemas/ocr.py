@@ -7,7 +7,7 @@ from app.schemas.loose import LooseRequest
 
 class KeyStatusOut(BaseModel):
     textin: bool
-    google_vision: bool
+    google_docai: bool
     llm: bool
 
 

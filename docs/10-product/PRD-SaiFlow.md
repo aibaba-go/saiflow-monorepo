@@ -3,8 +3,8 @@ doc_id: PRD-001
 title: "SaiFlow — 泰国 SME 制造企业单据数字化录入系统（PRD）"
 type: prd
 status: active
-version: 3.14.0
-updated: 2026-11-13
+version: 3.15.0
+updated: 2026-11-15
 owner: Product
 source: "PRD-SaiFlow.md v2.2.2; 2026-10-20 ~ 2026-10-21 业务流程重新梳理（多入口录入 + 大模型模板匹配与结构化转换 + 存储边界调整）"
 tags: [ocr, llm, data-entry, excel-import, thai-sme, erp, document-digitization, reporting, review]
@@ -24,7 +24,7 @@ tags: [ocr, llm, data-entry, excel-import, thai-sme, erp, document-digitization,
 |---|--------|--------|---------|
 | C-1 | 数据入口 | 仅纸质单据拍照/扫描 + OCR | **OCR 扫描**、**结构化文件导入**（Excel 等）、**界面直接录入**三种入口 |
 | C-2 | 统一业务流程 | 上传 → OCR → 核验 → 复核 → 归档 | **数据录入 → 解析 → 人工确认及修正（可选）→ 人工复核（可选）→ 写入正式业务数据** |
-| C-3 | OCR 引擎 | TextIn（流程图中提及 Cloud Vision） | 按**系统配置**选择 **TextIn** 或 **Google Cloud Vision API** |
+| C-3 | OCR 引擎 | TextIn（流程图中提及 Cloud Vision） | 按**系统配置**选择 **TextIn** 或 **Google Document AI OCR**（v3.15.0 起取代 Google Cloud Vision API） |
 | C-4 | 模板匹配 | 按 `doc_type` 或自动分类结果匹配模板 | **调用大模型**，根据 OCR 原始 JSON 匹配对应的文档格式模板 |
 | C-5 | 结构化转换 | Cloud Functions 按模板 JSONPath 映射 | **完全由大模型替代**：将 OCR 原始 JSON 转换为模板定义的结构化 JSON；每个字段可附带置信度（增强能力，不阻塞主流程） |
 | C-6 | 结果展现 | 可视化识别结果 | 按**模板定义的界面**展现识别结果，用户可修改并保存 |
@@ -82,7 +82,7 @@ SaiFlow 是面向泰国 SME 制造企业的**单据流程数字化平台**：通
 
 | 版本 | 核心目标 |
 |------|----------|
-| **V1.0** | 准确识别泰国本地单据（PO、Delivery Note、Invoice、Receipt）；可配置 OCR 引擎（TextIn / Google Cloud Vision API）；可配置大模型完成模板匹配与结构化转换；按模板界面人工确认与修正；可配置为无需复核、一级复核或二级复核；写入正式业务数据；私有 GCS 归档；基础数据导出 |
+| **V1.0** | 准确识别泰国本地单据（PO、Delivery Note、Invoice、Receipt）；可配置 OCR 引擎（TextIn / Google Document AI OCR）；可配置大模型完成模板匹配与结构化转换；按模板界面人工确认与修正；可配置为无需复核、一级复核或二级复核；写入正式业务数据；私有 GCS 归档；基础数据导出 |
 | **V2.0** | 结构化文件（Excel）导入；后端异步任务作为大模型结构化 JSON 的可选处理能力；对接 ERP / 管理系统；自动数据同步；单据比对；异常提醒；运营指标报表与应收应付跟踪 |
 | **V3.0** | 智能单据分类、历史检索、流转可追溯性、设备维修流程与流程模板复用 |
 
@@ -174,7 +174,7 @@ flowchart TB
     U["1. 上传 PNG / JPG / PDF"] --> G["原件保存至私有 GCS"]
     G --> E{"2. 系统配置<br>OCR 引擎"}
     E -- TextIn --> T["TextIn API"]
-    E -- Google --> V["Google Cloud Vision API"]
+    E -- Google --> V["Google Document AI OCR"]
     T --> RAW["3. 获得 OCR 原始 JSON<br>保存至 PostgreSQL"]
     V --> RAW
     RAW --> M["4. 调用大模型<br>匹配文档格式模板"]
@@ -192,7 +192,7 @@ flowchart TB
 | 步骤 | 动作 | 输入 | 输出 | 规则 |
 |------|------|------|------|------|
 | 1 | **上传单据** | 用户在 Web / LINE MiniApp 上传 | PNG / JPG / PDF 文件 | 原件保存至私有 GCS；支持批量上传与预处理（见 4.1） |
-| 2 | **选择 OCR 引擎** | 系统配置 | 选定引擎 | 按系统配置调用 **TextIn** 或 **Google Cloud Vision API**；配置粒度见 OQ-12 |
+| 2 | **选择 OCR 引擎** | 系统配置 | 选定引擎 | 按系统配置调用 **TextIn** 或 **Google Document AI OCR**；配置粒度见 OQ-12 |
 | 3 | **获得 OCR 原始 JSON** | OCR 引擎响应 | 原始识别载荷 | 原样保存至 PostgreSQL（jsonb），并记录所用引擎；作为后续步骤与审计、重试的依据 |
 | 4 | **大模型匹配模板** | 步骤 3 的原始 JSON + 已发布的文档格式模板清单 | 匹配到的模板（含版本） | 调用系统参数中配置的大模型，判断该单据对应哪一个文档格式模板；无法自动匹配时，按下方“模板匹配失败处理”由用户选择模板或“自由格式” |
 | 5 | **大模型结构化转换** | 原始 JSON + 匹配模板的期望格式 | 符合模板结构的结构化 JSON | 调用大模型转换为模板定义的表头字段与明细行。提示词中须描述映射关系，并附上模板中配置的期望格式（见 4.2）。每个转换后的字段**可**附带置信度（0.0–1.0）——置信度为增强能力，**缺失时主流程仍可走通** |
@@ -282,7 +282,7 @@ flowchart TB
     Caddy -- 页面 --> FrontendCR["前端容器<br>web-pc / admin / LINE 小程序"]
     Caddy -- /api --> BackendAPI["后端 API 容器<br>Python"]
     BackendAPI -- 读写原件 / 导入文件 --> GCS["Cloud Storage<br>私有 Bucket"]
-    BackendAPI -- 按配置调用 --> OCRService["TextIn<br>或 Google Cloud Vision API"]
+    BackendAPI -- 按配置调用 --> OCRService["TextIn<br>或 Google Document AI OCR"]
     OCRService -- 原始JSON --> BackendAPI
     BackendAPI -- 模板匹配 / 结构化转换 --> LLM["大模型服务<br>（系统参数配置地址与 AppKey）"]
     LLM -- 结构化JSON + 置信度 --> BackendAPI
@@ -301,7 +301,7 @@ flowchart TB
     style PostgreSQL fill:#c8e6c9
 ```
 
-> 除 GCS、Vision API 与外部 OCR、大模型服务外，以上组件都运行在一台 LightNode VPS（曼谷机房）的 Docker Compose 中（`ADR-008`）。
+> 除 GCS、Document AI 与外部 OCR、大模型服务外，以上组件都运行在一台 LightNode VPS（曼谷机房）的 Docker Compose 中（`ADR-008`）。
 >
 > v2.2.2 中由 Cloud Functions 监听 Firestore 事件、按 JSONPath 映射写入 Cloud SQL 的链路，在本版中**完全由“大模型结构化转换 → 人工确认 → 写入数据库”替代**，V1.0 不再使用 JSONPath 映射。下一个大版本再考虑以后端异步任务作为生成大模型结构化 JSON 的可选能力。
 
@@ -327,7 +327,7 @@ flowchart TB
 
 - **合规：** 泰国本地合规；**PDPA**（个人数据保护法）。
 - **数据存储：** 原始文档与导入文件存储在私有 GCS Bucket；全部表单数据、文档模板定义及登录、权限等系统数据存储在 PostgreSQL（运行于 VPS 的 Docker 中，`ADR-008`）。访问权限、保留与删除须符合 PDPA。
-- **外部服务：** OCR 引擎（TextIn / Google Cloud Vision API）与大模型服务仅由服务端调用。
+- **外部服务：** OCR 引擎（TextIn / Google Document AI OCR）与大模型服务仅由服务端调用。
 - **大模型 PDPA 合规：** 大模型可配置为任意服务；**选择或更换模型时，由人工确认该模型服务是否符合 PDPA**（系统不自动判定合规性）。
 - **准确性：** 单据识别准确性标准（见 `NFR-PERF`）；字段置信度用于提示人工核验与批量确认，不是主流程的必要条件。
 - **兼容性：** 主流泰国本地 SME ERP 版本；Windows/Mac。
@@ -364,7 +364,7 @@ flowchart TB
 
 按 3.2 节步骤 2–5 实现：
 
-1. **OCR 引擎可配置：** 按系统配置调用 TextIn 或 Google Cloud Vision API；记录每份单据所用引擎。
+1. **OCR 引擎可配置：** 按系统配置调用 TextIn 或 Google Document AI OCR；记录每份单据所用引擎。
 2. **原始 JSON 留存：** OCR 原始 JSON 原样保存至 PostgreSQL（jsonb），支持审计、重试与版本追溯。
 3. **大模型可配置：** 通过系统参数配置**模型地址**与 **AppKey** 即可接入或切换大模型；AppKey 仅服务端使用。选择模型时，由人工确认其是否符合 PDPA。
 4. **大模型模板匹配：** 以原始 JSON 为输入，为已发布模板打出匹配度；最高匹配度达到 70% 时按该模板转换，否则（或没有模板、自动转换缺少主要字段时）直接使用 **“自由格式”**。用户可在“更换模板”中改选模板；用户**手动**选择的模板缺少主要字段时，提示所选模板与单据不符（见 3.2“模板匹配失败处理”）。
@@ -430,7 +430,7 @@ flowchart TB
 
 | 系统参数 | 说明 |
 |----------|------|
-| OCR 引擎 | 首选与备用两个引擎（TextIn / Google Cloud Vision API）及优先级，由平台 admin 配置，全系统共用；默认首选 TextIn、备用 Google Cloud Vision API，备用可设为不使用，不能与首选相同 |
+| OCR 引擎 | 首选与备用两个引擎（TextIn / Google Document AI OCR）及优先级，由平台 admin 配置，全系统共用；默认首选 TextIn、备用 Google Document AI OCR，备用可设为不使用，不能与首选相同 |
 | 单据重试次数 | 单份单据在首选引擎上重试达到该次数仍失败时，该单据改用备用引擎；默认 **3 次**（负责人确认，2026-10-30），可设 1–10 |
 | 全局切换阈值 | 首选引擎全局连续失败达到该阈值时，整体切换到备用引擎；默认 5 次，可设 1–100（B-5b 初始值，B-3 可按实测调整） |
 | 首选引擎试探间隔 | 整体切换后按该间隔试探首选引擎，恢复后切回；默认 300 秒，可设 30–86400 秒（B-5b 初始值，B-3 可按实测调整）。以上三项只统计服务层面的失败（超时、服务报错、厂商余额不足等），不统计内容层面的失败（图片模糊、识别不出内容） |
@@ -637,7 +637,7 @@ flowchart TB
 | OQ-4 | 归档文档的 PDPA 数据保留期限和删除策略？ | Legal | 是（投产前） |
 | OQ-5 | V2.0 运营报表必须提供哪些指标、统计口径、筛选维度与导出格式？ | Product / Management | 是（EPIC-07 实施前） |
 | OQ-6 | ~~哪些单据处理流程默认采用无需复核、一级复核或二级复核？各级复核人员的权限如何配置？~~ **已决（2026-11-07，`review-flow`）：** 组织 owner 按模板（含“通用结果”）设置 0/1/2 级，默认 0 级；个人租户不复核；复核人为角色持有“一级复核”/“二级复核”的成员，不能是确认人，二级复核人也不能是一级复核人；退回回到待核验 | Product / Management | 否 |
-| OQ-7 | TextIn **及 Google Cloud Vision API** 的区域、数据跨境处理依据、认证方式、限流、调用参数是否已通过安全与法务确认？GCS 业务桶与备份桶位于泰国境外（新加坡）是否可接受（`ADR-008`）？ | Product / Security / Legal | 是（投产前） |
+| OQ-7 | TextIn **及 Google Document AI OCR（处理器位于 asia-southeast1 新加坡）** 的区域、数据跨境处理依据、认证方式、限流、调用参数是否已通过安全与法务确认？GCS 业务桶与备份桶位于泰国境外（新加坡）是否可接受（`ADR-008`）？ | Product / Security / Legal | 是（投产前） |
 | OQ-8 | 报表汇总表（报表方式 B）的优先级？在什么条件下（数据量、报表复杂度、3-way matching 关联查询）从直接查询切换或补充为汇总表？汇总的频率（准实时 / 定时批量）？ | Product / Engineering | 否（方式 A 先行） |
 | OQ-9 | 模板审批、版本回滚和字段映射的默认治理规则是什么？ | Product / Management | 是（EPIC-08 实施前；推迟到 P1） |
 
@@ -733,6 +733,7 @@ flowchart TB
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 3.15.0 | 2026-11-15 | Product Engineering | `docai-backup-engine`：OCR 引擎由 TextIn / Google Cloud Vision API 改为 TextIn / Google Document AI OCR（asia-southeast1 处理器，默认作备用）；OQ-7 同步 |
 | 3.14.0 | 2026-11-13 | Product Engineering | `customer-email-login`（负责人 2026-11-12）：LINE 小程序与 web-pc 增加邮箱 + 密码、邮箱验证码登录（仅已注册用户）；注册设置密码；邮箱验证码重置密码；错 5 次锁 5 分钟 |
 | 3.7.0 | 2026-11-05 | Product Engineering | B-5a（负责人 2026-11-05）：界面默认语言改为英语；套餐价格由平台 admin 维护并在套餐页显示；LINE 小程序底部导航与“报表”标签的显示条件 |
 | 3.8.0 | 2026-11-06 | Product Engineering | B-5b（变更 `web-admin-console`）：admin 后台界面语言为中文（默认）/ 英文；OCR 与大模型参数的默认值；admin 后台增加查询用户、查看操作日志与修改本人口令 |

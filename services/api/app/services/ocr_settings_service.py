@@ -12,15 +12,15 @@ from app.clock import utcnow
 from app.config import Settings
 from app.errors import AppError
 from app.models import SystemSetting
+from app.ocr.docai import docai_configured
+from app.ocr.states import ENGINES  # the selectable engines
 from app.services.audit_service import record
 from app.services.organization_service import Actor
-
-ENGINES = ("textin", "google_vision")
 
 # setting key → (attribute, default)
 FIELDS: dict[str, tuple[str, object]] = {
     "ocr_primary_engine": ("primary_engine", "textin"),
-    "ocr_backup_engine": ("backup_engine", "google_vision"),
+    "ocr_backup_engine": ("backup_engine", "google_docai"),
     "ocr_retry_per_document": ("retry_per_document", 3),
     "ocr_switch_threshold": ("switch_threshold", 5),
     "ocr_probe_interval_seconds": ("probe_interval_seconds", 300),
@@ -106,6 +106,6 @@ def key_status(settings: Settings) -> dict[str, bool]:
 
     return {
         "textin": present(settings.textin_app_id) and present(settings.textin_secret_code),
-        "google_vision": present(settings.google_vision_api_key),
+        "google_docai": docai_configured(settings),
         "llm": present(settings.llm_api_key),
     }

@@ -43,8 +43,13 @@ class Settings(BaseSettings):
     # OCR engine and LLM keys (FR-SYS-005): only their presence is ever reported
     textin_app_id: str | None = None
     textin_secret_code: SecretStr | None = None
-    google_vision_api_key: SecretStr | None = None
     llm_api_key: SecretStr | None = None
+    # Google Document AI OCR (FR-OCR-027): the processor; its credentials are the GCS
+    # service-account key below. Unset project/processor = the engine is unavailable.
+    docai_project_id: str | None = None
+    docai_location: str = "asia-southeast1"
+    docai_processor_id: str | None = None
+    docai_processor_version: str | None = None  # unset = the processor's default version
     # Originals, previews and exports (ocr-scan-flow, ADR-008): a private GCS bucket; unset,
     # uploads and downloads answer 503. The credentials file is a mounted service-account key.
     gcs_bucket: str | None = None

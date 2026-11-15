@@ -3,8 +3,8 @@ doc_id: ADR-008
 title: "ADR-008 — 运行环境改为 VPS + Docker，表单数据存 PostgreSQL jsonb"
 type: adr
 status: accepted
-version: 1.0.0
-updated: 2026-11-02
+version: 1.1.0
+updated: 2026-11-15
 owner: Product Engineering
 related: [ADR-001, ADR-005, ADR-006, ADR-007, NFR-SEC-001, NFR-SEC-002, NFR-SEC-009, NFR-DATA-005, OQ-7, OQ-8]
 doc_source: manual
@@ -23,7 +23,7 @@ accepted（2026-11-02，负责人确认；变更 `adopt-vps-docker`）
 - 项目初期 Google Cloud 托管服务（Cloud Run、Cloud SQL、Firestore、Secret Manager）的费用过高，难以承受。
 - 负责人已在 LightNode 曼谷机房采购一台 VPS，并手动完成防火墙配置（SSH 端口 11022，开放 80/443）。
 - 原方案中 Firestore 只用到“保存不固定结构的 JSON”这一特性，没有用到通知、实时监听等其他特性。
-- OCR 引擎 TextIn 与 Google Cloud Vision API 不变；原件等对象继续使用私有 GCS。
+- OCR 引擎 TextIn 与 Google Cloud Vision API 不变；原件等对象继续使用私有 GCS。（`docai-backup-engine`，2026-11-15 修订：Google Cloud Vision API 由 asia-southeast1 的 Google Document AI OCR 取代）
 - 约束：PDPA；凭据只在服务端；1–2 人维护。
 
 ## 决策
@@ -40,7 +40,7 @@ accepted（2026-11-02，负责人确认；变更 `adopt-vps-docker`）
 | 部署 | GitHub Actions 手动触发：构建镜像并推送到 GHCR → 经 SSH（端口 11022）登录 VPS → 执行数据库迁移 → `docker compose` 更新服务 → 健康检查；部署所需的 SSH 私钥等值只放在 GitHub 仓库 Secrets 中，服务器上的部署账号只拥有部署所需的权限 |
 | 备份 | 每天导出一次数据库；VPS 本地保留 7 天；每次导出完成后立即复制一份到 GCS 上单独的数据库备份桶，备份桶保留 30 天后自动删除 |
 | 日志 | Docker 日志（后端为单行 JSON），按大小轮转；集中日志与告警留到投产前决定（OQ-29） |
-| GCP 凭据 | 一个专用服务账号，只授予：业务桶对象读写、备份桶写入、Vision API 调用；其密钥按“凭据”一行保存 |
+| GCP 凭据 | 一个专用服务账号，只授予：业务桶对象读写、备份桶写入、Document AI API User（2026-11-15 前为 Vision API 调用）；其密钥按“凭据”一行保存 |
 
 ### 存储边界
 
@@ -92,4 +92,5 @@ accepted（2026-11-02，负责人确认；变更 `adopt-vps-docker`）
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.1.0 | 2026-11-15 | Product Engineering | `docai-backup-engine`：Google Cloud Vision API 由 asia-southeast1 的 Google Document AI OCR 取代；服务账号角色同步（决策其余部分不变） |
 | 1.0.0 | 2026-11-02 | Product Engineering | 初版：VPS + Docker 运行环境；表单数据存 PostgreSQL jsonb；对象保持私有 GCS；取代 ADR-001、ADR-007 |

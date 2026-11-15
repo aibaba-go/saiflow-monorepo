@@ -10,6 +10,7 @@ from pydantic import SecretStr
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
+from app.clock import utcnow
 from app.db import create_sessionmaker
 from app.ocr import mapping_worker, worker
 from app.ocr.engines import EngineResult
@@ -20,14 +21,33 @@ from tests.integration.test_uploads import pdf
 
 JOBS = "/api/v1/ocr/jobs"
 RAW = {"เลขที่": "IV00000001", "วันที่": "01/10/2569", "ผู้ขาย": "บริษัท ตัวอย่าง จำกัด"}
-VISION_TEXT = "  ใบกำกับภาษี IV00000001\n中文原文 English\n12345678901234567890\n฿ 16,050.40\n"
-VISION_RAW = {
+DOCAI_TEXT = "  ใบกำกับภาษี IV00000001\n中文原文 English\n12345678901234567890\n฿ 16,050.40\n"
+# Document AI REST shape (FR-OCR-027): one document, page 2 empty (no text anchor)
+DOCAI_RAW = {
+    "documents": [
+        {
+            "text": DOCAI_TEXT,
+            "pages": [
+                {
+                    "pageNumber": 1,
+                    "dimension": {"width": 100, "height": 200, "unit": "pixels"},
+                    "layout": {"textAnchor": {"textSegments": [{"endIndex": "71"}]}},
+                    "lines": [{"layout": {"textAnchor": {"textSegments": [{"endIndex": "25"}]}}}],
+                },
+                {"pageNumber": 2, "dimension": {"width": 100, "height": 200}, "layout": {}},
+            ],
+        }
+    ]
+}
+DOCAI_PAGES = {"pages": [DOCAI_TEXT, ""]}  # the page-text view (FR-OCR-028)
+VISION_TEXT = DOCAI_TEXT
+VISION_RAW = {  # a historical Google Cloud Vision result stored before the upgrade
     "pages": [
         {"fullTextAnnotation": {"text": VISION_TEXT, "pages": [{"width": 100, "height": 200}]}},
         {},
     ]
 }
-FALLBACK = {"ocr_text": {"page_1": VISION_TEXT, "page_2": ""}}
+FALLBACK = {"ocr_text": {"page_1": DOCAI_TEXT, "page_2": ""}}
 # Real HTTP JSON numbers: parsing and the worker must preserve these without a float hop.
 GENERIC_JSON = """{
     "invoice_no": "IV1", "big": 12345678901234567890, "negative": -12345678901234567890,
@@ -93,18 +113,18 @@ class FakeLlm:
 
 
 class PayloadEngine:
-    """Vendor-shaped synthetic payloads, never a TextIn llm_json stand-in for Vision."""
+    """Vendor-shaped synthetic payloads, never a TextIn llm_json stand-in for Document AI."""
 
     def __init__(self, name, raw=None):
         self.name, self.calls = name, 0
-        self.raw = deepcopy(VISION_RAW if name == "google_vision" else RAW) if raw is None else raw
+        self.raw = deepcopy(DOCAI_RAW if name == "google_docai" else RAW) if raw is None else raw
 
     def run(self, *, kind, content, filename, pages):
         self.calls += 1
         return EngineResult(
             engine=self.name,
             raw=deepcopy(self.raw),
-            structured=None if self.name == "google_vision" else deepcopy(self.raw),
+            structured=None if self.name != "textin" else deepcopy(self.raw),
             page_count=pages,
         )
 
@@ -127,7 +147,7 @@ def assert_document_input(llm, stage, raw):
 
 
 async def select_primary(db, primary):
-    backup = "textin" if primary == "google_vision" else "google_vision"
+    backup = "textin" if primary == "google_docai" else "google_docai"
     for key, value in (("ocr_primary_engine", primary), ("ocr_backup_engine", backup)):
         await db.execute(
             text(
@@ -139,7 +159,7 @@ async def select_primary(db, primary):
     await db.commit()
 
 
-async def vision_job(
+async def docai_job(
     api,
     store,
     sm,
@@ -152,8 +172,8 @@ async def vision_job(
     disable_templates=True,
     headers=None,
 ):
-    """Real Vision pages -> actual MockTransport refine call -> worker persistence."""
-    await select_primary(db, "google_vision")
+    """Real Document AI pages -> actual MockTransport refine call -> worker persistence."""
+    await select_primary(db, "google_docai")
     if disable_templates:
         await db.execute(text("update document_templates set status='DISABLED'"))
         await db.commit()
@@ -164,17 +184,17 @@ async def vision_job(
     response = await new_job(api, pdf(2), "synthetic.pdf", headers=headers)
     assert response.status_code == 201, response.text
     job = response.json()
-    vision, textin = PayloadEngine("google_vision"), PayloadEngine("textin")
+    docai, textin = PayloadEngine("google_docai"), PayloadEngine("textin")
     assert await worker.run_once(
         sm,
         store,
         settings,
-        engines={vision.name: vision, textin.name: textin},
+        engines={docai.name: docai, textin.name: textin},
         sleep=_no_sleep,
         llm_transport=llm.transport,
     )
-    assert (vision.calls, textin.calls) == (1, 0)
-    assert tuple(await raw_result(db, job["id"])) == ("google_vision", VISION_RAW)
+    assert (docai.calls, textin.calls) == (1, 0)
+    assert tuple(await raw_result(db, job["id"])) == ("google_docai", DOCAI_RAW)
     if no_llm:
         assert llm.calls == []
     else:
@@ -182,7 +202,7 @@ async def vision_job(
         body = llm.requests[0][1]
         assert "response_format" not in body
         user = body["messages"][1]["content"]
-        assert json.loads(user.split("\n\n", 1)[1]) == {"pages": [VISION_TEXT, ""]}
+        assert json.loads(user.split("\n\n", 1)[1]) == DOCAI_PAGES
     return job
 
 
@@ -218,7 +238,7 @@ async def _no_sleep(_s):
 async def recognised(api, store, sm, settings, llm, structured=None, engine="textin"):
     """A job recognised by a fake engine; returns the job JSON."""
     job = (await new_job(api)).json()
-    if engine == "google_vision":
+    if engine == "google_docai":
         fake = PayloadEngine(engine)
     else:
         fake = FakeEngine(engine, structured=RAW if structured is None else structured)
@@ -499,10 +519,10 @@ async def test_generic_result_textin(api, line, store, sm, ai_settings, llm, db)
     assert await _stage(api, job["id"]) == "VERIFYING"
 
 
-async def test_vision_generic_built_by_llm(api, line, store, sm, ai_settings, llm, db):
-    # AC-FR-OCR-025-01/03/05: actual Vision pages and actual JSON decoding.
+async def test_docai_generic_built_by_llm(api, line, store, sm, ai_settings, llm, db):
+    # AC-FR-OCR-025-01/03/05: actual Document AI pages and actual JSON decoding.
     await login(api, line)
-    job = await vision_job(api, store, sm, ai_settings, llm, db)
+    job = await docai_job(api, store, sm, ai_settings, llm, db)
     _, structured, mapping_id, _, pending = await _current(db, job["id"])
     assert structured == GENERIC_OUTPUT and mapping_id is None and pending is None
     response = await api.get(f"{JOBS}/{job['id']}/result")
@@ -710,26 +730,26 @@ async def test_failure_card_clears_after_recovering(api, line, store, sm, ai_set
         "timeout",
     ],
 )
-async def test_vision_invalid_llm_uses_original_pages_no_extra_ocr(
+async def test_docai_invalid_llm_uses_original_pages_no_extra_ocr(
     api, line, store, sm, ai_settings, llm, db, output
 ):
     # AC-FR-OCR-025-02, AC-FR-OCR-026-01/02.
     await login(api, line)
-    job = await vision_job(api, store, sm, ai_settings, llm, db, output=output)
+    job = await docai_job(api, store, sm, ai_settings, llm, db, output=output)
     response = await api.get(f"{JOBS}/{job['id']}/result")
     assert response.status_code == 200, response.text
     assert response.json()["structured"] == FALLBACK
     assert response.json()["template"] is None
     assert await _stage(api, job["id"]) == "VERIFYING"
-    assert tuple(await raw_result(db, job["id"])) == ("google_vision", VISION_RAW)
+    assert tuple(await raw_result(db, job["id"])) == ("google_docai", DOCAI_RAW)
 
 
-async def test_vision_without_llm_key_uses_original_pages(
+async def test_docai_without_llm_key_uses_original_pages(
     api, line, store, sm, app_settings, llm, db
 ):
     # AC-FR-OCR-026-01: no LLM key does not discard OCR text or ask another OCR engine.
     await login(api, line)
-    job = await vision_job(api, store, sm, app_settings, llm, db, no_llm=True)
+    job = await docai_job(api, store, sm, app_settings, llm, db, no_llm=True)
     response = await api.get(f"{JOBS}/{job['id']}/result")
     assert response.status_code == 200, response.text
     assert response.json()["structured"] == FALLBACK and llm.calls == []
@@ -744,11 +764,11 @@ async def test_both_primary_engines_convert_same_template_using_unchanged_raw(
     versions = await _versions(db)
     outputs = []
     document = pdf(2)
-    for engine in ("textin", "google_vision"):
+    for engine in ("textin", "google_docai"):
         await select_primary(db, engine)
         primary = PayloadEngine(engine)
-        other = PayloadEngine("google_vision" if engine == "textin" else "textin")
-        llm.replies["generic"] = [GENERIC_JSON] if engine == "google_vision" else []
+        other = PayloadEngine("google_docai" if engine == "textin" else "textin")
+        llm.replies["generic"] = [GENERIC_JSON] if engine == "google_docai" else []
         job = (await new_job(api, document, "same-synthetic.pdf")).json()
         assert await worker.run_once(
             sm,
@@ -770,9 +790,10 @@ async def test_both_primary_engines_convert_same_template_using_unchanged_raw(
         assert await mapping_pass(sm, ai_settings, llm)
         calls = FakeLlm()
         calls.requests = llm.requests[request_start:]
-        expected_raw = RAW if engine == "textin" else VISION_RAW
-        assert_document_input(calls, "match", expected_raw)
-        assert_document_input(calls, "convert", expected_raw)
+        expected_raw = RAW if engine == "textin" else DOCAI_RAW
+        model_input = RAW if engine == "textin" else DOCAI_PAGES  # AC-FR-OCR-028-01
+        assert_document_input(calls, "match", model_input)
+        assert_document_input(calls, "convert", model_input)
         response = await api.get(f"{JOBS}/{job['id']}/result")
         assert response.status_code == 200, response.text
         body = response.json()
@@ -800,14 +821,14 @@ async def test_fallback_edit_then_manual_template_uses_raw_not_edited_text(
     # AC-FR-OCR-026-03: a fallback is not the input to a later template conversion.
     await login(api, line)
     versions = await _versions(db)
-    job = await vision_job(
+    job = await docai_job(
         api, store, sm, ai_settings, llm, db, output="null", disable_templates=False
     )
     llm.replies["match"] = [
         {"ranking": [{"template_version_id": versions["tax_invoice"], "score": 0.40}]}
     ]
     assert await mapping_pass(sm, ai_settings, llm)
-    assert_document_input(llm, "match", VISION_RAW)
+    assert_document_input(llm, "match", DOCAI_PAGES)
     body = (await api.get(f"{JOBS}/{job['id']}/result")).json()
     edited = {"ocr_text": {"page_1": "edited, not vendor OCR", "page_2": ""}}
     saved = await api.patch(
@@ -822,8 +843,8 @@ async def test_fallback_edit_then_manual_template_uses_raw_not_edited_text(
     assert response.status_code == 202, response.text
     llm.replies["convert"] = [TAX_OUTPUT]
     assert await mapping_pass(sm, ai_settings, llm)
-    assert_document_input(llm, "convert", VISION_RAW)
-    assert tuple(await raw_result(db, job["id"])) == ("google_vision", VISION_RAW)
+    assert_document_input(llm, "convert", DOCAI_PAGES)
+    assert tuple(await raw_result(db, job["id"])) == ("google_docai", DOCAI_RAW)
     for sql in (
         "update ocr_raw_results set payload='{}' where job_id=:j",
         "delete from ocr_raw_results where job_id=:j",
@@ -835,3 +856,69 @@ async def test_fallback_edit_then_manual_template_uses_raw_not_edited_text(
     restored = (await api.get(f"{JOBS}/{job['id']}/result")).json()
     assert restored["structured"] == edited and restored["version"] == saved.json()["version"]
     assert llm.calls == ["generic", "match", "convert"]
+
+
+async def test_docai_large_layout_uses_page_texts_for_templates(
+    api, line, store, sm, ai_settings, llm, db
+):
+    # AC-FR-OCR-028-01: the full layout response exceeds the 60,000-character limit
+    await login(api, line)
+    versions = await _versions(db)
+    await select_primary(db, "google_docai")
+    big = deepcopy(DOCAI_RAW)
+    vertices = [{"x": 0.123456, "y": 0.654321}] * 4
+    block = {"layout": {"confidence": 0.98, "boundingPoly": {"normalizedVertices": vertices}}}
+    big["documents"][0]["pages"][0]["blocks"] = [block] * 800
+    assert len(json.dumps(big, ensure_ascii=False, separators=(",", ":"))) > 60_000
+    engine = PayloadEngine("google_docai", raw=big)
+    llm.replies["generic"] = [GENERIC_JSON]
+    job = (await new_job(api, pdf(2), "large-layout.pdf")).json()
+    assert await worker.run_once(
+        sm,
+        store,
+        ai_settings,
+        engines={engine.name: engine},
+        sleep=_no_sleep,
+        llm_transport=llm.transport,
+    )
+    llm.replies["match"] = [
+        {"ranking": [{"template_version_id": versions["tax_invoice"], "score": 0.93}]}
+    ]
+    llm.replies["convert"] = [TAX_OUTPUT]
+    assert await mapping_pass(sm, ai_settings, llm)
+    assert_document_input(llm, "match", DOCAI_PAGES)
+    assert_document_input(llm, "convert", DOCAI_PAGES)
+    body = (await api.get(f"{JOBS}/{job['id']}/result")).json()
+    assert body["template"]["template_version_id"] == versions["tax_invoice"]
+    assert body["structured"]["document"]["invoice_no"] == "IV00000001"
+    assert tuple(await raw_result(db, job["id"])) == ("google_docai", big)
+
+
+async def test_historical_vision_result_converts_from_page_texts(
+    api, line, store, sm, ai_settings, llm, db
+):
+    # AC-FR-OCR-028-02: a Vision result saved before the upgrade, converted by hand
+    await login(api, line)
+    versions = await _versions(db)
+    job = (await new_job(api, pdf(2), "history.pdf")).json()
+    vision = EngineResult(
+        engine="google_vision", raw=deepcopy(VISION_RAW), structured=None, page_count=2
+    )
+    await worker._save(sm, job["id"], vision, utcnow(), structured=deepcopy(FALLBACK))
+    llm.replies["match"] = [
+        {"ranking": [{"template_version_id": versions["tax_invoice"], "score": 0.40}]}
+    ]
+    assert await mapping_pass(sm, ai_settings, llm)
+    response = await api.post(
+        f"{JOBS}/{job['id']}/template", json={"template_version_id": versions["tax_invoice"]}
+    )
+    assert response.status_code == 202, response.text
+    llm.replies["convert"] = [TAX_OUTPUT]
+    assert await mapping_pass(sm, ai_settings, llm)
+    assert_document_input(llm, "match", {"pages": [VISION_TEXT, ""]})
+    assert_document_input(llm, "convert", {"pages": [VISION_TEXT, ""]})
+    body = (await api.get(f"{JOBS}/{job['id']}/result")).json()
+    assert body["template"]["template_version_id"] == versions["tax_invoice"]
+    assert tuple(await raw_result(db, job["id"])) == ("google_vision", VISION_RAW)
+    engine = await db.execute(text("select engine from ocr_jobs where id=:j"), {"j": job["id"]})
+    assert engine.scalar() == "google_vision"

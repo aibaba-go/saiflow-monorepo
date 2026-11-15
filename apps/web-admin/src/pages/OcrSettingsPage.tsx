@@ -9,7 +9,8 @@ import { Page } from "../components/Page";
 import { useT } from "../i18n";
 import { asInt, catalog, catalogKeys, type OcrChanges, type OcrSettings } from "../services/catalog";
 
-const ENGINE_NAMES: Record<string, string> = { textin: "TextIn", google_vision: "Google Cloud Vision" };
+// FR-SYS-005, FR-SYS-072: Document AI OCR replaced Google Cloud Vision as the second engine.
+const ENGINE_NAMES: Record<string, string> = { textin: "TextIn", google_docai: "Google Document AI OCR" };
 
 /** OCR engine and LLM settings (FR-SYS-072). Keys show only whether they are set. */
 export function OcrSettingsPage() {
@@ -39,7 +40,7 @@ function KeyStatus({ keys }: { keys: OcrSettings["keys"] }) {
     <Card title={t("ocr.keys")}>
       <Descriptions data-testid="ocr-keys" column={1} size="small">
         <Descriptions.Item label="TextIn">{tag(keys.textin)}</Descriptions.Item>
-        <Descriptions.Item label="Google Cloud Vision">{tag(keys.google_vision)}</Descriptions.Item>
+        <Descriptions.Item label={ENGINE_NAMES.google_docai}>{tag(keys.google_docai)}</Descriptions.Item>
         <Descriptions.Item label={t("ocr.llm")}>{tag(keys.llm)}</Descriptions.Item>
       </Descriptions>
       <Alert type="info" showIcon message={t("ocr.keyNote")} />

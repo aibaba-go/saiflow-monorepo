@@ -12,17 +12,17 @@ from tests.integration.db_fixtures import login
 from tests.integration.tenancy_helpers import add_member, client_like, make_org, make_role, tenant
 from tests.integration.test_ocr_jobs import new_job
 from tests.integration.test_template_mapping import (
+    DOCAI_RAW,
     FALLBACK,
     GENERIC_JSON,
     GENERIC_OUTPUT,
     TAX_OUTPUT,
-    VISION_RAW,
     FakeLlm,
+    docai_job,
     mapping_pass,
     raw_result,
     recognised,
     select_primary,
-    vision_job,
 )
 
 JOBS = "/api/v1/ocr/jobs"
@@ -56,7 +56,7 @@ async def tax_job(api, store, sm, settings, llm, db, engine="textin"):
         )
     ).scalar()
     await select_primary(db, engine)
-    if engine == "google_vision":
+    if engine == "google_docai":
         llm.replies["generic"] = [GENERIC_JSON]
     job = await recognised(api, store, sm, settings, llm, engine=engine)
     llm.replies["match"] = [{"ranking": [{"template_version_id": tax, "score": 0.9}]}]
@@ -403,12 +403,12 @@ async def test_amount_issues_recheck_after_save(api, line, mail, store, sm, ai_s
 
 
 @pytest.mark.parametrize("fallback", [False, True], ids=["generic", "ocr-text"])
-async def test_vision_result_exact_roundtrip_versions_and_confirm(
+async def test_docai_result_exact_roundtrip_versions_and_confirm(
     api, line, mail, store, sm, ai_settings, llm, db, fallback
 ):
     # AC-FR-OCR-025-01/03/05, 026-03; FR-VERIFY-015/009/006.
     me = await registered(api, line, mail)
-    job = await vision_job(
+    job = await docai_job(
         api, store, sm, ai_settings, llm, db, output="null" if fallback else GENERIC_JSON
     )
     original = FALLBACK if fallback else GENERIC_OUTPUT
@@ -463,13 +463,13 @@ async def test_vision_result_exact_roundtrip_versions_and_confirm(
     assert state.confirmed_by_user_id == me["user_id"] and state.official_at is not None
     assert (await save(api, job["id"], 2, original)).status_code == 409
     assert (await api.post(f"{JOBS}/{job['id']}/generic")).status_code == 409
-    assert tuple(await raw_result(db, job["id"])) == ("google_vision", VISION_RAW)
+    assert tuple(await raw_result(db, job["id"])) == ("google_docai", DOCAI_RAW)
     assert llm.calls == ["generic"]
 
 
 @pytest.mark.parametrize("fallback", [False, True], ids=["generic", "ocr-text"])
 @pytest.mark.parametrize("gate", ["guest", "unregistered", "expired"])
-async def test_vision_general_result_keeps_confirmation_gates(
+async def test_docai_general_result_keeps_confirmation_gates(
     api, line, mail, store, sm, ai_settings, llm, db, fallback, gate
 ):
     # AC-FR-OCR-025-01/026-03: free-form has no required-field gate, not no auth/plan gate.
@@ -479,7 +479,7 @@ async def test_vision_general_result_keeps_confirmation_gates(
         await login(api, line)
     else:
         me = await registered(api, line, mail)
-    job = await vision_job(
+    job = await docai_job(
         api, store, sm, ai_settings, llm, db, output="null" if fallback else GENERIC_JSON
     )
     if gate == "expired":
@@ -507,4 +507,4 @@ async def test_vision_general_result_keeps_confirmation_gates(
     current = await result(api, job["id"])
     assert current["structured"] == edited and current["version"] == draft.json()["version"]
     assert current["confirmed"] is False
-    assert tuple(await raw_result(db, job["id"])) == ("google_vision", VISION_RAW)
+    assert tuple(await raw_result(db, job["id"])) == ("google_docai", DOCAI_RAW)

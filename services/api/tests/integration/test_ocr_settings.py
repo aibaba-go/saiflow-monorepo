@@ -20,7 +20,7 @@ pytestmark = pytest.mark.integration
 URL = "/api/v1/admin/ocr-settings"
 DEFAULTS = {
     "primary_engine": "textin",
-    "backup_engine": "google_vision",
+    "backup_engine": "google_docai",
     "retry_per_document": 3,
     "switch_threshold": 5,
     "probe_interval_seconds": 300,
@@ -38,7 +38,7 @@ async def test_defaults_and_key_status(api, db):  # AC-FR-SYS-005-01
     assert r.status_code == 200, r.text
     body = r.json()
     assert {k: body[k] for k in DEFAULTS} == DEFAULTS
-    assert body["keys"] == {"textin": True, "google_vision": False, "llm": False}
+    assert body["keys"] == {"textin": True, "google_docai": False, "llm": False}
     assert "very-secret-code" not in r.text and "app-id-1" not in r.text
 
 
@@ -61,7 +61,7 @@ async def test_patch_one_field(api, db):  # AC-FR-SYS-005-02
 @pytest.mark.parametrize(
     ("body", "fields"),
     [
-        ({"primary_engine": "google_vision"}, ["backup_engine"]),
+        ({"primary_engine": "google_docai"}, ["backup_engine"]),
         ({"primary_engine": "tesseract"}, ["primary_engine"]),
         ({"backup_engine": "textin"}, ["backup_engine"]),
         ({"retry_per_document": 0}, ["retry_per_document"]),
@@ -87,17 +87,17 @@ async def test_validation(api, db, body, fields):  # AC-FR-SYS-005-03
 
 async def test_backup_none_and_swap(api, db):
     admin = await admin_client(api, db)
-    r = await admin.patch(URL, json={"primary_engine": "google_vision", "backup_engine": "none"})
+    r = await admin.patch(URL, json={"primary_engine": "google_docai", "backup_engine": "none"})
     assert r.status_code == 200, r.text
-    r = await admin.patch(URL, json={"primary_engine": "textin", "backup_engine": "google_vision"})
+    r = await admin.patch(URL, json={"primary_engine": "textin", "backup_engine": "google_docai"})
     assert r.status_code == 200
 
 
 async def test_reader_returns_current(api, db):  # AC-FR-SYS-005-04
     admin = await admin_client(api, db)
-    await admin.patch(URL, json={"primary_engine": "google_vision", "backup_engine": "textin"})
+    await admin.patch(URL, json={"primary_engine": "google_docai", "backup_engine": "textin"})
     current = await ocr_settings_service.get(db)
-    assert (current.primary_engine, current.backup_engine) == ("google_vision", "textin")
+    assert (current.primary_engine, current.backup_engine) == ("google_docai", "textin")
     assert current.retry_per_document == 3
 
 
@@ -127,11 +127,11 @@ async def _setting_audits(db):
     ).all()
 
 
-@pytest.mark.parametrize("primary", ["google_vision", "textin"])
+@pytest.mark.parametrize("primary", ["google_docai", "textin"])
 async def test_atomic_swap_preserves_other_values_and_audits(api, db, primary):
     # AC-FR-SYS-162-01/02, AC-FR-SYS-005-02/04.
     admin = await admin_client(api, db)
-    old = "textin" if primary == "google_vision" else "google_vision"
+    old = "textin" if primary == "google_docai" else "google_docai"
     custom = {
         "primary_engine": old,
         "backup_engine": primary,
@@ -166,9 +166,9 @@ async def test_invalid_mixed_patch_is_atomic_without_audit(api, db, bad_field):
     admin = await admin_client(api, db)
     initial = (await admin.get(URL)).json()
     before = await _setting_audits(db)
-    request = {"primary_engine": "google_vision", "backup_engine": "textin", "llm_model": "new"}
+    request = {"primary_engine": "google_docai", "backup_engine": "textin", "llm_model": "new"}
     if bad_field == "conflict":
-        request["backup_engine"] = "google_vision"
+        request["backup_engine"] = "google_docai"
         expected_field = "backup_engine"
     else:
         request[bad_field] = 0 if bad_field == "retry_per_document" else " "
@@ -182,10 +182,10 @@ async def test_invalid_mixed_patch_is_atomic_without_audit(api, db, bad_field):
         assert (await ocr_settings_service.get(fresh)).__dict__ == DEFAULTS
 
 
-@pytest.mark.parametrize("primary", ["google_vision", "textin"])
+@pytest.mark.parametrize("primary", ["google_docai", "textin"])
 async def test_none_backup_is_preserved_by_primary_only_patch(api, db, primary):
     admin = await admin_client(api, db)
-    other = "textin" if primary == "google_vision" else "google_vision"
+    other = "textin" if primary == "google_docai" else "google_docai"
     assert (
         await admin.patch(URL, json={"primary_engine": other, "backup_engine": "none"})
     ).status_code == 200
@@ -199,14 +199,14 @@ async def test_none_backup_is_preserved_by_primary_only_patch(api, db, primary):
     ]
 
 
-@pytest.mark.parametrize("primary", ["textin", "google_vision"])
+@pytest.mark.parametrize("primary", ["textin", "google_docai"])
 async def test_worker_reads_swap_next_job_not_during_active_call(
     api, line, store, db_engine, db, app_settings, primary
 ):
     # FR-SYS-005, AC-FR-OCR-025-04: hold the first call while saving a global swap.
     await login(api, line)
     admin = await admin_client(api, db)
-    other = "google_vision" if primary == "textin" else "textin"
+    other = "google_docai" if primary == "textin" else "textin"
     assert (
         await admin.patch(URL, json={"primary_engine": primary, "backup_engine": other})
     ).status_code == 200
@@ -215,7 +215,7 @@ async def test_worker_reads_swap_next_job_not_during_active_call(
     sm = create_sessionmaker(db_engine)
     settings = app_settings.model_copy(update={"llm_api_key": SecretStr("synthetic-key")})
     llm = FakeLlm()
-    llm.replies["generic"] = [{"document": {"invoice_no": "IV-Vision"}}]
+    llm.replies["generic"] = [{"document": {"invoice_no": "IV-DocAI"}}]
     entered, release = asyncio.Event(), threading.Event()
     loop = asyncio.get_running_loop()
 

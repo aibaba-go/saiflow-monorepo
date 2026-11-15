@@ -58,8 +58,10 @@ TEMPLATE_STATUSES = ("ENABLED", "DISABLED")
 EXPORT_FORMATS = ("XLSX",)
 EXPORT_STATUSES = ("GENERATING", "READY", "EXPIRED", "FAILED")
 
-# OCR engines (FR-SYS-005)
-ENGINES = ("textin", "google_vision")
+# OCR engines (FR-SYS-005): the selectable ones, also the engine health rows
+ENGINES = ("textin", "google_docai")
+# what jobs and raw results may record: Google Cloud Vision results stay as history
+RECORDED_ENGINES = ("textin", "google_vision", "google_docai")
 
 
 def sql_in(values: tuple[str, ...]) -> str:

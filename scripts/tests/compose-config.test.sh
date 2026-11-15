@@ -49,7 +49,7 @@ done
 check "reminders service receives REMINDERS_ENABLED" grep -qF "REMINDERS_ENABLED: \${REMINDERS_ENABLED:-true}" <<<"$reminders"
 check "env.example lists REMINDERS_ENABLED" grep -q '^REMINDERS_ENABLED=' "$deploy/env.example"
 # web-admin-console: OCR and LLM keys reach the backend from .env (FR-SYS-005; empty = not configured)
-for var in TEXTIN_APP_ID TEXTIN_SECRET_CODE GOOGLE_VISION_API_KEY LLM_API_KEY; do
+for var in TEXTIN_APP_ID TEXTIN_SECRET_CODE DOCAI_PROJECT_ID DOCAI_LOCATION DOCAI_PROCESSOR_ID DOCAI_PROCESSOR_VERSION LLM_API_KEY; do
   check "backend receives $var" grep -q "$var: \${$var:-" <<<"$backend"
   check "env.example lists $var" grep -q "^$var=" "$deploy/env.example"
 done
@@ -64,7 +64,7 @@ check "ocr worker service exists" test -n "$ocr"
 check "ocr worker runs the loop" grep -qF 'command: ["python", "-m", "app.cli", "ocr-worker-loop"]' <<<"$ocr"
 check "ocr worker runs as the app role" grep -q 'DB_USER: saiflow_v3_app' <<<"$ocr"
 check "ocr worker publishes no ports" bash -c "! grep -v '^ *#' <<<\"\$1\" | grep -q 'ports:'" _ "$ocr"
-for var in GCS_BUCKET GCS_CREDENTIALS_FILE TEXTIN_APP_ID TEXTIN_SECRET_CODE GOOGLE_VISION_API_KEY LLM_API_KEY; do
+for var in GCS_BUCKET GCS_CREDENTIALS_FILE TEXTIN_APP_ID TEXTIN_SECRET_CODE DOCAI_PROJECT_ID DOCAI_LOCATION DOCAI_PROCESSOR_ID DOCAI_PROCESSOR_VERSION LLM_API_KEY; do
   check "ocr worker receives $var" grep -q "$var: \${$var:-" <<<"$ocr"
 done
 check "ocr worker receives OCR_WORKER_ENABLED" grep -qF "OCR_WORKER_ENABLED: \${OCR_WORKER_ENABLED:-true}" <<<"$ocr"

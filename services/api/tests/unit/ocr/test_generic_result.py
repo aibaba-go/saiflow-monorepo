@@ -1,4 +1,4 @@
-"""New generic result boundary and readable fallback (FR-OCR-025/026)."""
+"""New generic result boundary and readable fallback (FR-OCR-025/026/028)."""
 
 import copy
 import json
@@ -7,22 +7,34 @@ import httpx
 import pytest
 
 from app.ocr import worker
+from app.ocr.page_text import page_texts
 
+P1 = "ใบกำกับภาษี\n中文 Invoice 12345678901234567890"
+P3 = "Total 123456789012.30\n"
+ENGINE = "google_docai"
+# Document AI: two chunks merged in order; page 2 has no text anchor (an empty page)
 RAW = {
-    "pages": [
-        {"fullTextAnnotation": {"text": "ใบกำกับภาษี\n中文 Invoice 12345678901234567890"}},
-        {"fullTextAnnotation": {"text": ""}},
-        {"fullTextAnnotation": {"text": "Total 123456789012.30\n"}},
+    "documents": [
+        {
+            "text": P1,
+            "pages": [
+                {"pageNumber": 1, "layout": {"textAnchor": {"textSegments": [{"endIndex": "43"}]}}},
+                {"pageNumber": 2, "layout": {}},
+            ],
+        },
+        {
+            "text": P3,
+            "pages": [
+                {
+                    "layout": {
+                        "textAnchor": {"textSegments": [{"startIndex": "0", "endIndex": "22"}]}
+                    }
+                }
+            ],
+        },
     ],
-    "vendor_metadata": {"retained": True},
 }
-FALLBACK = {
-    "ocr_text": {
-        "page_1": RAW["pages"][0]["fullTextAnnotation"]["text"],
-        "page_2": "",
-        "page_3": RAW["pages"][2]["fullTextAnnotation"]["text"],
-    }
-}
+FALLBACK = {"ocr_text": {"page_1": P1, "page_2": "", "page_3": P3}}
 CONFIG = {"DEEPSEEK_API_KEY": "fake", "DEEPSEEK_BASE_URL": "https://llm.invalid"}
 
 
@@ -48,7 +60,7 @@ async def test_valid_groups_tables_and_exact_integer_boundary():
     }
     original = copy.deepcopy(source)
     transport = httpx.MockTransport(lambda _r: response(json.dumps(source)))
-    result = await worker._generic(RAW, CONFIG, transport)
+    result = await worker._generic(ENGINE, RAW, CONFIG, transport)
     assert result["large"] == "12345678901234567890"
     assert result["seller"]["negative"] == "-12345678901234567890"
     assert result["items"][0]["quantity"] == "9007199254740992"
@@ -84,7 +96,9 @@ async def test_invalid_generic_is_readable_original_not_successful_extraction(co
     """AC-FR-OCR-025-02, 026-01/02: JSON parse success alone is insufficient."""
     raw = copy.deepcopy(RAW)
     assert (
-        await worker._generic(raw, CONFIG, httpx.MockTransport(lambda _r: response(content)))
+        await worker._generic(
+            ENGINE, raw, CONFIG, httpx.MockTransport(lambda _r: response(content))
+        )
         == FALLBACK
     )
     assert raw == RAW
@@ -103,7 +117,7 @@ async def test_invalid_generic_is_readable_original_not_successful_extraction(co
 )
 async def test_zero_or_false_alone_is_useful(source):
     result = await worker._generic(
-        RAW, CONFIG, httpx.MockTransport(lambda _r: response(json.dumps(source)))
+        ENGINE, RAW, CONFIG, httpx.MockTransport(lambda _r: response(json.dumps(source)))
     )
     assert result == source
 
@@ -113,14 +127,14 @@ async def test_zero_or_false_alone_is_useful(source):
 )
 async def test_empty_table_rows_alone_are_not_extraction(source):
     result = await worker._generic(
-        RAW, CONFIG, httpx.MockTransport(lambda _r: response(json.dumps(source)))
+        ENGINE, RAW, CONFIG, httpx.MockTransport(lambda _r: response(json.dumps(source)))
     )
     assert result == FALLBACK
 
 
 async def test_decimal_tokens_are_exact_text():
     result = await worker._generic(
-        RAW, CONFIG, httpx.MockTransport(lambda _r: response('{"total":123456789012.30}'))
+        ENGINE, RAW, CONFIG, httpx.MockTransport(lambda _r: response('{"total":123456789012.30}'))
     )
     assert result == {"total": "123456789012.30"}
 
@@ -129,7 +143,7 @@ async def test_unconfigured_llm_preserves_pages_without_call():
     def unexpected(_request):
         raise AssertionError("unconfigured LLM must not be called")
 
-    assert await worker._generic(RAW, {}, httpx.MockTransport(unexpected)) == FALLBACK
+    assert await worker._generic(ENGINE, RAW, {}, httpx.MockTransport(unexpected)) == FALLBACK
 
 
 @pytest.mark.parametrize("failure", ["timeout", "http", "shape"])
@@ -141,30 +155,20 @@ async def test_llm_failures_use_original(failure):
             return httpx.Response(503)
         return httpx.Response(200, json={"choices": []})
 
-    assert await worker._generic(RAW, CONFIG, httpx.MockTransport(handle)) == FALLBACK
-
-
-def test_page_extraction_is_defensive_and_keeps_empty_pages():
-    raw = {
-        "pages": [
-            None,
-            "bad",
-            {},
-            {"fullTextAnnotation": []},
-            {"fullTextAnnotation": {"text": 12}},
-            {"fullTextAnnotation": {"text": "  原文\n"}},
-        ]
-    }
-    assert worker._page_texts(raw) == {"pages": ["", "", "", "", "", "  原文\n"]}
-    assert worker._page_texts({"pages": "not an array"}) == {"pages": []}
-    assert worker._page_texts(None) == {"pages": []}
+    assert await worker._generic(ENGINE, RAW, CONFIG, httpx.MockTransport(handle)) == FALLBACK
 
 
 async def test_no_readable_pages_still_returns_explicit_fallback():
-    assert await worker._generic({"pages": [{}, {}]}, {}, None) == {
+    two_empty = {"documents": [{"text": "", "pages": [{}, {}]}]}
+    assert await worker._generic(ENGINE, two_empty, {}, None) == {
         "ocr_text": {"page_1": "", "page_2": ""}
     }
-    assert await worker._generic({}, {}, None) == {"ocr_text": {}}
+    assert await worker._generic(ENGINE, {}, {}, None) == {"ocr_text": {}}
+    # historical Vision results keep their pages too (AC-FR-OCR-028-02)
+    vision = {"pages": [{"fullTextAnnotation": {"text": "原文\n"}}, {}]}
+    assert await worker._generic("google_vision", vision, {}, None) == {
+        "ocr_text": {"page_1": "原文\n", "page_2": ""}
+    }
 
 
 async def test_llm_input_contains_actual_pages_not_coordinates():
@@ -176,5 +180,8 @@ async def test_llm_input_contains_actual_pages_not_coordinates():
         assert "response_format" not in body
         return response('{"invoice_no":"IV1"}')
 
-    assert await worker._generic(RAW, CONFIG, httpx.MockTransport(handle)) == {"invoice_no": "IV1"}
-    assert json.loads(seen[0].split("\n\n", 1)[1]) == worker._page_texts(RAW)
+    assert await worker._generic(ENGINE, RAW, CONFIG, httpx.MockTransport(handle)) == {
+        "invoice_no": "IV1"
+    }
+    assert json.loads(seen[0].split("\n\n", 1)[1]) == {"pages": page_texts(ENGINE, RAW)}
+    assert "documents" not in seen[0] and "textAnchor" not in seen[0]

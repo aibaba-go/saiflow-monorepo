@@ -23,7 +23,7 @@ from app.clock import utcnow
 from app.config import Settings
 from app.integrations.storage import ObjectMissing, ObjectStore
 from app.models import File, OcrJob, OcrRawResult, ResultVersion
-from app.ocr import mapping_worker, sample_worker, states
+from app.ocr import mapping_worker, page_text, sample_worker, states
 from app.ocr.engines import (
     Engine,
     EngineFailure,
@@ -99,17 +99,6 @@ async def _cancel_requested(sm: async_sessionmaker[AsyncSession], job_id: str) -
     return status is None or status == states.CANCEL_REQUESTED or status in states.TERMINAL
 
 
-def _page_texts(raw) -> dict:
-    """FR-OCR-026: read only page text; malformed/empty pages retain their position."""
-    pages = raw.get("pages") if isinstance(raw, dict) else None
-    texts = []
-    for page in pages if isinstance(pages, list) else []:
-        annotation = page.get("fullTextAnnotation") if isinstance(page, dict) else None
-        value = annotation.get("text") if isinstance(annotation, dict) else None
-        texts.append(value if isinstance(value, str) else "")
-    return {"pages": texts}
-
-
 def _usable_generic(node) -> bool:
     """FR-OCR-025: the existing editors support fields, groups and scalar-cell tables.
     Parseable JSON alone is not extraction. Empty optional fields/tables are allowed,
@@ -162,11 +151,12 @@ def _browser_exact(node):
     return node
 
 
-async def _generic(raw, llm: dict, transport) -> dict:
-    """FR-OCR-025/026: usable LLM extraction or readable original pages, never a scalar."""
+async def _generic(engine: str, raw, llm: dict, transport) -> dict:
+    """FR-OCR-025/026/028: usable LLM extraction from the page texts, or the readable
+    original pages (malformed/empty pages keep their position), never a scalar."""
     from app.ocr import deepseek
 
-    pages = _page_texts(raw)
+    pages = {"pages": page_text.page_texts(engine, raw) or []}
     fallback = {"ocr_text": {f"page_{i + 1}": value for i, value in enumerate(pages["pages"])}}
     if not deepseek.is_configured(llm):
         return fallback
@@ -289,9 +279,9 @@ async def _process(
         return
     await _finish(sm, job_id, states.POSTPROCESSING)
     generic = None
-    if result.structured is None:  # Vision gives text only: the LLM builds the generic result
+    if result.structured is None:  # Document AI gives text only: the LLM builds the result
         generic = await _generic(
-            result.raw, mapping_service.llm_config(ocr, settings), llm_transport
+            result.engine, result.raw, mapping_service.llm_config(ocr, settings), llm_transport
         )
     await _save(sm, job_id, result, started, generic)
 

@@ -292,20 +292,29 @@ async def test_generic_llm_cannot_overwrite_cancelled_or_finished_job(
             200, json={"choices": [{"message": {"content": '{"invoice_no":"IV1"}'}}]}
         )
 
-    class Vision:
-        name = "google_vision"
+    class DocAI:
+        name = "google_docai"
         calls = 0
 
         def run(self, *, kind, content, filename, pages):
             self.calls += 1
             return EngineResult(
                 engine=self.name,
-                raw={"pages": [{"fullTextAnnotation": {"text": "Invoice IV1\n"}}]},
+                raw={
+                    "documents": [
+                        {
+                            "text": "Invoice IV1\n",
+                            "pages": [
+                                {"layout": {"textAnchor": {"textSegments": [{"endIndex": "12"}]}}}
+                            ],
+                        }
+                    ]
+                },
                 structured=None,
                 page_count=pages,
             )
 
-    engine = Vision()
+    engine = DocAI()
     settings = app_settings.model_copy(update={"llm_api_key": SecretStr("fake")})
     await worker.run_once(
         sm,

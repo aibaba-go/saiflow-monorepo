@@ -16,13 +16,13 @@ from tests.integration.db_fixtures import login
 from tests.integration.tenancy_helpers import client_like
 from tests.integration.test_results import registered, result, save, tax_job
 from tests.integration.test_template_mapping import (
+    DOCAI_RAW,
     FALLBACK,
     GENERIC_JSON,
     GENERIC_OUTPUT,
-    VISION_RAW,
     FakeLlm,
+    docai_job,
     raw_result,
-    vision_job,
 )
 
 JOBS = "/api/v1/ocr/jobs"
@@ -333,7 +333,7 @@ def _assert_text_cells(workbook, expected):
         assert all(c.data_type == "s" for c in matches)
 
 
-@pytest.mark.parametrize("engine", ["textin", "google_vision"])
+@pytest.mark.parametrize("engine", ["textin", "google_docai"])
 async def test_both_primary_template_save_confirm_export_exact_cells(
     api, line, mail, store, sm, ai_settings, llm, db, engine
 ):
@@ -385,12 +385,12 @@ async def test_both_primary_template_save_confirm_export_exact_cells(
 
 
 @pytest.mark.parametrize("mode", ["generic", "invalid-llm", "no-llm"])
-async def test_vision_generic_or_fallback_save_confirm_export_exact_text(
+async def test_docai_generic_or_fallback_save_confirm_export_exact_text(
     api, line, mail, store, sm, ai_settings, llm, db, mode
 ):
     # AC-FR-OCR-025-01/03/05, AC-FR-OCR-026-03: latest confirmed version, not the raw/version 1.
     await registered(api, line, mail)
-    job = await vision_job(
+    job = await docai_job(
         api,
         store,
         sm,
@@ -451,12 +451,12 @@ async def test_vision_generic_or_fallback_save_confirm_export_exact_text(
         )
     ).scalar_one()
     assert version == 2
-    assert tuple(await raw_result(db, job["id"])) == ("google_vision", VISION_RAW)
+    assert tuple(await raw_result(db, job["id"])) == ("google_docai", DOCAI_RAW)
     assert llm.calls == ([] if mode == "no-llm" else ["generic"])
 
 
 @pytest.mark.parametrize("fallback", [False, True], ids=["generic", "ocr-text"])
-async def test_vision_general_result_review_and_export_permissions(
+async def test_docai_general_result_review_and_export_permissions(
     api, line, mail, store, sm, ai_settings, llm, db, fallback
 ):
     # AC-FR-OCR-025-01/026-03, FR-VERIFY-010/011/012, FR-ENTRY-015, FR-REPORT-007.
@@ -468,7 +468,7 @@ async def test_vision_general_result_review_and_export_permissions(
     org = await review_org(api, line, mail, db)
     await set_level(db, org.tenant_id, 2, code=None)
     client = org.clerk.client
-    job = await vision_job(
+    job = await docai_job(
         client,
         store,
         sm,
@@ -555,4 +555,4 @@ async def test_vision_general_result_review_and_export_permissions(
             report_query.build(spec, tenant_id=org.tenant_id, scope_user_id=None, period=None),
         )
     assert diag["documents"] == 0 and rows == []  # generic/fallback never become template data
-    assert tuple(await raw_result(db, job["id"])) == ("google_vision", VISION_RAW)
+    assert tuple(await raw_result(db, job["id"])) == ("google_docai", DOCAI_RAW)

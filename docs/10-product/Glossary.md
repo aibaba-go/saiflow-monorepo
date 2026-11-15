@@ -3,8 +3,8 @@ doc_id: GLO-001
 title: "SaiFlow — 术语表（唯一事实来源）"
 type: glossary
 status: active
-version: 1.10.0
-updated: 2026-11-11
+version: 1.11.0
+updated: 2026-11-15
 owner: Product
 ---
 
@@ -83,7 +83,7 @@ owner: Product
 | **双重存储（Dual storage）** | 同时归档原始图像文件与识别/结构化数据文件。 |
 | **Merge PDF** | 将多个文档（PO + DN + Invoice）合并为一个账单包 PDF。 |
 | **TextIn** | 外部 OCR 与结构化文档识别服务；SaiFlow 仅在服务端调用，并保存其原始 JSON 响应。 |
-| **原始识别载荷（Raw extraction payload）** | OCR 引擎（TextIn 或 Google Cloud Vision API）返回、原样保存于 PostgreSQL（jsonb）的完整 JSON 及其关联元数据；按载荷版本不可变。 |
+| **原始识别载荷（Raw extraction payload）** | OCR 引擎（TextIn 或 Google Document AI OCR；历史上也有 Google Cloud Vision API）返回、原样保存于 PostgreSQL（jsonb）的完整 JSON 及其关联元数据；按载荷版本不可变。 |
 | **文档格式模板（Document template）** | 已版本化的表单定义：表单类型、字段、明细行、主要字段与界面定义；是大模型模板匹配与结构化转换的依据，也决定 Excel 导入模板与导出版式。 |
 | **JSONPath 映射** | v3 不再使用（已由大模型结构化转换取代，PRD OQ-19）；保留词条以便追溯：曾指从原始 JSON 中选择数据并写入既定规范字段的受限路径规则。 |
 | **幂等转换（Idempotent conversion）** | 对同一文档与原始载荷版本重复执行时，结果不产生重复记录的转换。 |
@@ -91,7 +91,7 @@ owner: Product
 | **OCR 扫描** | 拍照、扫描或导入图像/PDF 后经 OCR 与大模型得到结构化数据的录入入口（P0）。 |
 | **结构化文件导入** | 按固定导入模板填写的 xlsx / xls 文件上传后按字段名直接解析的录入入口，不调用大模型（P1）。 |
 | **界面直接录入** | 选择文档格式模板后在模板界面中直接录入数据的入口（P2）。 |
-| **Google Cloud Vision API** | 可配置的 OCR 引擎之一，与 TextIn 并列；仅在服务端调用。 |
+| **Google Document AI OCR** | 可配置的 OCR 引擎之一（Enterprise Document OCR 处理器，位于 asia-southeast1），与 TextIn 并列，默认作备用；仅在服务端以服务账号调用。v1.11.0 起取代 Google Cloud Vision API（其历史识别结果仍保留并可查看）。 |
 | **首选引擎 / 备用引擎** | 平台管理员配置的两个 OCR 引擎及其优先级；首选引擎失败按两层规则切换到备用引擎（PRD §4.6、OQ-12）。 |
 | **大模型模板匹配** | 由大模型根据原始识别载荷判断单据对应哪个文档格式模板；无法匹配时弹出模板选择框。 |
 | **大模型结构化转换** | 由大模型按选定模板把原始识别载荷转换为模板定义的结构化 JSON，并给出字段置信度。 |
@@ -159,6 +159,7 @@ owner: Product
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.11.0 | 2026-11-15 | Product Engineering | `docai-backup-engine`：Google Cloud Vision API 改为 Google Document AI OCR；原始识别载荷引擎同步 |
 | 1.10.0 | 2026-11-11 | Product Engineering | 新增运营报表、卡片、草稿、发布快照、粒度、合成预览及独立管理/查看权限术语 |
 | 1.9.0 | 2026-11-07 | Product Engineering | 新增“待复核”“复核轮次”“修改记录”（变更 `review-flow`） |
 | 1.8.0 | 2026-11-06 | Product Engineering | “自由格式”改为 V1.0，注明界面名称“通用结果”（变更 `ocr-scan-flow`） |
