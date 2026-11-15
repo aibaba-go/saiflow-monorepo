@@ -8,7 +8,7 @@ Google Cloud Vision 已从代码、配置、管理端与文档中替换为 Googl
 
 - **隔离库集成测试未运行：** `temp/local-postgres/secrets.env` 已不存在，本机 127.0.0.1:25432 需要 scram 口令，环境中也没有 `TEST_DB_*`。不改 pg_hba、不连 81.68.72.120。恢复凭据后按下文命令补跑。已确认集成测试可收集（788 项）。
 - **真实 Document AI 调用未做：** asia-southeast1 处理器须由负责人在控制台创建（API 创建被权限策略拦截）并提供处理器 ID；服务账号须授予 “Document AI API User”。（2026-11-15 已补做，见下节。）
-- 未提交、未归档、未部署。部署须负责人在对话中明确批准，生产需先配置 `DOCAI_*` 变量。
+- ~~未提交、未归档、未部署。~~ 已提交并部署（2026-11-15，见“CI 与部署”）；尚未归档。
 
 ## AC → 测试 → 当前结果
 
@@ -49,7 +49,16 @@ Google Cloud Vision 已从代码、配置、管理端与文档中替换为 Googl
 - v2.1.1 图片：1 次调用，1 页，泰文与英文正确，1948 字符；raw 77,938 字节 JSON，大模型输入 2,071。
 - v2.1.1 16 页 PDF：拆成 2 次调用（15 + 1），page_count 16、16 页原文、无空页；raw 1,295,272 字节，大模型输入 33,137（低于 60k 上限，AC-FR-OCR-028-01 的真实对应）。
 
-未验证：生产服务账号 `saiflow-v3-docs-dev@…` 的调用。只读查询项目 IAM 显示它尚无 `roles/documentai.apiUser`，须负责人授予；授予并配置 `DOCAI_*` 前生产只用 TextIn（备用不可用，后台显示未配置）。
+未验证：生产服务账号 `saiflow-v3-docs-dev@…` 的调用。只读查询项目 IAM 显示它尚无 `roles/documentai.apiUser`，须负责人授予；授予并配置 `DOCAI_*` 前生产只用 TextIn（备用不可用，后台显示未配置）。（角色已于部署前授予，见下节。）
+
+## CI 与部署（2026-11-15）
+
+- `d2a3b2d` 的 CI #119：backend、frontend、contract、stack 通过；scripts 的凭据扫描（AC-FR-PLAT-005-04）失败，命中 `test_docai.py` 中假服务账号夹具的字面字段名（非真实凭据）。修复 `657e3b6`：字段名分段拼接；本地 `check-no-secrets.sh` 通过，`git grep` 同规则扫描 `657e3b6` 树无命中、扫描 `d2a3b2d` 命中该文件。
+- `657e3b6` 的 CI：负责人确认 5 个任务全绿（CI 在 postgres:18 上以 `REQUIRE_INTEGRATION=1` 运行集成测试，覆盖上表“集成待跑”各项与 0020 迁移）。本机未直接查看该运行（无 `gh`、浏览器未登录）。
+- 生产准备（负责人执行）：项目 IAM 只读查询显示 `saiflow-v3-docs-dev@saiflow-509205.iam.gserviceaccount.com` 已有 `roles/documentai.apiUser`；负责人报告已在 `/opt/saiflow/.env` 加入四个 `DOCAI_*`（版本 v2.1.1），先于部署，故部署的 `compose up -d` 以新变量重建容器。
+- 标准 Deploy 由负责人在 GitHub 触发。公开健康检查轮询：saiflow-app、saiflow-admin、saiflow-line2 三站 `/api/v1/health` 均为 `status=ok`、`database=ok`、`version=657e3b609c441f1d586491cefc3c584b8f3cde10`（部署前为 `8e965db…`）。
+
+部署后仍未验证：管理端 OCR 设置页“Google Document AI OCR”显示已配置（需登录管理端）；生产服务账号经 Document AI 的真实识别（仅在 TextIn 故障转移或切换主引擎时发生，未做线上业务操作）。
 
 ## 补跑集成测试（恢复凭据后）
 
