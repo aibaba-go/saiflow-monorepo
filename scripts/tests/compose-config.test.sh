@@ -72,4 +72,7 @@ check "env.example lists OCR_WORKER_ENABLED" grep -q '^OCR_WORKER_ENABLED=' "$de
 check "the secrets folder (service-account key) is mounted read-only" bash -c "grep -qF './secrets:/run/secrets:ro' <<<\"\$1\" && grep -qF './secrets:/run/secrets:ro' <<<\"\$2\"" _ "$backend" "$ocr"
 # admin-impersonate-user: the admin's one-time link points at web-pc's own host (FR-SYS-145)
 check "backend receives WEB_PC_ORIGIN from APP_HOST" grep -qF "WEB_PC_ORIGIN: https://\${APP_HOST:?}" <<<"$backend"
+# shellcheck disable=SC2016
+check "database volume can be isolated for test" grep -qF 'name: ${POSTGRES_VOLUME:-saiflow_pgdata}' "$deploy/compose.yaml"
+check "env.example documents the database volume" grep -q '^POSTGRES_VOLUME=' "$deploy/env.example"
 finish

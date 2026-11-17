@@ -1,18 +1,18 @@
 ---
 doc_id: OPS-001
-title: "SaiFlow — 部署与运维说明（dev 环境）"
+title: "SaiFlow — 部署与运维说明（生产与测试环境）"
 type: guide
 status: active
-version: 1.10.0
-updated: 2026-11-15
+version: 1.12.0
+updated: 2026-11-17
 owner: Product Engineering
 related: [ADR-008, FR-PLAT-005, FR-PLAT-006]
 doc_source: manual
 ---
 
-# SaiFlow — 部署与运维说明（dev 环境）
+# SaiFlow — 部署与运维说明（生产与测试环境）
 
-> 运行环境见 [`ADR-008`](../30-design/adr/ADR-008-vps-docker-hosting.md)：一台 LightNode VPS（曼谷，Ubuntu 24.04）上用 Docker Compose 运行 PostgreSQL、后端、三个前端与 Caddy。脚本在 `scripts/`，Compose 与 Caddy 配置在 `scripts/deploy/`。部署记录写在对应 change 的 `verification.md`，不写在这里。
+> 运行环境见 [`ADR-008`](../30-design/adr/ADR-008-vps-docker-hosting.md)：生产与测试各用一台 LightNode VPS（Ubuntu 24.04），各自用 Docker Compose 运行 PostgreSQL、后端、三个前端与 Caddy。脚本在 `scripts/`，Compose 与 Caddy 配置在 `scripts/deploy/`。部署记录写在对应 change 的 `verification.md`，不写在这里。
 
 ## 1. 地址
 
@@ -23,13 +23,20 @@ doc_source: manual
 | LINE 小程序 | https://saiflow-line2.aibaba.asia | `saiflow-fe-line-mini` |
 | 后端 | 以上每个地址下的 `/api`（健康检查 `/api/v1/health`） | `saiflow-be-api` |
 
-公网只开放 80、443（Caddy）与 SSH 11022；数据库端口不对外。
+| 环境 | 服务器（SSH 11022） | APP_HOST | ADMIN_HOST | LINE_HOST |
+|------|--------------------|----------|------------|-----------|
+| production | `130.94.24.117` | `saiflow-app.aibaba.asia` | `saiflow-admin.aibaba.asia` | `saiflow-line2.aibaba.asia` |
+| test | `38.60.156.234` | `dev-saiflow-app.aibaba.asia` | `dev-saiflow-admin.aibaba.asia` | `dev-saiflow-line.aibaba.asia` |
+
+公网只开放 80、443（Caddy）与 SSH 11022；数据库端口不对外。测试域名需要负责人配置 DNS 后才能取得公网 HTTPS 证书。
+
+迁移过渡期 DNS 仍指向旧服务器时，旧机 Caddy 将原生产域名经 HTTPS/SNI 转发到新机，旧机测试域名仍访问本地测试服务；生产只有新机数据库可写。负责人将三个生产 A 记录切到新机并确认生效后，才能移除转发规则。过渡期间不要部署 test：工作流会复制标准 Caddyfile，替换转发配置。
 
 ## 2. 一次性配置（按顺序，只做一次）
 
 ### 2.1 DNS
 
-在 `aibaba.asia` 的 DNS 中加三条 A 记录，都指向 VPS 的公网 IP：`saiflow-app`、`saiflow-admin`、`saiflow-line2`。生效后 Caddy 才能申请证书。
+在 `aibaba.asia` 的 DNS 中，三个生产 A 记录 `saiflow-app`、`saiflow-admin`、`saiflow-line2` 指向 `130.94.24.117`；三个测试 A 记录 `dev-saiflow-app`、`dev-saiflow-admin`、`dev-saiflow-line` 指向 `38.60.156.234`。DNS 由负责人操作，不由迁移脚本修改。新生产预切换验证复用迁移的现有证书；新测试域名需 DNS 生效后 Caddy 才能申请证书。
 
 ### 2.2 部署密钥（在你自己的电脑上）
 
@@ -63,16 +70,22 @@ scp -P 11022 saiflow-v3-backup-key.json root@<VPS_IP>:/opt/saiflow/secrets/gcs-b
 ssh -p 11022 root@<VPS_IP> 'chown deploy:deploy /opt/saiflow/secrets/gcs-backup.json && chmod 600 /opt/saiflow/secrets/gcs-backup.json'
 ```
 
-### 2.5 GitHub 仓库设置（Settings → Secrets and variables → Actions）
+### 2.5 GitHub Environment 设置（Settings → Environments）
+
+创建 `production` 与 `test`，分别配置下表，不共用 SSH 部署私钥：
 
 | 类型 | 名称 | 值 |
 |------|------|----|
-| Secret | `VPS_SSH_KEY` | `saiflow_deploy_key` 私钥全文 |
-| Secret | `VPS_KNOWN_HOSTS` | `ssh-keyscan -p 11022 <VPS_IP>` 的输出（固定主机指纹，防止中间人） |
-| Variable | `VPS_HOST` | VPS 公网 IP |
-| Variable | `APP_HOST` | `saiflow-app.aibaba.asia` |
-| Variable | `ADMIN_HOST` | `saiflow-admin.aibaba.asia` |
-| Variable | `LINE_HOST` | `saiflow-line2.aibaba.asia` |
+| Secret | `VPS_SSH_KEY` | 所选环境部署账号的私钥全文 |
+| Secret | `VPS_KNOWN_HOSTS` | 所选服务器端口 11022 的固定主机密钥 |
+| Variable | `VPS_HOST` | §1 中所选服务器 IP |
+| Variable | `APP_HOST` / `ADMIN_HOST` / `LINE_HOST` | §1 中所选环境的三个域名 |
+| Variable（production） | `LIFF_ID` / `LINE_CHANNEL_ID` | 生产公开频道 ID，见 §2.6 |
+| Variable（test） | `TEST_LIFF_ID` / `TEST_LINE_CHANNEL_ID` | 独立测试频道 ID；未配置则测试构建为空，不回退到生产频道 |
+
+GitHub 不接受空变量，因此测试使用独立变量名。生产/测试镜像标签为 `<提交 SHA>-production` / `<提交 SHA>-test`，后端健康版本仍为原提交 SHA，避免不同频道的前端互相覆盖。
+
+双环境 workflow 未提交发布前，现有 Deploy 仍读取仓库级变量与 Secrets；这些兼容配置只表示 production，目标为新生产服务器，不能用于发布测试。环境设置准备好不等于双环境 workflow 已上线。
 
 镜像推送与服务器拉取都用工作流自带的临时令牌，不需要另建镜像仓库密码；服务器在每次部署结束时退出登录（FR-PLAT-005）。
 
@@ -196,9 +209,9 @@ docker compose exec -T saiflow-be-ocr python -m app.cli ocr-worker-run-once     
 ## 3. 部署
 
 1. 确认要部署的提交在 GitHub Actions 的 `CI` 中已通过。
-2. Actions → `Deploy` → Run workflow，选择分支 `chore/ai-workflow-v2`（部署该分支最新提交）。
-3. 工作流依次：检查分支（只允许 `chore/ai-workflow-v2`，选了别的分支即停止）→ 检查 CI 结果（未通过即停止）→ 构建并推送 4 个镜像 → 复制 Compose 与脚本到 `/opt/saiflow` → 在服务器上拉取镜像、数据库迁移、重启服务 → 检查三个地址的健康检查与版本 → 确认 5432 端口从外部不可连。
-4. 结果见该次运行的 Summary；任何一步失败，工作流即为失败。
+2. 双环境 workflow 发布后，Actions → `Deploy` → Run workflow，选择分支 `chore/ai-workflow-v2` 和目标 `test` / `production`。默认 `test`；正式发布须显式选择 `production`。发布前的旧 workflow 没有目标选项，只部署仓库级配置所指的新生产。
+3. 工作流依次：检查分支（只允许 `chore/ai-workflow-v2`，选了别的分支即停止）→ 检查 CI 结果（未通过即停止）→ 构建并推送所选目标的 4 个镜像 → 复制 Compose 与脚本到目标服务器 `/opt/saiflow` → 拉取镜像、数据库迁移、重启服务 → 检查所选环境三个地址的健康检查与版本 → 确认 5432 端口从外部不可连。
+4. 结果见该次运行的 Summary；任何一步失败，工作流即为失败。不同环境分别串行部署，互不更新另一环境的服务。
 
 推送代码或合并 PR **不会**触发部署。
 
@@ -257,7 +270,15 @@ curl -s https://saiflow-app.aibaba.asia/api/v1/health
 docker compose exec -T saiflow-be-api python -m app.cli audit-verify   # 操作日志是否被改动
 ```
 
-## 7. 已知风险
+## 7. 测试环境边界
+
+- 测试 PostgreSQL 从空库迁移，不恢复生产业务数据；仅保留平台管理员账号供后台登录，不复制客户账号或管理员会话，不改变管理员密码。`.env` 中 `POSTGRES_VOLUME=saiflow_test_pgdata`，生产默认 `saiflow_pgdata`；旧生产卷不挂载到测试服务，迁移备份/原卷仅用于回滚，最终清理由负责人确认后进行。
+- 暂时共用既有业务桶 `saiflow-docs-dev`，不改生产原件路径，不删除生产对象。测试库没有生产对象引用；测试文件采用应用既有随机对象名称，不从生产库导入引用。
+- `OCR_WORKER_ENABLED=false`、`REMINDERS_ENABLED=false`；测试清空 SMTP、LINE 实际频道凭据以及付费 OCR/LLM key。测试上传不代表识别流程可用；开启识别/清理前应使用独立测试桶和服务账号。
+- 测试备份使用 `BACKUP_BUCKET=gs://saiflow-db-backup/test`，生产仍使用既有备份位置，避免同名备份相互覆盖。
+- 独立测试 LINE 频道及 DNS 未配置时，不声称测试 LINE 登录或公网 HTTPS 可用。
+
+## 8. 已知风险
 
 - **单台服务器：** 数据库与全部服务在同一台机器上，宕机即全部不可用；磁盘损坏时只能从备份桶恢复（ADR-008）。
 - **`deploy` 账号权限接近 root：** 它属于 `docker` 组，能运行任意容器。只允许密钥登录，私钥只在 GitHub Secrets 中；dev 阶段接受（B-1 决定 D9）。
@@ -268,6 +289,8 @@ docker compose exec -T saiflow-be-api python -m app.cli audit-verify   # 操作�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.12.0 | 2026-11-17 | Product Engineering | `promote-new-production`：测试域名由 `test-saiflow-*` 改为 `dev-saiflow-*`（旧机 `.env`、Caddy 路由与 GitHub test Environment 变量同步），生产域名与转发桥不变 |
+| 1.11.0 | 2026-11-17 | Product Engineering | `promote-new-production`：生产/测试目标、Environment 凭据、目标隔离镜像标签、独立测试卷及共用桶限制、DNS 过渡转发说明；测试域名统一使用 `test-saiflow-*` 命名 |
 | 1.10.0 | 2026-11-15 | Product Engineering | `docai-backup-engine`：§2.8 以 Document AI OCR 的四个变量取代 `GOOGLE_VISION_API_KEY`，补充 `asia-southeast1` 处理器与服务账号角色的一次性配置；§4 0020 的回退 |
 | 1.9.1 | 2026-11-13 | Product Engineering | 后台账号连续 5 次输错口令的锁定时间改为 5 分钟（`line-result-table-admin-lock`，FR-SYS-019） |
 | 1.9.0 | 2026-11-06 | Product Engineering | §2.10 每次部署自动整理 `secrets` 文件夹的所有者与权限（`secrets-perms.sh`）；备份密钥保持 `deploy` 所有，后端读不到 |

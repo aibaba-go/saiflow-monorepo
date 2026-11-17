@@ -4,6 +4,13 @@ name: Deploy
 
 on:
   workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment target
+        required: true
+        type: choice
+        default: test
+        options: [test, production]
 
 permissions:
   contents: read
@@ -11,18 +18,19 @@ permissions:
   actions: read
 
 concurrency:
-  group: deploy
+  group: deploy-${{ inputs.environment }}
   cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-24.04
+    environment: ${{ inputs.environment }}
     # A normal deploy takes about 3 minutes; stop a hung SSH, pull or health check.
     timeout-minutes: 10
     env:
       SHA: ${{ github.sha }}
+      IMAGE_TAG: ${{ github.sha }}-${{ inputs.environment }}
       REGISTRY: ghcr.io/aibaba-go
-      VPS_HOST: ${{ vars.VPS_HOST }}
       SSH_PORT: "11022"
     steps:
       - uses: actions/checkout@v4
@@ -40,23 +48,25 @@ jobs:
           GHCR_TOKEN: ${{ github.token }}
           GHCR_USER: ${{ github.actor }}
           # LIFF app ID of the LINE mini app: public, set in Settings → Variables
-          LIFF_ID: ${{ vars.LIFF_ID }}
+          LIFF_ID: ${{ inputs.environment == 'production' && vars.LIFF_ID || vars.TEST_LIFF_ID }}
           # LINE Login channel ID for web-pc's LINE login: public, set in Settings → Variables
-          LINE_CHANNEL_ID: ${{ vars.LINE_CHANNEL_ID }}
+          LINE_CHANNEL_ID: ${{ inputs.environment == 'production' && vars.LINE_CHANNEL_ID || vars.TEST_LINE_CHANNEL_ID }}
         run: |
           printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-          docker build -t "$REGISTRY/saiflow-be-api:$SHA" --build-arg APP_VERSION="$SHA" services/api
-          docker push "$REGISTRY/saiflow-be-api:$SHA"
+          docker build -t "$REGISTRY/saiflow-be-api:$IMAGE_TAG" --build-arg APP_VERSION="$SHA" services/api
+          docker push "$REGISTRY/saiflow-be-api:$IMAGE_TAG"
           for app in web-pc web-admin line-mini; do
             docker build -f scripts/docker/frontend.Dockerfile --build-arg APP="$app" \
               --build-arg VITE_LIFF_ID="$LIFF_ID" --build-arg VITE_LINE_CHANNEL_ID="$LINE_CHANNEL_ID" \
-              -t "$REGISTRY/saiflow-fe-$app:$SHA" .
-            docker push "$REGISTRY/saiflow-fe-$app:$SHA"
+              -t "$REGISTRY/saiflow-fe-$app:$IMAGE_TAG" .
+            docker push "$REGISTRY/saiflow-fe-$app:$IMAGE_TAG"
           done
           docker logout ghcr.io
 
       - name: SSH key and pinned host key
         env:
+          # Environment variables are available only after the job starts.
+          VPS_HOST: ${{ vars.VPS_HOST }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
         run: |
@@ -81,6 +91,14 @@ jobs:
             echo "  StrictHostKeyChecking yes"
           } >~/.ssh/config
 
+      - name: test server must no longer forward production traffic
+        if: inputs.environment == 'test'
+        run: |
+          ssh vps 'if [ -f /opt/saiflow/production-forwarding ]; then
+            echo "test deploy refused: complete the production DNS cutover before replacing Caddyfile" >&2
+            exit 1
+          fi'
+
       - name: copy stack files to /opt/saiflow
         run: |
           scp -r scripts/deploy/compose.yaml scripts/deploy/Caddyfile scripts/deploy/postgres-init \
@@ -94,8 +112,8 @@ jobs:
           GHCR_TOKEN: ${{ github.token }}
           GHCR_USER: ${{ github.actor }}
         run: |
-          # shellcheck disable=SC2029  # $SHA is meant to expand here, on the runner
-          printf '%s\n%s\n' "$GHCR_USER" "$GHCR_TOKEN" | ssh vps "bash /opt/saiflow/remote-deploy.sh $SHA"
+          # shellcheck disable=SC2029  # $IMAGE_TAG expands on the runner.
+          printf '%s\n%s\n' "$GHCR_USER" "$GHCR_TOKEN" | ssh vps "bash /opt/saiflow/remote-deploy.sh $IMAGE_TAG"
 
       - name: health on all three sites (AC-FR-PLAT-005-03)
         env:
@@ -115,6 +133,8 @@ jobs:
           exit "$status"
 
       - name: database port is closed from outside (AC-FR-PLAT-005-06)
+        env:
+          VPS_HOST: ${{ vars.VPS_HOST }}
         run: |
           if nc -z -w 5 "$VPS_HOST" 5432; then
             echo "::error::port 5432 on $VPS_HOST is reachable from the internet"; exit 1
@@ -125,7 +145,7 @@ jobs:
         if: always()
         run: |
           {
-            echo "### Deploy $SHA"
+            echo "### Deploy $IMAGE_TAG"
             echo '```'
             cat "$RUNNER_TEMP/smoke.txt" 2>/dev/null || echo "(no smoke-check output)"
             echo '```'

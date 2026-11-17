@@ -185,5 +185,6 @@ services:
 
 volumes:
   pgdata:
+    name: ${POSTGRES_VOLUME:-saiflow_pgdata}
   caddy_data:
   caddy_config:
