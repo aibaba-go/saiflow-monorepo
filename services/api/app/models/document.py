@@ -17,7 +17,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSON, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -167,7 +167,7 @@ class ResultVersion(Base):
     created_by_user_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("users.id"), index=True
     )
-    structured: Mapped[dict | None] = mapped_column(JSONB)
+    structured: Mapped[dict | None] = mapped_column(JSON)  # json keeps the key order
     mapping_id: Mapped[str | None] = mapped_column(
         _ID,
         ForeignKey("template_mappings.id", deferrable=True, initially="DEFERRED", use_alter=True),

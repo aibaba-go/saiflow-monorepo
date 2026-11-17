@@ -208,7 +208,7 @@ def build(
     # underestimate otherwise makes the planner repeat index joins per document.
     base_fence = "MATERIALIZED " if spec.grain == "table" else ""
     base = (
-        f"base AS {base_fence}(SELECT j.id AS job_id, r.structured AS doc "
+        f"base AS {base_fence}(SELECT j.id AS job_id, CAST(r.structured AS jsonb) AS doc "
         "FROM ocr_jobs j "
         "JOIN result_versions r ON r.id = j.confirmed_version_id AND r.job_id = j.id "
         "JOIN template_mappings m ON m.id = r.mapping_id AND m.job_id = j.id "

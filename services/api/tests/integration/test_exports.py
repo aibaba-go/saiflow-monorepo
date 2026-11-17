@@ -455,6 +455,37 @@ async def test_docai_generic_or_fallback_save_confirm_export_exact_text(
     assert llm.calls == ([] if mode == "no-llm" else ["generic"])
 
 
+STATEMENT_JSON = """{
+    "statement": {"account_name": "SAIFLOW CO., LTD.", "account_no": "123-4-56789-0"},
+    "transactions": [
+        {"transaction_date": "2026-10-01", "posting_date": "2026-10-02",
+         "description": "Transfer", "amount": "1,200.00"}
+    ]
+}"""
+STATEMENT_COLUMNS = ["transaction_date", "posting_date", "description", "amount"]
+
+
+async def test_generic_keys_keep_document_order(api, line, mail, store, sm, ai_settings, llm, db):
+    # FR-OCR-023, FR-ENTRY-015 ("通用结果按保存的顺序"): fields and columns as on the page.
+    await registered(api, line, mail)
+    job = await docai_job(api, store, sm, ai_settings, llm, db, output=STATEMENT_JSON)
+    body = await result(api, job["id"])
+    assert list(body["structured"]) == ["statement", "transactions"]
+    assert list(body["structured"]["statement"]) == ["account_name", "account_no"]
+    assert list(body["structured"]["transactions"][0]) == STATEMENT_COLUMNS
+    edited = deepcopy(body["structured"])
+    edited["transactions"].append(dict.fromkeys(STATEMENT_COLUMNS, "x"))
+    saved = await save(api, job["id"], body["version"], edited)
+    assert saved.status_code == 200, saved.text
+    for row in (await result(api, job["id"]))["structured"]["transactions"]:
+        assert list(row) == STATEMENT_COLUMNS
+    done = await save(api, job["id"], saved.json()["version"], edited, confirm=True)
+    assert done.status_code == 200, done.text
+    _, workbook = await _download_workbook(api, job["id"])
+    rows = [[c.value for c in row] for row in workbook.worksheets[0].iter_rows()]
+    assert STATEMENT_COLUMNS in [row[: len(STATEMENT_COLUMNS)] for row in rows]
+
+
 @pytest.mark.parametrize("fallback", [False, True], ids=["generic", "ocr-text"])
 async def test_docai_general_result_review_and_export_permissions(
     api, line, mail, store, sm, ai_settings, llm, db, fallback

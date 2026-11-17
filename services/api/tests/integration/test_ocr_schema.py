@@ -2,6 +2,7 @@
 (FR-TEMPLATE-006)."""
 
 import importlib.util
+import json
 import uuid
 from pathlib import Path
 
@@ -330,3 +331,60 @@ def test_0020_moves_vision_to_document_ai_and_keeps_history(db_settings_session)
         up = _alembic(db_settings_session, "upgrade", "head")
         assert up.returncode == 0, up.stderr
         asyncio.run(run(f"delete from {S}.system_settings where key like 'ocr_%_engine'"))
+
+
+def test_0021_result_versions_keep_key_order(db_settings_session):
+    """FR-OCR-023: result versions are json (written order), jsonb before 0021; both ways
+    keep the saved content."""
+    import asyncio
+
+    from app.db import create_engine
+
+    async def run(*sqls: str):
+        engine = create_engine(db_settings_session)
+        try:
+            async with engine.begin() as conn:
+                rows = None
+                for sql in sqls:
+                    res = await conn.execute(text(sql))
+                    rows = res.all() if res.returns_rows else None
+                return rows
+        finally:
+            await engine.dispose()
+
+    kind = (
+        "select data_type from information_schema.columns where table_schema = 'saiflow_v3' "
+        "and table_name = 'result_versions' and column_name = 'structured'"
+    )
+    assert asyncio.run(run(kind)) == [("json",)]
+    body = '{"transaction_date": "1", "posting_date": "2", "description": "3", "amount": "4"}'
+    try:
+        asyncio.run(
+            run(
+                f"insert into {S}.tenants (kind, status) values ('guest', 'active')",
+                f"insert into {S}.files (id, tenant_id, original_name, status) "
+                f"select 'f-0021', max(id), 'a.png', 'READY' from {S}.tenants",
+                f"insert into {S}.ocr_jobs (id, tenant_id, file_id, status) "
+                f"select 'j-0021', max(id), 'f-0021', 'SUCCEEDED' from {S}.tenants",
+                f"insert into {S}.result_versions (id, job_id, version, structured) "
+                f"values ('v-0021', 'j-0021', 1, '{body}')",
+            )
+        )
+        saved = f"select structured::text from {S}.result_versions where id = 'v-0021'"
+        assert asyncio.run(run(saved)) == [(body,)]
+        down = _alembic(db_settings_session, "downgrade", "0020")
+        assert down.returncode == 0, down.stderr
+        assert asyncio.run(run(kind)) == [("jsonb",)]
+        up = _alembic(db_settings_session, "upgrade", "head")
+        assert up.returncode == 0, up.stderr
+        assert asyncio.run(run(kind)) == [("json",)]
+        assert json.loads(asyncio.run(run(saved))[0][0]) == json.loads(body)
+    finally:
+        asyncio.run(
+            run(
+                f"delete from {S}.result_versions where id = 'v-0021'",
+                f"delete from {S}.ocr_jobs where id = 'j-0021'",
+                f"delete from {S}.files where id = 'f-0021'",
+                f"delete from {S}.tenants where id = (select max(id) from {S}.tenants)",
+            )
+        )
