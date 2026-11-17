@@ -34,12 +34,12 @@
 ### P3 — 验证
 
 - [x] `pnpm -r lint`、`pnpm -r test`、`pnpm -r build`。
-- [ ] 本地开发服务器浏览器验证：游客上传→核验→确认→登录→自动确认；游客打开单据库；已登录用户菜单不变。（已做：游客首页/上传页与菜单、游客打开单据库；未做：需要真实 OCR 的确认流程与已登录用户菜单，见 verification.md。）
+- [ ] 本地开发服务器浏览器验证：游客上传→核验→确认→登录→自动确认；游客打开单据库；已登录用户菜单不变。（已做：本地游客首页/上传页与菜单、游客打开单据库；生产上游客上传→识别→核验→确认→登录页；未做：登录后自动确认与已登录用户菜单，见 verification.md。）
 - [x] 结果写入 [verification.md](verification.md)。
 
 ### P4 — 收尾、提交与发布
 
-- [ ] 只提交本 change 与 web-pc 相关文件，推送 `chore/ai-workflow-v2`，等待 CI 通过后触发 Deploy，检查三个站点的健康检查与版本，并把证据补入 verification.md。
+- [x] 只提交本 change 与 web-pc 相关文件，推送 `chore/ai-workflow-v2`，等待 CI 通过后触发 Deploy，检查三个站点的健康检查与版本，并把证据补入 verification.md。
 
 ## 4. 确认点
 

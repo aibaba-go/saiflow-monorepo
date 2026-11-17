@@ -9,7 +9,7 @@ web-pc 支持游客：首页、上传、核验三页无需登录即可使用（�
 尚未完成、不以其他检查替代：
 
 - **新测试的红灯运行未单独记录**：测试写成时本机尚未装好 pnpm；实现后全部通过。
-- **游客 → 确认 → 登录 → 自动确认的完整浏览器流程**：本地没有 GCS 与 OCR 凭据，无法产生真实的待核验任务；该流程只由组件测试覆盖（129-14/15/16）。生产环境的登录需要负责人自己的账号，未代为登录。
+- **登录后自动确认未在浏览器中验证**：生产环境已验证游客上传 → 识别 → 核验 → 确认 → 进入登录页（见下文）；之后的登录需要负责人自己的账号，未代为登录，登录后自动确认（129-14/15/16）只由组件测试覆盖。
 - **已登录用户的菜单与顶部栏未在浏览器中检查**：由已有的 web-pc 组件测试覆盖（全部通过）。
 
 ## AC → 测试 → 当前结果
@@ -47,3 +47,17 @@ web-pc 支持游客：首页、上传、核验三页无需登录即可使用（�
 - `tests/integration/test_exports.py::test_generic_keys_keep_document_order`、`tests/integration/test_ocr_schema.py::test_0021_result_versions_keep_key_order`：本地隔离库（127.0.0.1:25432，`saiflow_test_local`）通过。
 - 全量后端 `pytest tests`（`REQUIRE_INTEGRATION=1`，本地隔离库）：**1441 passed**（10 分 35 秒）。
 - 首次运行时 `ruff check` 报 0021 迁移一行超过 100 字符（E501），已改正；`ruff check .`、`ruff format --check .` 复查通过，`test_ocr_schema.py` 与 `test_exports.py` 重跑 **30 passed**。
+
+## CI 与部署（2026-11-18）
+
+- 提交：`a559dae`（generic-key-order）、`39af080`（pc-guest-upload），推送 `chore/ai-workflow-v2`。
+- CI run 44129713682（39af080）：success（backend、frontend、contract、scripts、stack）。
+- Deploy run 44131413231（workflow_dispatch，39af080）：success（4m38s）。
+- `/api/v1/health`：saiflow-app、saiflow-admin、saiflow-line2 均为 `{"status":"ok","version":"39af080d7f769bd087828b1f51da9d2d230c37e9","database":"ok"}`（line2 首次请求超时，随后连续 3 次 200）。
+
+### 生产浏览器检查（saiflow-app.aibaba.asia，无登录会话）
+
+- 首页：自动建立游客会话（`/api/v1/me` 200），侧栏只有 Home、Upload、Verify，顶部只有语言与“Log in”。
+- 上传：以游客身份上传一张测试收据图（本机 HTML 渲染截图），开始识别，识别完成，“Go to verify”进入核验页 `/verify/cfc0ef75-…`。
+- 通用结果字段按原单据顺序显示：document_type、company_name、invoice_number、date、customer、items（jsonb 下 `date` 会排在最前），即 generic-key-order 在新识别结果上生效。
+- 点“Confirm”：进入 `/login?next=%2Fverify%2Fcfc0ef75-…`，`sessionStorage` 记有待确认标记；任务仍为 `VERIFYING`（未确认）。检查后已清除测试浏览器中的标记；该游客任务留在游客租户，随游客会话失效。
