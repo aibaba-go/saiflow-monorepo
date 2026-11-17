@@ -7,7 +7,7 @@
 - 新生产 `130.94.24.117:11022` 已运行现有生产数据、配置和三个前端；旧机 `38.60.156.234:11022` 已运行独立空客户库测试服务。
 - DNS 未修改。现有三个生产域名仍经旧机 HTTPS/SNI 转发到新机；生产只有新机数据库接受业务写入。
 - GitHub production/test Environment 已配置，现有已提交 Deploy 的仓库级目标已改为新生产。
-- 双环境 workflow、卷隔离、需求 delta 和运维说明仅在本地修改，尚未提交、推送或触发新工作流；没有为本地改动宣称新 CI 或 Actions 部署成功。
+- 双环境 workflow、卷隔离、需求 delta 和运维说明最初仅在本地修改；2026-11-18 获授权后已提交、CI 通过并以 production 目标发布，见文末“双环境 workflow 提交与生产发布”。
 
 ## 生产迁移证据
 
@@ -89,3 +89,15 @@
 - GitHub test Environment 的 APP_HOST、ADMIN_HOST、LINE_HOST 已更新并读回；production 变量未更改。首次 `gh variable set` 因参数语法被拒绝（未写入任何值），改用 `--body` 后成功。
 - DNS 仍未修改：公共 DoH 查询显示三条生产 A 记录仍指向 `38.60.156.234`，`dev-saiflow-*` 与 `test-saiflow-*` 均无 A 记录，因此测试域名公网 HTTPS 仍无证书（loopback SNI 检查返回 SSL 错误，属预期）。本次没有提交或推送。
 - 过程记录：`temp/vps-migration/rename-dev-domains.py`、`rename-dev-domains.log`、`verify-dev-domains.sh`、`verify-dev-domains.log`。
+
+## 双环境 workflow 提交与生产发布（2026-11-18，负责人授权"提交并在新的生产环境发布"）
+
+- 提交前本地：`scripts/tests/*.test.sh` 12 套全部通过（workflow 25、compose 90），`check-no-secrets` 通过，`openspec validate promote-new-production --strict` 通过，`git diff --check` 通过；新 change 目录人工检查无凭据。本机无 shellcheck/Docker。
+- 卷兼容：新机现有卷 `saiflow_pgdata`（project `saiflow`，volume `pgdata`）；以新 compose.yaml 在新机执行 `config` 得 `pgdata.name=saiflow_pgdata`，`--dry-run up -d --no-deps postgres` 仅显示 `Running`，无重建卷提示。
+- 提交 `2cd6e4d` 的 CI `44134776958` 失败：scripts 作业 shellcheck 在 workflow 静态测试两行字面 `$` 处报 SC2016。按文件既有写法补 `# shellcheck disable=SC2016`，提交 `f7d4914`；CI `44136129828` 五个作业（backend、frontend、contract、scripts、stack）全部成功。
+- 发布前公共 DoH 查询：三个生产域名 A 记录已指向 `130.94.24.117`，`dev-saiflow-app` 指向 `38.60.156.234`；生产版本为 `39af080`。
+- Deploy `44137994010`（`environment=production`，`f7d4914`）成功：分支与 CI 门禁、构建推送、SSH 固定主机密钥、复制栈文件、拉取/备份/迁移/重启、三站健康、5432 外部关闭均成功；test 转发保护步骤按设计跳过。
+- 发布后三个生产站点 page 200，health 为 status ok/database ok/version `f7d491438892673296e0168fa0da4976a0348e64`。
+- 新机 `.env`：`IMAGE_TAG=f7d4914…-production`，`PREVIOUS_IMAGE_TAG=39af080…`；四个应用容器运行 `-production` 标签镜像；PostgreSQL 容器未重启（healthy），仍挂载 `saiflow_pgdata`；users=2、tenants=22、ocr_jobs=26，alembic `0021`。
+- 测试站点未受影响：`dev-saiflow-app`、`dev-saiflow-admin` health 仍为 ok/ok/`f7ebd04c`。
+- 未覆盖：旧机 `production-forwarding` 标记与过渡转发规则仍保留，因此 test Deploy 仍会被拒绝；清理需负责人确认 DNS 全部生效（含 AAAA）后另行执行。登录后业务、LINE 原生客户端与真实识别未在本次发布中复测。

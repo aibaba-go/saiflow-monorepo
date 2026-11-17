@@ -50,6 +50,7 @@
 - [x] 最小修改 workflow，运行静态测试及已有脚本回归。
 - [x] 创建 production/test Environment，写入各自变量与 SSH Secrets；仓库级变量与 Secrets 指向新生产。
 - [x] 更新 ADR/运维说明，记录验证及未覆盖项。未明确授权时不提交、推送或触发新 workflow。
+- [x] 获授权后提交推送，CI 通过后以 `environment=production` 发布并核对三站版本与数据（见 verification.md）。
 
 ## Completion Boundary
 
