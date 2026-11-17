@@ -351,6 +351,54 @@ describe("template extra header fields (FR-SYS-129-06..10)", { timeout: 60_000 }
   });
 });
 
+describe("read-only generic tables (FR-SYS-131, FR-SYS-124, FR-SYS-105)", () => {
+  it.each(["en", "th", "zh"] as const)("%s renders any top-level detail array with columns from all rows", (lang) => {
+    const data = {
+      name: "Test statement",
+      arbitrary_details: [
+        { amount: "12345678901234567890.00", description: "<img src=x onerror=alert(1)>" },
+        { amount: 0, description: null, posted: false },
+      ],
+      grouped: { items: [{ quantity: "2" }] },
+    };
+    renderWithProviders(<ReadonlyResult value={data} groups={null} lang={lang} t={(key) => translate(lang, key)} />);
+    const tables = document.querySelectorAll<HTMLElement>(".ant-table table");
+    expect(tables).toHaveLength(2);
+    const [details, nested] = tables;
+    expect(within(details!).getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual(["amount", "description", "posted"]);
+    expect(within(details!).getAllByRole("row")).toHaveLength(3);
+    expect(within(details!).getByRole("cell", { name: "12345678901234567890.00" })).toBeInTheDocument();
+    expect(within(details!).getByRole("cell", { name: "0" })).toBeInTheDocument();
+    expect(within(details!).getByRole("cell", { name: "false" })).toBeInTheDocument();
+    expect(within(details!).getByText("<img src=x onerror=alert(1)>")).toBeInTheDocument();
+    expect(details!.querySelector("img")).toBeNull();
+    expect(within(nested!).getByRole("cell", { name: "2" })).toBeInTheDocument();
+    expect(screen.getByText("Test statement")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).toBeNull();
+  });
+
+  it("keeps saved fields that collide with internal row identity", () => {
+    const data = { details: [{ _i: "saved-id", index: "saved-index", value: "saved-value", amount: "100.00" }] };
+    renderWithProviders(<ReadonlyResult value={data} groups={null} lang="en" t={(key) => translate("en", key)} />);
+    const table = document.querySelector<HTMLElement>(".ant-table table")!;
+    expect(within(table).getByRole("cell", { name: "saved-id" })).toBeInTheDocument();
+    expect(within(table).getByRole("cell", { name: "saved-index" })).toBeInTheDocument();
+    expect(within(table).getByRole("cell", { name: "saved-value" })).toBeInTheDocument();
+    expect(data).toEqual({ details: [{ _i: "saved-id", index: "saved-index", value: "saved-value", amount: "100.00" }] });
+  });
+
+  it("does not treat empty, primitive or mixed arrays as detail tables", () => {
+    const data = { empty: [], tags: ["one", "two"], amounts: [0, false], mixed: [{ note: "object" }, "text"], absent: null };
+    renderWithProviders(<ReadonlyResult value={data} groups={null} lang="en" t={(key) => translate("en", key)} />);
+    expect(document.querySelector(".ant-table")).toBeNull();
+    expect(screen.getByText("one, two")).toBeInTheDocument();
+    expect(screen.getByText("0, false")).toBeInTheDocument();
+    expect(screen.getByText('{"note":"object"}, text')).toBeInTheDocument();
+    expect(screen.getByText("empty")).toBeInTheDocument();
+    expect(screen.getByText("absent")).toBeInTheDocument();
+  });
+});
+
 describe("OCR original text fallback (FR-OCR-026)", () => {
   beforeEach(() => useLanguage.getState().setLang("en"));
   afterEach(() => useLanguage.getState().setLang("en"));

@@ -211,6 +211,36 @@ describe("library (FR-SYS-130)", () => {
 });
 
 describe("document detail (FR-SYS-131)", () => {
+  it("renders a generic top-level detail array as a read-only table (FR-SYS-131, FR-SYS-105)", async () => {
+    signedIn({
+      "GET /api/v1/ocr/jobs/j1": () => json(200, job(1, "CONFIRMED", { template_name: null })),
+      "GET /api/v1/ocr/jobs/j1/result": () => json(200, result({
+        template: null,
+        structured: {
+          bank_name: "Test Bank",
+          grand_total: "250.00",
+          transactions: [
+            { amount: "100.00", description: "First purchase", transaction_date: "01/01/2025" },
+            { amount: "150.00", description: "Second purchase", transaction_date: "02/01/2025" },
+          ],
+        },
+      })),
+      "GET /api/v1/ocr/jobs/j1/changes": () => json(200, []),
+      "GET /api/v1/files/f1/pages/1/preview": () => new Response(new Blob(["x"])),
+    });
+    renderAt("/documents/j1");
+    const page = await screen.findByTestId("page-document");
+    const cell = await within(page).findByRole("cell", { name: "First purchase" });
+    const table = cell.closest("table")!;
+    expect(within(table).getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual(["amount", "description", "transaction_date"]);
+    expect(within(table).getAllByRole("row")).toHaveLength(3);
+    expect(within(table).getByRole("cell", { name: "100.00" })).toBeInTheDocument();
+    expect(within(table).getByRole("cell", { name: "Second purchase" })).toBeInTheDocument();
+    expect(within(page).getByText("Test Bank")).toBeInTheDocument();
+    expect(within(page).queryByRole("textbox")).not.toBeInTheDocument();
+    expect(within(page).queryByText(/\{"amount":/)).not.toBeInTheDocument();
+  });
+
   it("export downloads xlsx (131-01)", async () => {
     const created = vi.fn(() => "blob:x");
     URL.createObjectURL = created as never;

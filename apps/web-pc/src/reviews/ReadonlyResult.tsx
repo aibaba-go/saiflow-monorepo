@@ -33,14 +33,14 @@ function text(value: unknown): string {
 
 function RowsTable({ title, columns, rows }: { title: string; columns: { key: string; title: string }[]; rows: Obj[] }) {
   return (
-    <Table<Obj & { _i: number }>
+    <Table<{ value: Obj; index: number }>
       size="small"
       bordered
       pagination={false}
       title={() => <Typography.Text strong>{title}</Typography.Text>}
-      rowKey="_i"
-      dataSource={rows.map((r, i) => ({ ...r, _i: i }))}
-      columns={columns.map((c) => ({ key: c.key, title: c.title, render: (_: unknown, r: Obj) => text(r[c.key]) }))}
+      rowKey="index"
+      dataSource={rows.map((value, index) => ({ value, index }))}
+      columns={columns.map((c) => ({ key: c.key, title: c.title, render: (_: unknown, r: { value: Obj }) => text(r.value[c.key]) }))}
       scroll={{ x: true }}
     />
   );
@@ -113,6 +113,10 @@ export function ReadonlyResult({ value, groups, lang, t }: { value: unknown; gro
   return (
     <Space direction="vertical" style={{ width: "100%" }} size="middle">
       {entries.map(([gk, gv]) => {
+        if (isRows(gv) && gv.length > 0) {
+          const keys = [...new Set(gv.flatMap((r) => Object.keys(r)))];
+          return <RowsTable key={gk} title={gk} columns={keys.map((c) => ({ key: c, title: c }))} rows={gv} />;
+        }
         if (!isObj(gv)) {
           return (
             <Descriptions key={gk} size="small" bordered column={1}>
