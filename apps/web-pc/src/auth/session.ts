@@ -1,4 +1,5 @@
-/** Who is signed in (FR-SYS-090): GET /me, null without a session. web-pc has no guest. */
+/** Who is signed in (FR-SYS-090): GET /me, null without a session. A guest may use only
+ * Home, Upload and Verify, so useMe() stays user-only and useIdentity() includes guests. */
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { create } from "zustand";
 
@@ -14,18 +15,31 @@ export const TENANTS_KEY = ["me", "tenants"] as const;
  * user's next login; another user on this browser never sees it. */
 export const tenantKey = (userId: number) => `saiflow.pc.tenant.${userId}`;
 
-export async function fetchMe(): Promise<Me | null> {
+export async function fetchIdentity(): Promise<Me | null> {
   try {
-    const me = await call(api.GET("/api/v1/me"), { own401: true });
-    return me.kind === "user" ? me : null;
+    return await call(api.GET("/api/v1/me"), { own401: true });
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) return null;
     throw error;
   }
 }
 
+const userOnly = (me: Me | null) => (me?.kind === "user" ? me : null);
+
+/** The signed-in user, null for a guest or no session. */
 export function useMe() {
-  return useQuery({ queryKey: ME_KEY, queryFn: fetchMe, staleTime: 30_000 });
+  return useQuery({ queryKey: ME_KEY, queryFn: fetchIdentity, staleTime: 30_000, select: userOnly });
+}
+
+/** The signed-in user or the guest, null without a session. */
+export function useIdentity() {
+  return useQuery({ queryKey: ME_KEY, queryFn: fetchIdentity, staleTime: 30_000 });
+}
+
+export async function startGuest(queryClient: QueryClient): Promise<Me> {
+  const me = await call(api.POST("/api/v1/auth/guest"), { own401: true });
+  queryClient.setQueryData(ME_KEY, me);
+  return me;
 }
 
 export function useMyTenants(enabled = true) {

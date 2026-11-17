@@ -24,6 +24,17 @@ export const UNREGISTERED: Me = {
   phone: null,
   registered: false,
 };
+export const GUEST: Me = {
+  ...USER,
+  kind: "guest",
+  user_id: null,
+  tenant_id: 90,
+  display_name: null,
+  email: null,
+  email_suggestion: null,
+  phone: null,
+  registered: false,
+};
 export const PERSONAL: UsableTenant = {
   tenant_id: 70,
   kind: "personal",

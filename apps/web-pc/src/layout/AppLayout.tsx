@@ -2,9 +2,10 @@ import { App, Menu, Spin, Typography } from "antd";
 import { useEffect } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 
-import { useMe, useMyTenants } from "../auth/session";
+import { useIdentity, useMyTenants } from "../auth/session";
 import { ErrorText } from "../components/ErrorText";
 import { useT, type MessageKey } from "../i18n";
+import { anyConfirmPending } from "../ocr/confirmAfterLogin";
 import { BellBadge } from "../notifications/BellBadge";
 import { useReportAccess } from "../reports/common";
 import { canManageTemplates } from "../templates/common";
@@ -50,6 +51,9 @@ export function selected(pathname: string): string {
 
 /** The company behind SaiFlow, linked from the sidebar footer (FR-SYS-135). */
 export const AIBABA_URL = "https://www.aibaba.asia/";
+
+/** The only pages a guest may use (FR-SYS-090). */
+const GUEST_MENU = new Set(["home", "upload", "verify"]);
 
 /** Menu keys under the "workspace" heading; the rest sit under "organization & settings". */
 const WORKSPACE = new Set(["home", "upload", "verify", "library", "reviews", "reportView"]);
@@ -107,7 +111,7 @@ function initials(name: string): string {
 
 /** Keep the tenant list in the tenant store and show its one-off notice (AC-096-03). */
 function useTenantsLoader(userId: number | null | undefined) {
-  const tenants = useMyTenants();
+  const tenants = useMyTenants(!!userId);
   const bindUser = useTenantChoice((s) => s.bindUser);
   const setTenants = useTenantChoice((s) => s.setTenants);
   const notice = useTenantChoice((s) => s.notice);
@@ -117,6 +121,8 @@ function useTenantsLoader(userId: number | null | undefined) {
   useEffect(() => {
     if (!userId || !tenants.data) return;
     bindUser(userId);
+    // a guest's confirm continues after login in the personal tenant (AC-FR-SYS-129-14)
+    if (anyConfirmPending()) useTenantChoice.setState({ id: null });
     setTenants(tenants.data);
   }, [userId, tenants.data, bindUser, setTenants]);
   useEffect(() => {
@@ -130,9 +136,11 @@ function useTenantsLoader(userId: number | null | undefined) {
 export function AppLayout() {
   const t = useT();
   const location = useLocation();
-  const me = useMe();
-  const tenants = useTenantsLoader(me.data?.user_id);
-  const loaded = useTenantChoice((s) => s.tenants) !== null;
+  const me = useIdentity();
+  const guest = me.data?.kind === "guest";
+  const tenants = useTenantsLoader(guest ? null : me.data?.user_id);
+  const tenantsLoaded = useTenantChoice((s) => s.tenants) !== null;
+  const loaded = guest || tenantsLoaded;
   const { tenant } = useTenant();
   const { access: reports } = useReportAccess();
   // Roles only in an organization, for those holding role management; Reviews for holders
@@ -161,7 +169,7 @@ export function AppLayout() {
     ),
     label: <Link to={m.path}>{t(m.label)}</Link>,
   });
-  const visible = MENU.filter((m) => !hidden.includes(m.key));
+  const visible = MENU.filter((m) => !hidden.includes(m.key) && (!guest || GUEST_MENU.has(m.key)));
   const items = [
     { type: "group" as const, key: "g-work", label: t("layout.navWorkspace"), children: visible.filter((m) => WORKSPACE.has(m.key)).map(item) },
     { type: "group" as const, key: "g-manage", label: t("layout.navManage"), children: visible.filter((m) => !WORKSPACE.has(m.key)).map(item) },
@@ -212,6 +220,13 @@ export function AppLayout() {
               </>
             )}
           </nav>
+          {guest ? (
+            <div className="pc-topbar__tools">
+              <LanguageSwitch />
+              <span className="pc-topbar__divider" aria-hidden="true" />
+              <Link to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`}>{t("layout.login")}</Link>
+            </div>
+          ) : (
           <div className="pc-topbar__tools">
             <TenantSwitcher />
             <span className="pc-topbar__divider" aria-hidden="true" />
@@ -230,6 +245,7 @@ export function AppLayout() {
             </span>
             <LogoutButton />
           </div>
+          )}
         </header>
         <main className="pc-content">
           {tenants.isError && !loaded ? <ErrorText error={tenants.error} /> : loaded ? <Outlet /> : <Spin />}

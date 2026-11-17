@@ -6,7 +6,8 @@ import { createBrowserRouter, Navigate, Route, RouterProvider, Routes } from "re
 import { AppConfig } from "./AppConfig";
 import { ImpersonatePage } from "./auth/ImpersonatePage";
 import { RequireUser } from "./auth/RequireUser";
-import { forgetSession, useSessionNotice } from "./auth/session";
+import { RequireVisitor } from "./auth/RequireVisitor";
+import { forgetSession, ME_KEY, type Me, useSessionNotice } from "./auth/session";
 import { useT } from "./i18n";
 import { AppLayout } from "./layout/AppLayout";
 import { ApplyOrgPage } from "./pages/ApplyOrgPage";
@@ -39,13 +40,18 @@ import { setTenantGoneHandler, setUnauthenticatedHandler } from "./services/api"
 import { refreshTenants } from "./tenants/useCurrentTenant";
 import { useLanguage } from "./stores/language";
 
-/** Any 401 outside login: forget the user; RequireUser then goes to /login?next= (090-04). */
+/** Any 401 outside login: forget who was signed in. A user's page then goes to
+ * /login?next= (090-04); a guest gets a new guest session from RequireVisitor (090-10). */
 function SessionWatcher() {
   const queryClient = useQueryClient();
   const setExpired = useSessionNotice((s) => s.setExpired);
+  const { message } = AntApp.useApp();
+  const t = useT();
   useEffect(() => {
     setUnauthenticatedHandler(() => {
-      setExpired(true);
+      const before = queryClient.getQueryData<Me | null>(ME_KEY);
+      if (before?.kind === "guest") void message.warning(t("err.guest_expired"));
+      else setExpired(true);
       forgetSession(queryClient);
     });
     setTenantGoneHandler(() => void refreshTenants(queryClient));
@@ -53,7 +59,7 @@ function SessionWatcher() {
       setUnauthenticatedHandler(() => {});
       setTenantGoneHandler(() => {});
     };
-  }, [queryClient, setExpired]);
+  }, [queryClient, setExpired, message, t]);
   return null;
 }
 
@@ -74,34 +80,37 @@ export function AppRoutes() {
           <Route path="/impersonate" element={<ImpersonatePage />} />
           <Route path="/register" element={<RegisterGuidePage />} />
           <Route path="/health" element={<HealthPage />} />
-          <Route element={<RequireUser />}>
+          <Route element={<RequireVisitor />}>
+            {/* one layout for guest and user pages, so moving between them keeps it */}
             <Route element={<AppLayout />}>
               <Route path="/" element={<HomePage />} />
-              <Route path="/org" element={<OrgGate><OrgPage /></OrgGate>} />
-              <Route path="/org/apply" element={<ApplyOrgPage />} />
-              <Route path="/roles" element={<OrgGate><RolesPage /></OrgGate>} />
-              <Route path="/reviews" element={<ReviewsPage />} />
-              <Route path="/reviews/:id" element={<ReviewDetailPage />} />
-              <Route path="/review-settings" element={<ReviewSettingsPage />} />
-              <Route path="/templates" element={<TemplatesPage />} />
-              <Route path="/templates/new" element={<TemplateNewPage />} />
-              <Route path="/templates/samples/:id" element={<TemplateSamplePage />} />
-              <Route path="/templates/:id" element={<TemplateDetailPage />} />
-              <Route path="/reports" element={<ReportsPage />} />
-              <Route path="/reports/:id/design" element={<ReportDesignPage />} />
-              <Route path="/reports/:id" element={<ReportViewPage />} />
-              <Route path="/report-view" element={<ReportBrowserPage />} />
-              <Route path="/report-view/:id" element={<ReportViewPage />} />
               <Route path="/upload" element={<UploadPage />} />
               <Route path="/verify" element={<VerifyPage />} />
               <Route path="/verify/:id" element={<VerifyPage />} />
-              <Route path="/plans" element={<PlansPage />} />
-              <Route path="/notifications" element={<NotificationsPage />} />
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/library" element={<LibraryPage />} />
-              <Route path="/documents/:id" element={<DocumentPage />} />
-              <Route path="/data" element={<Navigate to="/library" replace />} />
-              <Route path="*" element={<NotFound />} />
+              <Route element={<RequireUser />}>
+                <Route path="/org" element={<OrgGate><OrgPage /></OrgGate>} />
+                <Route path="/org/apply" element={<ApplyOrgPage />} />
+                <Route path="/roles" element={<OrgGate><RolesPage /></OrgGate>} />
+                <Route path="/reviews" element={<ReviewsPage />} />
+                <Route path="/reviews/:id" element={<ReviewDetailPage />} />
+                <Route path="/review-settings" element={<ReviewSettingsPage />} />
+                <Route path="/templates" element={<TemplatesPage />} />
+                <Route path="/templates/new" element={<TemplateNewPage />} />
+                <Route path="/templates/samples/:id" element={<TemplateSamplePage />} />
+                <Route path="/templates/:id" element={<TemplateDetailPage />} />
+                <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/reports/:id/design" element={<ReportDesignPage />} />
+                <Route path="/reports/:id" element={<ReportViewPage />} />
+                <Route path="/report-view" element={<ReportBrowserPage />} />
+                <Route path="/report-view/:id" element={<ReportViewPage />} />
+                <Route path="/plans" element={<PlansPage />} />
+                <Route path="/notifications" element={<NotificationsPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/library" element={<LibraryPage />} />
+                <Route path="/documents/:id" element={<DocumentPage />} />
+                <Route path="/data" element={<Navigate to="/library" replace />} />
+                <Route path="*" element={<NotFound />} />
+              </Route>
             </Route>
           </Route>
         </Routes>

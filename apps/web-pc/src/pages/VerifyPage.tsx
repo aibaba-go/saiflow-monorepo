@@ -3,11 +3,12 @@ import { Alert, App, Button, Drawer, Empty, List, Modal, Space, Spin, Typography
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useBlocker, useNavigate, useParams } from "react-router-dom";
 
-import { useMe } from "../auth/session";
+import { useIdentity, useMe } from "../auth/session";
 import { ErrorText } from "../components/ErrorText";
 import { Page } from "../components/Page";
 import { formatBangkokDateTime } from "../format";
 import { isMessageKey, useT } from "../i18n";
+import { clearConfirm, rememberConfirm, wantsConfirm } from "../ocr/confirmAfterLogin";
 import { applyTemplate, chooseGeneric, type JobOut, type ResultOut, saveResult, useJob, useJobs, useResult } from "../ocr/api";
 import { EditableResult } from "../ocr/EditableResult";
 import { canEditJob, jobTarget } from "../ocr/stage";
@@ -60,8 +61,10 @@ function Workspace({ job, queue }: { job: JobOut; queue: JobOut[] }) {
   const [logOpen, setLogOpen] = useState(false);
   const changes = useChanges(job.id, logOpen);
   const leaving = useRef(false);
+  const autoConfirmed = useRef(false);
 
   const { tenant } = useTenant();
+  const signedIn = useIdentity().data?.kind === "user";
   const data = result.data;
   const value: Json = draft && draft.jobId === job.id ? draft.value : ((data?.structured ?? {}) as Json);
   const dirty = Boolean(data && draft && draft.jobId === job.id && !same(draft.value, data.structured));
@@ -125,6 +128,14 @@ function Workspace({ job, queue }: { job: JobOut; queue: JobOut[] }) {
   }
 
   async function confirm() {
+    // A guest's edits are kept as a draft; the confirm continues after login (AC-FR-SYS-129-14).
+    if (!signedIn) {
+      if (dirty && !(await save(false))) return;
+      rememberConfirm(job.id);
+      leaving.current = true;
+      navigate(`/login?next=${encodeURIComponent(`/verify/${job.id}`)}`);
+      return;
+    }
     // Edits are saved as a draft first, so a refused confirm (plan expired, missing
     // fields) loses nothing (FR-SYS-129; final review 2).
     let version: number | undefined;
@@ -143,6 +154,14 @@ function Workspace({ job, queue }: { job: JobOut; queue: JobOut[] }) {
     const next = queue.find((j) => j.id !== job.id);
     navigate(next ? `/verify/${next.id}` : "/verify", { replace: true });
   }
+
+  // once only: a refused automatic confirm is left to the user (AC-FR-SYS-129-16)
+  useEffect(() => {
+    if (autoConfirmed.current || !data || data.confirmed || !signedIn || !wantsConfirm(job.id)) return;
+    autoConfirmed.current = true;
+    clearConfirm(job.id);
+    void confirm();
+  });
 
   async function switchTo(target: SwitchTarget) {
     setSwitching(false);
