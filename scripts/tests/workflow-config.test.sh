@@ -38,9 +38,11 @@ check "job uses the selected Environment (AC-FR-PLAT-005-07)" grep -qF 'environm
 check "deploys serialize per target" grep -qF 'group: deploy-${{ inputs.environment }}' "$wf"
 # shellcheck disable=SC2016
 check "image tags differ by target" grep -qF 'IMAGE_TAG: ${{ github.sha }}-${{ inputs.environment }}' "$wf"
+# shellcheck disable=SC2016
 check "build and push use the target-specific tag" test "$(grep -cF '$REGISTRY/saiflow-be-api:$IMAGE_TAG' "$wf")" -eq 2
 # shellcheck disable=SC2016
 check "server deploy receives the target-specific tag" grep -qF 'remote-deploy.sh $IMAGE_TAG' "$wf"
+# shellcheck disable=SC2016
 check "backend build keeps the source SHA for health checks" grep -qF -- '--build-arg APP_VERSION="$SHA"' "$wf"
 # shellcheck disable=SC2016
 check "test LIFF ID cannot inherit production" grep -qF "LIFF_ID: \${{ inputs.environment == 'production' && vars.LIFF_ID || vars.TEST_LIFF_ID }}" "$wf"
