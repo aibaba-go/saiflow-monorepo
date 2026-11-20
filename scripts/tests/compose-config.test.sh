@@ -75,6 +75,6 @@ check "backend receives WEB_PC_ORIGIN from APP_HOST" grep -qF "WEB_PC_ORIGIN: ht
 # shellcheck disable=SC2016
 check "database volume can be isolated for test" grep -qF 'name: ${POSTGRES_VOLUME:-saiflow_pgdata}' "$deploy/compose.yaml"
 check "env.example documents the database volume" grep -q '^POSTGRES_VOLUME=' "$deploy/env.example"
-check "backend receives REPORT_EMBED_ORIGINS with an empty default" grep -qF 'REPORT_EMBED_ORIGINS: ${REPORT_EMBED_ORIGINS:-}' <<<"$backend"
+check "backend receives REPORT_EMBED_ORIGINS with an empty default" grep -qF "REPORT_EMBED_ORIGINS: \${REPORT_EMBED_ORIGINS:-}" <<<"$backend"
 check "env.example lists REPORT_EMBED_ORIGINS" grep -q '^REPORT_EMBED_ORIGINS=' "$deploy/env.example"
 finish
