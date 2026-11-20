@@ -1,0 +1,623 @@
+{
+  "code": "system.tax_invoice",
+  "name": "Tax Invoice / ใบกำกับภาษี",
+  "description": "Thai Tax Invoice (ใบกำกับภาษี) for goods sold, with seller and buyer 13-digit tax IDs; detail rows are goods, not invoices. Includes combined documents ใบกำกับภาษี/ใบส่งของ (Tax Invoice / Delivery Order), ใบแจ้งหนี้/ใบกำกับภาษี and ใบส่งสินค้า/ใบกำกับภาษี, both original (ต้นฉบับ) and copy (สำเนา). Typical features: the title contains ใบกำกับภาษี or Tax Invoice; there is a document number ใบกำกับภาษีเลขที่ / Tax Invoice No. and a date; the body is a goods table (ลำดับ Seq, รายการสินค้า Description, จำนวน Quantity, หน่วย Unit, ราคา Price, ส่วนลด Discount, จำนวนเงิน Amount); the footer has รวมเงิน Sub Total, ส่วนลด Discount, ภาษีมูลค่าเพิ่ม Vat 7%, รวมเงินสุทธิ Net Total, the amount in Thai words, and ผู้ส่งของ / ผู้รับของ sign-off boxes. Unlike a Billing Note (ใบวางบิล), each detail row is a product rather than an invoice.",
+  "groups": [
+    {
+      "key": "document",
+      "name": "Document / ข้อมูลเอกสาร",
+      "description": "Document header information, usually in the box at the top right",
+      "items": [
+        {
+          "kind": "field",
+          "key": "invoice_no",
+          "name": "Tax Invoice No. / เลขที่ใบกำกับภาษี",
+          "description": "Document number, labeled ใบกำกับภาษีเลขที่ / Tax Invoice No. / เลขที่, e.g. IV69100017",
+          "type": "string",
+          "required": true,
+          "names": {
+            "en": "Tax Invoice No.",
+            "th": "เลขที่ใบกำกับภาษี",
+            "zh": "税务发票号"
+          },
+          "primary": true
+        },
+        {
+          "kind": "field",
+          "key": "invoice_date",
+          "name": "Date / วันที่",
+          "description": "Issue date, labeled วันที่ / Date. Keep as written (e.g. 01/10/2026); do not convert between Buddhist and Gregorian years",
+          "type": "date",
+          "required": true,
+          "names": {
+            "en": "Date",
+            "th": "วันที่",
+            "zh": "日期"
+          }
+        },
+        {
+          "kind": "field",
+          "key": "document_title",
+          "name": "Document Title / ชื่อเอกสาร",
+          "description": "Document title as written, including the original / copy marker, e.g. \"ต้นฉบับใบกำกับภาษี / ใบส่งของ TAX INVOICE ORIGINAL / DELIVERY ORDER\"",
+          "type": "string",
+          "names": {
+            "en": "Document Title",
+            "th": "ชื่อเอกสาร",
+            "zh": "单据标题"
+          }
+        },
+        {
+          "kind": "field",
+          "key": "customer_code",
+          "name": "Customer Code / รหัสลูกค้า",
+          "description": "Customer code, labeled รหัสลูกค้า / Cust Code",
+          "type": "string",
+          "names": {
+            "en": "Customer Code",
+            "th": "รหัสลูกค้า",
+            "zh": "客户代码"
+          }
+        },
+        {
+          "kind": "field",
+          "key": "customer_po_no",
+          "name": "Customer PO No. / เลขที่ใบสั่งซื้อ",
+          "description": "Customer purchase order number, labeled เลขที่ใบสั่งซื้อ / Customer PO No. / P/O No.; used to reconcile against the purchase order",
+          "type": "string",
+          "names": {
+            "en": "Customer PO No.",
+            "th": "เลขที่ใบสั่งซื้อ",
+            "zh": "客户订单号"
+          }
+        },
+        {
+          "kind": "field",
+          "key": "salesman",
+          "name": "Salesman / พนักงานขาย",
+          "description": "Sales representative, labeled ตัวแทนขาย / พนักงานขาย / Salesman",
+          "type": "string",
+          "names": {
+            "en": "Salesman",
+            "th": "พนักงานขาย",
+            "zh": "销售员"
+          }
+        },
+        {
+          "kind": "field",
+          "key": "payment_term",
+          "name": "Payment Term / เงื่อนไขการชำระ",
+          "description": "Payment terms, labeled กำหนดชำระ / เงื่อนไขการชำระเงิน / Term / Credit, e.g. \"เงินสด\" (cash) or \"30 วัน\"; keep as written",
+          "type": "string",
+          "names": {
+            "en": "Payment Term",
+            "th": "เงื่อนไขการชำระ",
+            "zh": "付款条件"
+          }
+        },
+        {
+          "kind": "field",
+          "key": "due_date",
+          "name": "Due Date / วันครบกำหนด",
+          "description": "Payment due date, labeled วันครบกำหนด / Due Date; use null if no explicit date appears, do not derive it from the payment terms",
+          "type": "date",
+          "names": {
+            "en": "Due Date",
+            "th": "วันครบกำหนด",
+            "zh": "到期日"
+          }
+        }
+      ],
+      "names": {
+        "en": "Document",
+        "th": "ข้อมูลเอกสาร",
+        "zh": "单据信息"
+      }
+    },
+    {
+      "key": "seller",
+      "name": "Seller / ผู้ขาย",
+      "description": "The seller issuing the invoice; details are usually in the page header next to the logo",
+      "items": [
+        {
+          "kind": "field",
+          "key": "name",
+          "name": "Company Name / ชื่อบริษัท",
+          "description": "Seller's full Thai name, e.g. \"บริษัท เค สยาม กรุ๊ป จำกัด\"; keep as written",
+          "type": "string",
+          "required": true,
+          "names": {
+            "en": "Company Name",
+            "th": "ชื่อบริษัท",
+            "zh": "公司名称"
+          }
+        },
+        {
+          "kind": "field",
+          "key": "name_en",
+          "name": "English Name / ชื่อภาษาอังกฤษ",
+          "description": "Seller's English name, e.g. \"K SIAM GROUP CO., LTD.\"; null if absent",
+          "type": "string",
+          "names": {
+            "en": "English Name",
+            "th": "ชื่อภาษาอังกฤษ",
+            "zh": "英文名称"
+          }
+        },
+        {
+          "kind": "field",
+          "key": "tax_id",
+          "name": "Tax ID / เลขประจำตัวผู้เสียภาษี",
+          "description": "Seller's 13-digit taxpayer ID, labeled เลขประจำตัวผู้เสียภาษีอากร; digits only, no spaces or hyphens",
+          "type": "string",
+          "required": true,
+          "names": {
+            "en": "Tax ID",
+            "th": "เลขประจำตัวผู้เสียภาษี",
+            "zh": "税号"
+          }
+        },
+        {
+          "kind": "field",
+          "key": "branch",
+          "name": "Branch / สาขา",
+          "description": "Seller branch, e.g. \"สำนักงานใหญ่\" (head office) or \"สาขาที่ 00001\"; also fill this when the address starts with \"สำนักงานใหญ่ :\"",
+          "type": "string",
+          "names": {
+            "en": "Branch",
+            "th": "สาขา",
+            "zh": "分支机构"
+          }
+        },
+        {
+          "kind": "field",
+          "key": "address",
+          "name": "Address / ที่อยู่",
+          "description": "Seller's full address, merged into one line, without the \"สำนักงานใหญ่ :\" prefix",
+          "type": "string",
+          "names": {
+            "en": "Address",
+            "th": "ที่อยู่",
+            "zh": "地址"
+          }
+        },
+        {
+          "kind": "field",
+          "key": "phone",
+          "name": "Phone / โทร",
+          "description": "Seller phone, labeled โทร / Tel; separate multiple numbers with commas",
+          "type": "string",
+          "names": {
+            "en": "Phone",
+            "th": "โทร",
+            "zh": "电话"
+          }
+        },
+        {
+          "kind": "field",
+          "key": "fax",
+          "name": "Fax / แฟกซ์",
+          "description": "Seller fax, labeled แฟกซ์ / Fax; null if absent",
+          "type": "string",
+          "names": {
+            "en": "Fax",
+            "th": "แฟกซ์",
+            "zh": "传真"
+          }
+        }
+      ],
+      "names": {
+        "en": "Seller",
+        "th": "ผู้ขาย",
+        "zh": "卖方"
+      }
+    },
+    {
+      "key": "buyer",
+      "name": "Buyer / ผู้ซื้อ",
+      "description": "The buyer (customer), labeled ลูกค้า / Customer / ผู้ซื้อ / Sold To",
+      "items": [
+        {
+          "kind": "field",
+          "key": "name",
+          "name": "Customer Name / ชื่อลูกค้า",
+          "description": "Buyer's full name; keep as written",
+          "type": "string",
+          "required": true,
+          "names": {
+            "en": "Customer Name",
+            "th": "ชื่อลูกค้า",
+            "zh": "客户名称"
+          }
+        },
+        {
+          "kind": "field",
+          "key": "tax_id",
+          "name": "Tax ID / เลขประจำตัวผู้เสียภาษี",
+          "description": "Buyer's 13-digit taxpayer ID, labeled เลขประจำตัวผู้เสียภาษี; digits only",
+          "type": "string",
+          "names": {
+            "en": "Tax ID",
+            "th": "เลขประจำตัวผู้เสียภาษี",
+            "zh": "税号"
+          }
+        },
+        {
+          "kind": "field",
+          "key": "branch",
+          "name": "Branch / สาขา",
+          "description": "Buyer branch, often right after the buyer's tax ID, e.g. \"สำนักงานใหญ่\"",
+          "type": "string",
+          "names": {
+            "en": "Branch",
+            "th": "สาขา",
+            "zh": "分支机构"
+          }
+        },
+        {
+          "kind": "field",
+          "key": "address",
+          "name": "Address / ที่อยู่",
+          "description": "Buyer's full address, merged into one line",
+          "type": "string",
+          "names": {
+            "en": "Address",
+            "th": "ที่อยู่",
+            "zh": "地址"
+          }
+        }
+      ],
+      "names": {
+        "en": "Buyer",
+        "th": "ผู้ซื้อ",
+        "zh": "买方"
+      }
+    },
+    {
+      "key": "goods",
+      "name": "Items / รายการสินค้า",
+      "description": "Goods detail table",
+      "items": [
+        {
+          "kind": "table",
+          "key": "line_items",
+          "name": "Line Items / รายการสินค้า",
+          "description": "One row per sequence number (ลำดับ / Seq) in the document; merge product name and specification lines spanning several lines under the same number into that row's description; skip blank rows; if the original (ต้นฉบับ) and copy (สำเนา) pages in the file are identical, output them only once",
+          "columns": [
+            {
+              "key": "seq",
+              "name": "Seq / ลำดับ",
+              "description": "Row number, labeled ลำดับ / Seq / No.",
+              "type": "integer",
+              "names": {
+                "en": "Seq",
+                "th": "ลำดับ",
+                "zh": "序号"
+              }
+            },
+            {
+              "key": "product_code",
+              "name": "Product Code / รหัสสินค้า",
+              "description": "Product code, labeled รหัสสินค้า / Code; null if the column does not exist",
+              "type": "string",
+              "names": {
+                "en": "Product Code",
+                "th": "รหัสสินค้า",
+                "zh": "商品代码"
+              }
+            },
+            {
+              "key": "description",
+              "name": "Description / รายการสินค้า",
+              "description": "Full product name and specification, labeled รายการสินค้า / Description; merge multiple lines under the same number into one line, but exclude a separate \"PO : …\" line",
+              "type": "string",
+              "required": true,
+              "names": {
+                "en": "Description",
+                "th": "รายการสินค้า",
+                "zh": "商品描述"
+              }
+            },
+            {
+              "key": "po_no",
+              "name": "PO No. / เลขที่ใบสั่งซื้อ",
+              "description": "Purchase order number noted on this row, written like \"PO : PS260900055\"; number only; null if absent",
+              "type": "string",
+              "names": {
+                "en": "PO No.",
+                "th": "เลขที่ใบสั่งซื้อ",
+                "zh": "订单号"
+              }
+            },
+            {
+              "key": "quantity",
+              "name": "Quantity / จำนวน",
+              "description": "Quantity, labeled จำนวน / Quantity / Qty; digits only",
+              "type": "decimal",
+              "names": {
+                "en": "Quantity",
+                "th": "จำนวน",
+                "zh": "数量"
+              },
+              "role": "quantity"
+            },
+            {
+              "key": "unit",
+              "name": "Unit / หน่วย",
+              "description": "Unit of measure, labeled หน่วย / Unit, e.g. \"แผ่น\", \"ชิ้น\", \"กล่อง\"",
+              "type": "string",
+              "names": {
+                "en": "Unit",
+                "th": "หน่วย",
+                "zh": "单位"
+              }
+            },
+            {
+              "key": "unit_price",
+              "name": "Unit Price / ราคาต่อหน่วย",
+              "description": "Unit price, labeled ราคา / ราคาต่อหน่วย / Price / Unit Price; keep the decimal places as written",
+              "type": "decimal",
+              "names": {
+                "en": "Unit Price",
+                "th": "ราคาต่อหน่วย",
+                "zh": "单价"
+              },
+              "role": "unit_price"
+            },
+            {
+              "key": "discount",
+              "name": "Discount / ส่วนลด",
+              "description": "Line discount, labeled ส่วนลด / Discount; may be an amount or a percentage (e.g. 5%); keep as written; null if blank",
+              "type": "string",
+              "names": {
+                "en": "Discount",
+                "th": "ส่วนลด",
+                "zh": "折扣"
+              },
+              "role": "line_discount"
+            },
+            {
+              "key": "amount",
+              "name": "Amount / จำนวนเงิน",
+              "description": "Line amount, labeled จำนวนเงิน / Amount; take the number as written, do not compute quantity × unit price",
+              "type": "amount",
+              "required": true,
+              "names": {
+                "en": "Amount",
+                "th": "จำนวนเงิน",
+                "zh": "金额"
+              },
+              "role": "line_total"
+            }
+          ],
+          "names": {
+            "en": "Line Items",
+            "th": "รายการสินค้า",
+            "zh": "商品明细"
+          }
+        }
+      ],
+      "names": {
+        "en": "Items",
+        "th": "รายการสินค้า",
+        "zh": "商品"
+      }
+    },
+    {
+      "key": "summary",
+      "name": "Summary / สรุปยอด",
+      "description": "Totals area below the detail table; take every amount as written, do not calculate",
+      "items": [
+        {
+          "kind": "field",
+          "key": "sub_total",
+          "name": "Sub Total / รวมเงิน",
+          "description": "Goods total before discount, labeled รวมเงิน / Sub Total",
+          "type": "amount",
+          "names": {
+            "en": "Sub Total",
+            "th": "รวมเงิน",
+            "zh": "小计"
+          },
+          "role": "lines_total"
+        },
+        {
+          "kind": "field",
+          "key": "discount_rate",
+          "name": "Discount Rate / อัตราส่วนลด",
+          "description": "Document-level discount rate, written next to ส่วนลด (Discount), e.g. \"2%\"; keep as written; null if absent",
+          "type": "string",
+          "names": {
+            "en": "Discount Rate",
+            "th": "อัตราส่วนลด",
+            "zh": "折扣率"
+          }
+        },
+        {
+          "kind": "field",
+          "key": "discount_amount",
+          "name": "Discount / ส่วนลด",
+          "description": "Document-level discount amount, labeled ส่วนลด / Discount; null if absent",
+          "type": "amount",
+          "names": {
+            "en": "Discount",
+            "th": "ส่วนลด",
+            "zh": "折扣"
+          },
+          "role": "discount"
+        },
+        {
+          "kind": "field",
+          "key": "total_before_vat",
+          "name": "Total before VAT / รวมค่าสินค้า",
+          "description": "Amount after discount and before VAT, labeled รวมค่าสินค้า / มูลค่าสินค้า / Total / Amount before VAT",
+          "type": "amount",
+          "names": {
+            "en": "Total before VAT",
+            "th": "รวมค่าสินค้า",
+            "zh": "税前合计"
+          },
+          "role": "base"
+        },
+        {
+          "kind": "field",
+          "key": "vat_rate",
+          "name": "VAT Rate / อัตราภาษี",
+          "description": "VAT rate, written next to ภาษีมูลค่าเพิ่ม (Vat), e.g. \"7%\"; keep as written",
+          "type": "string",
+          "names": {
+            "en": "VAT Rate",
+            "th": "อัตราภาษี",
+            "zh": "增值税率"
+          }
+        },
+        {
+          "kind": "field",
+          "key": "vat_amount",
+          "name": "VAT / ภาษีมูลค่าเพิ่ม",
+          "description": "VAT amount, labeled ภาษีมูลค่าเพิ่ม / Vat",
+          "type": "amount",
+          "names": {
+            "en": "VAT",
+            "th": "ภาษีมูลค่าเพิ่ม",
+            "zh": "增值税"
+          },
+          "role": "tax"
+        },
+        {
+          "kind": "field",
+          "key": "net_total",
+          "name": "Net Total / รวมเงินสุทธิ",
+          "description": "Total payable including VAT, labeled รวมเงินสุทธิ / จำนวนเงินรวมทั้งสิ้น / Net Total / Grand Total",
+          "type": "amount",
+          "required": true,
+          "names": {
+            "en": "Net Total",
+            "th": "รวมเงินสุทธิ",
+            "zh": "净额合计"
+          },
+          "primary": true,
+          "role": "grand_total"
+        },
+        {
+          "kind": "field",
+          "key": "amount_in_words",
+          "name": "Amount in Words / จำนวนเงินตัวอักษร",
+          "description": "Amount in Thai words, usually in parentheses on the left of the totals area, e.g. \"(เจ็ดหมื่นหนึ่งพัน…สตางค์)\"; remove the outer parentheses and keep the rest as written",
+          "type": "string",
+          "names": {
+            "en": "Amount in Words",
+            "th": "จำนวนเงินตัวอักษร",
+            "zh": "金额大写"
+          }
+        }
+      ],
+      "names": {
+        "en": "Summary",
+        "th": "สรุปยอด",
+        "zh": "汇总"
+      }
+    },
+    {
+      "key": "delivery",
+      "name": "Delivery / การส่งของ",
+      "description": "Delivery and sign-off boxes at the bottom of the page, mostly handwritten; use null if blank or only a dotted line",
+      "items": [
+        {
+          "kind": "field",
+          "key": "delivered_by",
+          "name": "Delivered By / ผู้ส่งของ",
+          "description": "Name of the person delivering, written near ผู้ส่งของ / Delivered By",
+          "type": "string",
+          "names": {
+            "en": "Delivered By",
+            "th": "ผู้ส่งของ",
+            "zh": "送货人"
+          }
+        },
+        {
+          "kind": "field",
+          "key": "delivery_date",
+          "name": "Delivery Date / วันที่ส่ง",
+          "description": "Delivery date, written at วันที่ / Date on the ผู้ส่งของ line; keep as written",
+          "type": "date",
+          "names": {
+            "en": "Delivery Date",
+            "th": "วันที่ส่ง",
+            "zh": "送货日期"
+          }
+        },
+        {
+          "kind": "field",
+          "key": "vehicle_no",
+          "name": "Vehicle No. / ทะเบียนรถ",
+          "description": "Delivery vehicle licence plate, labeled ทะเบียนรถ, e.g. \"70-1713\"",
+          "type": "string",
+          "names": {
+            "en": "Vehicle No.",
+            "th": "ทะเบียนรถ",
+            "zh": "车牌号"
+          }
+        },
+        {
+          "kind": "field",
+          "key": "received_by",
+          "name": "Received By / ผู้รับของ",
+          "description": "Name of the person receiving, written near ผู้รับของ / Receiver",
+          "type": "string",
+          "names": {
+            "en": "Received By",
+            "th": "ผู้รับของ",
+            "zh": "收货人"
+          }
+        },
+        {
+          "kind": "field",
+          "key": "received_date",
+          "name": "Received Date / วันที่รับ",
+          "description": "Receiving date, written at วันที่ / Date on the ผู้รับของ line; keep as written",
+          "type": "date",
+          "names": {
+            "en": "Received Date",
+            "th": "วันที่รับ",
+            "zh": "收货日期"
+          }
+        }
+      ],
+      "names": {
+        "en": "Delivery",
+        "th": "การส่งของ",
+        "zh": "送货"
+      }
+    },
+    {
+      "key": "other",
+      "name": "Other / อื่นๆ",
+      "description": "Remarks",
+      "items": [
+        {
+          "kind": "field",
+          "key": "remark",
+          "name": "Remark / หมายเหตุ",
+          "description": "Content written in the remark box (หมายเหตุ / Remark); printed standard terms (e.g. \"(1) ได้รับสินค้าตามรายการ…\") are not remarks; null if blank",
+          "type": "string",
+          "names": {
+            "en": "Remark",
+            "th": "หมายเหตุ",
+            "zh": "备注"
+          }
+        }
+      ],
+      "names": {
+        "en": "Other",
+        "th": "อื่นๆ",
+        "zh": "其他"
+      }
+    }
+  ],
+  "names": {
+    "en": "Tax Invoice",
+    "th": "ใบกำกับภาษี",
+    "zh": "税务发票"
+  }
+}

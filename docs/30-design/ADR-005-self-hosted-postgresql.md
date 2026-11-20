@@ -3,8 +3,8 @@ doc_id: ADR-005
 title: "ADR-005 — 关系数据库迁移至自建 PostgreSQL 17"
 type: adr
 status: reverted
-version: 1.1.0
-updated: 2026-10-27
+version: 1.2.0
+updated: 2026-11-02
 owner: Product Engineering
 related: [ADR-001, NFR-SEC-001, NFR-SEC-002, NFR-DATA-005]
 ---
@@ -14,6 +14,8 @@ related: [ADR-001, NFR-SEC-001, NFR-SEC-002, NFR-DATA-005]
 ## 状态
 
 **reverted（已回切）。** 用户因新库响应慢要求恢复原 Cloud SQL，2026-10-27 已完成回切，当前关系数据存储恢复 [ADR-001](ADR-001-cloud-native-deployment.md)：Cloud SQL PostgreSQL 18.6，实例 `saiflow-dev`，库 `postgres`、schema `saiflow`。本 ADR 不再取代 ADR-001 的数据库条目。
+
+**2026-11-02 补充：** [ADR-008](adr/ADR-008-vps-docker-hosting.md) 将自建 PostgreSQL 定为正式方案：数据库以 Docker 运行在 LightNode VPS（曼谷机房）上，与本 ADR 记录的主机 `122.51.11.112`、库 `odoo` 及配置无关；本 ADR 仍为历史记录。
 
 以下“背景”“决策”“迁移记录（2026-10-26）”及“后果与风险”保留为当时的历史记录，不代表当前部署配置、待办或回切操作；当前状态以“回切记录（2026-10-27）”为准。
 
@@ -61,5 +63,6 @@ related: [ADR-001, NFR-SEC-001, NFR-SEC-002, NFR-DATA-005]
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.2.0 | 2026-11-02 | Product Engineering | 补充：自建 PostgreSQL 由 ADR-008 定为正式方案（VPS Docker，与本 ADR 的主机无关） |
 | 1.1.0 | 2026-10-27 | Product Engineering | 标记 reverted，保留历史迁移正文；记录恢复原 Cloud SQL、6 条增量回灌与只读一致性校验、连接及流量状态、新库只读归档和验证边界 |
 | 1.0.0 | 2026-10-26 | Product Engineering | 关系数据从 Cloud SQL 迁移至自建 PostgreSQL 17（122.51.11.112 / odoo.saiflow），记录迁移校验、风险与回滚 |

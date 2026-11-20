@@ -1,0 +1,56 @@
+/* main components/StatusChip.vue as the prototype .status: a small square-cornered tag with a
+ * leading dot, in the STD-008 status colours (§2.4, §7.3; FR-SYS-133). */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 999px; /* colour pass (FR-SYS-132): pastel pills */
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  text-align: left;
+  /* break-word, not anywhere: whole words stay together (a flex row cannot squeeze the chip
+   * into "Verifyin g"); only a word longer than the row itself is broken */
+  overflow-wrap: break-word;
+}
+
+.chip::before {
+  content: "";
+  flex-shrink: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.processing {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+}
+
+.failed {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+.verifying {
+  background: var(--info-bg);
+  color: var(--info-text);
+}
+
+.review {
+  background: var(--review-bg);
+  color: var(--review-text);
+}
+
+.completed {
+  background: var(--success-bg);
+  color: var(--success-text);
+}

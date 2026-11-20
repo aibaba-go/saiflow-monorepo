@@ -1,0 +1,3672 @@
+openapi: 3.0.3
+info:
+  title: SaiFlow API
+  version: 1.1.0
+  description: |
+    SaiFlow 后端接口（Flask，`services/api`）。本文件是对外接口契约的唯一来源，
+    `docs/30-design/API-Spec.md` 由其生成发布，请勿手写第二份。
+
+    ## 通用约定
+    - 所有业务接口位于 `/api/v1`；未启用版本（如 `/api/v2/...`）与旧的无版本 `/api/...` 业务路径一律 404。
+    - 成功响应：`{"code": "OK", "data": ...}`（见 `OkEnvelope`）。
+    - 失败响应：`{"code", "message_key", "request_id", "retryable", "field_errors"}`（见 `Error`），
+      `message_key` 为前端 i18n 文案键。
+    - 时间字段为 UTC 的 ISO 8601 字符串（无时区后缀）。
+
+    ## 归属：只有 tenant_id
+    - 业务归属的唯一表达是 `tenant_id`（`tenants` 表）。个人用户（含游客）各占一个 PERSONAL 租户，
+      每个公司各占一个 ENTERPRISE 租户（`enterprises.tenant_id` 一对一扩展）。
+    - 请求侧：`POST /uploads`、`POST /file-imports`、`POST /me/plan-applications` 在 JSON body 中接受可选
+      `tenant_id`；`GET /me/subscription`、`GET /ocr/jobs` 以查询参数接受 `tenant_id`。
+      缺省或空值 = 调用者本人的个人租户。
+    - 响应侧：身份/租户列表与业务对象一律返回 `tenant_id`（企业租户另给 `tenant_type` / `name` / `role`）。
+
+    ## 套餐与计量
+    - 没有 FREE 档位、没有赠送任务额度。每个租户恰好一行订阅：个人租户（含游客）自 `tenants.created_at`
+      起默认开通 Kinder 一个月；企业租户自 `enterprises.verified_at` 起算，未认证时无订阅（`status=NONE`）。
+    - 唯一计量单位是 `OCR_PAGE`（每月页数），按泰国时间（UTC+7）自然月实时统计 `ocr_jobs.page_count`，
+      FAILED / CANCELLED 的任务不计，因此没有消耗流水、也没有取消返还。
+    - 订阅到期后新建任务被硬停（402 `PLAN_EXPIRED`）；订阅仍 ACTIVE 但本月页数用尽为 402 `QUOTA_EXCEEDED`。
+      已有任务、结果与导出在任何情况下都可继续查看与导出。
+
+    ## 认证与 CSRF
+    - 免登录白名单（精确匹配）：`POST /auth/line`、`POST /auth/guest`；其余接口必须携带会话 Cookie `saiflow_session`（HttpOnly，path=/api）。
+    - 写请求（POST/PUT/PATCH/DELETE）还必须携带请求头 `X-CSRF-Token`，其值来自登录 / `GET /auth/session` 响应中的 `csrf_token`。
+    - 跨用户 / 跨租户访问不存在或无权的对象统一返回 404，不泄露资源存在性。
+
+    ## 错误码
+    | HTTP | code | 说明 |
+    |------|------|------|
+    | 400 | INVALID_ARGUMENT | 参数校验失败，`field_errors` 给出字段级原因 |
+    | 401 | AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED | 未登录 / 会话过期 / 会话已吊销 |
+    | 402 | PLAN_EXPIRED / QUOTA_EXCEEDED | 订阅已到期或未开通（`plan.expired`）/ 本月页数已用尽（`quota.exceeded`） |
+    | 403 | ACCOUNT_DISABLED / PERMISSION_DENIED / CSRF_INVALID / ENTERPRISE_ACCESS_REVOKED | 账号禁用 / 无权限 / CSRF 校验失败 / 企业访问权已撤销 |
+    | 404 | RESOURCE_NOT_FOUND | 资源不存在或无权访问 |
+    | 409 | STATE_CONFLICT / VERSION_CONFLICT | 状态不允许 / 乐观并发版本冲突 |
+    | 429 | RATE_LIMITED | 请求过于频繁（retryable=true） |
+    | 503 | SERVICE_UNAVAILABLE / AUTH_SERVICE_UNAVAILABLE / OCR_VENDOR_UNAVAILABLE / EMAIL_SERVICE_UNAVAILABLE / STORAGE_UNAVAILABLE / EXPORT_UNAVAILABLE / EXPORT_FAILED | 依赖服务不可用 |
+servers:
+  - url: /api/v1
+    description: 当前部署（相对路径）
+  - url: https://saiflow-api-920915040833.asia-southeast1.run.app/api/v1
+    description: Cloud Run 正式环境
+  - url: http://localhost:5000/api/v1
+    description: 本地开发
+security:
+  - sessionCookie: []
+tags:
+  - name: Auth
+    description: 登录、游客会话、会话查询与注销
+  - name: Me
+    description: 当前用户资料、注册、邮箱、租户、通知与数据请求
+  - name: Plans
+    description: 套餐与订阅
+  - name: Files
+    description: 文件上传（上传会话）与原件访问
+  - name: OCR
+    description: OCR 识别任务
+  - name: Results
+    description: 识别结果查询与人工核验修改
+  - name: Exports
+    description: 结果导出与下载
+  - name: Enterprises
+    description: 企业创建、认证资料、绑定与解绑
+  - name: Applications
+    description: 入企申请与企业邀请
+  - name: Ops
+    description: 运维端点（不在 /api/v1 下）
+paths:
+  /auth/line:
+    post:
+      tags: [Auth]
+      summary: LINE 登录换取会话
+      description: |
+        用 LINE ID token 换取 SaiFlow 会话（免登录白名单接口，精确匹配 POST，不校验 CSRF）。
+
+        正常流程：服务端以 POST form 调用 LINE `https://api.line.me/oauth2/v2.1/verify`
+        （id_token + client_id=LINE_CHANNEL_ID）验真，并本地复核 iss=`https://access.line.me`、
+        aud 包含渠道 ID、exp 未过期。按 (line_provider=line, line_sub=sub) 新建或复用用户；
+        未完成注册（registered=false）的用户会用 LINE 资料（name/picture/email/phone_number）
+        刷新 display_name/avatar_url/email/phone，已注册用户的资料不被覆盖。
+
+        AUTH_DEV_MODE 开发兜底：当 `id_token` 为空、提供 `dev_id` 且服务端开启 AUTH_DEV_MODE 时，
+        以 line_sub=`dev:<dev_id>` 建立开发身份（首次创建时随机生成昵称、手机号、邮箱（约 1/3 概率为空）
+        与首字母 PNG 头像）；dev_id 超过 64 字符返回 400 `error.invalid_argument`。
+        未开启 AUTH_DEV_MODE 时 dev_id 被忽略，按缺少 id_token 处理。
+
+        游客归并：若请求携带有效的游客会话 Cookie，登录成功后游客的全部数据（文件、任务、结果版本、导出、
+        申请、通知、审计、成员关系等）归并到该真实账号；游客个人租户的订阅与到期提醒记录被删除，
+        其套餐申请的 `target_tenant_id` 改指向真实账号的个人租户，随后游客账号及其会话被删除。
+
+        成功后签发新会话（Set-Cookie `saiflow_session`，HttpOnly）并下发明文 CSRF token；
+        同时幂等确保该用户的个人租户存在并已开通一个月 Kinder 订阅（`source=DEFAULT`，自
+        `tenants.created_at` 起算，已有订阅行不会被重置）。`language` 仅接受 th/en，其他值忽略。
+
+        错误：
+        - 400 INVALID_ARGUMENT `auth.id_token_required`（未提供 id_token 且未走开发兜底）、`error.invalid_argument`（dev_id 过长）
+        - 401 AUTH_REQUIRED `auth.line_token_invalid`（LINE 验真非 200 或 iss 不符）、`auth.line_channel_mismatch`、`auth.line_token_expired`
+        - 503 AUTH_SERVICE_UNAVAILABLE `auth.line_not_configured`（未配置 LINE_CHANNEL_ID）、`auth.line_verify_unavailable`（调用 LINE 网络失败），retryable=true
+      operationId: authLine
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthLineRequest'
+      responses:
+        '200':
+          description: 登录成功，已签发会话 Cookie
+          headers:
+            Set-Cookie:
+              description: "saiflow_session=<token>; HttpOnly; Max-Age=<绝对过期秒数>"
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AuthPayload'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /auth/guest:
+    post:
+      tags: [Auth]
+      summary: 创建或复用游客会话
+      description: |
+        免登录白名单接口（不校验 CSRF）。若请求已携带有效会话（游客或真实用户），直接复用该会话：
+        轮换 CSRF token 并返回当前用户与可见租户列表，不签发新 Cookie。
+        否则新建游客用户（line_provider=guest，display_name=Guest，status=ACTIVE），签发新会话
+        （Set-Cookie `saiflow_session`），同时创建其个人租户并幂等开通一个月 Kinder 订阅
+        （`source=DEFAULT`，自 `tenants.created_at` 起算）；游客不发送到期提醒。
+        游客可上传与核验，之后经 POST /auth/line 登录时数据自动归并到真实账号
+        （游客租户的订阅与提醒记录随之清除，套餐申请改指向真实账号的个人租户）。
+        `language` 仅接受 th/en，其他值忽略（默认 th）。
+      operationId: authGuest
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                language:
+                  type: string
+                  enum: [th, en]
+                  description: 界面语言；非 th/en 时忽略
+      responses:
+        '200':
+          description: 游客会话已建立或复用（仅新建时返回 Set-Cookie）
+          headers:
+            Set-Cookie:
+              description: 新建游客会话时下发 saiflow_session（HttpOnly）
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AuthPayload'
+
+  /auth/session:
+    get:
+      tags: [Auth]
+      summary: 获取当前会话并轮换 CSRF
+      description: |
+        返回当前会话摘要（用户、可见租户、签发与绝对过期时间），并轮换下发新的 CSRF token
+        （旧 CSRF token 立即失效）。需登录态（游客会话亦可）。
+        时间字段为 UTC 的 ISO 8601 字符串（无时区后缀）。
+        错误：401 AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED；403 ACCOUNT_DISABLED。
+      operationId: getAuthSession
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 当前会话
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AuthSessionPayload'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: 退出登录
+      description: |
+        撤销当前会话（置 revoked_at）并清除会话 Cookie。无请求体。
+        错误：401 AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED；403 ACCOUNT_DISABLED / CSRF_INVALID。
+      operationId: authLogout
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      responses:
+        '200':
+          description: 已退出
+          headers:
+            Set-Cookie:
+              description: 清除 saiflow_session
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [logged_out]
+                        properties:
+                          logged_out:
+                            type: boolean
+                            enum: [true]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /me:
+    get:
+      tags: [Me]
+      summary: 获取当前用户
+      description: |
+        返回当前登录用户资料（游客亦可）。
+        错误：401 AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED；403 ACCOUNT_DISABLED。
+      operationId: getMe
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 当前用户
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    patch:
+      tags: [Me]
+      summary: 更新个人资料
+      description: |
+        字段白名单：display_name / phone / language / avatar_url，仅更新请求体中出现的字段，其他字段忽略。
+        有字段变更时提交并记审计 `me.update`；无变更时原样返回当前用户。
+
+        - display_name：去除首尾空白后长度 1–128。
+        - phone：个人中心可修改（FR-SYS-015），校验与注册完全一致——空串清空；否则去空白后 ≤32 字符，
+          只允许 `+`、数字、空格、`(`、`)`、`.`、`-`，剔除非数字后须为 6–15 位数字。游客不可修改（403 PERMISSION_DENIED）。
+        - language：th 或 en。
+        - avatar_url：游客不可修改（403 PERMISSION_DENIED）。取值规则——与当前头像地址相同视为不变；
+          空串清除头像；以 `https://` 开头且不超过 1024 字符时作为外部头像引用保存；
+          否则须为 `data:image/(png|jpeg|webp);base64,...` data URL，解码后不超过 300 KB 且文件头与声明类型一致，
+          图片转存对象存储，之后 avatar_url 返回 `/api/v1/me/avatar?v=<版本>`。
+
+        错误：
+        - 400 INVALID_ARGUMENT `error.invalid_argument`，field_errors：display_name→`error.field_required`；
+          phone→`error.phone_invalid`；language→`error.invalid_argument`；avatar_url→`error.avatar_invalid`
+        - 403 PERMISSION_DENIED `error.permission_denied`（游客改手机号或头像）；CSRF_INVALID；ACCOUNT_DISABLED
+        - 503 STORAGE_UNAVAILABLE `avatar.upload_failed`（头像对象存储失败）
+      operationId: updateMe
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMeRequest'
+      responses:
+        '200':
+          description: 更新后的用户
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /me/quota:
+    get:
+      tags: [Me]
+      summary: 获取租户额度与订阅视图
+      description: |
+        返回当前用户所有有效租户（本人个人租户 + ACTIVE 成员且企业 VERIFIED 的企业租户）的额度视图。
+        查询时会幂等补开默认订阅（个人租户按 `tenants.created_at`、企业租户按 `enterprises.verified_at`
+        起算 Kinder 一个月），企业未认证时不开通。
+
+        - 计量唯一单位为 `OCR_PAGE`（`plan.metering` 恒为 OCR_PAGE），不存在赠送任务与 FREE 档位。
+        - `plan.source`：DEFAULT=系统默认开通的一个月 / APPROVED=人工审批续费 / null（无订阅）；
+          `plan.is_paid` 仅在 source=APPROVED 时为 true，ACTIVE 不代表已付款。
+        - `subscription.status`：ACTIVE / EXPIRED / NONE（企业未认证，无订阅行）；
+          `days_remaining` 为泰国时区自然日（0=今天到期，负数=已过期），NONE 时为 null。
+        - `pages`：订阅 ACTIVE 时为本月权益与剩余页数（泰国时间自然月实时统计，FAILED/CANCELLED 不计）；
+          非 ACTIVE 时 `remaining` 恒为 0。
+        错误：401 AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED；403 ACCOUNT_DISABLED。
+      operationId: getMeQuota
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 额度与订阅视图
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [tenants]
+                        properties:
+                          tenants:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/QuotaTenant'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /me/avatar:
+    get:
+      tags: [Me]
+      summary: 获取当前用户头像图片
+      description: |
+        后端代理读取对象存储中的当前用户头像字节（会话鉴权，不生成匿名/签名 URL）。
+        响应头 `Cache-Control: private, max-age=86400`、`X-Content-Type-Options: nosniff`；
+        Content-Type 按对象扩展名为 image/png、image/jpeg 或 image/webp。
+        查询参数 v 仅用于绕过缓存，服务端不读取。
+        错误：404 RESOURCE_NOT_FOUND（用户无已转存头像，或对象不存在；外部 https 头像不经此接口）；
+        401 AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED；403 ACCOUNT_DISABLED。
+      operationId: getMeAvatar
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: v
+          in: query
+          required: false
+          description: 头像版本号（缓存击穿用，服务端忽略）
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 头像图片字节
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: "private, max-age=86400"
+            X-Content-Type-Options:
+              schema:
+                type: string
+                example: nosniff
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /me/registration:
+    post:
+      tags: [Me]
+      summary: 补录注册信息
+      description: |
+        LINE 登录后补录注册信息（FR-SYS-014）。仅非游客可调用。Phone/Email 默认使用服务端验证后的 LINE
+        token 资料；email 需要对应 scope 与授权，标准 LINE Login 不保证提供手机号；缺失时可手填。
+        Phone 可编辑且可选（≤32 字符、6–15 位数字，可含前导 +、空格、括号、点和短横线；空串可清空，省略保留原值）。
+        依次校验 display_name（去空白后 1–128）、phone、email（≤254 且格式合法）、code（必填，6 位数字，校验并消费
+        发往该邮箱且未过期（10 分钟）的最新验证码；仅显式本地 AUTH_DEV_MODE 下只要求非空、不校验）。
+        可选 avatar_url，规则同 PATCH /me。成功保存 phone/email/display_name/avatar_url，registered=true，记审计 `user.register`。
+
+        错误：
+        - 400 INVALID_ARGUMENT，field_errors：display_name→`error.field_required`；phone→`error.phone_invalid`；email→`error.field_required`/`error.email_invalid`；code→`error.field_required`/`error.email_code_invalid`；avatar_url→`error.avatar_invalid`
+        - 403 PERMISSION_DENIED `error.permission_denied`（游客）；CSRF_INVALID；ACCOUNT_DISABLED
+        - 409 STATE_CONFLICT `registration.already_done`（已完成注册）
+        - 503 STORAGE_UNAVAILABLE `avatar.upload_failed`
+      operationId: submitMeRegistration
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrationRequest'
+      responses:
+        '200':
+          description: 注册完成后的用户
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /me/email/code:
+    post:
+      tags: [Me]
+      summary: 发送邮箱验证码
+      description: |
+        向邮箱发送 6 位数字验证码（注册 FR-SYS-014 / 更换邮箱 FR-SYS-016），有效期 10 分钟，
+        同一用户发送冷却 60 秒。仅非游客可调用。已注册用户提交与当前邮箱相同（不区分大小写）的邮箱会被拒绝。
+        生产使用经证书校验的 TLS SMTP 发信（Gmail 发件账号，应用专用密码由 Secret Manager 注入）。
+        仅 SMTP 接受后才记录验证码哈希并使该用户旧码失效；验证码、收件地址及凭据不写日志或响应。
+        仅显式本地 AUTH_DEV_MODE 模拟成功、不实际发信。成功记审计 `me.email_code`。
+
+        错误：
+        - 400 INVALID_ARGUMENT，field_errors：email→`error.field_required`/`error.email_invalid`/`error.email_unchanged`
+        - 403 PERMISSION_DENIED（游客）；CSRF_INVALID；ACCOUNT_DISABLED
+        - 429 RATE_LIMITED `error.rate_limited`（60 秒冷却内重复发送），retryable=true
+        - 503 EMAIL_SERVICE_UNAVAILABLE `email.sender_unavailable`（未配置、认证失败、拒收、网络或 TLS 错误；不产生有效新码）
+      operationId: sendMeEmailCode
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  maxLength: 254
+                  description: 目标邮箱（去除首尾空白后校验）
+      responses:
+        '200':
+          description: 验证码邮件已被 SMTP 接受（本地开发模式为模拟）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [sent, cooldown_seconds]
+                        properties:
+                          sent:
+                            type: boolean
+                            enum: [true]
+                          cooldown_seconds:
+                            type: integer
+                            description: 再次发送前需等待的秒数
+                            example: 60
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /me/email:
+    post:
+      tags: [Me]
+      summary: 更换邮箱
+      description: |
+        凭新邮箱 + 验证码更换邮箱（FR-SYS-016）。仅非游客可调用。新邮箱不得与当前邮箱相同（不区分大小写）。
+        code 必填，校验并消费发往该邮箱且未过期的最新验证码；AUTH_DEV_MODE 下只要求非空、不校验。
+        成功记审计 `me.email_change`。
+
+        错误：
+        - 400 INVALID_ARGUMENT，field_errors：email→`error.field_required`/`error.email_invalid`/`error.email_unchanged`；code→`error.field_required`/`error.email_code_invalid`
+        - 403 PERMISSION_DENIED（游客）；CSRF_INVALID；ACCOUNT_DISABLED
+      operationId: changeMeEmail
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, code]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  maxLength: 254
+                code:
+                  type: string
+                  description: 邮箱验证码（6 位数字）
+      responses:
+        '200':
+          description: 更新后的用户
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /me/tenants:
+    get:
+      tags: [Me]
+      summary: 列出我的租户
+      description: |
+        返回有效租户（本人个人租户 + ACTIVE 成员且企业 VERIFIED 的企业租户）以及本人处理中的申请
+        （状态 DRAFT/SUBMITTED/UNDER_REVIEW/NEEDS_INFO，按更新时间倒序）。
+        个人租户缺失时会幂等补建。
+        错误：401 AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED；403 ACCOUNT_DISABLED。
+      operationId: listMeTenants
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 租户与处理中申请
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [tenants, pending_applications]
+                        properties:
+                          tenants:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Tenant'
+                          pending_applications:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/PendingApplicationBrief'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /me/applications:
+    get:
+      tags: [Me]
+      summary: 列出我的申请
+      description: |
+        返回本人提交的全部申请（企业认证、入企、套餐升级），按更新时间倒序，不分页。
+        错误：401 AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED；403 ACCOUNT_DISABLED。
+      operationId: listMeApplications
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 申请列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [items]
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/UserApplication'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /me/notifications:
+    get:
+      tags: [Me]
+      summary: 列出我的通知
+      description: |
+        返回本人最近 50 条通知（按创建时间倒序，无分页参数）与未读总数 `unread_count`
+        （未读数统计本人全部未读通知，不受 50 条截断影响）。
+        套餐到期提醒（type=PLAN_EXPIRING / PLAN_EXPIRED）也通过本接口下发。
+        错误：401 AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED；403 ACCOUNT_DISABLED。
+      operationId: listMeNotifications
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 通知列表与未读数
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [unread_count, items]
+                        properties:
+                          unread_count:
+                            type: integer
+                            minimum: 0
+                            description: 本人未读通知总数
+                          items:
+                            type: array
+                            maxItems: 50
+                            items:
+                              $ref: '#/components/schemas/Notification'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /me/notifications/read:
+    post:
+      tags: [Me]
+      summary: 标记通知已读
+      description: |
+        把指定通知标记为已读。`ids` 为非空整数数组时只标记这些通知；`ids` 缺省、为 null 或为空数组时
+        标记本人全部未读通知。幂等（已读的通知不会被重复更新），且只会影响调用者本人的通知行——
+        传入他人或不存在的 ID 不报错，只是不计入 `updated`。
+
+        错误：
+        - 400 INVALID_ARGUMENT `error.invalid_argument`，field_errors `{field: ids, message_key: error.invalid_argument}`
+          （`ids` 不是数组，或数组中含非整数元素；JSON 布尔值不算整数）
+        - 401 AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED；403 ACCOUNT_DISABLED / CSRF_INVALID
+      operationId: markMeNotificationsRead
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  nullable: true
+                  description: 要标记的通知 ID；缺省/null/空数组表示全部标记已读
+                  items:
+                    type: integer
+                    format: int64
+      responses:
+        '200':
+          description: 标记结果
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [updated, unread_count]
+                        properties:
+                          updated:
+                            type: integer
+                            minimum: 0
+                            description: 本次由未读变为已读的通知条数
+                          unread_count:
+                            type: integer
+                            minimum: 0
+                            description: 标记后本人剩余未读数
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /me/activity-events:
+    get:
+      tags: [Me]
+      summary: 列出我的操作记录
+      description: |
+        返回本人最近 50 条审计事件，按创建时间倒序，无分页参数（不含 detail）。
+        错误：401 AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED；403 ACCOUNT_DISABLED。
+      operationId: listMeActivityEvents
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 操作记录
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [items]
+                        properties:
+                          items:
+                            type: array
+                            maxItems: 50
+                            items:
+                              $ref: '#/components/schemas/ActivityEvent'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /me/data-requests:
+    post:
+      tags: [Me]
+      summary: 提交个人数据访问或删除请求
+      description: |
+        登记数据访问（ACCESS）或删除（DELETION）请求，须显式 `confirmed: true` 才会创建；
+        note 超过 255 字符时被截断（不报错）。新请求状态为 PENDING，记审计 `data_request.create`。
+
+        错误：
+        - 400 INVALID_ARGUMENT `error.invalid_argument`（kind 非法，field_errors：kind→`error.invalid_argument`）；`data_request.confirm_required`（confirmed 不为 true）
+        - 401 AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED；403 ACCOUNT_DISABLED / CSRF_INVALID
+      operationId: createMeDataRequest
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, confirmed]
+              properties:
+                kind:
+                  type: string
+                  enum: [ACCESS, DELETION]
+                confirmed:
+                  type: boolean
+                  enum: [true]
+                  description: 必须为 true（明确确认发起）
+                note:
+                  type: string
+                  maxLength: 255
+                  description: 备注；超出 255 字符部分被截断
+      responses:
+        '201':
+          description: 请求已创建
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/DataRequest'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /plans:
+    get:
+      tags: [Plans]
+      summary: 获取套餐目录
+      description: |
+        返回套餐目录（KINDER/STARTER/INTERMEDIATE/ADVANCE，按档位从低到高，无 FREE 档）。
+        每月页数：Kinder 1,000 / Starter 5,000 / Intermediate 10,000 / Advance 100,000。
+        币种 THB，支付完全线下（payment=OFFLINE，联系销售开通/续费），无在线下单、无回调、无自动续费。
+        本接口只返回目录，不接受 `tenant_id`，也不含任何租户状态。需登录态。
+        错误：401 AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED；403 ACCOUNT_DISABLED。
+      operationId: listPlans
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 套餐目录
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [currency, payment, items]
+                        properties:
+                          currency:
+                            type: string
+                            enum: [THB]
+                          payment:
+                            type: string
+                            enum: [OFFLINE]
+                          items:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Plan'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /me/subscription:
+    get:
+      tags: [Plans]
+      summary: 获取租户订阅状态
+      description: |
+        返回指定租户的订阅状态（`tenant_id` 缺省/空值 = 本人个人租户）。每个租户恰好一行订阅，
+        首次查询时按默认规则幂等开通 Kinder 一个月：个人租户（含游客）自 `tenants.created_at` 起算；
+        企业租户自 `enterprises.verified_at` 起算（人工把 `enterprises.status` 改为 VERIFIED 后，
+        服务端首次读到时补填 `verified_at`）。自然月加法带夹取：2026-01-31 + 1 月 → 2026-02-28。
+
+        - `status`：ACTIVE=有效期内 / EXPIRED=已到期（不能再新建 OCR 任务，历史仍可读） /
+          NONE=企业尚未认证，无订阅行，plan 与日期字段均为 null。
+        - `source`：DEFAULT=系统默认开通的一个月 / APPROVED=人工审批续费开通；`application_id` 为据以续期的申请 ID。
+        - `days_remaining`：泰国时区自然日（0=今天到期，负数=已过期）；NONE 时为 null。
+        - `pending`：本租户处理中的 PLAN_UPGRADE 申请简述（SUBMITTED/UNDER_REVIEW/NEEDS_INFO），无则 null。
+          pending 既不提升也不降低当前权益，前端应在 `status != ACTIVE` 且 pending 非空时才显示「处理中」。
+        - `can_manage`：个人租户恒为 true；企业租户仅 ACTIVE 的 OWNER 为 true。
+
+        错误：
+        - 400 INVALID_ARGUMENT `error.invalid_workspace`（`tenant_id` 无法解析为整数、租户不存在，或租户类型非法）
+        - 403 PERMISSION_DENIED `error.permission_denied`（他人的个人租户；或企业租户但本人无成员行/企业不存在）；
+          ACCOUNT_DISABLED `auth.account_disabled`（本人个人租户 status 非 ACTIVE）；
+          ENTERPRISE_ACCESS_REVOKED `error.enterprise_access_revoked`（成员非 ACTIVE、企业未 VERIFIED 或租户非 ACTIVE）
+        - 401 AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED
+      operationId: getMeSubscription
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: tenant_id
+          in: query
+          required: false
+          description: 目标租户 ID（`tenants.id`）；缺省或空值表示本人个人租户
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: 订阅状态
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Subscription'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /me/plan-applications:
+    post:
+      tags: [Plans]
+      summary: 提交套餐升级/续费申请
+      description: |
+        为指定租户（`tenant_id` 缺省 = 本人个人租户）登记套餐开通/续费意向工单
+        （applications.type=PLAN_UPGRADE，status=SUBMITTED，target_tenant_id=该租户），
+        由后台人工审核开通，无在线支付。游客不可提交（401）。企业租户仅该企业 ACTIVE 的 OWNER 可提交。
+
+        线下续费闭环：运营把申请置为 APPROVED，并在 `applications.form` 写 `valid_from` / `valid_to`
+        （或 `period_months`）；服务端在下次读取订阅时惰性生效一次（`source=APPROVED`，记录 `application_id`，
+        同一申请绝不重复生效）。若当期尚未到期，新周期从当前 `expires_at` 接续，不浪费剩余天数。
+
+        档位规则：订阅 ACTIVE 时拒绝降档（409 `plan.not_upgrade`），允许同档续费与升档；
+        EXPIRED / NONE 时任意档位均可申请。成功记审计 `plan_application.submit`、给本人发通知
+        PLAN_UPGRADE_SUBMITTED，并返回该租户最新订阅视图（`pending` 非空，`status` 保持原值）。
+
+        错误：
+        - 400 INVALID_ARGUMENT `error.invalid_argument`（plan_code 不在目录中：field_errors `{field: plan_code, reason: invalid}`；
+          `tenant_id` 存在但不是 JSON 整数：`{field: tenant_id, reason: invalid}`，注意此处 field_errors 使用 reason 而非 message_key）；
+          `error.invalid_workspace`（`tenant_id` 指向不存在或类型非法的租户）
+        - 401 AUTH_REQUIRED `auth.login_required`（游客会话）；SESSION_EXPIRED / SESSION_REVOKED
+        - 403 PERMISSION_DENIED `plan.enterprise_owner_only`（非企业 ACTIVE OWNER）/ `error.permission_denied`（他人个人租户或非该企业成员）；
+          ENTERPRISE_ACCESS_REVOKED；ACCOUNT_DISABLED；CSRF_INVALID
+        - 409 STATE_CONFLICT `plan.application_pending`（该租户已有处理中申请）、`plan.not_upgrade`（ACTIVE 期间申请更低档位）
+      operationId: submitPlanApplication
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanApplicationRequest'
+      responses:
+        '201':
+          description: 申请已提交，返回最新订阅视图
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Subscription'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # ===================== Files (routes/files.py) =====================
+  /uploads:
+    post:
+      tags: [Files]
+      summary: 创建上传会话
+      description: |
+        三段式上传第 1 步：POST /uploads（预检并建会话）→ PUT /uploads/{upload_id}/content（原始字节请求体）→ POST /uploads/{upload_id}/complete（校验并置 READY）。
+        文件状态机：UPLOADING → UPLOADED → VALIDATING → READY / REJECTED。
+
+        本接口预检租户归属、用途、扩展名与声明大小，创建 status=UPLOADING 的文件记录，返回 201。
+        - `file_name` 中 `[A-Za-z0-9._-]`、空格、泰文、中日韩统一表意文字以外的字符替换为 `_`，并截断为 255 字符；扩展名（小写）必须为 jpg/jpeg/png/pdf。
+        - `size_bytes` 若提供且大于 20MB（20971520）直接拒绝；此时不校验实际字节（实际大小在 PUT content 阶段校验）。
+        - 归属：`tenant_id` 缺省或为空值时落在本人个人租户（缺失时幂等补建）；传企业租户 ID 时当前用户须为该企业
+          ACTIVE 成员、企业状态为 VERIFIED、租户 status 为 ACTIVE。
+
+        错误：
+        - 400 INVALID_ARGUMENT：`error.invalid_argument`（purpose 非法）、`error.invalid_workspace`（`tenant_id` 无法解析为整数、租户不存在或类型非法）、`files.unsupported_type`（field_errors 指向 file_name）、`files.too_large`。
+        - 403 PERMISSION_DENIED（他人的个人租户，或企业租户但本人无成员行/企业不存在）、ACCOUNT_DISABLED（本人个人租户非 ACTIVE）、ENTERPRISE_ACCESS_REVOKED（`error.enterprise_access_revoked`，成员非 ACTIVE、企业未 VERIFIED 或租户非 ACTIVE）、CSRF_INVALID。
+      operationId: createUpload
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadCreateRequest'
+      responses:
+        '201':
+          description: 已创建上传会话（文件 status=UPLOADING）。`upload_id` 与 `file.id` 相同。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UploadSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /uploads/{upload_id}/content:
+    put:
+      tags: [Files]
+      summary: 上传文件内容
+      description: |
+        三段式上传第 2 步：请求体为文件原始字节（不是 multipart，服务端不校验 Content-Type）。
+        - 仅上传会话的创建者可调用，否则 404。
+        - 文件状态须为 UPLOADING / UPLOADED / REJECTED（允许覆盖重传；REJECTED 后可重传），否则 409 STATE_CONFLICT（`error.state_conflict`）。
+        - 字节大于 20MB：文件置 REJECTED，返回 400 `files.too_large`；请求体超过 MAX_CONTENT_LENGTH（20MB）时框架直接返回 400 INVALID_ARGUMENT `files.too_large`。
+        - 魔数校验：jpg/jpeg 须为 JPEG（FF D8 FF）、png 须为 PNG 签名、pdf 须以 `%PDF` 开头，且须与会话文件名扩展名一致；否则文件置 REJECTED，返回 400 `files.disguised_type`。
+        - 成功后写入对象存储，计算 size_bytes 与 sha256，文件置 UPLOADED 并清空 reject_reason。
+      operationId: uploadContent
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - name: upload_id
+          in: path
+          required: true
+          description: 上传会话 ID（即文件 ID，32 位十六进制 UUID）。
+          schema:
+            type: string
+      requestBody:
+        required: true
+        description: 文件原始字节（最大 20MB）。
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+          image/png:
+            schema:
+              type: string
+              format: binary
+          application/pdf:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: 内容已接收，文件 status=UPLOADED。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UploadContentResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /uploads/{upload_id}/complete:
+    post:
+      tags: [Files]
+      summary: 完成上传并校验
+      description: |
+        三段式上传第 3 步：确认上传，置 VALIDATING 后校验完整性与页数，通过则置 READY。
+        - 仅上传会话的创建者可调用，否则 404。
+        - 已为 READY 时幂等返回 200 与当前文件；状态非 UPLOADED（且非 READY）返回 409 STATE_CONFLICT。
+        - PDF 用 pypdf 读取页数，损坏/加密 → 400 `files.corrupt_or_encrypted`；图片页数记为 1。
+        - purpose=OCR_TASK 时：PDF 页数 > 50 → 400 `files.too_many_pages`；图片页数 > 1 → 400 `files.invalid`。APPLICATION_MATERIAL 不做页数限制。
+        - 以上校验失败时文件置 REJECTED，reject_reason 为对应 message_key。
+        Body 无需参数（不读取请求体）。
+      operationId: completeUpload
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - name: upload_id
+          in: path
+          required: true
+          description: 上传会话 ID（即文件 ID，32 位十六进制 UUID）。
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 文件已 READY（含幂等重放）。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/FilePayload'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /file-imports:
+    post:
+      tags: [Files]
+      summary: 通过 URL 导入文件
+      description: |
+        服务端受控抓取公网文件并直接生成 READY 文件（purpose 固定为 OCR_TASK），返回 201。
+        - `url` 必须为 http/https 且含主机名，否则 400 `file_import.invalid_url`。
+        - 抓取：连接超时 10s、总超时 20s、跟随重定向；非 200 响应或网络错误 → 400 `file_import.fetch_failed`；累计超过 20MB → 400 `files.too_large`。
+        - 类型按魔数判定（JPEG/PNG/PDF），无法识别 → 400 `files.unsupported_type`；文件名取 URL 路径末段（净化并补齐扩展名），缺省为 `import.<ext>`。
+        - PDF 损坏/加密 → 400 `files.corrupt_or_encrypted`（文件记录以 REJECTED 落库）。本接口不校验 50 页上限。
+        - 归属规则同 POST /uploads（body 可选 `tenant_id`，缺省为本人个人租户；企业租户需 ACTIVE 成员资格、企业 VERIFIED，否则 400 `error.invalid_workspace` / 403）。
+      operationId: importFileFromUrl
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileImportRequest'
+      responses:
+        '201':
+          description: 已导入，文件 status=READY。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/FilePayload'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /files/{file_id}:
+    get:
+      tags: [Files]
+      summary: 获取文件信息
+      description: |
+        返回文件元数据。可见范围：本人创建的文件，或文件归属租户在当前用户可访问租户列表内（企业租户须为 ACTIVE 成员）；其他情况一律 404（不泄露存在性）。
+      operationId: getFile
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: file_id
+          in: path
+          required: true
+          description: 文件 ID（32 位十六进制 UUID）。
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 文件信息。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/FilePayload'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /files/{file_id}/content:
+    get:
+      tags: [Files]
+      summary: 读取或下载原件
+      description: |
+        后端从对象存储取回原件字节并代理下发（需会话鉴权，不提供匿名/签名 URL）。
+        - 访问控制同 GET /files/{file_id}。
+        - 文件状态须为 READY 或 UPLOADED，且对象存在，否则 404。
+        - `download=1` 时以附件下发（Content-Disposition: attachment，文件名为 original_name）；否则内联返回，不带 Content-Disposition。
+        - Content-Type 为文件的 mime_type（image/jpeg、image/png、application/pdf）。
+      operationId: getFileContent
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: file_id
+          in: path
+          required: true
+          description: 文件 ID（32 位十六进制 UUID）。
+          schema:
+            type: string
+        - name: download
+          in: query
+          required: false
+          description: 取值为 `1` 时作为附件下载；其他值或缺省为内联。
+          schema:
+            type: string
+            enum: ['1']
+      responses:
+        '200':
+          description: 原件字节。
+          headers:
+            Content-Disposition:
+              description: 仅 `download=1` 时返回，形如 `attachment; filename=...`（非 ASCII 文件名附带 `filename*=UTF-8''...`）。
+              schema:
+                type: string
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /files/{file_id}/pages/{page}/preview:
+    get:
+      tags: [Files]
+      summary: 获取页预览图
+      description: |
+        页预览（需会话鉴权，后端代理下发，内联返回无 Content-Disposition）。
+        - 访问控制同 GET /files/{file_id}；文件状态须为 READY 或 UPLOADED，否则 404。
+        - PDF：用 PyMuPDF 以 2 倍缩放渲染第 `page` 页（1 起）为 PNG，结果缓存于对象存储 `previews/<file_id>/page_<n>.png`；页码越界 → 404；PDF 损坏 → 400 `files.corrupt_or_encrypted`。
+        - 图片：仅 `page=1` 有效（否则 404），直接返回原图（Content-Type 为其 mime_type）。
+      operationId: getFilePagePreview
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: file_id
+          in: path
+          required: true
+          description: 文件 ID（32 位十六进制 UUID）。
+          schema:
+            type: string
+        - name: page
+          in: path
+          required: true
+          description: 页码（1 起）。
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 预览图字节。
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ===================== OCR (routes/ocr.py) =====================
+  /ocr/capabilities:
+    get:
+      tags: [OCR]
+      summary: 获取 OCR 能力与限额
+      description: 返回 OCR 厂商（固定 textin）、支持的特性与上传/任务限额（取自服务端配置）。
+      operationId: getOcrCapabilities
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 能力与限额。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/OcrCapabilities'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /ocr/jobs:
+    post:
+      tags: [OCR]
+      summary: 创建 OCR 任务
+      description: |
+        基于 READY 且 purpose=OCR_TASK 的文件创建 OCR 任务（status=QUEUED，progress=0），由进程内 worker 异步处理；返回 201 与任务摘要。
+        - 任务归属租户由源文件推导（与文件同 `tenant_id`）；创建前会再次解析该租户——企业租户会校验当前用户为 ACTIVE 成员、企业 VERIFIED 且租户 ACTIVE（否则 403 PERMISSION_DENIED / ENTERPRISE_ACCESS_REVOKED）。
+        - 文件不可见 → 404；purpose 非 OCR_TASK → 400 `job.file_purpose_invalid`；文件非 READY → 409 STATE_CONFLICT `job.file_not_ready`。
+        - 页范围（文件 page_count > 0 时校验）：起始页 = `params.page`(0 起) + 1，超过文件页数 → 400 `job.page_out_of_range`；`params.page_count`（缺省为 min(文件页数, 50)）> 50 → 400 `job.page_count_exceeded`。
+        - 幂等：`Idempotency-Key` 请求头优先，body `idempotency_key` 兜底（去首尾空白后 1~128 字符）。命中已有任务且当前用户可见（本人创建或任务租户可访问）→ 200 原样返回该任务摘要；命中但不可见 → 404。
+        - 订阅门禁（在任务入库的同一事务内检查）：
+          - 订阅非 ACTIVE（已过期，或企业尚未认证因而无订阅行）→ 402 PLAN_EXPIRED（`plan.expired`），需人工审批续费后才能继续新建任务；
+          - 订阅 ACTIVE 但本月页数已用尽 → 402 QUOTA_EXCEEDED（`quota.exceeded`）。
+          月页数按泰国时间（UTC+7）自然月实时统计该租户 `ocr_jobs.page_count`，FAILED/CANCELLED 不计，不存在赠送额度或消耗流水。
+        - 仅 `params` 中的 parse_mode/table/formula/rotate/page/page_count 及 `field_names` 会被保存，其他键忽略。
+        - 参数非法时 400 INVALID_ARGUMENT，field_errors 形如 `{field: file_id|params|field_names|page|page_count|idempotency_key, reason: required|invalid}`。
+      operationId: createOcrJob
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: 幂等键（1~128 字符）；优先于 body.idempotency_key。
+          schema:
+            type: string
+            maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OcrJobCreateRequest'
+      responses:
+        '200':
+          description: 幂等重放，返回已存在的任务摘要。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/OcrJobSummary'
+        '201':
+          description: 已创建任务（status=QUEUED）。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/OcrJobSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '402':
+          $ref: '#/components/responses/PaymentRequired'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    get:
+      tags: [OCR]
+      summary: 分页查询 OCR 任务
+      description: |
+        列出当前用户可见的任务：本人个人租户任务 + 当前用户为 ACTIVE 成员的所有企业租户任务（含其他成员创建的）。按 created_at 倒序。
+        过滤条件可组合：
+        - `status`：逗号分隔，大小写不敏感；取值须属于 QUEUED/PREPROCESSING/PROCESSING/POSTPROCESSING/SUCCEEDED/PARTIAL_SUCCESS/FAILED/CANCELLED（CANCEL_REQUESTED 不可作为筛选值），否则 400（field=status）。
+        - `tenant_id`：只看该租户的任务。无法解析为整数 → 400（field=tenant_id）；不在当前用户可访问租户列表内 → 404（不泄露存在性）。
+        - `stage`：OCR_PROCESSING（非终态）/ OCR_FAILED（FAILED、CANCELLED）/ VERIFYING（成功但未确认）/ VERIFIED（已确认但 completed_at 为空）/ COMPLETED（已确认且 completed_at 非空）；非法值 400（field=stage）。
+        - `q`：按源文件名（original_name）不区分大小写子串匹配。
+        - 分页：`page` ≥ 1，`page_size` 1~100，非法时 400（field=page）。
+        订阅到期（402 `plan.expired`）只拦截新建任务，不影响本接口：历史任务始终可查。
+      operationId: listOcrJobs
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: 逗号分隔的任务状态列表，例如 `SUCCEEDED,PARTIAL_SUCCESS`。
+          schema:
+            type: string
+        - name: tenant_id
+          in: query
+          required: false
+          description: 目标租户 ID（`tenants.id`）；缺省表示全部可见租户。
+          schema:
+            type: integer
+            format: int64
+        - name: stage
+          in: query
+          required: false
+          description: 流程阶段（大小写不敏感）。
+          schema:
+            type: string
+            enum: [OCR_PROCESSING, OCR_FAILED, VERIFYING, VERIFIED, COMPLETED]
+        - name: q
+          in: query
+          required: false
+          description: 文件名关键字。
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: 任务分页列表。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/OcrJobPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /ocr/jobs/{job_id}:
+    get:
+      tags: [OCR]
+      summary: 获取 OCR 任务详情
+      description: 返回任务摘要（用于轮询状态与进度）。可见范围：本人创建，或任务归属租户在当前用户可访问租户列表内（企业租户须为 ACTIVE 成员）；否则 404。
+      operationId: getOcrJob
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          description: OCR 任务 ID（32 位十六进制 UUID）。
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 任务摘要。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/OcrJobSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [OCR]
+      summary: 删除任务结果
+      description: |
+        删除任务的全部结果数据：所有 ResultVersion、PageResult 以及关联导出（含对象存储中的导出文件）。任务记录本身保留。
+        - 任务须为终态（SUCCEEDED/PARTIAL_SUCCESS/FAILED/CANCELLED），否则 409 STATE_CONFLICT `job.not_terminal`。
+        - 可见性同 GET /ocr/jobs/{job_id}，不可见 → 404。
+      operationId: deleteOcrJobResults
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          description: OCR 任务 ID（32 位十六进制 UUID）。
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 结果已删除。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/OcrJobResultsDeleted'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /ocr/jobs/{job_id}/cancel:
+    post:
+      tags: [OCR]
+      summary: 取消 OCR 任务
+      description: |
+        - 终态任务 → 409 STATE_CONFLICT `job.already_terminal`。
+        - 已为 CANCEL_REQUESTED → 幂等返回当前摘要。
+        - QUEUED → 直接置 CANCELLED 并写 finished_at。月页数只统计非 FAILED/CANCELLED 的任务，
+          取消即自动不计入本月消耗，没有额度返还步骤。
+        - 处理中（PREPROCESSING/PROCESSING/POSTPROCESSING）→ 置 CANCEL_REQUESTED，由 worker 终止。
+        可见性同 GET /ocr/jobs/{job_id}。无请求体。
+      operationId: cancelOcrJob
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          description: OCR 任务 ID（32 位十六进制 UUID）。
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 取消后的任务摘要。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/OcrJobSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /ocr/jobs/{job_id}/rerun:
+    post:
+      tags: [OCR]
+      summary: 重新识别
+      description: |
+        以原任务的文件、params 与能力快照创建新任务（status=QUEUED，parent_job_id 指向原任务，创建者为当前用户），返回 201。
+        - 原任务须为终态，否则 409 `job.not_terminal`；源文件不存在或非 READY → 409 `job.file_not_ready`。
+        - 企业租户文件再次校验 ACTIVE 成员资格与企业 VERIFIED（403）。
+        - 订阅门禁同创建任务：非 ACTIVE → 402 PLAN_EXPIRED（`plan.expired`）；本月页数用尽 → 402 QUOTA_EXCEEDED（`quota.exceeded`）。
+        无请求体。
+      operationId: rerunOcrJob
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          description: OCR 任务 ID（32 位十六进制 UUID）。
+          schema:
+            type: string
+      responses:
+        '201':
+          description: 新任务摘要。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/OcrJobSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '402':
+          $ref: '#/components/responses/PaymentRequired'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # ===================== Results (routes/results.py) =====================
+  /ocr/jobs/{job_id}/results:
+    get:
+      tags: [Results]
+      summary: 获取当前识别结果
+      description: |
+        返回任务当前结果版本（is_current=true）。`structured` 为 TextIn Prompt 模式结构化 JSON；旧版逐页结果没有 structured 时折算为 `{fields: {名称: 值}, tables: [[[单元格文本]]]}`。`pages` 为旧版逐页数据（Prompt 任务为空数组）。
+        - 尚无结果且任务非终态 → 409 STATE_CONFLICT `results.not_ready`；任务已终态但无结果（如失败或结果已删除）→ 404。
+        - 可见性同 GET /ocr/jobs/{job_id}。
+      operationId: getOcrJobResults
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          description: OCR 任务 ID（32 位十六进制 UUID）。
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 当前结果版本。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ResultVersion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    patch:
+      tags: [Results]
+      summary: 复核编辑或确认结果
+      description: |
+        乐观并发：`expected_version` 必须等于当前版本号，否则 409 VERSION_CONFLICT（`error.version_conflict`）。
+        两种编辑方式（互斥）：
+        - `structured`：提交完整结构化 JSON（对象或数组，紧凑 UTF-8 序列化后 ≤ 2,000,000 字节）。与当前内容不同时生成新版本（version+1），并按新 JSON 重算 table_count / field_count；与非空 `edits` 同时提交 → 400（reason=mutually_exclusive_with_structured）。
+        - `edits`：旧版逐页结果按单元格修改 current_text（单元格 review_status 置 EDITED，raw_text 保留），生成新版本并复制全部页结果；目标单元格不存在 → 400，field_errors 含 `reason=cell_not_found` 及 page_number/table_id/row_index/column_index。
+        `confirm` 为真时仅允许非游客且已完成注册的用户：在任何结果版本、单元格或任务状态写入前，
+        游客拒绝为 401 AUTH_REQUIRED `auth.login_required`，已登录未注册拒绝为 403 PERMISSION_DENIED `registration.required`。
+        已注册确认将任务 review_status 置 CONFIRMED，completed_at 为空时写入（阶段 COMPLETED）；
+        历史 VERIFIED 任务在注册后显式 confirm 也可完成。仅确认且无内容变化时不生成新版本，并将当前版本所有单元格置 CONFIRMED。
+        `confirm=false` 的草稿编辑仍允许游客/未注册用户；内容有变化且任务尚未 CONFIRMED 时，review_status 置 EDITED。不额外校验套餐订阅。
+        其他错误：结果未就绪 409 `results.not_ready`；无结果 404；参数非法 400（field: expected_version reason=required；edits/edits[i] reason=invalid；structured reason=invalid|too_large）。
+      operationId: updateOcrJobResults
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          description: OCR 任务 ID（32 位十六进制 UUID）。
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResultUpdateRequest'
+      responses:
+        '200':
+          description: 更新后的当前结果版本（无内容变化时版本号不变）。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ResultVersion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # ===================== Exports (routes/exports.py) =====================
+  /ocr/jobs/{job_id}/exports:
+    post:
+      tags: [Exports]
+      summary: 创建结果导出
+      description: |
+        基于任务当前结果版本同步生成导出文件，创建即 READY，返回 201；有效期 24 小时。
+        - 格式（大小写不敏感）：XLSX（全部单元格按字符串写入、保留前导零；结构化结果按“文档信息/表格”版式，分区标题语言取用户 language，th 或 en）、CSV（UTF-8 BOM）、TXT（结构化结果为缩进 JSON 文本，旧版为逐页文本）。
+        - 以 `=`、`+`、`-`、`@` 开头的单元格文本在 XLSX/CSV 中前置 `'` 防公式注入。
+        - 任务非终态 → 409 STATE_CONFLICT `job.not_terminal`；无当前结果版本 → 404；format 非法 → 400（field=format, reason=invalid）。
+        - 生成依赖缺失 → 503 EXPORT_UNAVAILABLE（`error.export_unavailable`）；生成/存储失败 → 导出记录置 FAILED，返回 503 EXPORT_FAILED（`error.export_failed`，retryable=true）。
+      operationId: createExport
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          description: OCR 任务 ID（32 位十六进制 UUID）。
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportCreateRequest'
+      responses:
+        '201':
+          description: 导出已生成（status=READY）。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ExportJob'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /exports/{export_id}:
+    get:
+      tags: [Exports]
+      summary: 查询导出
+      description: |
+        返回导出记录。对象级鉴权经所属任务校验（不可见 → 404）。
+        READY 且已过 expires_at 时，记录被置为 EXPIRED 并返回 409 STATE_CONFLICT `export.expired`；之后再查询返回 200 且 status=EXPIRED。
+      operationId: getExport
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: export_id
+          in: path
+          required: true
+          description: 导出 ID（32 位十六进制 UUID）。
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 导出记录。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ExportJob'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /exports/{export_id}/download:
+    get:
+      tags: [Exports]
+      summary: 下载导出文件
+      description: |
+        后端代理下发导出文件（需会话 Cookie 与对象级鉴权，无匿名/签名 URL），始终以附件形式返回。
+        文件名：`<源文件名去扩展名>-v<result_version_id 前 8 位>.<xlsx|csv|txt>`（源文件缺失时用 job_id）。
+        - 不可见 → 404；已过期 → 409 `export.expired`；状态非 READY 或对象不存在 → 409 `export.not_ready`。
+      operationId: downloadExport
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: export_id
+          in: path
+          required: true
+          description: 导出 ID（32 位十六进制 UUID）。
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 导出文件字节。
+          headers:
+            Content-Disposition:
+              description: 形如 `attachment; filename=...`（非 ASCII 文件名附带 `filename*=UTF-8''...`）。
+              schema:
+                type: string
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            text/plain:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /enterprises:
+    post:
+      tags: [Enterprises]
+      summary: 添加公司
+      description: |
+        创建公司，初始状态为 PENDING_VERIFICATION（待后台人工审核，审核通过后改为 VERIFIED 才生效）。
+        系统自动生成公司编号 code（格式 `ent-YYMMDD-xxxxxx`，xxxxxx 为 6 位十六进制随机串），
+        创建人自动成为该公司 ACTIVE 状态的 OWNER 成员（approved_via=CREATE）。
+        字段先 trim 再校验；请求体非合法 JSON 时按空对象处理。
+        校验失败返回 400 INVALID_ARGUMENT，field_errors 可能包含：
+        `legal_name/required`（为空或超过 255 字符）、`registration_no/required`（为空或超过 64 字符）、
+        `contact_phone/invalid`（超过 32 字符）、`cert_file_id/invalid`（文件不存在、非本人上传、
+        purpose 不是 APPLICATION_MATERIAL 或 status 不是 READY）。
+        写入审计事件 company.create。
+      operationId: createEnterprise
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnterpriseUpsertRequest'
+      responses:
+        '201':
+          description: 创建成功，返回新公司（status=PENDING_VERIFICATION）。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [enterprise]
+                        properties:
+                          enterprise:
+                            $ref: '#/components/schemas/Enterprise'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+
+  /enterprises/mine:
+    get:
+      tags: [Enterprises]
+      summary: 我的公司列表
+      description: |
+        返回当前用户成员关系状态为 PENDING 或 ACTIVE 的所有公司（自己创建的或已绑定/已申请的，含待审核公司），
+        按公司创建时间倒序。每项为公司信息加上我的角色 my_role 与我的成员状态 membership_status。
+        不分页。
+      operationId: listMyEnterprises
+      responses:
+        '200':
+          description: 我的公司列表。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [items]
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/MyCompany'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+        - sessionCookie: []
+
+  /enterprises/{enterprise_id}:
+    patch:
+      tags: [Enterprises]
+      summary: 修改公司信息
+      description: |
+        仅该公司 ACTIVE 状态的 OWNER 可修改。请求体与添加公司相同，legal_name 与 registration_no
+        必须完整提交（整体覆盖 legal_name / registration_no / contact_phone；contact_phone 未提供则置为空串）。
+        cert_file_id 为空或未提供时保留原证明材料。
+        若公司当前为 VERIFIED，修改后自动回到 PENDING_VERIFICATION 需重新审核；其他状态保持不变。
+        公司不存在返回 404 RESOURCE_NOT_FOUND；非 ACTIVE OWNER 返回 403 PERMISSION_DENIED（先于参数校验）；
+        参数校验规则与 field_errors 同添加公司。写入审计事件 company.update。
+      operationId: updateEnterprise
+      parameters:
+        - name: enterprise_id
+          in: path
+          required: true
+          description: 公司 ID（enterprises.id）。
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnterpriseUpsertRequest'
+      responses:
+        '200':
+          description: 修改成功，返回最新公司信息。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [enterprise]
+                        properties:
+                          enterprise:
+                            $ref: '#/components/schemas/Enterprise'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+
+  /enterprises/bind:
+    post:
+      tags: [Enterprises]
+      summary: 按公司编号绑定公司
+      description: |
+        按公司编号 code（enterprises.code，如 `ent-261018-a1b2c3`）绑定已生效（VERIFIED）公司，
+        绑定后立即成为 ACTIVE 成员（approved_via=BIND）。一人可绑定多个公司；此前已解绑（LEFT）
+        可重新绑定，并沿用原角色。服务端仅校验 code 非空（trim 后），不校验格式。
+        错误：code 为空返回 400（field_errors `code/required`）；公司不存在或未审核通过统一返回
+        404 RESOURCE_NOT_FOUND（不区分）；已是 ACTIVE/PENDING 成员返回 409 STATE_CONFLICT
+        `membership.already_member`；成员关系为 REJECTED/REMOVED 返回 409 `membership.rejoin_forbidden`。
+        成功后写审计 company.bind，并给本人发送 MEMBERSHIP_ACTIVE 通知。
+      operationId: bindEnterprise
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnterpriseBindRequest'
+      responses:
+        '200':
+          description: 绑定成功，返回公司信息与我的角色。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/EnterpriseJoinResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+
+  /enterprises/{enterprise_id}/unbind:
+    post:
+      tags: [Enterprises]
+      summary: 解绑公司
+      description: |
+        将当前用户在该公司的成员关系（ACTIVE 或 PENDING）置为 LEFT 并记录 revoked_at；
+        成员关系记录保留，但不再是有效身份。任何角色（含 OWNER）均可解绑。无需请求体。
+        当前用户在该公司无 ACTIVE/PENDING 成员关系时返回 404 RESOURCE_NOT_FOUND。
+        写入审计事件 company.unbind。
+      operationId: unbindEnterprise
+      parameters:
+        - name: enterprise_id
+          in: path
+          required: true
+          description: 公司 ID（enterprises.id）。
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: 解绑成功。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/EnterpriseUnbindResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+
+  /enterprises/{enterprise_id}/membership-applications:
+    post:
+      tags: [Applications]
+      summary: 提交入企申请
+      description: |
+        向已生效（VERIFIED）公司提交入企申请：创建 type=MEMBERSHIP、status=SUBMITTED 的申请单，
+        并为申请人建立 PENDING 成员关系（role=MEMBER，approved_via=APPLICATION）；此前为 LEFT 的成员关系
+        改回 PENDING。表单快照 form 记录 message 与公司编号 enterprise_code。
+        错误：公司不存在或未 VERIFIED 返回 404 RESOURCE_NOT_FOUND；message 超过 500 字符返回 400
+        （field_errors `message/too_long`）；已是 PENDING/ACTIVE 成员返回 409 STATE_CONFLICT
+        `application.duplicate_open`；成员关系为 REJECTED/REMOVED 返回 409 `membership.rejoin_forbidden`。
+        写入审计事件 application.submit。
+      operationId: submitMembershipApplication
+      parameters:
+        - name: enterprise_id
+          in: path
+          required: true
+          description: 目标公司 ID（enterprises.id）。
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MembershipApplicationRequest'
+      responses:
+        '201':
+          description: 申请已提交，返回申请单。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/MembershipApplication'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+
+  /enterprises/{enterprise_id}/invitations:
+    post:
+      tags: [Applications]
+      summary: 创建邀请
+      description: |
+        仅该公司 ACTIVE 状态的 OWNER 或 ADMIN 可创建一次性邀请令牌。令牌明文只在本响应中返回一次，
+        服务端仅保存其 SHA-256 哈希。创建时不校验公司审核状态（兑换时才要求 VERIFIED）。
+        错误：公司不存在返回 404 RESOURCE_NOT_FOUND；非 ACTIVE OWNER/ADMIN 返回 403 PERMISSION_DENIED；
+        max_uses 非 1–100 的整数返回 400（field_errors `max_uses/invalid`）；ttl_hours 非 1–720 的整数返回 400
+        （field_errors `ttl_hours/invalid`）。布尔值、浮点数、字符串或显式 null 均视为非法。
+        写入审计事件 invitation.create。
+      operationId: createInvitation
+      parameters:
+        - name: enterprise_id
+          in: path
+          required: true
+          description: 公司 ID（enterprises.id）。
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationCreateRequest'
+      responses:
+        '201':
+          description: 邀请已创建，返回令牌明文（仅此一次）。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Invitation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+
+  /invitations/redeem:
+    post:
+      tags: [Applications]
+      summary: 兑换邀请
+      description: |
+        已登录用户凭邀请令牌加入公司，成功后成为 ACTIVE 成员（approved_via=INVITATION；此前为 LEFT 则恢复并沿用原角色），
+        邀请 use_count 加 1，达到 max_uses 时邀请置为 EXPIRED。令牌会先 trim 再计算哈希匹配。
+        错误：token 缺失、非字符串或超过 128 字符返回 400（field_errors `token/required`）；
+        令牌不存在或邀请非 ACTIVE 统一返回 404 RESOURCE_NOT_FOUND（防枚举）；
+        409 STATE_CONFLICT 的 message_key：`invitation.expired`（已过期，同时置为 EXPIRED）、
+        `invitation.exhausted`（次数用尽）、`invitation.enterprise_unavailable`（公司不存在或未 VERIFIED）、
+        `membership.already_member`（已是 ACTIVE/PENDING 成员）、`membership.rejoin_forbidden`（成员关系为 REJECTED/REMOVED）。
+        成功后写审计 invitation.redeem，并给本人发送 MEMBERSHIP_ACTIVE 通知。
+      operationId: redeemInvitation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationRedeemRequest'
+      responses:
+        '200':
+          description: 兑换成功，返回公司信息与我的角色。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/EnterpriseJoinResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+
+  /invitations/{invitation_id}:
+    delete:
+      tags: [Applications]
+      summary: 撤销邀请
+      description: |
+        将 ACTIVE 邀请置为 REVOKED。邀请创建人或该公司 OWNER/ADMIN 可撤销。
+        错误：邀请不存在返回 404 RESOURCE_NOT_FOUND；无权限返回 403 PERMISSION_DENIED；
+        邀请已非 ACTIVE（已撤销/已过期）返回 409 STATE_CONFLICT `invitation.not_active`。
+        写入审计事件 invitation.revoke。
+      operationId: revokeInvitation
+      parameters:
+        - name: invitation_id
+          in: path
+          required: true
+          description: 邀请 ID（invitations.id）。
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: 撤销成功。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/OkEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/InvitationRevokeResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+
+  /health:
+    get:
+      tags: [Ops]
+      summary: 健康检查
+      description: 非版本化运维端点，实际路径为 `/api/health`，无需登录。`vendor` 表示 TextIn 客户端是否已配置。
+      operationId: getHealth
+      security: []
+      servers:
+        - url: /api
+      responses:
+        '200':
+          description: 服务存活
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, service, vendor]
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  service:
+                    type: string
+                    example: saiflow-api
+                  vendor:
+                    type: string
+                    enum: [textin, unconfigured]
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: saiflow_session
+      description: 登录 / 游客会话 Cookie（HttpOnly，path=/api），由 `POST /auth/line` 或 `POST /auth/guest` 下发。
+    csrfHeader:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: 写请求（POST/PUT/PATCH/DELETE）必带；值为登录或 `GET /auth/session` 返回的 `csrf_token`。
+  responses:
+    BadRequest:
+      description: 参数校验失败（INVALID_ARGUMENT）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: INVALID_ARGUMENT
+            message_key: error.invalid_argument
+            request_id: 3f9c2a1b7d4e5f60
+            retryable: false
+            field_errors:
+              - field: legal_name
+                reason: required
+    Unauthorized:
+      description: 未登录或会话无效（AUTH_REQUIRED / SESSION_EXPIRED / SESSION_REVOKED）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: AUTH_REQUIRED
+            message_key: auth.login_required
+            request_id: 3f9c2a1b7d4e5f60
+            retryable: false
+            field_errors: []
+    PaymentRequired:
+      description: |
+        需要付费才能继续（402）。两种互斥语义：
+        - `PLAN_EXPIRED` / `plan.expired`：订阅已到期或尚未开通（企业未认证），新建 OCR 任务被硬停；
+        - `QUOTA_EXCEEDED` / `quota.exceeded`：订阅仍 ACTIVE，但本月页数（OCR_PAGE）已用尽。
+        两种情况下历史任务、结果与导出均不受影响。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: PLAN_EXPIRED
+            message_key: plan.expired
+            request_id: 3f9c2a1b7d4e5f60
+            retryable: false
+            field_errors: []
+    Forbidden:
+      description: 无权限（ACCOUNT_DISABLED / PERMISSION_DENIED / CSRF_INVALID / ENTERPRISE_ACCESS_REVOKED）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: CSRF_INVALID
+            message_key: error.csrf_invalid
+            request_id: 3f9c2a1b7d4e5f60
+            retryable: false
+            field_errors: []
+    NotFound:
+      description: 资源不存在或无权访问（RESOURCE_NOT_FOUND）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: RESOURCE_NOT_FOUND
+            message_key: error.not_found
+            request_id: 3f9c2a1b7d4e5f60
+            retryable: false
+            field_errors: []
+    Conflict:
+      description: 状态冲突（STATE_CONFLICT / VERSION_CONFLICT）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: STATE_CONFLICT
+            message_key: error.state_conflict
+            request_id: 3f9c2a1b7d4e5f60
+            retryable: false
+            field_errors: []
+    TooManyRequests:
+      description: 请求过于频繁（RATE_LIMITED）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: RATE_LIMITED
+            message_key: error.rate_limited
+            request_id: 3f9c2a1b7d4e5f60
+            retryable: true
+            field_errors: []
+    ServiceUnavailable:
+      description: 依赖服务不可用（SERVICE_UNAVAILABLE / AUTH_SERVICE_UNAVAILABLE / OCR_VENDOR_UNAVAILABLE / EMAIL_SERVICE_UNAVAILABLE / STORAGE_UNAVAILABLE / EXPORT_UNAVAILABLE / EXPORT_FAILED）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: SERVICE_UNAVAILABLE
+            message_key: error.service_unavailable
+            request_id: 3f9c2a1b7d4e5f60
+            retryable: true
+            field_errors: []
+  schemas:
+    OkEnvelope:
+      type: object
+      description: 成功响应外层；各接口用 allOf 收窄 `data` 的结构。
+      required: [code, data]
+      properties:
+        code:
+          type: string
+          enum: [OK]
+        data:
+          description: 业务数据（无返回内容时为空对象）
+    Error:
+      type: object
+      description: 统一错误响应。
+      required: [code, message_key, request_id, retryable, field_errors]
+      properties:
+        code:
+          type: string
+          description: 机器可读错误码
+          enum:
+            - INVALID_ARGUMENT
+            - AUTH_REQUIRED
+            - SESSION_EXPIRED
+            - SESSION_REVOKED
+            - PLAN_EXPIRED
+            - QUOTA_EXCEEDED
+            - ACCOUNT_DISABLED
+            - PERMISSION_DENIED
+            - CSRF_INVALID
+            - ENTERPRISE_ACCESS_REVOKED
+            - RESOURCE_NOT_FOUND
+            - STATE_CONFLICT
+            - VERSION_CONFLICT
+            - RATE_LIMITED
+            - SERVICE_UNAVAILABLE
+            - AUTH_SERVICE_UNAVAILABLE
+            - OCR_VENDOR_UNAVAILABLE
+            - EMAIL_SERVICE_UNAVAILABLE
+            - STORAGE_UNAVAILABLE
+            - EXPORT_UNAVAILABLE
+            - EXPORT_FAILED
+        message_key:
+          type: string
+          description: 前端 i18n 文案键
+          example: error.not_found
+        request_id:
+          type: string
+          description: 请求追踪 ID（16 位十六进制）
+        retryable:
+          type: boolean
+          description: 是否可重试
+        field_errors:
+          type: array
+          description: |
+            字段级校验错误（仅 INVALID_ARGUMENT 时可能非空）。两种形态并存，取决于路由：
+            `{field, reason}`（如 plans / ocr / files 的参数校验）或 `{field, message_key}`（如 /me 下的资料校验）。
+          items:
+            type: object
+            required: [field]
+            properties:
+              field:
+                type: string
+                example: legal_name
+              reason:
+                type: string
+                description: 原因代码，如 required / invalid / too_long
+                example: required
+              message_key:
+                type: string
+                description: 前端 i18n 文案键，如 error.phone_invalid / error.field_required
+                example: error.phone_invalid
+
+    AuthLineRequest:
+      type: object
+      description: id_token 与 dev_id 至少提供其一；dev_id 仅在 AUTH_DEV_MODE 开启且 id_token 为空时生效
+      properties:
+        id_token:
+          type: string
+          description: LINE LIFF/Login 获取的 ID token（去除首尾空白）
+        dev_id:
+          type: string
+          maxLength: 64
+          description: 开发兜底身份标识（仅 AUTH_DEV_MODE），映射为 line_sub=dev:<dev_id>
+        language:
+          type: string
+          enum: [th, en]
+          description: 界面语言；非 th/en 时忽略
+
+    User:
+      type: object
+      required: [id, display_name, avatar_url, language, status, is_guest, phone, email, registered, created_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        display_name:
+          type: string
+          maxLength: 128
+        avatar_url:
+          type: string
+          description: 头像地址；已转存时为 `/api/v1/me/avatar?v=<版本>`，否则为外部 https URL（LINE），无头像为空串
+        language:
+          type: string
+          enum: [th, en]
+        status:
+          type: string
+          enum: [ACTIVE, DISABLED]
+        is_guest:
+          type: boolean
+          description: 是否游客账号
+        phone:
+          type: string
+          maxLength: 32
+          description: 默认 LINE 返回值，注册时与个人中心（PATCH /me）均可修改；可能为空串
+        email:
+          type: string
+          maxLength: 254
+          description: 可能为空串
+        registered:
+          type: boolean
+          description: 是否已完成注册信息录入
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: UTC ISO 8601（无时区后缀）
+
+    Tenant:
+      type: object
+      description: 有效身份（租户）列表项（workspace.list_tenants）。
+      required: [tenant_id, tenant_type, name, role]
+      properties:
+        tenant_id:
+          type: integer
+          format: int64
+          description: 租户 ID（`tenants.id`），业务归属的唯一标识
+        tenant_type:
+          type: string
+          enum: [PERSONAL, ENTERPRISE]
+        name:
+          type: string
+          nullable: true
+          description: 企业法定名称（enterprises.legal_name）；个人租户为 null
+        role:
+          type: string
+          enum: [OWNER, ADMIN, MEMBER]
+          nullable: true
+          description: 本人在该企业租户中的角色；个人租户为 null
+
+    AuthPayload:
+      type: object
+      required: [user, csrf_token, tenants]
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        csrf_token:
+          type: string
+          description: 明文 CSRF token，写请求需放入 X-CSRF-Token 请求头
+        tenants:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tenant'
+
+    AuthSessionPayload:
+      allOf:
+        - $ref: '#/components/schemas/AuthPayload'
+        - type: object
+          required: [issued_at, absolute_expires_at]
+          properties:
+            issued_at:
+              type: string
+              format: date-time
+              nullable: true
+              description: 会话签发时间（UTC，无时区后缀）
+            absolute_expires_at:
+              type: string
+              format: date-time
+              nullable: true
+              description: 会话绝对过期时间（UTC，无时区后缀）
+
+    UpdateMeRequest:
+      type: object
+      description: 仅出现的字段会被更新
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: 去除首尾空白后校验
+        phone:
+          type: string
+          maxLength: 32
+          description: |
+            个人中心可修改（FR-SYS-015）。空串清空；否则去空白后 ≤32 字符，只允许 `+`、数字、空格、
+            `(`、`)`、`.`、`-`，剔除非数字后须为 6–15 位数字。游客不可修改（403）。
+        language:
+          type: string
+          enum: [th, en]
+        avatar_url:
+          type: string
+          description: |
+            与当前头像地址相同=不变；空串=清除；https URL（≤1024 字符）=外部引用；
+            或 data URL `data:image/(png|jpeg|webp);base64,...`（解码后 ≤300 KB，文件头须与类型一致）。游客不可修改。
+
+    RegistrationRequest:
+      type: object
+      required: [display_name, email, code]
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        phone:
+          type: string
+          maxLength: 32
+          description: 注册时可编辑；空串可清空，省略保留 LINE 默认值；非空时需 6–15 位数字及常用电话格式
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        code:
+          type: string
+          description: 6 位数字邮箱验证码；10 分钟内有效且仅用一次（显式本地 AUTH_DEV_MODE 下仅要求非空）
+        avatar_url:
+          type: string
+          description: 可选，规则同 UpdateMeRequest.avatar_url
+
+    QuotaTenant:
+      type: object
+      description: 单个租户的额度与订阅视图（quota.quota_summary）。
+      required: [tenant_id, tenant_type, name, plan, subscription, pages]
+      properties:
+        tenant_id:
+          type: integer
+          format: int64
+        tenant_type:
+          type: string
+          enum: [PERSONAL, ENTERPRISE]
+        name:
+          type: string
+          nullable: true
+          description: 企业法定名称；个人租户为 null
+        plan:
+          type: object
+          required: [code, name, is_paid, source, metering]
+          properties:
+            code:
+              type: string
+              nullable: true
+              enum: [KINDER, STARTER, INTERMEDIATE, ADVANCE, null]
+              description: 无订阅（企业未认证）时为 null；不存在 FREE 档位
+            name:
+              type: string
+              nullable: true
+            is_paid:
+              type: boolean
+              description: 仅 source=APPROVED 为 true；系统默认开通的一个月 Kinder 为 false，ACTIVE 不代表已付款。
+            source:
+              type: string
+              nullable: true
+              enum: [DEFAULT, APPROVED, null]
+              description: DEFAULT=系统默认开通一个月 / APPROVED=人工审批续费 / null=无订阅。
+            metering:
+              type: string
+              enum: [OCR_PAGE]
+              description: 唯一计量单位：每月页数。没有赠送任务额度，也没有第二种计量。
+        subscription:
+          type: object
+          required: [status, starts_at, expires_at, days_remaining]
+          properties:
+            status:
+              type: string
+              enum: [ACTIVE, EXPIRED, NONE]
+              description: ACTIVE=有效期内 / EXPIRED=已到期（新建任务 402 plan.expired）/ NONE=企业未认证，无订阅行。
+            starts_at:
+              type: string
+              format: date-time
+              nullable: true
+              description: 本期生效时间（UTC，无时区后缀）；NONE 时为 null
+            expires_at:
+              type: string
+              format: date-time
+              nullable: true
+              description: 本期到期时间（UTC，无时区后缀）；NONE 时为 null
+            days_remaining:
+              type: integer
+              nullable: true
+              description: 剩余泰国时区自然日：0=今天到期，负数=已过期；NONE 时为 null
+        pages:
+          type: object
+          required: [monthly_total, remaining]
+          description: |
+            本月页数权益与剩余（泰国时间 UTC+7 自然月，按 `ocr_jobs.page_count` 实时统计，FAILED/CANCELLED 不计）。
+            订阅非 ACTIVE 时 `remaining` 恒为 0（`monthly_total` 为该档目录值，无订阅时为 0）。
+          properties:
+            monthly_total:
+              type: integer
+            remaining:
+              type: integer
+              minimum: 0
+
+    PendingApplicationBrief:
+      type: object
+      required: [id, type, status]
+      properties:
+        id:
+          type: integer
+          format: int64
+        type:
+          type: string
+          enum: [ENTERPRISE_VERIFICATION, MEMBERSHIP, PLAN_UPGRADE]
+        status:
+          type: string
+          enum: [DRAFT, SUBMITTED, UNDER_REVIEW, NEEDS_INFO]
+
+    UserApplication:
+      type: object
+      required: [id, type, status, form, version, review_note, target_tenant_id, submitted_at, created_at, updated_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        type:
+          type: string
+          enum: [ENTERPRISE_VERIFICATION, MEMBERSHIP, PLAN_UPGRADE]
+        status:
+          type: string
+          enum: [DRAFT, SUBMITTED, UNDER_REVIEW, NEEDS_INFO, APPROVED, REJECTED, WITHDRAWN]
+        form:
+          type: object
+          additionalProperties: true
+          description: >-
+            表单快照（结构随 type 而异）。PLAN_UPGRADE 含 plan_code/plan_name/tenant_id/tenant_type，
+            以及提交时为空串的 valid_from / valid_to——运营审批时填入有效期（`YYYY-MM-DD` 或 ISO 时间），
+            也可用 period_months（1~120 的整数）代替 valid_to；两者皆空则按默认 12 个月续期。
+        version:
+          type: integer
+          description: 乐观并发版本号
+        review_note:
+          type: string
+          maxLength: 512
+        target_tenant_id:
+          type: integer
+          format: int64
+          description: 申请指向的租户（个人或企业租户）ID。
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    Notification:
+      type: object
+      required: [id, type, title, body, read, created_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        type:
+          type: string
+          maxLength: 32
+          description: >-
+            通知类型，如 INFO、PLAN_UPGRADE_SUBMITTED、PLAN_EXPIRING（到期前 D7/D3/D1/D0 提醒）、
+            PLAN_EXPIRED（到期后提醒）。
+        title:
+          type: string
+          maxLength: 128
+        body:
+          type: string
+          maxLength: 512
+        read:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    ActivityEvent:
+      type: object
+      required: [action, object_type, object_id, created_at]
+      properties:
+        action:
+          type: string
+          maxLength: 64
+          description: 审计动作，如 me.update、user.register、plan_application.submit
+        object_type:
+          type: string
+          maxLength: 32
+        object_id:
+          type: string
+          maxLength: 64
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    DataRequest:
+      type: object
+      required: [id, kind, status, created_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        kind:
+          type: string
+          enum: [ACCESS, DELETION]
+        status:
+          type: string
+          enum: [PENDING, DONE, REJECTED]
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    Plan:
+      type: object
+      required: [code, name, price, quota_pages_per_month, seats, features]
+      properties:
+        code:
+          type: string
+          enum: [KINDER, STARTER, INTERMEDIATE, ADVANCE]
+        name:
+          type: string
+        price:
+          type: object
+          required: [monthly_thb, yearly_thb, display]
+          properties:
+            monthly_thb:
+              type: integer
+              nullable: true
+              description: 月付价格（THB）；不提供时为 null
+            yearly_thb:
+              type: integer
+              nullable: true
+              description: 年付价格（THB）；不提供时为 null
+            display:
+              type: string
+              description: 展示文案，如 "THB 888 / year"、"Contact us"
+        quota_pages_per_month:
+          type: integer
+          description: 每月可识别页数
+        seats:
+          type: integer
+        features:
+          type: array
+          items:
+            type: string
+
+    SubscriptionBrief:
+      type: object
+      required: [plan_code, plan_name, application_id, submitted_at]
+      properties:
+        plan_code:
+          type: string
+          nullable: true
+          enum: [KINDER, STARTER, INTERMEDIATE, ADVANCE, null]
+        plan_name:
+          type: string
+          nullable: true
+        application_id:
+          type: integer
+          format: int64
+          nullable: true
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    Subscription:
+      type: object
+      description: >-
+        单个租户的订阅状态（subscriptions.state 加上 tenant_id / tenant_type / can_manage）。
+        每个租户最多一行订阅：个人租户（含游客）在首次登录时从 tenants.created_at 起自动开通一个月 Kinder（source=DEFAULT）；
+        企业租户从 enterprises.verified_at 起开通，未通过认证时没有订阅行，status 为 NONE。
+        运营批准 PLAN_UPGRADE 申请后惰性同步为 source=APPROVED。
+      required: [status, plan_code, plan_name, source, application_id, starts_at, expires_at, days_remaining, pending, tenant_id, tenant_type, can_manage]
+      properties:
+        status:
+          type: string
+          enum: [ACTIVE, EXPIRED, NONE]
+          description: expires_at 晚于当前时间为 ACTIVE，否则 EXPIRED；没有订阅行（企业未认证）为 NONE。
+        plan_code:
+          type: string
+          nullable: true
+          enum: [KINDER, STARTER, INTERMEDIATE, ADVANCE, null]
+          description: NONE 时为 null。
+        plan_name:
+          type: string
+          nullable: true
+        source:
+          type: string
+          nullable: true
+          enum: [DEFAULT, APPROVED, null]
+          description: DEFAULT 为系统默认开通的一个月 Kinder；APPROVED 为运营批准申请后生成的区间；NONE 时为 null。
+        application_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: 生成当前区间的申请 ID；DEFAULT 与 NONE 时为 null。
+        starts_at:
+          type: string
+          format: date-time
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 按自然月推进并做月末夹取（2026-01-31 + 1 个月 = 2026-02-28）。
+        days_remaining:
+          type: integer
+          nullable: true
+          description: 按泰国时区（UTC+7）日历日计算；0 表示当天到期，负数表示已过期；NONE 时为 null。
+        pending:
+          allOf:
+            - $ref: '#/components/schemas/SubscriptionBrief'
+          nullable: true
+          description: 处理中的 PLAN_UPGRADE 申请（SUBMITTED/UNDER_REVIEW/NEEDS_INFO）；无则 null。
+        tenant_id:
+          type: integer
+          format: int64
+        tenant_type:
+          type: string
+          enum: [PERSONAL, ENTERPRISE]
+        can_manage:
+          type: boolean
+          description: 当前用户能否为该租户提交套餐申请（个人租户 true；企业租户仅 OWNER）。
+
+    PlanApplicationRequest:
+      type: object
+      required: [plan_code]
+      properties:
+        plan_code:
+          type: string
+          enum: [KINDER, STARTER, INTERMEDIATE, ADVANCE]
+        tenant_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: >-
+            目标租户 ID；省略或为空时默认调用者本人的个人租户。必须为 JSON 整数（布尔/字符串均按
+            400 INVALID_ARGUMENT + field_errors[{field: tenant_id, reason: invalid}] 拒绝）。
+
+    # ---------- Files ----------
+    FileObject:
+      type: object
+      description: 文件对象（File.to_dict）。时间为 UTC ISO 8601，无时区后缀。
+      properties:
+        id:
+          type: string
+          description: 文件 ID（32 位十六进制）。
+          example: 3f2b9c0e8a1d4e6f9b7c5a3d2e1f0a9b
+        tenant_id:
+          type: integer
+          format: int64
+          description: 文件归属租户 ID（个人或企业租户）。
+        purpose:
+          type: string
+          enum: [OCR_TASK, APPLICATION_MATERIAL]
+        original_name:
+          type: string
+          maxLength: 255
+          description: 净化后的原始文件名。
+        mime_type:
+          type: string
+          description: image/jpeg、image/png、application/pdf；扩展名不受支持时为空串。
+        size_bytes:
+          type: integer
+          description: 字节数（内容上传前为 0）。
+        page_count:
+          type: integer
+          description: 页数（complete 校验前为 0；图片为 1）。
+        sha256:
+          type: string
+          description: 内容 SHA-256 十六进制摘要（内容上传前为空串）。
+        status:
+          type: string
+          enum: [UPLOADING, UPLOADED, VALIDATING, READY, REJECTED]
+        reject_reason:
+          type: string
+          description: 拒绝原因 message_key（如 files.too_large、files.disguised_type、files.too_many_pages、files.invalid、files.corrupt_or_encrypted）；未拒绝为空串。
+        created_at:
+          type: string
+          nullable: true
+          example: '2026-10-18T03:21:45.123456'
+    FilePayload:
+      type: object
+      properties:
+        file:
+          $ref: '#/components/schemas/FileObject'
+    UploadCreateRequest:
+      type: object
+      required: [file_name]
+      properties:
+        file_name:
+          type: string
+          description: 原始文件名；扩展名须为 jpg/jpeg/png/pdf（大小写不敏感），净化后截断至 255 字符。
+          example: invoice-2026-10.pdf
+        size_bytes:
+          type: integer
+          maximum: 20971520
+          description: 可选，声明的文件大小；超过 20MB 直接拒绝。
+        purpose:
+          type: string
+          enum: [OCR_TASK, APPLICATION_MATERIAL]
+          default: OCR_TASK
+        tenant_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: >-
+            归属租户 ID；省略或为空时默认调用者本人的个人租户。无法解析或不可见时返回
+            400 INVALID_ARGUMENT（error.invalid_workspace）。
+    UploadSession:
+      type: object
+      properties:
+        upload_id:
+          type: string
+          description: 上传会话 ID，与 file.id 相同；用于后续 PUT content / POST complete。
+        file:
+          $ref: '#/components/schemas/FileObject'
+    UploadContentResult:
+      type: object
+      properties:
+        file_id:
+          type: string
+        size_bytes:
+          type: integer
+        sha256:
+          type: string
+    FileImportRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          description: http 或 https 公网地址。
+          example: https://example.com/docs/po-001.pdf
+        tenant_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: 归属租户 ID；省略或为空时默认调用者本人的个人租户。
+
+    # ---------- OCR ----------
+    OcrCapabilities:
+      type: object
+      properties:
+        vendor:
+          type: string
+          enum: [textin]
+        features:
+          type: object
+          properties:
+            table:
+              type: boolean
+              example: true
+            formula:
+              type: boolean
+              example: true
+            rotate:
+              type: boolean
+              example: true
+            fields:
+              type: boolean
+              example: true
+            parse_modes:
+              type: array
+              items:
+                type: string
+              example: [scan, layout, article]
+        limits:
+          type: object
+          properties:
+            allowed_extensions:
+              type: array
+              items:
+                type: string
+              example: [jpeg, jpg, pdf, png]
+            max_file_size_bytes:
+              type: integer
+              example: 20971520
+            max_pages_per_task:
+              type: integer
+              example: 50
+            max_images_per_task:
+              type: integer
+              example: 10
+            max_images_total_bytes:
+              type: integer
+              example: 52428800
+    OcrJobParams:
+      type: object
+      description: OCR 参数。仅以下键会被保存；parse_mode/table/formula/rotate 服务端不校验取值，原样保存。
+      properties:
+        parse_mode:
+          type: string
+          description: 解析模式，能力接口给出 scan / layout / article。
+        table:
+          type: boolean
+        formula:
+          type: boolean
+        rotate:
+          type: boolean
+        page:
+          type: integer
+          minimum: 0
+          description: 起始页偏移（0 起；实际起始页 = page + 1）。
+        page_count:
+          type: integer
+          minimum: 1
+          maximum: 50
+          description: 识别页数；缺省为 min(文件页数, 50)。
+    OcrJobCreateRequest:
+      type: object
+      required: [file_id]
+      properties:
+        file_id:
+          type: string
+          description: READY 且 purpose=OCR_TASK 的文件 ID。
+        params:
+          $ref: '#/components/schemas/OcrJobParams'
+        field_names:
+          type: array
+          maxItems: 100
+          description: 需抽取的字段名列表；每项为非空白字符串且长度 ≤ 64，保存前去首尾空白。
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+        idempotency_key:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: 幂等键（Idempotency-Key 请求头缺省时使用）。
+    OcrJobSummary:
+      type: object
+      description: OCR 任务摘要（OcrJob.to_summary）。时间为 UTC ISO 8601，无时区后缀。
+      properties:
+        id:
+          type: string
+        tenant_id:
+          type: integer
+          format: int64
+          description: 任务归属租户 ID（继承源文件的 tenant_id）。
+        file_id:
+          type: string
+        file_name:
+          type: string
+          description: 源文件 original_name（文件缺失时为空串）。
+        status:
+          type: string
+          enum: [QUEUED, PREPROCESSING, PROCESSING, POSTPROCESSING, SUCCEEDED, PARTIAL_SUCCESS, FAILED, CANCEL_REQUESTED, CANCELLED]
+        progress:
+          type: integer
+          description: 进度（0~100）。
+        page_count:
+          type: integer
+        table_count:
+          type: integer
+        field_count:
+          type: integer
+        duration_ms:
+          type: integer
+        review_status:
+          type: string
+          enum: [UNREVIEWED, EDITED, CONFIRMED]
+        stage:
+          type: string
+          enum: [OCR_PROCESSING, OCR_FAILED, VERIFYING, VERIFIED, COMPLETED]
+          description: |
+            流程阶段：FAILED/CANCELLED → OCR_FAILED；其余非成功状态 → OCR_PROCESSING；成功（SUCCEEDED/PARTIAL_SUCCESS）未确认 → VERIFYING；历史已确认且 completed_at 为空 → VERIFIED（注册后显式 confirm 可完成）；已确认且 completed_at 非空 → COMPLETED。新确认请求必须先登录注册。
+        error_code:
+          type: string
+          description: 失败时的错误码，否则为空串。
+        error_message:
+          type: string
+        parent_job_id:
+          type: string
+          nullable: true
+          description: 由 rerun 产生时指向原任务。
+        created_at:
+          type: string
+          nullable: true
+        finished_at:
+          type: string
+          nullable: true
+    OcrJobPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OcrJobSummary'
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+    OcrJobResultsDeleted:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 任务 ID。
+        results_deleted:
+          type: boolean
+          enum: [true]
+
+    # ---------- Results ----------
+    ResultCell:
+      type: object
+      description: 旧版逐页结果的表格单元格。
+      properties:
+        row_index:
+          type: integer
+          minimum: 0
+        column_index:
+          type: integer
+          minimum: 0
+        row_span:
+          type: integer
+        column_span:
+          type: integer
+        raw_text:
+          type: string
+          description: OCR 原始文本（编辑后保留）。
+        current_text:
+          type: string
+          description: 当前文本（可编辑）。
+        polygon:
+          type: array
+          items: {}
+          description: 厂商返回的坐标。
+        confidence:
+          type: number
+        review_status:
+          type: string
+          enum: [UNREVIEWED, EDITED, CONFIRMED]
+    ResultTable:
+      type: object
+      properties:
+        table_id:
+          type: string
+          example: table_1
+        row_count:
+          type: integer
+        column_count:
+          type: integer
+        cells:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResultCell'
+    ResultField:
+      type: object
+      properties:
+        name:
+          type: string
+        value:
+          type: string
+        source:
+          type: string
+        source_page:
+          type: integer
+    ResultPage:
+      type: object
+      description: 旧版逐页结果。
+      properties:
+        page_number:
+          type: integer
+          description: 原始页码（1 起）。
+        text:
+          type: string
+        tables:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResultTable'
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResultField'
+    ResultVersion:
+      type: object
+      description: 任务当前结果版本视图。
+      properties:
+        job_id:
+          type: string
+        version:
+          type: integer
+          description: 当前版本号（每次内容修改 +1），PATCH 时作为 expected_version。
+        review_status:
+          type: string
+          enum: [UNREVIEWED, EDITED, CONFIRMED]
+        page_count:
+          type: integer
+        table_count:
+          type: integer
+        field_count:
+          type: integer
+        missing_pages:
+          type: array
+          description: PARTIAL_SUCCESS 时缺失的页码。
+          items:
+            type: integer
+        structured:
+          description: |
+            结构化结果（任意 JSON 对象或数组，保留键顺序）。TextIn Prompt 任务为结构化 JSON；旧版逐页结果折算为 `{fields: {名称: 值}, tables: [[[单元格文本]]]}`。
+        pages:
+          type: array
+          description: 旧版逐页数据；TextIn Prompt 任务为空数组。
+          items:
+            $ref: '#/components/schemas/ResultPage'
+    ResultCellEdit:
+      type: object
+      required: [page_number, table_id, row_index, column_index, current_text]
+      properties:
+        page_number:
+          type: integer
+          minimum: 1
+        table_id:
+          type: string
+          minLength: 1
+        row_index:
+          type: integer
+          minimum: 0
+        column_index:
+          type: integer
+          minimum: 0
+        current_text:
+          type: string
+          maxLength: 4000
+    ResultUpdateRequest:
+      type: object
+      required: [expected_version]
+      properties:
+        expected_version:
+          type: integer
+          description: 客户端所见的当前版本号（须为整数，不接受布尔值）。
+        structured:
+          description: 完整结构化 JSON（对象或数组，紧凑序列化后 ≤ 2,000,000 字节）；与非空 edits 互斥。
+        edits:
+          type: array
+          description: 旧版逐页结果的单元格编辑；与 structured 互斥。
+          items:
+            $ref: '#/components/schemas/ResultCellEdit'
+        confirm:
+          type: boolean
+          default: false
+          description: 为真时仅已注册非游客可确认并完成；游客 401 auth.login_required，已登录未注册 403 registration.required，拒绝前不写版本/状态。false 仍可保存草稿。
+
+    # ---------- Exports ----------
+    ExportCreateRequest:
+      type: object
+      required: [format]
+      properties:
+        format:
+          type: string
+          enum: [XLSX, CSV, TXT]
+          description: 大小写不敏感。
+    ExportJob:
+      type: object
+      description: 导出记录（Export.to_dict）。时间为 UTC ISO 8601，无时区后缀。
+      properties:
+        id:
+          type: string
+        job_id:
+          type: string
+        result_version_id:
+          type: string
+          description: 导出所基于的结果版本 ID。
+        format:
+          type: string
+          enum: [XLSX, CSV, TXT]
+        status:
+          type: string
+          enum: [GENERATING, READY, EXPIRED, FAILED]
+        expires_at:
+          type: string
+          nullable: true
+          description: 过期时间（创建后 24 小时）。
+        created_at:
+          type: string
+          nullable: true
+
+    EnterpriseStatus:
+      type: string
+      description: 公司审核状态。PENDING_VERIFICATION=待审核；VERIFIED=已生效；SUSPENDED=已暂停；DISABLED=审核不通过/停用。
+      enum: [PENDING_VERIFICATION, VERIFIED, SUSPENDED, DISABLED]
+
+    MembershipRole:
+      type: string
+      description: 成员角色。
+      enum: [OWNER, ADMIN, MEMBER]
+
+    Enterprise:
+      type: object
+      description: 公司（enterprises 表，Enterprise.to_dict()）。enterprises 是企业租户的 1:1 扩展，业务数据一律挂在 tenant_id 上。
+      required: [id, tenant_id, code, country, legal_name, registration_no, contact_phone, cert_file_id, status, verified_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 公司 ID（自增）。
+        tenant_id:
+          type: integer
+          format: int64
+          description: 对应的企业租户 ID（tenants.id，一对一）；文件、OCR 任务、成员、订阅等均以此归属。
+        code:
+          type: string
+          maxLength: 32
+          description: 公司编号（系统生成，格式 `ent-YYMMDD-xxxxxx`），用于按编号绑定。
+          example: ent-261018-a1b2c3
+        country:
+          type: string
+          maxLength: 8
+          description: 国家代码，默认 TH。
+          example: TH
+        legal_name:
+          type: string
+          maxLength: 255
+          description: 公司名称。
+        registration_no:
+          type: string
+          maxLength: 64
+          description: 公司代码（注册号）。
+        contact_phone:
+          type: string
+          maxLength: 32
+          description: 联系人手机号，可为空串。
+        cert_file_id:
+          type: string
+          nullable: true
+          maxLength: 36
+          description: 证明材料文件 ID（files.id，purpose=APPLICATION_MATERIAL）；未上传为 null。
+        status:
+          $ref: '#/components/schemas/EnterpriseStatus'
+        verified_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            认证通过时间（UTC）；status 首次变为 VERIFIED 时由服务端补填。企业租户的默认一个月 Kinder
+            自此起算；为 null 表示尚未认证，该租户没有订阅行（订阅 status=NONE）。
+
+    MyCompany:
+      description: 我的公司列表项：公司信息 + 我的角色与成员状态。
+      allOf:
+        - $ref: '#/components/schemas/Enterprise'
+        - type: object
+          required: [my_role, membership_status]
+          properties:
+            my_role:
+              $ref: '#/components/schemas/MembershipRole'
+            membership_status:
+              type: string
+              description: 我在该公司的成员状态（列表只包含 PENDING 与 ACTIVE）。
+              enum: [PENDING, ACTIVE]
+
+    EnterpriseUpsertRequest:
+      type: object
+      description: 添加/修改公司请求体。所有字符串字段会先 trim 再校验。
+      required: [legal_name, registration_no]
+      properties:
+        legal_name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: 公司名称（必填）。
+        registration_no:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: 公司代码/注册号（必填）。
+        contact_phone:
+          type: string
+          maxLength: 32
+          description: 联系人手机号（可选，未提供为空串）。
+        cert_file_id:
+          type: string
+          nullable: true
+          description: 证明材料文件 ID；须为本人上传、purpose=APPLICATION_MATERIAL 且 status=READY 的文件。可选；修改时为空则保留原值。
+
+    EnterpriseBindRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          minLength: 1
+          description: 公司编号（enterprises.code，trim 后非空；服务端不校验格式）。
+          example: ent-261018-a1b2c3
+
+    EnterpriseJoinResult:
+      type: object
+      description: 绑定或兑换邀请成功后的结果。
+      required: [enterprise, role]
+      properties:
+        enterprise:
+          $ref: '#/components/schemas/Enterprise'
+        role:
+          $ref: '#/components/schemas/MembershipRole'
+
+    EnterpriseUnbindResult:
+      type: object
+      required: [enterprise_id, status]
+      properties:
+        enterprise_id:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum: [LEFT]
+
+    MembershipApplicationRequest:
+      type: object
+      properties:
+        message:
+          type: string
+          maxLength: 500
+          description: 申请留言（可选，trim 后不超过 500 字符）。
+
+    MembershipApplication:
+      type: object
+      description: 入企申请单（applications 表，Application.to_dict()）。时间为 UTC，ISO 8601 无时区后缀。
+      required: [id, type, status, form, version, review_note, target_tenant_id, submitted_at, created_at, updated_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        type:
+          type: string
+          description: 申请类型，本接口固定为 MEMBERSHIP。
+          enum: [MEMBERSHIP]
+        status:
+          type: string
+          description: 申请状态；新提交为 SUBMITTED。
+          enum: [DRAFT, SUBMITTED, UNDER_REVIEW, NEEDS_INFO, APPROVED, REJECTED, WITHDRAWN]
+        form:
+          type: object
+          description: 表单快照。
+          properties:
+            message:
+              type: string
+              description: 申请留言（可为空串）。
+            enterprise_code:
+              type: string
+              description: 目标公司编号。
+        version:
+          type: integer
+          description: 乐观并发版本号，新建为 1。
+        review_note:
+          type: string
+          maxLength: 512
+          description: 审核备注，新建为空串。
+        target_tenant_id:
+          type: integer
+          format: int64
+          description: 目标公司的企业租户 ID（enterprises.tenant_id）。
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    InvitationCreateRequest:
+      type: object
+      properties:
+        max_uses:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 1
+          description: 最大可兑换次数。
+        ttl_hours:
+          type: integer
+          minimum: 1
+          maximum: 720
+          default: 72
+          description: 有效期（小时），最长 30 天。
+
+    Invitation:
+      type: object
+      description: 创建邀请的返回结果；token 明文仅在此返回一次。
+      required: [id, token, url, expires_at, max_uses]
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 邀请 ID。
+        token:
+          type: string
+          description: 邀请令牌明文（URL-safe，32 字符左右）。
+        url:
+          type: string
+          nullable: true
+          description: 加入链接 `{APP_BASE_URL}/join?token=...`；未配置 APP_BASE_URL 时为 null。
+        expires_at:
+          type: string
+          format: date-time
+          description: 过期时间（UTC，ISO 8601 无时区后缀）。
+        max_uses:
+          type: integer
+          description: 最大可兑换次数。
+
+    InvitationRedeemRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: 邀请令牌明文。
+
+    InvitationRevokeResult:
+      type: object
+      required: [id, status]
+      properties:
+        id:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum: [REVOKED]

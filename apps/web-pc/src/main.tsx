@@ -1,9 +1,14 @@
-import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
-import './i18n';
-import App from './App';
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
 
-createRoot(document.getElementById('root')!).render(
+import "@saiflow/ui/styles/fonts.css";
+import "@saiflow/ui/styles/tokens.css";
+import "@saiflow/ui/styles/brand.css";
+import "./styles/app.css";
+
+import { App } from "./App";
+
+createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <App />
   </StrictMode>,

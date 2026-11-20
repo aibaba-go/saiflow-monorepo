@@ -1,0 +1,99 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+import { BrandLoading } from "../../components/BrandLoading";
+import { ErrorText } from "../../components/ErrorText";
+import { useSubmit } from "../../hooks/useSubmit";
+import { useT } from "../../i18n";
+import { useSession } from "../../stores/session";
+import { formatBangkokDateTime } from "../../utils/format";
+import { useTenantChoice } from "../tenants/useCurrentTenant";
+import { useMarkRead, useNotificationPages } from "./data";
+import { renderNotification, type NotificationItem } from "./render";
+import { Button } from "../../components/ui/button";
+
+/** The notification center (FR-SYS-054): newest first, read or unread, never deleted. */
+export function NotificationsPage() {
+  const t = useT();
+  const tenants = useSession((s) => s.tenants);
+  const pages = useNotificationPages();
+  const markRead = useMarkRead();
+  const [error, setError] = useState<unknown>(null);
+  const [handled, setHandled] = useState(false);
+  const all = useSubmit(async () => {
+    try {
+      await markRead();
+    } catch (err) {
+      setError(err);
+    }
+  });
+
+  const tenantName = (id: number) => {
+    const tenant = tenants.find((x) => x.tenant_id === id);
+    if (!tenant) return t("tenant.left"); // an organization the user has left
+    return tenant.kind === "organization" ? (tenant.name ?? "") : t("tenant.personal");
+  };
+  const navigate = useNavigate();
+  const choose = useTenantChoice((s) => s.choose);
+  const current = useTenantChoice((s) => s.id);
+  const open = async (n: NotificationItem) => {
+    if (!n.read) {
+      try {
+        await markRead([n.id]);
+      } catch (err) {
+        setError(err);
+        return;
+      }
+    }
+    // a review notice opens the review detail in its organization (FR-SYS-054)
+    const jobId = (n.data as Record<string, unknown>).job_id;
+    if (n.type === "review_pending" && typeof jobId === "string") {
+      if (!tenants.some((x) => x.tenant_id === n.tenant_id)) {
+        setHandled(true); // no longer a member: nothing to review there
+        return;
+      }
+      if (current !== n.tenant_id) choose(n.tenant_id);
+      navigate(`/reviews/${jobId}`);
+    }
+  };
+
+  if (pages.isPending) return <BrandLoading label={t("common.loading")} />;
+  if (pages.isError) return <ErrorText error={pages.error} />;
+  const items = pages.data.pages.flatMap((p) => p.items);
+  const unread = pages.data.pages[0]?.unread_count ?? 0;
+
+  return (
+    <div className="page">
+      <h1 className="page__title">{t("notif.title")}</h1>
+      {unread > 0 && (
+        <Button size="sm" loading={all.pending} onClick={() => void all.run()}>
+          {t("notif.markAll")}
+        </Button>
+      )}
+      <ErrorText error={error} />
+      {handled && <div className="card-row__meta" role="status">{t("review.handled")}</div>}
+      {items.length === 0 && <div className="card-row__meta">{t("notif.empty")}</div>}
+      {items.map((n) => {
+        const { title, body } = renderNotification(n, t, tenantName(n.tenant_id));
+        return (
+          <button
+            key={n.id}
+            type="button"
+            className={`card-row notif ${n.read ? "notif--read" : "notif--unread"}`}
+            aria-label={n.read ? undefined : t("notif.unreadItem", { title })}
+            onClick={() => void open(n)}
+          >
+            <span className="card-row__title">{title}</span>
+            <span className="card-row__meta">{body}</span>
+            <span className="card-row__meta">{formatBangkokDateTime(n.created_at)}</span>
+          </button>
+        );
+      })}
+      {pages.hasNextPage && (
+        <Button loading={pages.isFetchingNextPage} onClick={() => void pages.fetchNextPage()}>
+          {t("notif.loadMore")}
+        </Button>
+      )}
+    </div>
+  );
+}

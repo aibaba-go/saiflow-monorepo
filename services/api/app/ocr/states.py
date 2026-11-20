@@ -1,0 +1,68 @@
+"""The one place status values come from (ADR-009 T3); the CHECK constraints in migration
+0009 are frozen copies of these tuples."""
+
+# files.status (FR-UPLOAD-010)
+FILE_STATUSES = ("UPLOADING", "UPLOADED", "READY", "REJECTED", "DELETED")
+
+# ocr_jobs.status (FR-OCR-017)
+QUEUED, PREPROCESSING, PROCESSING, POSTPROCESSING = (
+    "QUEUED",
+    "PREPROCESSING",
+    "PROCESSING",
+    "POSTPROCESSING",
+)
+SUCCEEDED, PARTIAL_SUCCESS, FAILED = "SUCCEEDED", "PARTIAL_SUCCESS", "FAILED"
+CANCEL_REQUESTED, CANCELLED = "CANCEL_REQUESTED", "CANCELLED"
+JOB_STATUSES = (
+    QUEUED,
+    PREPROCESSING,
+    PROCESSING,
+    POSTPROCESSING,
+    SUCCEEDED,
+    PARTIAL_SUCCESS,
+    FAILED,
+    CANCEL_REQUESTED,
+    CANCELLED,
+)
+TERMINAL = (SUCCEEDED, PARTIAL_SUCCESS, FAILED, CANCELLED)
+RUNNING = (QUEUED, PREPROCESSING, PROCESSING, POSTPROCESSING, CANCEL_REQUESTED)
+SUCCESS = (SUCCEEDED, PARTIAL_SUCCESS)
+
+# ocr_jobs.review_status (FR-VERIFY-009, 011): CONFIRMED is official business data;
+# PENDING_L1 / PENDING_L2 wait for review (review-flow)
+PENDING_L1, PENDING_L2, CONFIRMED = "PENDING_L1", "PENDING_L2", "CONFIRMED"
+REVIEW_STATUSES = ("UNREVIEWED", "EDITED", PENDING_L1, PENDING_L2, CONFIRMED)
+PENDING_REVIEW = (PENDING_L1, PENDING_L2)
+LOCKED = (PENDING_L1, PENDING_L2, CONFIRMED)  # no saving, confirming or switching (FR-VERIFY-006)
+
+# Task stages (FR-VERIFY-017)
+STAGES = (
+    "OCR_PROCESSING",
+    "OCR_FAILED",
+    "TEMPLATE_MATCHING",
+    "VERIFYING",
+    "PENDING_REVIEW",
+    "CONFIRMED",
+)
+
+# template_mappings
+MAPPING_SOURCES = ("AUTO", "MANUAL")
+PENDING, MATCHING, CONVERTING, READY = "PENDING", "MATCHING", "CONVERTING", "READY"
+MAPPING_STATUSES = (PENDING, MATCHING, CONVERTING, READY, FAILED)
+MAPPING_IN_PROGRESS = (PENDING, MATCHING, CONVERTING)
+
+# document_templates.status
+TEMPLATE_STATUSES = ("ENABLED", "DISABLED")
+
+# exports
+EXPORT_FORMATS = ("XLSX",)
+EXPORT_STATUSES = ("GENERATING", "READY", "EXPIRED", "FAILED")
+
+# OCR engines (FR-SYS-005): the selectable ones, also the engine health rows
+ENGINES = ("textin", "google_docai")
+# what jobs and raw results may record: Google Cloud Vision results stay as history
+RECORDED_ENGINES = ("textin", "google_vision", "google_docai")
+
+
+def sql_in(values: tuple[str, ...]) -> str:
+    return ", ".join(f"'{v}'" for v in values)

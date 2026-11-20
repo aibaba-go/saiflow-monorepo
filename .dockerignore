@@ -1,0 +1,15 @@
+# Frontend image build context is the repo root; send only what pnpm needs.
+.git
+**/node_modules
+**/dist
+legacy
+docs
+openspec
+services
+temp
+.superpowers
+.claude
+.idea
+.obsidian
+**/.env
+**/.env.*

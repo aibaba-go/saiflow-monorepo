@@ -1,0 +1,190 @@
+# SaiFlow stack on the VPS (ADR-008). Lives in /opt/saiflow next to .env (mode 600).
+#   docker compose up -d postgres
+#   bash db-roles.sh                     # database accounts (needs DB_MIGRATE_PASSWORD)
+#   docker compose run --rm saiflow-be-migrate alembic upgrade head
+#   docker compose up -d --remove-orphans
+name: saiflow
+
+x-common: &common
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+services:
+  postgres:
+    <<: *common
+    image: postgres:18
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: saiflow
+      DB_PASSWORD: ${DB_PASSWORD:?}
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    # No ports: reachable only on the internal network (FR-PLAT-005, AC-005-06).
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d saiflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  saiflow-be-api:
+    <<: *common
+    image: ${IMAGE_REGISTRY:-ghcr.io/aibaba-go}/saiflow-be-api:${IMAGE_TAG:?}
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: saiflow
+      DB_USER: saiflow_v3_app
+      DB_PASSWORD: ${DB_PASSWORD:?}
+      # Trust X-Forwarded-For so the guest rate limit sees the visitor's IP (AC-FR-SYS-010-07).
+      # Safe: this service publishes no port, only Caddy reaches it, and Caddy replaces any
+      # X-Forwarded-For sent by the client.
+      FORWARDED_ALLOW_IPS: "*"
+      # LINE login and SMTP (FR-SYS-001, FR-SYS-020); empty = that feature answers 503
+      LINE_CHANNEL_ID: ${LINE_CHANNEL_ID:-}
+      LINE_CHANNEL_SECRET: ${LINE_CHANNEL_SECRET:-}
+      LINE_LOGIN_REDIRECT_URIS: ${LINE_LOGIN_REDIRECT_URIS:-}
+      # web-pc's own LINE Login channel (same provider); empty = web login uses LINE_CHANNEL_ID
+      LINE_WEB_CHANNEL_ID: ${LINE_WEB_CHANNEL_ID:-}
+      LINE_WEB_CHANNEL_SECRET: ${LINE_WEB_CHANNEL_SECRET:-}
+      # web-pc's public origin: the admin's "log in as this user" link points here (FR-SYS-145)
+      WEB_PC_ORIGIN: https://${APP_HOST:?}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+      # OCR engine and LLM keys (FR-SYS-005); the admin console shows only configured or not
+      TEXTIN_APP_ID: ${TEXTIN_APP_ID:-}
+      TEXTIN_SECRET_CODE: ${TEXTIN_SECRET_CODE:-}
+      # Document AI OCR (backup engine) signs in with GCS_CREDENTIALS_FILE (FR-OCR-027)
+      DOCAI_PROJECT_ID: ${DOCAI_PROJECT_ID:-}
+      DOCAI_LOCATION: ${DOCAI_LOCATION:-asia-southeast1}
+      DOCAI_PROCESSOR_ID: ${DOCAI_PROCESSOR_ID:-}
+      DOCAI_PROCESSOR_VERSION: ${DOCAI_PROCESSOR_VERSION:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      # Originals, previews and exports (ocr-scan-flow, ADR-008); empty bucket = uploads 503
+      GCS_BUCKET: ${GCS_BUCKET:-}
+      GCS_CREDENTIALS_FILE: ${GCS_CREDENTIALS_FILE:-}
+      # Signs 60-second export download tickets (FR-ENTRY-015); empty = tickets 503
+      DOWNLOAD_TICKET_SECRET: ${DOWNLOAD_TICKET_SECRET:-}
+    volumes:
+      - ./secrets:/run/secrets:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Recognition and template conversion (ocr-scan-flow, FR-OCR-022): its own process, never
+  # inside the web service. OCR_WORKER_ENABLED=false in .env keeps it idle.
+  saiflow-be-ocr:
+    <<: *common
+    image: ${IMAGE_REGISTRY:-ghcr.io/aibaba-go}/saiflow-be-api:${IMAGE_TAG:?}
+    command: ["python", "-m", "app.cli", "ocr-worker-loop"]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: saiflow
+      DB_USER: saiflow_v3_app
+      DB_PASSWORD: ${DB_PASSWORD:?}
+      GCS_BUCKET: ${GCS_BUCKET:-}
+      GCS_CREDENTIALS_FILE: ${GCS_CREDENTIALS_FILE:-}
+      TEXTIN_APP_ID: ${TEXTIN_APP_ID:-}
+      TEXTIN_SECRET_CODE: ${TEXTIN_SECRET_CODE:-}
+      # Document AI OCR (backup engine) signs in with GCS_CREDENTIALS_FILE (FR-OCR-027)
+      DOCAI_PROJECT_ID: ${DOCAI_PROJECT_ID:-}
+      DOCAI_LOCATION: ${DOCAI_LOCATION:-asia-southeast1}
+      DOCAI_PROCESSOR_ID: ${DOCAI_PROCESSOR_ID:-}
+      DOCAI_PROCESSOR_VERSION: ${DOCAI_PROCESSOR_VERSION:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      OCR_WORKER_ENABLED: ${OCR_WORKER_ENABLED:-true}
+    volumes:
+      - ./secrets:/run/secrets:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Reminder passes (rebuild-notifications, FR-SYS-037): expiry, usage and free-quota
+  # reminders, at least every 30 minutes. REMINDERS_ENABLED=false in .env stops sending.
+  saiflow-be-reminders:
+    <<: *common
+    image: ${IMAGE_REGISTRY:-ghcr.io/aibaba-go}/saiflow-be-api:${IMAGE_TAG:?}
+    command: ["python", "-m", "app.cli", "reminders-loop"]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: saiflow
+      DB_USER: saiflow_v3_app
+      DB_PASSWORD: ${DB_PASSWORD:?}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+      REMINDERS_ENABLED: ${REMINDERS_ENABLED:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Runs migrations as the account that owns the schema; never started by `up`
+  # (harden-identity, AC-FR-SYS-003-06). remote-deploy.sh checks DB_MIGRATE_PASSWORD first,
+  # so a missing value fails the deploy without breaking other compose commands (backups).
+  saiflow-be-migrate:
+    image: ${IMAGE_REGISTRY:-ghcr.io/aibaba-go}/saiflow-be-api:${IMAGE_TAG:?}
+    profiles: ["tools"]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: saiflow
+      DB_USER: saiflow_v3_migrator
+      DB_PASSWORD: ${DB_MIGRATE_PASSWORD:-}
+      DB_APP_USER: saiflow_v3_app
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  saiflow-fe-web-pc:
+    <<: *common
+    image: ${IMAGE_REGISTRY:-ghcr.io/aibaba-go}/saiflow-fe-web-pc:${IMAGE_TAG:?}
+
+  saiflow-fe-web-admin:
+    <<: *common
+    image: ${IMAGE_REGISTRY:-ghcr.io/aibaba-go}/saiflow-fe-web-admin:${IMAGE_TAG:?}
+
+  saiflow-fe-line-mini:
+    <<: *common
+    image: ${IMAGE_REGISTRY:-ghcr.io/aibaba-go}/saiflow-fe-line-mini:${IMAGE_TAG:?}
+
+  caddy:
+    <<: *common
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      APP_HOST: ${APP_HOST:?}
+      ADMIN_HOST: ${ADMIN_HOST:?}
+      LINE_HOST: ${LINE_HOST:?}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - saiflow-be-api
+      - saiflow-fe-web-pc
+      - saiflow-fe-web-admin
+      - saiflow-fe-line-mini
+
+volumes:
+  pgdata:
+    name: ${POSTGRES_VOLUME:-saiflow_pgdata}
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,136 @@
+/* Login panel (FR-SYS-153, 154): a branded header, LINE first, then the email forms. */
+.sheet {
+  padding: 18px 18px max(18px, env(safe-area-inset-bottom));
+}
+.head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.mark {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: linear-gradient(150deg, var(--brand-navy), var(--brand-blue) 70%, var(--brand-teal));
+  color: var(--brand-on-navy);
+  font-size: 19px;
+  font-weight: 800;
+  box-shadow: 0 6px 16px rgb(26 111 232 / 0.28);
+}
+.titles {
+  flex: 1;
+  min-width: 0;
+}
+.title {
+  margin: 0;
+  font-size: 19px;
+  line-height: 26px;
+  color: var(--brand-navy);
+}
+.subtitle {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-secondary);
+}
+.close {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+}
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.line {
+  min-height: 48px;
+  border-radius: 12px;
+  background: var(--line-green);
+  color: var(--brand-on-navy);
+  font-size: 16px;
+  box-shadow: 0 6px 16px rgb(6 199 85 / 0.25);
+}
+.line:hover,
+.line:active {
+  background: var(--line-green-pressed);
+}
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--surface-muted);
+}
+.tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  transition: background 150ms ease, color 150ms ease;
+}
+.tab[aria-selected="true"] {
+  background: var(--surface);
+  color: var(--primary-pressed);
+  box-shadow: 0 1px 4px rgb(10 37 64 / 0.12);
+}
+.link {
+  align-self: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  color: var(--primary-pressed);
+  font-size: 14px;
+  font-weight: 600;
+}
+.hint {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--info-bg);
+  color: var(--info-text);
+  font-size: 13px;
+  line-height: 19px;
+}
+.hint svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}

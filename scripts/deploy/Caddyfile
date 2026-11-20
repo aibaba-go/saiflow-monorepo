@@ -1,0 +1,30 @@
+# HTTPS entry (ADR-008). Each site serves one frontend; /api/* on every site goes to
+# the backend, so frontends and backend share an origin. Site names come from .env;
+# *.localhost names (CI) get certificates from Caddy's internal CA automatically.
+
+{$APP_HOST} {
+	handle /api/* {
+		reverse_proxy saiflow-be-api:8000
+	}
+	handle {
+		reverse_proxy saiflow-fe-web-pc:8080
+	}
+}
+
+{$ADMIN_HOST} {
+	handle /api/* {
+		reverse_proxy saiflow-be-api:8000
+	}
+	handle {
+		reverse_proxy saiflow-fe-web-admin:8080
+	}
+}
+
+{$LINE_HOST} {
+	handle /api/* {
+		reverse_proxy saiflow-be-api:8000
+	}
+	handle {
+		reverse_proxy saiflow-fe-line-mini:8080
+	}
+}

@@ -1,35 +1,31 @@
-import i18n from 'i18next';
-import { initReactI18next } from 'react-i18next';
-import { translations, type UiLanguage } from './locales';
+// Ported from apps/line-mini/src/i18n/index.ts (web-pc-account plan: copied, not shared).
+import { useCallback } from "react";
 
-export const LANGUAGE_STORAGE_KEY = 'saiflow.web-pc.language';
-export const DEFAULT_LANGUAGE: UiLanguage = 'th';
+import { useLanguage, type Lang } from "../stores/language";
+import { en, type MessageKey } from "./en";
+import { th } from "./th";
+import { zh } from "./zh";
 
-export function isUiLanguage(value: unknown): value is UiLanguage {
-  return value === 'th' || value === 'en' || value === 'zh';
+export type { MessageKey } from "./en";
+export type Vars = Record<string, string | number>;
+export type T = (key: MessageKey, vars?: Vars) => string;
+
+const DICTIONARIES: Record<Lang, Record<MessageKey, string>> = { en, th, zh };
+
+export function translate(lang: Lang, key: MessageKey, vars?: Vars): string {
+  const text = DICTIONARIES[lang][key] ?? en[key] ?? key;
+  if (!vars) return text;
+  return text.replace(/\{(\w+)\}/g, (match, name: string) =>
+    name in vars ? String(vars[name]) : match,
+  );
 }
 
-/** 从 localStorage 恢复上次选择的语言（无记录时回落默认泰语）。 */
-export function readStoredLanguage(): UiLanguage {
-  if (typeof window === 'undefined') return DEFAULT_LANGUAGE;
-  const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
-  return isUiLanguage(stored) ? stored : DEFAULT_LANGUAGE;
+export function isMessageKey(key: string): key is MessageKey {
+  return key in en;
 }
 
-export function storeLanguage(language: UiLanguage): void {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+/** t() for the current language; components re-render when the language changes. */
+export function useT(): T {
+  const lang = useLanguage((s) => s.lang);
+  return useCallback((key: MessageKey, vars?: Vars) => translate(lang, key, vars), [lang]);
 }
-
-void i18n.use(initReactI18next).init({
-  resources: {
-    th: { translation: translations.th },
-    en: { translation: translations.en },
-    zh: { translation: translations.zh },
-  },
-  lng: readStoredLanguage(),
-  fallbackLng: DEFAULT_LANGUAGE,
-  interpolation: { escapeValue: false },
-});
-
-export default i18n;

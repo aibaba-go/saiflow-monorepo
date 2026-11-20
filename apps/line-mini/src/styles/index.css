@@ -1,0 +1,46 @@
+/* LINE mini app styles: Tailwind with the STD-008 theme (ADR-010 §1). */
+@import "tailwindcss";
+@import "@saiflow/ui/styles/fonts.css";
+@import "@saiflow/ui/styles/tokens.css";
+@import "@saiflow/ui/styles/brand.css";
+@import "@saiflow/ui/styles/theme.css";
+
+/* mini app density (STD-008 §5, §6; FR-SYS-134) */
+:root {
+  --card-radius: 14px;
+  --control-radius: 10px;
+  --control-h: 44px;
+  /* bottom TabBar: 6 + 50 + 8 padding/tab + 1 border; pages reserve it plus the safe area */
+  --tabbar-h: 65px;
+  --tabbar-space: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 16px);
+}
+
+body {
+  font-size: 15px;
+  line-height: 24px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-stack);
+}
+
+/* Tailwind's reset sets headings to the body weight and removes paragraph margins; the
+ * pages were written for browser defaults (final review I1). In the base layer, so a
+ * utility class (font-normal, m-0) still wins. */
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-weight: 600;
+  }
+  p {
+    margin: 1em 0;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}

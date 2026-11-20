@@ -1,23 +1,25 @@
-import '@testing-library/jest-dom/vitest';
+import "@testing-library/jest-dom/vitest";
 
-// jsdom 缺少 matchMedia，AntD 组件依赖时的最小 polyfill
-if (typeof window !== 'undefined' && !window.matchMedia) {
-  Object.defineProperty(window, 'matchMedia', {
-    writable: true,
-    value: (query: string) => ({
+import { cleanup, configure } from "@testing-library/react";
+import { afterEach } from "vitest";
+
+// Ant Design reads matchMedia for responsive behaviour; jsdom does not provide it.
+if (!window.matchMedia) {
+  window.matchMedia = (query: string) =>
+    ({
       matches: false,
       media: query,
       onchange: null,
-      addListener: () => undefined,
-      removeListener: () => undefined,
-      addEventListener: () => undefined,
-      removeEventListener: () => undefined,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
       dispatchEvent: () => false,
-    }),
-  });
+    }) as MediaQueryList;
 }
 
-// 每个测试用例之间清空 localStorage，避免会话/语言串扰
-beforeEach(() => {
-  window.localStorage.clear();
-});
+// The whole app renders in each page test; its first render (antd cold start) can take
+// over the 1 s default when every package's tests run at once (`pnpm -r test`).
+configure({ asyncUtilTimeout: 5000 });
+
+afterEach(() => cleanup());

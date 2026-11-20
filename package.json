@@ -2,11 +2,27 @@
   "name": "saiflow",
   "private": true,
   "description": "SaiFlow monorepo — 前端（apps/、packages/，pnpm workspace）+ 后端（services/，Python，独立工具链）",
+  "type": "module",
+  "packageManager": "pnpm@12.11.2",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "dev:web-pc": "pnpm --filter @saiflow/web-pc dev",
+    "dev:web-admin": "pnpm --filter @saiflow/web-admin dev",
     "dev:line-mini": "pnpm --filter @saiflow/line-mini dev",
+    "generate:api-client": "bash packages/api-client/scripts/generate.sh",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.14.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.14.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^5.0.5"
   }
 }

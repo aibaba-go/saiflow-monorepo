@@ -1,0 +1,45 @@
+/* The scan pages' frame (FR-SYS-118 layout). Colours and fonts come from the STD-008 tokens
+ * (@saiflow/ui tokens.css); .tokens stays for portals (the viewer) that leave the page root. */
+.tokens {
+  color: var(--text);
+  font-family: var(--font-stack);
+}
+
+/* A page root: the tokens plus main's page frame. Portals (the viewer) use .tokens. */
+.scan {
+  composes: tokens;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-stack);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding-bottom: var(--tabbar-space); /* the bottom navigation and the safe area */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  --page-x: 16px;
+}
+
+/* the 360px breakpoint of the prototype: a little less side room */
+@media (max-width: 360px) {
+  .scan {
+    --page-x: 15px;
+  }
+}
+
+.tokens *,
+.tokens *::before,
+.tokens *::after {
+  box-sizing: border-box;
+}
+
+/* zero specificity, so a component's own button class (padding, border, background) wins */
+:where(.tokens) button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+  color: inherit;
+}

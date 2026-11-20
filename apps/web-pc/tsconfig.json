@@ -1,4 +1,7 @@
 {
-  "files": [],
-  "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.node.json" }]
+  "extends": "@saiflow/tsconfig/react-app.json",
+  "include": [
+    "src",
+    "vite.config.ts"
+  ]
 }

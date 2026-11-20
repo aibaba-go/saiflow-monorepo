@@ -1,0 +1,180 @@
+# CI for every push to chore/ai-workflow-v2 and every PR. Never deploys (FR-PLAT-005).
+name: CI
+
+on:
+  push:
+    branches: [chore/ai-workflow-v2]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: saiflow_test
+          POSTGRES_PASSWORD: ci-throwaway-db
+          # NFR-DEV-003: integration tests only run against loopback saiflow_test_<name>
+          POSTGRES_DB: saiflow_test_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U saiflow_test -d saiflow_test_ci"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    defaults:
+      run:
+        working-directory: services/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.6"
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest -v
+        env:
+          REQUIRE_INTEGRATION: "1"
+          TEST_DB_HOST: localhost
+          TEST_DB_PORT: "5432"
+          TEST_DB_NAME: saiflow_test_ci
+          TEST_DB_USER: saiflow_test
+          TEST_DB_PASSWORD: ci-throwaway-db
+
+  frontend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r lint
+      - run: pnpm -r test
+      - run: pnpm -r build
+
+  contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.6"
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: bash packages/api-client/scripts/generate.sh
+      - name: api-client matches the backend (AC-FR-PLAT-004-01)
+        run: |
+          if ! bash scripts/check-generated-clean.sh docs/30-design/openapi.json packages/api-client/src/generated; then
+            echo "::error::api-client is out of date; run pnpm generate:api-client"
+            exit 1
+          fi
+
+  scripts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: >-
+          shellcheck scripts/*.sh scripts/deploy/*.sh scripts/deploy/postgres-init/*.sh
+          scripts/tests/*.sh scripts/tests/fakes/docker packages/api-client/scripts/*.sh
+      - name: script tests
+        run: |
+          status=0
+          for t in scripts/tests/*.test.sh; do
+            echo "== $t"; bash "$t" || status=1
+          done
+          exit "$status"
+      - name: no credentials in the repository (AC-FR-PLAT-005-04)
+        run: bash scripts/check-no-secrets.sh
+
+  stack:
+    runs-on: ubuntu-24.04
+    env:
+      IMAGE_TAG: ci
+      # runner.temp is not available in job-level env; a fixed path is fine on hosted runners.
+      STACK_DIR: /tmp/saiflow-stack
+    steps:
+      - uses: actions/checkout@v4
+      - name: build images
+        run: |
+          docker build -t ghcr.io/aibaba-go/saiflow-be-api:ci --build-arg APP_VERSION=ci services/api
+          for app in web-pc web-admin line-mini; do
+            docker build -f scripts/docker/frontend.Dockerfile --build-arg APP="$app" \
+              -t "ghcr.io/aibaba-go/saiflow-fe-$app:ci" .
+          done
+      - name: prepare stack directory
+        run: |
+          mkdir -p "$STACK_DIR"
+          cp -r scripts/deploy/compose.yaml scripts/deploy/Caddyfile scripts/deploy/postgres-init "$STACK_DIR/"
+          {
+            echo "POSTGRES_USER=saiflow_admin"
+            echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)"
+            echo "DB_PASSWORD=$(openssl rand -hex 16)"
+            echo "DB_MIGRATE_PASSWORD=$(openssl rand -hex 16)"
+            echo "APP_HOST=app.localhost"
+            echo "ADMIN_HOST=admin.localhost"
+            echo "LINE_HOST=line.localhost"
+            echo "IMAGE_TAG=ci"
+          } >"$STACK_DIR/.env"
+          chmod 600 "$STACK_DIR/.env"
+      - name: start stack and migrate
+        working-directory: ${{ env.STACK_DIR }}
+        run: |
+          docker compose up -d --wait postgres
+          # Start where servers set up before harden-identity are: schema created and owned
+          # by the app role (old flow, up to 0002). The old init script gave the app role
+          # CREATE; today's no longer does (M4), so grant it here; db-roles.sh revokes it.
+          docker compose exec -T postgres sh -c \
+            'psql -U "$POSTGRES_USER" -d saiflow -qc "GRANT CREATE ON DATABASE saiflow TO saiflow_v3_app"'
+          docker compose run --rm saiflow-be-api alembic upgrade 0002
+          DEPLOY_DIR="$STACK_DIR" bash "$GITHUB_WORKSPACE/scripts/deploy/db-roles.sh"
+          # The running backend must keep access between the role step and the migration.
+          docker compose exec -T postgres sh -c \
+            'PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -U saiflow_v3_app -d saiflow -tAc "select count(*) from saiflow_v3.tenants"'
+          docker compose run --rm saiflow-be-migrate alembic upgrade head
+          docker compose up -d --remove-orphans
+      - name: health through Caddy on all three sites
+        env:
+          SMOKE_INSECURE: "1"
+        run: |
+          for host in app.localhost admin.localhost line.localhost; do
+            bash scripts/smoke-check.sh "https://$host" ci --timeout-seconds 90
+          done
+      - name: reminder process runs a pass (FR-SYS-037)
+        working-directory: ${{ env.STACK_DIR }}
+        run: |
+          test "$(docker compose ps --status running -q saiflow-be-reminders)" != ""
+          docker compose exec -T saiflow-be-reminders python -m app.cli reminders-run-once             | grep -q '^reminders OK'
+      - name: database port is not published (AC-FR-PLAT-005-06)
+        working-directory: ${{ env.STACK_DIR }}
+        run: |
+          # `docker port` lists only published mappings; `docker compose port` prints ":0"
+          # for an unpublished port, so it cannot be used for this check.
+          cid="$(docker compose ps -q postgres)"
+          test -n "$cid" || { echo "::error::postgres container not found"; exit 1; }
+          published="$(docker port "$cid")"
+          if [ -n "$published" ]; then
+            echo "::error::postgres port is published: $published"; exit 1
+          fi
+      - name: backup and restore drill (AC-FR-PLAT-006-04)
+        working-directory: ${{ env.STACK_DIR }}
+        run: |
+          docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -Fc saiflow' >"$RUNNER_TEMP/ci.dump"
+          bash "$GITHUB_WORKSPACE/scripts/deploy/restore-check.sh" "$RUNNER_TEMP/ci.dump"
+      - name: logs on failure
+        if: failure()
+        working-directory: ${{ env.STACK_DIR }}
+        run: docker compose logs --no-color --tail 200

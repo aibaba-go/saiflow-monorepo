@@ -1,0 +1,14 @@
+# 源码上传排除项（gcloud run deploy --source 用），避免把 .venv 等大目录传给 Cloud Build
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.env.local
+.git/
+.gitignore
+.pytest_cache/
+tests/
+sample/
+storage/
+temp/
+uploads/

@@ -3,8 +3,8 @@ doc_id: EPIC-02
 title: "EPIC-02 — 多类型文档 OCR 识别"
 type: epic
 status: active
-version: 1.4.2
-updated: 2026-10-31
+version: 1.5.0
+updated: 2026-11-06
 owner: Product Engineering
 priority: P0
 source: "PRD-001 §4.2"
@@ -13,12 +13,14 @@ related: [DM-Document, DM-LineItem, DM-ExtractedField, DM-ExtractionPayload, DM-
 
 # EPIC-02 — 多类型文档 OCR 识别
 
+> **注意（2026-10-30）：** 本 Epic 尚未按 PRD v3 改写，与 `PRD-SaiFlow.md` v3.1 冲突时以 PRD 为准；将随 ADR-006 §7 的重建步骤迁入 `openspec/specs/`。文中引用的 `Architecture` / `Data-Model` 旧章节细节见 git tag `legacy-v1` 中的版本。
+
 > **核心模块。** 识别每一种支持的文档类型，提取其必需字段，处理泰语/英语/中文混合文本，对置信度评分，并将低置信度输出标记为需要人工核验。字段定义位于 `docs/30-design/Data-Model.md`；本 epic 定义必须识别的内容及规则。
 
 ## 1. Epic 摘要
-- **目标：** 将 TextIn 结果不可变保存，并以后台异步模板映射生成可核验的基于模板的解析结果。
-- **范围内：** 既有 OCR/TextIn 重试；FR-OCR-018..021 新增自动匹配、转换、独立 MappingWorker 与关系型原始快照。
-- **范围外：** 人工更正 UI（EPIC-03）、主数据映射与 3-way match（V2.0）、模板管理界面（EPIC-08 P1）、批量 Dataflow。模板映射不新增 doc_type 分类、字段置信度、日期/佛历标准化或金额计算；既有 FR-OCR-001..017 的历史目标不由本变更提前实现，差异见 §4.5。
+- **目标：** 将预处理后的文档图像经 TextIn 转换为可审计的原始 JSON，并映射为带置信度评分的结构化字段数据。
+- **范围内：** 文档类型处理、TextIn 调用、原始 JSON 保存、按类型字段提取、表格/行项目提取、混合语言识别、置信度评分、金额纠错、Cloud Functions 转换、失败重试和低置信度标记。
+- **范围外：** 人工更正 UI（EPIC-03）、主数据映射与 3-way match（V2.0）、模板配置界面（EPIC-08）、批量 Dataflow 实现。
 - **主要参与者：** 系统（自动）；P-01/P-02/P-04 使用结果。
 - **关键实体：** `DM-Document`、`DM-ExtractionPayload`、`DM-ConversionJob`、`DM-ExtractedField`、`DM-LineItem`。
 
@@ -27,10 +29,10 @@ related: [DM-Document, DM-LineItem, DM-ExtractedField, DM-ExtractionPayload, DM-
 | ID | 陈述（系统必须……） | 优先级 | 来源 | 依赖项 | 验证方式 |
 |----|--------------------|--------|------|--------|----------|
 | FR-OCR-001 | 在提取前确定/接受文档类型 | P0 | §4.2 | FR-UPLOAD-006 | AC-FR-OCR-001-01 |
-| FR-OCR-002 | 从 **Purchase Order（订单）**中提取必需字段 | P0 | §4.2 | FR-OCR-001 | AC-FR-OCR-002-01 |
-| FR-OCR-003 | 从 **Delivery Note** 中提取必需字段 | P0 | §4.2 | FR-OCR-001 | AC-FR-OCR-003-01 |
-| FR-OCR-004 | 从 **Invoice** 中提取必需字段 | P0 | §4.2 | FR-OCR-001 | AC-FR-OCR-004-01 |
-| FR-OCR-005 | 从 **Receipt** 中提取必需字段 | P0 | §4.2 | FR-OCR-001 | AC-FR-OCR-005-01 |
+| FR-OCR-002 | （V1.0 不预设该类型的模板：匹配不到模板时由自由格式承接，负责人 2026-11-06，`ocr-ui-parity` D4）从 **Purchase Order（订单）**中提取必需字段 | P0 | §4.2 | FR-OCR-001 | AC-FR-OCR-002-01 |
+| FR-OCR-003 | （V1.0 不预设该类型的模板：匹配不到模板时由自由格式承接，负责人 2026-11-06，`ocr-ui-parity` D4）从 **Delivery Note** 中提取必需字段 | P0 | §4.2 | FR-OCR-001 | AC-FR-OCR-003-01 |
+| FR-OCR-004 | （V1.0 不预设该类型的模板：匹配不到模板时由自由格式承接，负责人 2026-11-06，`ocr-ui-parity` D4）从 **Invoice** 中提取必需字段 | P0 | §4.2 | FR-OCR-001 | AC-FR-OCR-004-01 |
+| FR-OCR-005 | （V1.0 不预设该类型的模板：匹配不到模板时由自由格式承接，负责人 2026-11-06，`ocr-ui-parity` D4）从 **Receipt** 中提取必需字段 | P0 | §4.2 | FR-OCR-001 | AC-FR-OCR-005-01 |
 | FR-OCR-006 | 从 **Bill** 中提取必需字段 | P1 | §4.2 | FR-OCR-001 | AC-FR-OCR-006-01 |
 | FR-OCR-007 | 从 **Credit Note** 中提取必需字段 | P1 | §4.2 | FR-OCR-001 | AC-FR-OCR-007-01 |
 | FR-OCR-008 | 从 **Tax Receipt / Withholding Tax** 中提取必需字段 | P1 | §4.2 | FR-OCR-001 | AC-FR-OCR-008-01 |
@@ -38,15 +40,14 @@ related: [DM-Document, DM-LineItem, DM-ExtractedField, DM-ExtractionPayload, DM-
 | FR-OCR-010 | 将多行 / 嵌套项目表提取为结构化行项目 | P0 | §4.2 | FR-OCR-001 | AC-FR-OCR-010-01 |
 | FR-OCR-011 | 识别同一文档中混合的泰语 / 英语 / 简体及繁体中文 | P0 | §4.2 | FR-OCR-001 | AC-FR-OCR-011-01 |
 | FR-OCR-012 | 为每个提取字段生成置信度评分（0.0–1.0） | P0 | §3.2 P2.1 | FR-OCR-002 | AC-FR-OCR-012-01 |
-| FR-OCR-013 | 应用金额纠错（行总额与文档总额、税款计算） | P0 | §4.2 | FR-OCR-010 | AC-FR-OCR-013-01/02 |
+| FR-OCR-013 | **已迁移至 `openspec/specs/recognition/spec.md`（deprecated，`ocr-ui-parity`）** 应用金额纠错（行总额与文档总额、税款计算） | P0 | §4.2 | FR-OCR-010 | AC-FR-OCR-013-01/02 |
 | FR-OCR-014 | 检测并捕获签字区域是否存在 | P1 | §4.2 | FR-OCR-001 | AC-FR-OCR-014-01 |
 | FR-OCR-015 | 将置信度低于阈值的字段标记为需要人工核验 | P0 | §3.1 | FR-OCR-012 | AC-FR-OCR-015-01 |
-| FR-OCR-016 | 将日期、数字和货币（THB）标准化为规范格式 | P0 | §3.1 | FR-OCR-002 | AC-FR-OCR-016-01 |
-| FR-OCR-017 | 将预处理后的文档按既有任务参数提交至 TextIn API；调用失败时按 §4.5 在同一任务内实施有界自动重试；本期模板不配置供应商服务参数 | P0 | §4.2 | FR-UPLOAD-006 | AC-FR-OCR-017-01/02 |
-| FR-OCR-018 | 开关开启且 OCR 成功后，从系统与本租户启用未删除的当前模板版本中自动选一个；零候选不映射、单候选跳过匹配调用、多候选取最高合法得分，低于 0.7 仍套用并提示 | P0 | §3.2/4.2 R5/R6 | FR-OCR-021、FR-TEMPLATE-007 | AC-FR-OCR-018-01/02/03/04 |
-| FR-OCR-019 | 用现有 DeepSeek 对原始结果与固定模板版本执行结构化转换和严格结构/类型校验，补 null、丢弃模型额外键并计数，不推算/不计算；保存有映射归属的新结果版本 | P0 | §3.2/4.2 R2–R5 | FR-OCR-018、FR-TEMPLATE-003/004 | AC-FR-OCR-019-01/02/03/04 |
-| FR-OCR-020 | 通过独立异步 MappingWorker 条件认领、失败重试、卡住恢复与映射次数上限执行转换；复用 READY、不消耗月页额度，映射成败不改变 OCR 状态或覆盖用户编辑；保留既有 OCR 手动 Retry/取消语义 | P0 | §3.2/4.2 R5/R6 | FR-OCR-019 | AC-FR-OCR-020-01..09 |
-| FR-OCR-021 | 在 DeepSeek/映射/编辑前深拷贝 TextIn llm_json，并与 v1 在同一事务不可变保存至 PostgreSQL ocr_raw_results；返回 raw_result_id，历史无快照任务仅通用；开关默认关，本地共享库必须关 | P0 | §3.2/4.2 R6 | FR-OCR-017 | AC-FR-OCR-021-01/02/03/04 |
+| FR-OCR-016 | **已迁移至 `openspec/specs/recognition/spec.md`（deprecated，`ocr-ui-parity`）** 将日期、数字和货币（THB）标准化为规范格式 | P0 | §3.1 | FR-OCR-002 | AC-FR-OCR-016-01 |
+| FR-OCR-017 | **已迁移至 `openspec/specs/recognition/spec.md`（deprecated，`ocr-scan-flow`）** 将预处理后的文档提交至 TextIn API，并关联文档与所选模板的服务参数 | P0 | §4.2 | FR-UPLOAD-006、FR-TEMPLATE-006 | AC-FR-OCR-017-01 |
+| FR-OCR-018 | **已迁移至 `openspec/specs/recognition/spec.md`（deprecated，`ocr-scan-flow`）** 将 TextIn 返回的完整原始 JSON、请求关联信息和处理状态保存至 Firestore | P0 | §4.2 | FR-OCR-017 | AC-FR-OCR-018-01 |
+| FR-OCR-019 | **已迁移至 `openspec/specs/recognition/spec.md`（deprecated，`ocr-scan-flow`）** 在 Firestore 原始 JSON 创建后，通过 Cloud Functions 按已发布模板将其转换并写入 Cloud SQL | P0 | §4.2 | FR-OCR-018、FR-TEMPLATE-006 | AC-FR-OCR-019-01 |
+| FR-OCR-020 | **已迁移至 `openspec/specs/recognition/spec.md`（deprecated，`ocr-scan-flow`）** 对转换任务实施幂等写入、失败状态记录和可重试处理，且不重复创建关系数据 | P0 | §4.2 | FR-OCR-019 | AC-FR-OCR-020-01 |
 
 ## 3. 按文档类型列出的必需字段
 
@@ -96,29 +97,12 @@ related: [DM-Document, DM-LineItem, DM-ExtractedField, DM-ExtractionPayload, DM-
 - 默认核验阈值：`confidence < 0.85` → `needs_review = true`。
 - 阈值可按文档类型和字段配置（见 `NFR-DATA`）。
 
-### 4.5 TextIn 与独立模板映射（FR-OCR-017..021）
-
-- 当前运行时为 Flask `OcrWorker`；新 MappingWorker 与 OCR 分属独立线程，不占 Web 线程，不使用事件函数或路径规则转换。详见 [OCR-Pipeline](../../30-design/OCR-Pipeline.md) 与 [ADR-007](../../30-design/adr/ADR-007-llm-only-template-mapping.md)。
-- `TEMPLATE_MAPPING_ENABLED=false`（默认）：保存原始快照，v1 仍走现有 DeepSeek 整理，MappingWorker 不启动，apply-template 返回 409 `TEMPLATE_MAPPING_DISABLED`。本地与线上共用库，本地必须保持关闭。
-- 开启时跳过 DeepSeek **整理**（不是关闭模板匹配/转换模型），v1 直接使用 TextIn 原始结果；有候选才创建 AUTO 映射。0/1/多候选与低分规则见 FR-OCR-018；只要有合法排名即选最高分，无合法输出修复一次后失败，不猜模板。
-- `ocr_raw_results` 每任务一条、只写一次，不被后处理修改；模板/版本/快照/映射存 PostgreSQL `json`。历史 Firestore 全量 TextIn 归档仍是合法的独立载荷，不属于新映射触发源，见 [ADR-006](../../30-design/adr/ADR-006-relational-template-storage.md)。
-- 转换按分组→字段/表格→列取值；缺失补 null，模型额外键丢弃计数，单表 ≤500 行；紧凑原始 JSON >60,000 字符失败 `RAW_TOO_LARGE`，不截断。decimal/amount 用规范字符串避免浮点漂移，integer 需安全整数；失败保留原文并提示，日期字符串原样保留，不计算合计。
-- 映射状态 `PENDING → MATCHING → CONVERTING → READY / FAILED`，手动已指定版本跳过 MATCHING。每阶段最多首次+一次重试，退避 2 秒；默认每任务最多 5 次（含 AUTO/FAILED，复用 READY 不计），不消耗月页额度。处理中 10 分钟未更新置 `MAPPING_INTERRUPTED`。
-- 创建、切换、READY 生效、编辑均在任务行锁下；所有新结果版本为全任务 `max(version)+1`，切回分支可返回旧号且不新增版本。READY 总保存归属版本，仅 pending 仍为本映射、当前仍为 base 版本且未确认时自动生效，否则留作可切换，不覆盖用户编辑或新 pending。用户重试映射显式传 `force=true` 避免复用旧 READY，仍受次数上限约束。
-- 删除结果保留 job，在同任务锁事务内清理 results/raw/mappings 及指针；Worker 阶段前后重读任务与快照、映射、基础结果关联，关联被清理则中止不得迟到写回。该路径已静态复核并有隔离测试。审计只记录标识、版本、来源、结果、时间与调用用量，不记录单据内容。
-- 旧 FR-OCR-001/012/013/015/016 中分类、置信度、重算及佛历目标不适用于此次模板映射；其优先级/历史 AC 与 PRD/NFR 仍需范围化同步，不以此宣称本期已实现。2026-10-31 隔离 SQLite/mock 后端 816 项通过；真实 LLM 质量/耗时/token 基线未运行，0.7 保持初始阈值，完整验证边界见 [汇总验收](../../40-acceptance/Acceptance-Criteria.md)。
-
-**TextIn 调用失败的有界自动重试（FR-OCR-017；AC-FR-OCR-017-02，2026-10-29 历史证据）：** 当前 Flask `OcrWorker` / Prompt v2 路径见 [OCR-Pipeline §3.1](../../30-design/OCR-Pipeline.md#31-当前-flask--ocrworker--prompt-v2-调用路径)。以下既有契约与隔离验证保留，尚未发布；不作为本次模板映射已验证的证据。
-
-- 「最多重试 3 次」指首次调用 1 次 + 额外最多 3 次，总调用次数最多 4 次；第 1/2/3 次重试前分别退避 2/4/8 秒。仅在现有 `services/api/worker.py` 的 TextIn 调用循环执行，HTTP 客户端及适配器不另加重试层。
-- 可重试：网络/超时、HTTP 408/429/5xx、业务限流 `429`/`458`/`459`/`40306`、基础服务故障 `30203`、业务 `500..599`、无效响应 JSON、缺失或无效 `llm_json`（`-1`）。不重试：余额不足 `40003`、鉴权/权限/参数等明确永久错误及本地程序异常；明确永久错误优先停止，不被 HTTP 5xx 或限流文案覆盖，不因泛捕获异常就一律重试。
-- HTTP 状态与业务 `code` 分开判断：HTTP 失败即使业务 `code=200` 也不是成功，按 HTTP 错误分类；HTTP 成功（2xx）但业务 `code` 失败仍按业务错误分类。仅 HTTP 成功、业务 `code=200` 且 `llm_json` 有效才是成功。
-- 自动重试沿用同一 job、原件字节、文件名、页参数与 Prompt；不重新上传、不创建新 job/result、不因失败尝试发通知或额外累计 SaiFlow 月页额度。成功后仅一次结果持久化/后处理及既有完成通知，不为各尝试分别写结果。
-- 任何一次成功立即停止重试；额外 3 次重试耗尽只将同一 job 落为 `FAILED`，保留最后一次错误代码和消息，不产生成功结果或完成通知。明确不可重试错误则立即失败，不用尽重试次数。
-- 每次调用 TextIn 前必须重新读取并检查取消请求及既有终态（包括退避期间发生的取消、另一实例已落 CANCELLED/FAILED）；停止后续调用，不覆盖既有终态，不进入成功结果持久化/后处理。状态推进和结果持久化事务须锁行刷新，避免并发取消被覆盖。
-- Worker 启动恢复仅对超过 10 分钟无进展、尚未开始供应商调用的 PREPROCESSING 阶段条件恢复入队；PROCESSING/POSTPROCESSING 的供应商结果不确定，保守标记 FAILED/VENDOR_UNCERTAIN，不自动重新入队以重置重试预算。10 分钟是保守恢复阈值，不是 HTTP 总时长上限；需要时由用户显式 Retry。
-- 供应商 POST 超时可能已受理且扣费；未观察到供应商幂等键，不承诺 TextIn 只受理/扣费一次，只保证本应用自动重试不重复生成结果或额外累计 SaiFlow 月页额度。
-- 自动重试不同于用户手动 Retry/rerun：前者在同一 job 内继续，后者按 AC-FR-OCR-020-02 创建新任务并关联原任务；该重试契约不扩展认证或供应商配置，也不作为模板映射发布证据。
+### 4.5 TextIn、Firestore 与转换（FR-OCR-017..020）
+- FastAPI 仅通过服务端调用 TextIn；认证信息仅从 Secret Manager 注入，浏览器不得获得凭据。
+- 原始 TextIn JSON 在写入 Firestore 后不得被转换过程覆盖；每个载荷必须关联 `document_id`、模板标识/版本、供应商请求标识和处理时间。
+- Firestore 创建事件是默认的 Cloud Functions 触发源；函数按模板映射更新 Cloud SQL 中的 `DM-Document`、`DM-ExtractedField` 和 `DM-LineItem`。
+- 转换必须以 `document_id` 与原始载荷版本作为幂等键；重试只能更新同一转换结果，不能重复插入字段或行项目。
+- Dataflow 仅用于经批准的批量回填、重处理或高吞吐场景；其输出必须遵守相同的模板版本、幂等和审计规则。
 
 ### 4.6 取消任务（FR-OCR-020）
 - 处理页点击「Cancel task」先弹出确认框（「Keep processing」/「Cancel task」），确认后才调用 `POST /api/v1/ocr/jobs/{id}/cancel`；任务在弹框期间结束则确认框自动关闭。
@@ -155,54 +139,15 @@ Feature: EPIC-02 OCR 识别
     When 提取完成
     Then 该字段 SHALL 被标记为 needs_review = true（阈值 0.85）
 
-  Scenario: AC-FR-OCR-017-02 TextIn 调用失败的有界自动重试
-    Given 一个已存在的 OCR job，原件、文件名、页参数与 Prompt 已确定
-    When TextIn 调用发生网络/超时、HTTP 408/429/5xx、业务限流 429/458/459/40306、基础服务故障 30203、业务 500..599，或无效响应 JSON/缺失或无效 llm_json（-1）
-    Then 仅 services/api/worker.py 执行首次 1 次加额外最多 3 次重试，总调用次数最多 4 次
-    And 第 1/2/3 次重试前分别退避 2/4/8 秒，HTTP 客户端及适配器不另加重试
-    And 每次沿用同一 job、原件字节、文件名、页参数与 Prompt
-    And 自动重试不重新上传、不创建新 job/result、不因失败尝试发通知或额外累计 SaiFlow 月页额度
-    Given HTTP 成功但业务 code 失败，或 HTTP 失败但业务 code=200
-    Then 均不得视为成功，前者按业务错误分类，后者按 HTTP 错误分类
-    And 仅 HTTP 成功（2xx）、业务 code=200 且 llm_json 有效才是调用成功
-    Given 任一次遇到余额不足 40003、鉴权/权限/参数等明确永久错误，或本地程序异常
-    Then 立即停止自动重试并将同一 job 标记 FAILED，保留该错误，不产生成功结果或完成通知
-    Given 任一次调用成功且任务未被取消
-    Then 立即停止重试，不再调用 TextIn，仅一次结果持久化/后处理及既有完成通知
-    Given 首次及额外 3 次重试均为可重试失败，且任务未被取消
-    Then 只将同一 job 标记 FAILED 并保留最后一次错误代码和消息，不产生成功结果或完成通知
-    Given 任务在退避期间或下一次重试调用前被请求取消
-    When Worker 在每次重试调用 TextIn 前重新读取并检查取消状态
-    Then 沿用既有取消处理，不再调用供应商，不产生成功结果/后处理或完成通知
-    Given 另一实例已将任务标记为 CANCELLED 或其他终态
-    Then 停止本实例的后续调用和结果写入，不覆盖既有终态
-    Given Worker 启动恢复发现超过 10 分钟无进展的 PROCESSING/POSTPROCESSING 任务
-    Then 保守标记 FAILED/VENDOR_UNCERTAIN，不自动重新入队以重置重试预算
-    And 仅尚未开始供应商调用的 PREPROCESSING 阶段允许条件恢复入队；状态推进与结果写入锁行刷新，不覆盖并发取消或终态
-    Given 供应商 POST 超时且没有已确认的供应商幂等键
-    Then 不承诺供应商未受理或只扣费一次，仅保证本应用自动重试不重复生成结果或额外累计 SaiFlow 月页额度
-    And 自动重试不同于用户手动 Retry/rerun，后者仍按 AC-FR-OCR-020-02 创建新任务并关联原任务
+  Scenario: AC-FR-OCR-018-01 保存 TextIn 原始 JSON
+    Given 已完成预处理的 Invoice 和已发布的 INVOICE 模板版本 3
+    When 系统调用 TextIn 并收到结构化 JSON 响应
+    Then Firestore 保存完整响应、document_id、模板版本和供应商请求标识
 
-  Scenario: AC-FR-OCR-018-01 多候选选择最高合法得分
-    Given 开关开启且本任务有多个可用模板
-    When 大模型返回 Invoice 0.92、Receipt 0.40
-    Then 选择 Invoice 固定版本并记录得分与 top-3，OCR 状态不变
-
-  Scenario: AC-FR-OCR-019-01 按固定模板转换
-    Given 原始结果没有模板字段 document.tax_id
-    When 大模型转换并通过严格校验
-    Then document.tax_id 为 null，模型额外键丢弃计数，不计算原文不存在的数值
-
-  Scenario: AC-FR-OCR-020-04 复用成功映射
-    Given 同一模板当前版本已有 READY 映射
-    When 用户以正确 expected_version 套用且未指定 force
-    Then 返回 200 并切到该映射最新保存版本，不复制数据、不调用模型
-
-  Scenario: AC-FR-OCR-021-01 关闭开关仍保存原始快照
-    Given 模板映射开关关闭
-    When TextIn OCR 成功
-    Then 整理前深拷贝 llm_json，与 v1 在同一事务保存不可变原始快照
-    And v1 保持既有 DeepSeek 整理结果，返回 raw_result_id
+  Scenario: AC-FR-OCR-020-01 幂等转换重试
+    Given document_id 对应的 Firestore 原始 JSON 已成功转换一次
+    When Cloud Functions 对同一载荷版本重试
+    Then Cloud SQL 中仅保留一组该文档的字段和行项目，且转换状态保持成功
 
   Scenario: AC-FR-OCR-020-02 失败任务可读原因与重试
     Given 一个 status=FAILED 且 error_code=TEXTIN_ERROR_40003 的 OCR 任务
@@ -224,21 +169,18 @@ Feature: EPIC-02 OCR 识别
 ## 6. 可追溯性
 | FR ID | 验证方式 | 设计引用 |
 |-------|----------|----------|
-| FR-OCR-001..017 | 既有 AC-FR-OCR-* | 历史字段模型与 TextIn；此次不实现新分类/置信度/计算 |
-| FR-OCR-018..021 | [汇总 AC §2](../../40-acceptance/Acceptance-Criteria.md#2-epic-02--ocr-识别) | `DM-OcrRawResult`、`DM-TemplateMapping`、`DM-ResultVersion`、[OCR-Pipeline](../../30-design/OCR-Pipeline.md)、[API-Spec](../../30-design/API-Spec.md) |
+| FR-OCR-001..020 | AC-FR-OCR-* | `DM-Document`、`DM-ExtractionPayload`、`DM-ConversionJob`、`DM-ExtractedField`、`DM-LineItem`、`API-2`、`OCR-Pipeline.md` |
 
 ## 7. 开放问题
 - OQ-1：基于经验的各字段准确性目标与置信度阈值（PRD 第 7 节）。
 - OQ-7：TextIn API 的区域、数据跨境处理依据、认证方式、限流、回调或同步调用参数是否已通过安全与法务确认？
-- OQ-8：未来获批批量/报表投影在何种实测容量、延迟或查询需求下需要 Dataflow？本期默认是 Flask MappingWorker，无 Cloud Functions 事件链路，未来触发条件见 ADR-006。
+- OQ-8：哪些批量规模、延迟或重处理场景需要启用 Dataflow，而非默认 Cloud Functions 事件处理？
 
 ## 版本历史
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
-| 1.4.2 | 2026-10-31 | Product Engineering | 修正READY复用场景追溯至AC-FR-OCR-020-04，与汇总AC一致；最终隔离验证以汇总AC/任务记录为准 |
-| 1.4.1 | 2026-10-31 | Product Engineering | 明确所有新版本max+1与切回旧号、force重试、保留job的同锁删除和Worker关联重读中止；记录816隔离后端证据及真实LLM基线未运行/0.7初始边界 |
-| 1.4.0 | 2026-10-31 | Product Engineering | 重定义FR-OCR-018..020并新增021：最高合法匹配、严格转换、独立Worker、关系型不可变快照与默认/本地关闭；保留TextIn历史重试和Firestore完整原文边界 |
-| 1.3.1 | 2026-10-29 | Product Engineering | FR-OCR-017 / AC-FR-OCR-017-02：首次+最多 3 次重试、2/4/8 秒、错误分层、取消/终态、保守恢复不重排未知供应商结果、锁行刷新及扣费边界；284 项新增+366 项既有隔离回归通过；不改手动 rerun/API/数据库，未发布，真实厂商与数据库并发未验收 |
+| 1.5.0 | 2026-11-06 | Product Engineering | FR-OCR-013、016 迁移至 `openspec/specs/recognition`（`ocr-ui-parity`）；FR-OCR-002…005 注明由自由格式承接（D4） |
+| 1.4.0 | 2026-11-06 | Product Engineering | FR-OCR-017, FR-OCR-018, FR-OCR-019, FR-OCR-020 迁移至 `openspec/specs/`（变更 `ocr-scan-flow`），本文件中对应条目只作参考 |
 | 1.3.0 | 2026-10-18 | Product Engineering | 取消任务前需确认（AC-FR-OCR-020-03） |
 | 1.2.0 | 2026-10-17 | Product Engineering | 新增失败任务可读原因与重试验收场景（厂商余额不足等失败不再显示 404） |
 | 1.1.0 | 2026-10-07 | Product Engineering | 新增 TextIn 调用、Firestore 原始 JSON、Cloud Functions 转换及幂等重试需求 |

@@ -1,0 +1,265 @@
+/* The prototype's My page (temp/ui-redesign/saiflow-line-mini-aibaba.html myPage()): the
+ * profile hero, the workspace card, the settings rows and the language row (FR-SYS-138).
+ * Colours are STD-008 / brand tokens; text is never below 12px. */
+/* The page frame of the scan pages (theme.module.css .scan) without its button reset, which
+ * would override the shared ui Button (language, logout, login). */
+.my {
+  flex: 1;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  padding-bottom: var(--tabbar-space);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  --page-x: 16px;
+}
+
+@media (max-width: 360px) {
+  .my {
+    --page-x: 15px;
+  }
+}
+
+.my button {
+  cursor: pointer;
+}
+
+.content {
+  padding: 20px var(--page-x, 16px) 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* prototype .profile-hero */
+.hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 7px 0 22px;
+}
+
+.avatar {
+  width: 61px;
+  height: 61px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: 4px solid var(--surface);
+  border-radius: 50%;
+  background: var(--brand-blue-soft);
+  color: var(--primary-pressed);
+  font-size: 22px;
+  font-weight: 500;
+  box-shadow: 0 0 0 1px var(--brand-border);
+}
+
+.hero-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.hero-body h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.4;
+  font-weight: 600;
+  color: var(--brand-navy);
+  overflow-wrap: anywhere;
+}
+
+.hero-body p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* the current workspace card: opens the tenant switch */
+.workspace {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 76px;
+  padding: 16px;
+  text-align: left;
+  transition: background-color 0.16s ease-out;
+}
+
+.workspace:active {
+  background: var(--surface-muted);
+}
+
+.workspace:focus-visible,
+.row:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.ws-icon {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--brand-blue-soft);
+  color: var(--primary-pressed);
+}
+
+.ws-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ws-name {
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 600;
+  color: var(--brand-navy);
+  overflow-wrap: anywhere;
+}
+
+.ws-meta {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* prototype .settings-row */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 15px;
+  text-align: left;
+  border-bottom: 1px solid var(--brand-border);
+  transition: background-color 0.16s ease-out;
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+button.row:active {
+  background: var(--surface-muted);
+}
+
+.row-icon {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--icon);
+}
+
+.row-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.row-value {
+  flex-shrink: 0;
+  max-width: 45%;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.row-chevron {
+  flex-shrink: 0;
+  color: var(--icon);
+}
+
+/* the language row keeps the three buttons; they wrap under the title when narrow */
+.lang-row {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.langs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.logout {
+  margin-top: 20px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace,
+  .row {
+    transition: none;
+  }
+}
+
+/* ---- Colour pass (FR-SYS-132): a gradient avatar, a toned workspace chip and one colour
+ * chip per settings row (data-tone set by SettingsRow). Tokens only. ---- */
+.avatar {
+  background: linear-gradient(135deg, var(--brand-blue), var(--accent-violet));
+  color: var(--on-primary);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-violet) 30%, var(--brand-border)),
+    0 8px 18px -8px color-mix(in srgb, var(--accent-violet) 60%, transparent);
+}
+
+.ws-icon {
+  background: linear-gradient(135deg, var(--accent-indigo-soft), var(--brand-teal-soft));
+  color: var(--accent-indigo);
+}
+
+.row-icon {
+  --tone: var(--brand-blue);
+  --tone-soft: var(--brand-blue-soft);
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--tone-soft);
+  color: var(--tone);
+}
+
+.row-icon[data-tone="violet"] {
+  --tone: var(--accent-violet);
+  --tone-soft: var(--accent-violet-soft);
+}
+
+.row-icon[data-tone="amber"] {
+  --tone: var(--accent-amber);
+  --tone-soft: var(--accent-amber-soft);
+}
+
+.row-icon[data-tone="teal"] {
+  --tone: var(--brand-teal-ink);
+  --tone-soft: var(--brand-teal-soft);
+}
+
+.row-icon[data-tone="emerald"] {
+  --tone: var(--accent-emerald);
+  --tone-soft: var(--accent-emerald-soft);
+}
+
+.row-icon[data-tone="cyan"] {
+  --tone: var(--accent-cyan);
+  --tone-soft: var(--accent-cyan-soft);
+}
+
+.row-icon svg {
+  width: 18px;
+  height: 18px;
+}

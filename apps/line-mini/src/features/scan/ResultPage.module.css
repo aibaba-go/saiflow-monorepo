@@ -1,0 +1,306 @@
+/* main views/ResultPage.vue <style scoped> (FR-SYS-118) in the prototype's card language:
+ * white cards, soft notices, a segmented Table / JSON switch and a white action bar with the
+ * safe area below (FR-SYS-132). */
+.template-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: var(--card-radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  color: var(--brand-navy);
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.template-select:disabled { opacity: .7; }
+.template-caption { color: var(--brand-blue-hover); font-size: 12px; font-weight: 600; flex-shrink: 0; padding: 2px 8px; border-radius: 6px; background: var(--brand-blue-soft); }
+.template-notice { margin: 0; padding: 10px 12px; border-radius: var(--control-radius); font-size: 13px; line-height: 1.7; background: var(--warning-bg); color: var(--warning-text); }
+.template-notice.danger { background: var(--danger-bg); color: var(--danger-text); }
+.template-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+.template-actions button { min-height: var(--control-h); color: var(--primary); font-size: 13px; font-weight: 600; }
+.data-area { position: relative; }
+.mapping-mask { position: absolute; inset: 0; z-index: 2; padding: 24px 12px; background: color-mix(in srgb, var(--bg) 92%, transparent); border: 1px solid var(--brand-border); border-radius: var(--card-radius); display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 12px; text-align: center; }
+.template-option { display: block; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+.template-option label { display: flex; align-items: flex-start; gap: 8px; }
+.template-option input { flex-shrink: 0; accent-color: var(--primary); }
+.template-option small { display: inline-block; margin: 3px 4px 0 0; color: var(--primary); font-size: 12px; }
+.template-option details { margin: 8px 0 0 24px; font-size: 12px; }
+.template-option summary { cursor: pointer; color: var(--primary); }
+.template-preview { padding: 8px 0; line-height: 1.6; overflow-wrap: anywhere; }
+.template-preview small { display: block; color: var(--text-secondary); }
+.template-toast { position: fixed; bottom: calc(96px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); z-index: 60; width: max-content; max-width: calc(100% - 40px); border-radius: var(--card-radius); padding: 12px 18px; background: var(--brand-navy); color: var(--brand-on-navy); font-size: 13px; box-shadow: var(--shadow-raised); }
+.result {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+/* not a tab page: no room for the bottom navigation; the action bar holds the safe area */
+.result.result {
+  padding-bottom: 0;
+}
+
+.fatal {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px var(--page-x, 16px);
+}
+
+.failure {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 16px var(--page-x, 16px);
+  padding: 28px 16px;
+  text-align: center;
+  background: var(--surface);
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow-card);
+}
+
+.failure-badge {
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.failure h2 {
+  margin: 2px 0 0;
+  font-size: 19px;
+  line-height: 1.5;
+  color: var(--brand-navy);
+}
+
+.failure-file {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.failure-reason {
+  margin: 4px 0 10px;
+  max-width: 320px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--danger-text);
+}
+
+.failure .primary-btn,
+.failure .home-btn {
+  width: 100%;
+  max-width: 320px;
+}
+
+.summary {
+  padding: 14px var(--page-x, 16px) 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.summary-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.summary-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.summary-name {
+  font-size: 15px;
+  line-height: 1.5;
+  font-weight: 600;
+  color: var(--brand-navy);
+  overflow-wrap: anywhere;
+}
+
+.chips {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  flex: none;
+  max-width: 50%;
+}
+
+.meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.bar-caption {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.review-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--track);
+  color: var(--icon);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+}
+
+.review-chip.confirmed {
+  background: var(--success-bg);
+  color: var(--success-text);
+}
+
+.review-chip.edited {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+}
+
+.content {
+  flex: 1;
+  padding: 0 var(--page-x, 16px) 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.edit-hint {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  padding: 0 2px;
+}
+
+/* prototype .actionbar: white, a hairline on top, the safe area below */
+.action-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: var(--surface);
+  border-top: 1px solid var(--brand-border);
+  padding: 10px var(--page-x, 16px) max(14px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.guest-hint {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: var(--control-radius);
+  background: var(--warning-bg);
+  text-align: center;
+  font-size: 13px;
+  color: var(--warning-text);
+  font-weight: 600;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.action-buttons .reset-btn {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.action-buttons .primary-btn {
+  flex: 1.5 1 0;
+  min-width: 0;
+}
+
+/* labels wrap rather than being cut, so the height is a minimum (FR-SYS-136) */
+.reset-btn {
+  min-height: 46px;
+  padding: 8px 10px;
+  border: 0;
+  /* 用内阴影画边框，避免 border 宽度让两个等宽按钮出现 1px 偏差 */
+  box-shadow: inset 0 0 0 1px var(--brand-border);
+  border-radius: var(--control-radius);
+  background: var(--surface);
+  color: var(--brand-navy);
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.reset-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.primary-btn {
+  min-height: 46px;
+  padding: 8px 12px;
+  border-radius: var(--control-radius);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 600;
+  transition: background-color 0.16s ease-out;
+}
+
+.primary-btn:active:not(:disabled) {
+  background: var(--primary-pressed);
+}
+
+.primary-btn:disabled {
+  opacity: 0.6;
+}
+
+.status-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--control-radius);
+  background: var(--danger-bg);
+  text-align: center;
+  font-size: 13px;
+  color: var(--danger-text);
+}
+
+.home-btn {
+  min-height: var(--control-h);
+  padding: 8px 24px;
+  border-radius: var(--control-radius);
+  background: var(--brand-blue-soft);
+  color: var(--primary-pressed);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .primary-btn {
+    transition: none;
+  }
+}

@@ -2,9 +2,9 @@
 doc_id: ADR-001
 title: "ADR-001 — Google Cloud 云原生部署"
 type: adr
-status: accepted
-version: 1.0.3
-updated: 2026-10-27
+status: superseded
+version: 1.1.0
+updated: 2026-11-02
 owner: Product Engineering
 related: [NFR-SEC-001, NFR-SEC-002, NFR-DATA-001]
 ---
@@ -13,7 +13,9 @@ related: [NFR-SEC-001, NFR-SEC-002, NFR-DATA-001]
 
 ## 状态
 
-已接受（accepted），包括“结构化业务数据存储在 Cloud SQL for PostgreSQL 18.6”部分。2026-10-27 已恢复原实例 `saiflow-dev` 的库 `postgres`、schema `saiflow`；本决策的数据库条目当前不再被 ADR-005 取代，历史迁移与回切记录见 [ADR-005](ADR-005-self-hosted-postgresql.md)（reverted）。Cloud Run、私有 GCS、Firestore 部分保持有效。
+**superseded（已被取代）。** 2026-11-02 起由 [ADR-008](adr/ADR-008-vps-docker-hosting.md) 取代：运行环境改为 LightNode VPS + Docker，Cloud SQL 与 Firestore 改为 VPS 上的 PostgreSQL；只有私有 GCS 一项保留。以下内容为历史记录。
+
+原状态：已接受（accepted），包括“结构化业务数据存储在 Cloud SQL for PostgreSQL 18.6”部分。2026-10-27 已恢复原实例 `saiflow-dev` 的库 `postgres`、schema `saiflow`；本决策的数据库条目当前不再被 ADR-005 取代，历史迁移与回切记录见 [ADR-005](ADR-005-self-hosted-postgresql.md)（reverted）。Cloud Run、私有 GCS、Firestore 部分保持有效。
 
 ## 背景
 
@@ -55,6 +57,7 @@ PDPA 适用：需定义数据区域、保留/删除策略、授权访问和审�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.1.0 | 2026-11-02 | Product Engineering | 标记 superseded，由 ADR-008 取代（私有 GCS 保留） |
 | 1.0.3 | 2026-10-27 | Product Engineering | 恢复 Cloud SQL 数据库条目的 accepted 状态，记录 saiflow-dev/postgres.saiflow 已回切，ADR-005 不再取代本决策 |
 | 1.0.2 | 2026-10-26 | Product Engineering | 标注关系数据库部分被 ADR-005（自建 PostgreSQL 17）取代 |
 | 1.0.1 | 2026-10-02 | Product Engineering | 将人类可读内容翻译为简体中文 |

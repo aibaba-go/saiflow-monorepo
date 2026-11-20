@@ -1,0 +1,164 @@
+/* main components/ImageViewer.vue <style scoped>, copied verbatim. */
+.iv {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(10, 12, 16, 0.94);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  overscroll-behavior: contain;
+}
+
+.iv-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  cursor: grab;
+}
+
+.iv-img {
+  flex: none;
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 150px);
+  object-fit: contain;
+  background: var(--surface);
+  border-radius: 6px;
+  transform-origin: center center;
+  will-change: transform;
+  -webkit-user-drag: none;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.iv-img.ready {
+  opacity: 1;
+}
+
+.iv-img.animating {
+  transition: transform 0.2s ease;
+}
+
+.iv-loading,
+.iv-error {
+  position: absolute;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+}
+
+.iv-top,
+.iv-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  pointer-events: none;
+}
+
+.iv-top {
+  top: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px 0;
+}
+
+.iv-top > *,
+.iv-bottom > *,
+.iv-nav {
+  pointer-events: auto;
+}
+
+.iv-count {
+  margin-right: auto;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--on-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.iv-round {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--on-primary);
+  font-size: 24px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.iv-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 28px;
+}
+
+.iv-nav.prev {
+  left: 10px;
+}
+
+.iv-nav.next {
+  right: 10px;
+}
+
+.iv-bottom {
+  bottom: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
+}
+
+.iv-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.iv-tool {
+  min-width: 40px;
+  height: 36px;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: var(--on-primary);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1;
+  position: relative;
+}
+
+.iv-tool:disabled {
+  opacity: 0.35;
+}
+
+.iv-pct {
+  min-width: 64px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.iv-hint {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* 36px icon button, 44px tap area (FR-SYS-134) */
+.iv-tool::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+}

@@ -1,0 +1,80 @@
+/* Bottom navigation (prototype .tabbar): icon over label, soft pill behind the active icon,
+ * safe-area padding below. Its height is --tabbar-h (index.css) so pages can reserve it. */
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  background: var(--surface);
+  border-top: 1px solid var(--brand-border);
+  padding: 6px 6px max(8px, env(safe-area-inset-bottom));
+}
+
+.tabbar__list {
+  display: flex;
+}
+
+.tabbar__tab {
+  flex: 1;
+  min-width: 0;
+  min-height: 50px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
+  border: 0;
+  border-radius: var(--control-radius);
+  background: none;
+  padding: 2px 2px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  text-align: center;
+  cursor: pointer;
+}
+
+.tabbar__icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 28px;
+  border-radius: 9px;
+  transition: background-color 0.18s ease-out, color 0.18s ease-out;
+}
+
+.tabbar__label {
+  overflow-wrap: anywhere;
+}
+
+.tabbar__tab[aria-selected="true"] {
+  color: var(--brand-blue-hover);
+  font-weight: 600;
+}
+
+.tabbar__tab[aria-selected="true"] .tabbar__icon {
+  background: linear-gradient(135deg, var(--brand-blue), var(--accent-indigo));
+  color: var(--on-primary);
+  box-shadow: 0 6px 14px -6px color-mix(in srgb, var(--brand-blue) 70%, transparent);
+}
+
+/* Colour pass (FR-SYS-132): a frosted bar with a soft lift instead of a hard rule. */
+.tabbar {
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: saturate(1.4) blur(12px);
+  -webkit-backdrop-filter: saturate(1.4) blur(12px);
+  border-top-color: color-mix(in srgb, var(--brand-border) 70%, transparent);
+  box-shadow: 0 -6px 20px -12px color-mix(in srgb, var(--brand-navy) 30%, transparent);
+}
+
+.tabbar__tab:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tabbar__icon {
+    transition: none;
+  }
+}

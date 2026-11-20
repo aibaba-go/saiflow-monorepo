@@ -3,8 +3,8 @@ doc_id: AGENTS
 title: "SaiFlow monorepo — AI 代理入口"
 type: index
 status: active
-version: 2.4.0
-updated: 2026-10-27
+version: 3.2.0
+updated: 2026-11-02
 audience: [ai-agent, engineer, pm]
 ---
 
@@ -16,7 +16,7 @@ audience: [ai-agent, engineer, pm]
 
 **SaiFlow — “We turn paper into process.”（将纸张变为流程。）**
 
-面向泰国 SME 制造企业的纸质单据 OCR 数字化录入系统。识别采购订单（PO）、送货单（Delivery Note）、发票（Invoice）、收据（Receipt）、贷项通知单（Credit Note）与税务收据（Tax Receipt）；由人工核验后，录入并归档至本地 ERP、Excel 与文件夹。部署于 Google Cloud（Cloud Run、Cloud SQL PostgreSQL 18.6〔实例 `saiflow-dev` / `postgres.saiflow`，ADR-001、ADR-005 回切记录〕、私有 GCS、Firestore、Cloud Functions、Secret Manager）。
+面向泰国 SME 制造企业的纸质单据 OCR 数字化录入系统。识别采购订单（PO）、送货单（Delivery Note）、发票（Invoice）、收据（Receipt）、贷项通知单（Credit Note）与税务收据（Tax Receipt）；由人工核验后，录入并归档至本地 ERP、Excel 与文件夹。以 Docker Compose 部署于 LightNode VPS（曼谷）：原件等对象存私有 GCS；表单数据（含原始识别载荷与结构化结果，jsonb）与系统数据都存 PostgreSQL；见 ADR-008。
 
 ## 2. 入口与读取顺序（渐进式加载）
 
@@ -25,13 +25,13 @@ audience: [ai-agent, engineer, pm]
 | 步骤 | 当前任务 | 必须读取 |
 |------|----------|----------|
 | 0 | 任何任务 | `AGENTS.md`（本文件） |
-| 1 | 理解协作方式、阶段与角色 | `AI-WORKFLOW.md` |
+| 1 | 理解协作方式、阶段与确认点 | `AI-WORKFLOW.md` |
 | 2 | 理解目录与文档放置规则 | `docs/00-standards/Directory-Structure.md` |
 | 3 | 理解产品为什么做、要做什么 | `docs/10-product/PRD-SaiFlow.md`、`Vision-Scope.md` |
 | 4 | 理解业务术语 | `docs/10-product/Glossary.md`（术语唯一来源） |
-| 5 | 实现某项功能 | `docs/20-requirements/functional/<EPIC-xx>.md` |
+| 5 | 实现某项功能 | `openspec/specs/<capability>/spec.md`（行为需求正本）；capability 尚未迁移时参考 `docs/20-requirements/functional/<EPIC-xx>.md` |
 | 6 | 设计数据、接口或 OCR 流程 | `docs/30-design/Data-Model.md`、`API-Spec.md`、`OCR-Pipeline.md`、`Architecture.md` |
-| 7 | 编写测试或判断完成条件 | `docs/40-acceptance/Acceptance-Criteria.md` |
+| 7 | 编写测试或判断完成条件 | `openspec/specs/<capability>/spec.md` 中的 AC；尚未迁移时参考 `docs/40-acceptance/Acceptance-Criteria.md` |
 | 8 | 处理性能、安全、兼容性等约束 | `docs/20-requirements/non-functional/NFR.md` |
 
 产品、需求、设计、架构与验收标准均位于本仓库 `docs/` 下（唯一根）。旧 `saiflow-docs` 已废弃，内容已完成迁移。
@@ -45,26 +45,27 @@ audience: [ai-agent, engineer, pm]
 ```text
 saiflow-monorepo/
 ├── AGENTS.md / CLAUDE.md / AI-WORKFLOW.md  # 入口与协作
-├── apps/            # JS/TS 可部署应用（pnpm）：web-pc、line-mini
+├── apps/            # JS/TS 可部署应用（pnpm）：web-pc、line-mini —— B-1 重建的目标结构，当前为空
 ├── packages/        # JS/TS 共享库（pnpm）：api-client、ui、tsconfig
-├── services/        # 后端（Python，pnpm 不扫描）：api（FastAPI）
+├── services/        # 后端（Python，pnpm 不扫描）：api（FastAPI）—— B-1 重建的目标结构，当前为空
 ├── openspec/        # 变更流程与行为契约（原生布局）
 ├── docs/            # 产品级持久文档（00/01/10/20/30/40）
 ├── scripts/         # 仓库级脚本（含部署自动化）
+├── legacy/          # 旧代码只读参考（ADR-006），不参与构建
 ├── temp/            # 临时产物（禁止作为正式资产）
-└── .claude/         # Claude Code 配置（agents / skills / commands）
+└── .claude/         # Claude Code 配置（skills / commands；archive 为已停用定义）
 ```
 
-**默认命令隔离（硬约束）：** `pnpm-workspace.yaml` 只 glob `apps/*` 与 `packages/*`；Python 命令（`uvicorn`/`pytest`/`ruff`/`alembic`）一律在 `services/api/` 内执行。新增顶层目录时必须确认不破坏该隔离。
+**默认命令隔离（硬约束）：** `pnpm-workspace.yaml` 只 glob `apps/*` 与 `packages/*`；Python 命令（`uvicorn`/`pytest`/`ruff`/`alembic`）一律在 `services/api/` 内执行（B-1 重建后；不得在 `legacy/` 内执行）。新增顶层目录时必须确认不破坏该隔离。
 
 ## 4. AI 协作入口
 
-- **工作流细则** → `AI-WORKFLOW.md`（铁律、阶段↔OpenSpec 映射、subagent registry、统一提示词模板、DoR/DoD）。
-- **角色（subagent）** → `.claude/agents/`：`requirement-analyst`、`architect`、`coder`、`tester`。
-- **能力（skill）** → `.claude/skills/`：OpenSpec 官方 `openspec-*`（复用，勿改）+ 项目叠加 `saiflow-*`。
-- **变更流程** → `openspec/changes/<change>/`；行为契约沉淀到 `openspec/specs/`。
+- **工作流细则** → `AI-WORKFLOW.md`（唯一操作性规则：阶段与确认点、改动分级、文档分层、框架使用边界）。
+- **需求** → OpenSpec：`/opsx:explore`、`/opsx:propose`，产出 proposal 与 delta spec；行为需求正本为 `openspec/specs/`。
+- **实现** → SuperPowers：从 `superpowers:writing-plans` 起接手，TDD 实现、验证、审查、收尾。
+- **边界** → 需求阶段**不调用** `superpowers:brainstorming`；plan 写入 `openspec/changes/<change>/plan.md`（不写 `docs/superpowers/`）；改动分级见 `AI-WORKFLOW.md` §3。
 
-人类用**统一薄提示词**驱动，复杂度沉淀到 skill 与 subagent 定义中。产物即契约：阶段之间靠文件交接，subagent 只回摘要。
+全部在主会话内推进，负责人确认每个决策点。阶段之间靠 `openspec/changes/<change>/` 中的文件交接。
 
 ## 5. 临时文件约定（必须遵守）
 
@@ -93,11 +94,12 @@ AI 开发、分析、转换、调试、测试过程中产生的所有临时文�
 3. **术语一致性：** 必须使用 `Glossary.md` 的精确定义和名称。
 4. **验收优先：** 编码前必须先读取对应的 `AC-*` 验收标准。
 5. **禁止范围蔓延：** 初始版本 V1.0 只包含 P0；不得提前实现 P1/P2/P3 功能。
-6. **同步更新文档：** 改变系统行为时，必须更新源需求、相关设计、验收标准及版本历史（`docs/20-requirements`、`docs/30-design`、`docs/40-acceptance` 等）。
-7. **云端数据边界：** 原件存私有 GCS、TextIn 原始 JSON 存 Firestore、关系数据存 Cloud SQL PostgreSQL 18.6（实例 `saiflow-dev` / 库 `postgres` / schema `saiflow`，即 `postgres.saiflow`；ADR-001、ADR-005 回切记录）；仅服务端可访问云资源与 TextIn 凭据，必须符合 PDPA 与 `NFR-SEC-*`。
+6. **同步更新文档：** 改变系统行为时，需求与 AC 只通过 change 的 delta spec 落地（归档后进入 `openspec/specs/`），不再直接改写 `docs/20-requirements`、`docs/40-acceptance` 中的 EPIC/AC（迁移规则见 `AI-WORKFLOW.md` §4）；数据模型、架构等变化同步更新 `docs/30-design/` 及版本历史。
+7. **运行环境与数据边界：** 全部服务与 PostgreSQL 以 Docker Compose 运行在 LightNode VPS（曼谷）；原件等对象存私有 GCS（签名 URL 下载）；表单数据与系统数据都存 PostgreSQL，识别结果（OCR 原始 JSON、结构化 JSON）用 jsonb；见 ADR-008（取代 ADR-001、ADR-007）；凭据只在服务器环境变量文件与 GitHub Secrets 中，仅服务端可访问 GCS、数据库、OCR 与大模型凭据，必须符合 PDPA 与 `NFR-SEC-*`。
 8. **临时文件隔离：** 所有临时产物必须置于 `./temp/`。
-9. **过程与成果分层：** 过程产物写 `openspec/changes/<change>/`，产品级成果写 `docs/`；同一内容只定义一次，其余链接。
+9. **过程与成果分层：** 过程产物写 `openspec/changes/<change>/`，产品级成果写 `docs/`；同一内容只定义一次，其余链接。验证与部署证据只写 `openspec/changes/<change>/verification.md`，不写入 `docs/`。
 10. **勿手改生成物：** `.claude/commands/opsx/**` 与 `.claude/skills/openspec-*` 由 OpenSpec 生成，升级时会被覆盖；通过 `openspec update` 更新，不手工编辑。
+11. **`legacy/` 只读：** 旧代码可阅读参考，不修改、不被新代码引用、不复制未经测试的代码（ADR-006 §6）。
 
 ## 8. 变更前检查清单
 
@@ -111,6 +113,9 @@ AI 开发、分析、转换、调试、测试过程中产生的所有临时文�
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 3.2.0 | 2026-11-02 | Product Engineering | §1 与规则 7 按 ADR-008 修订：VPS + Docker，表单数据存 PostgreSQL jsonb，对象保持私有 GCS |
+| 3.1.0 | 2026-10-30 | Product Engineering | §1 与规则 7 的存储描述按 ADR-007 修订：表单数据存 Firestore，系统数据存 Cloud SQL |
+| 3.0.0 | 2026-10-30 | Product Engineering | 按 ADR-006：取消 subagent 入口，OpenSpec 管需求、SuperPowers 管实现；读取顺序与规则 6 改为以 `openspec/specs/` 为行为需求正本；新增 legacy/ 只读规则与验证证据位置；标注 apps/、services/ 为待重建目标结构 |
 | 2.4.0 | 2026-10-27 | Product Engineering | 产品云平台描述与规则 7 恢复 Cloud SQL PostgreSQL 18.6（saiflow-dev/postgres.saiflow；ADR-001、ADR-005 回切记录）；其余代理指令与权限不变 |
 | 2.3.0 | 2026-10-26 | Product Engineering | 关系数据库由 Cloud SQL 切换为自建 PostgreSQL 17（ADR-005），更新产品说明与云端数据边界 |
 | 2.2.0 | 2026-10-12 | Product Engineering | 完成 saiflow-docs 内容迁移；`docs/` 成为 SaiFlow 唯一文档根，旧 `saiflow-docs` 废弃 |

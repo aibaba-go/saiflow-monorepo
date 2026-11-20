@@ -3,8 +3,8 @@ doc_id: STD-007
 title: "SaiFlow — 文档来源与可编辑性指南"
 type: standard
 status: active
-version: 1.0.0
-updated: 2026-10-12
+version: 1.2.1
+updated: 2026-10-30
 owner: Product Engineering
 applies_to: [docs, openspec, packages, apps, services]
 doc_source: manual
@@ -78,7 +78,7 @@ generated_by: ""                      # 仅 generated / generated-but-curated �
 | `docs/10-product/*.md` | `manual` | Product / PM | PRD、Vision、Glossary、Personas |
 | `docs/20-requirements/**/*.md` | `manual` | Product / 需求分析 | EPIC、FR、NFR |
 | `docs/30-design/API-Spec.md` | `generated` | 后端 OpenAPI → OpenSpec sync | **唯一 API 契约发布点，禁止手写** |
-| `docs/30-design/Data-Model.md` | `manual` | 架构师 | 数据模型设计 |
+| `docs/30-design/Data-Model.md` | `manual` | 架构师 | 实体层，人工维护；字段以代码为唯一来源 |
 | `docs/30-design/OCR-Pipeline.md` | `manual` | 架构师 | OCR 流程设计 |
 | `docs/30-design/Architecture.md` | `manual` | 架构师 | 系统架构 |
 | `docs/30-design/adr/*.md` | `manual` | 架构师 | 架构决策记录 |
@@ -92,8 +92,8 @@ generated_by: ""                      # 仅 generated / generated-but-curated �
 | `openspec/specs/<capability>/` | `generated` | OpenSpec sync | 主能力契约，由变更归档后同步 |
 | `openspec/changes/<change>/proposal.md` | `generated` | OpenSpec propose | 变更提案 |
 | `openspec/changes/<change>/specs/<capability>/spec.md` | `generated` | OpenSpec propose | delta spec |
-| `openspec/changes/<change>/design.md` | `generated` | OpenSpec update | 变更级设计 |
-| `openspec/changes/<change>/tasks.md` | `generated` | OpenSpec apply 前派生 | 编码任务列表 |
+| `openspec/changes/<change>/plan.md` | `manual` | SuperPowers writing-plans，负责人确认 | 实施方案与任务（取代 design.md / tasks.md，ADR-006） |
+| `openspec/changes/<change>/verification.md` | `manual` | 实现阶段验证记录 | AC → 测试 → 结果；测试与部署证据只写此处 |
 | `openspec/changes/<change>/archive/*` | `generated` | OpenSpec archive | 已归档变更 |
 
 ### 3.3 代码目录
@@ -101,11 +101,12 @@ generated_by: ""                      # 仅 generated / generated-but-curated �
 | 路径 | `doc_source` | 说明 |
 |------|:------------:|------|
 | `apps/*/src/**` | `manual` | 前端业务代码，开发者手写 |
-| `packages/ui/src/**` | `manual` | 共享 UI 组件，开发者手写 |
+| `packages/ui/src/**` | `manual` | 设计令牌与主题（STD-008 的唯一来源，ADR-010），开发者手写 |
 | `packages/tsconfig/**` | `manual` | 共享 TS 配置，开发者手写 |
 | `packages/api-client/**` | `generated` | 由后端 OpenAPI 生成，**禁止手写第二份** |
 | `services/api/**` | `manual` | 后端 FastAPI 代码，是 API 契约的真实来源 |
 | `scripts/**` | `manual` | 仓库级脚本，开发者手写 |
+| `legacy/**` | `manual` | 旧代码只读参考（ADR-006），禁止修改 |
 
 ---
 
@@ -133,4 +134,7 @@ generated_by: ""                      # 仅 generated / generated-but-curated �
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 1.2.1 | 2026-11-07 | Product Engineering | `packages/ui/src/**` 改为设计令牌与主题（ADR-010） |
+| 1.2.0 | 2026-10-30 | Product Engineering | `Data-Model.md` 改为实体层，字段以代码为唯一来源（ADR-007） |
+| 1.1.0 | 2026-10-30 | Product Engineering | 按 ADR-006：change 产物以 plan.md、verification.md 取代 design.md、tasks.md；新增 `legacy/**` 行 |
 | 1.0.0 | 2026-10-12 | Product Engineering | 初始文档来源与可编辑性指南 |

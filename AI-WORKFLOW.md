@@ -3,129 +3,114 @@ doc_id: WF-001
 title: "SaiFlow — AI 协作工作流"
 type: standard
 status: active
-version: 1.1.0
-updated: 2026-10-12
+version: 2.1.0
+updated: 2026-10-30
 owner: Product Engineering
 audience: [ai-agent, engineer, pm]
+doc_source: manual
 ---
 
 # SaiFlow — AI 协作工作流
 
-> 本文件定义 AI（Claude Code + OpenSpec + SuperPowers）在本仓库的协作方式：**分层、阶段、subagent、统一提示词**。
-> 人类用**统一薄提示词**驱动；复杂度沉淀到 `skill` 与 `subagent` 定义中。
-> 入口顺序：`AGENTS.md`（仓库入口）→ `AI-WORKFLOW.md`（本文件，工作流细则）→ `openspec/`（变更流程）。
+> 本文件是 AI（Claude Code + OpenSpec + SuperPowers）在本仓库协作方式的唯一操作性规则：**OpenSpec 管“做什么”（需求），SuperPowers 管“怎么做”（实现）**，全部在主会话内推进，负责人确认每个决策点。决策依据见 `docs/30-design/adr/ADR-006-ai-native-workflow.md`。
+> 入口顺序：`AGENTS.md`（仓库入口）→ `AI-WORKFLOW.md`（本文件）→ `openspec/`（变更流程）。
 
-## 1. 三条铁律
+## 1. 铁律
 
-1. **过程与成果分层**：过程（变更提案 / delta spec / 任务）在 `openspec/`；成果（产品级持久文档）在 `docs/`。同一内容只定义一次，其余链接。
-2. **一个 change = 一个目录**：任何阶段的产物都写进 `openspec/changes/<change>/`，禁止另建全局过程目录（如 `01_propose/`）。
-3. **产物即契约，摘要只给人**：阶段之间靠**文件**交接；subagent 只向主代理回**摘要**（产物清单 + 关键结论 + 阻塞项），不回传细节。
+1. **过程与成果分层**：过程（变更提案 / delta spec / 方案 / 验证记录）在 `openspec/`；成果（产品级持久文档）在 `docs/`。同一内容只定义一次，其余链接。
+2. **一个 change = 一个目录**：一次变更的全部过程产物都写进 `openspec/changes/<change>/`，禁止另建全局过程目录（如 `01_propose/`、`docs/superpowers/`）。
+3. **需求只有一份正本**：行为需求（FR + Gherkin AC）的唯一正本是 `openspec/specs/<capability>/spec.md`。
 
-## 2. 分层与载体
+## 2. 阶段与工具分工
 
-| 层 | 载体 | 回答 | 说明 |
-|----|------|------|------|
-| 入口 | `AGENTS.md`、`AI-WORKFLOW.md` | 去哪读、怎么协作 | 导航与工作流 |
-| 能力 / 流程 | `.claude/skills/`（skill） | “怎么做” | 项目约定与环节纪律；可被 subagent 预载 |
-| 执行 / 隔离 | `.claude/agents/`（subagent） | “谁来做” | 角色 + 工具白名单 + 独立上下文 + 模型 |
-| 变更流程 | `openspec/` | “这次改什么” | 提案 → 设计 → 任务 → 实现 → 归档 |
-| 成果文档 | `docs/` | “产品是什么” | 持久知识：`00/01/10/20/30/40` + deployment/guides |
+交接点：delta spec 经负责人确认，且 `openspec validate <change>` 通过。
 
-**使用规则：**
+| 阶段 | 工具 / 命令 | 产物（位置） | 负责人确认点 |
+|------|-------------|--------------|--------------|
+| ① 需求澄清 | `/opsx:explore` | 无文件，或 change 内的笔记 | 需求边界、优先级（P0 限定）是否清楚 |
+| ② 需求规格 | `/opsx:propose`（叠加 `saiflow-requirements`） | `openspec/changes/<change>/proposal.md`、`.../specs/<capability>/spec.md` | **逐条确认** SHALL 语句与 Gherkin AC；`openspec validate <change>` 通过 |
+| ③ 实施方案 | `superpowers:writing-plans` | `openspec/changes/<change>/plan.md` | **逐项确认** 架构取舍、数据模型/接口变化、任务拆分；含权衡的决策另写 ADR |
+| ④ 隔离环境 | `superpowers:using-git-worktrees` | 分支 `feat/<change>` | — |
+| ⑤ 实现 | `superpowers:test-driven-development` + `superpowers:executing-plans` | `apps/**`、`packages/**`、`services/**` 代码与测试 | 计划内的检查点按 plan 约定确认 |
+| ⑥ 验证与审查 | `superpowers:verification-before-completion`、`superpowers:requesting-code-review` | `openspec/changes/<change>/verification.md`（AC → 测试 → 结果） | 审阅验证结果与审查意见 |
+| ⑦ 收尾 | `/opsx:archive`（在分支内、合并前完成）→ `superpowers:finishing-a-development-branch` | 合并分支；delta 合并进 `openspec/specs/`；change 移入 `openspec/changes/archive/` | 确认合并；**归档是必做步骤** |
 
-- OpenSpec 官方已提供 6 个 skill（`openspec-propose`、`openspec-apply-change`、`openspec-update-change`、`openspec-sync-specs`、`openspec-archive-change`、`openspec-explore`）——**复用，勿重造**。
-- 项目约束放在**叠加 skill**（`saiflow-conventions` 等）中，只补充“项目特有纪律”，不复制 OpenSpec 步骤。
-- **仅当**需要「上下文隔离 / 工具权限收窄 / 并行 / 换模型」时才用 subagent；纯知识型环节用 skill 即可。
-- **subagent 不能调用斜杠命令**（`/opsx:*` 是主会话的用户级触发器）。subagent 通过 **Bash 调用 `openspec` CLI**，或经 `skills:` 预载流程。
-- 分段只能沿**产物边界**切（每个边界处必须有自包含产物文件），否则会退化为“传话游戏”。
+## 3. 改动分级
 
-## 3. 阶段 ↔ OpenSpec 映射
+| 级别 | 判定标准 | 流程 |
+|------|----------|------|
+| **S — 小修** | 不改变任何 SHALL 语句或 AC 的可观察行为：样式、文案、重构、明显缺陷修复（行为本来就已在 spec 中定义） | 直接改代码 + 测试；提交信息引用相关 FR/AC ID |
+| **M — 行为变化** | 修改或新增少量 SHALL 语句/AC，不引入新实体或新接口 | ② delta spec → ③ 简短 plan（可一页）→ ⑤–⑦ |
+| **L — 新功能 / 新模块** | 新能力、新实体、新接口、架构调整 | 完整 ①–⑦ |
 
-| 阶段 | 角色（subagent） | 人类入口（斜杠） | 底层 CLI | 输入 | 产物 |
-|------|------------------|------------------|----------|------|------|
-| 需求分析 | `requirement-analyst` | `/opsx:propose` | `openspec new change` / `openspec instructions proposal\|spec` / `openspec validate` | `docs/10-product/**`、`docs/20-requirements/**`、变更名 | `openspec/changes/<change>/proposal.md`、`.../specs/<capability>/spec.md` |
-| 架构设计 | `architect` | `/opsx:update` | `openspec instructions design` / `openspec validate` | `proposal.md`、delta `spec.md`、`docs/30-design/**` | `.../design.md`；必要时 `docs/30-design/adr/ADR-*.md` |
-| 编码 | `coder` | `/opsx:apply` | `openspec instructions tasks` / `openspec status` | `design.md`、`tasks.md` | `apps/**`、`packages/**`、`services/**` 代码 + 单测 |
-| 测试 / 验证 | `tester` | （测试命令）+ `openspec validate` | `pytest` / `vitest`、`openspec validate` | `tasks.md`、验收标准（AC） | 测试报告（摘要）、validate 结论 |
-| 同步 / 归档 | 人类 / 主代理 | `/opsx:sync` → `/opsx:archive` | `openspec sync` / `openspec archive` | 已完成的 change | 主 specs 更新 + `changes/archive/` |
+判定不确定时，AI 必须向负责人询问级别，不得自行降级。
 
-> 小任务可跳过知识型阶段（如直接 `coder`）；阶段不是强制流水线。
+## 4. 文档分层与需求正本
 
-## 4. Subagent Registry
+| 内容 | 唯一正本 | 说明 |
+|------|----------|------|
+| 为什么做、产品范围、优先级 | `docs/10-product/`（PRD、Vision-Scope、Personas） | 产品级，不含实现细节 |
+| 术语 | `docs/10-product/Glossary.md` | 术语唯一来源 |
+| 行为需求（FR + Gherkin AC） | `openspec/specs/<capability>/spec.md` | 保留原 `FR-*`、`AC-*` ID，追溯不断链 |
+| 非功能需求 | `docs/20-requirements/non-functional/NFR.md` | 按 capability 引用 |
+| 架构、数据模型、ADR | `docs/30-design/` | 只写当前结构与决策，不写测试与部署记录；数据模型只写实体层，字段以代码为唯一来源 |
+| API 契约 | 后端 OpenAPI → `docs/30-design/API-Spec.md`（generated） | 禁止手写第二份 |
+| 一次变更的过程（规格增量、方案、验证） | `openspec/changes/<change>/` | 归档后保留在 `archive/` |
 
-| agent | 阶段 | tools | skills | model | 输入 | 产物 |
-|-------|------|-------|--------|-------|------|------|
-| `requirement-analyst` | 需求分析 | Read, Grep, Glob, Write, Edit, Bash | `saiflow-conventions`, `saiflow-requirements` | `inherit` | docs/10-product + docs/20-requirements + change 名 | proposal.md + delta spec |
-| `architect` | 架构设计 | Read, Grep, Glob, Write, Edit, Bash | `saiflow-conventions`, `saiflow-architecture` | `inherit` | proposal + spec + docs/30-design | design.md（+ADR） |
-| `coder` | 编码 | Read, Grep, Glob, Edit, Write, Bash | `saiflow-conventions` | `sonnet` | design.md + tasks.md | 代码 + 单测 |
-| `tester` | 测试 / 验证 | Read, Grep, Glob, Bash（只读 + 跑命令） | `saiflow-conventions`, `saiflow-testing` | `sonnet` | tasks.md + AC | 测试报告（摘要） |
+**迁移规则（旧 EPIC → capability）：**
 
-> 说明：
-> - `tools` 用工具名；若你的 Claude Code 版本支持作用域语法，可将 Bash 收窄为 `Bash(openspec:*)`、`Bash(pytest:*)` 等。
-> - `model` 别名为示例（`inherit`/`sonnet`/`opus`/`haiku`），以你本机版本可用值为准；机械阶段可换更便宜的模型以真正降本。
-> - `skills` 中的 `saiflow-*` 为待创建的项目叠加 skill（放入 `.claude/skills/`）。
+- 每重建一个模块，就把对应 EPIC 中的 FR 与 `docs/40-acceptance/Acceptance-Criteria.md` 中的 AC 按 PRD v3 改写，经该模块 change 的 delta spec 进入 `openspec/specs/<capability>/spec.md`。
+- 被迁移的 EPIC 章节标记 `deprecated` 并链接到对应 capability；全部迁完的 EPIC 整份设为 `status: deprecated`。`Requirements-Index.md` 的“设计引用 / 验证方式”列改为指向 capability。
+- 迁移时剔除过程信息与实现细节（存储键、日志式表述）；实现细节只出现在 `plan.md` 与代码中。
+- `docs/` 的版本历史只记录内容变化，**禁止**记录测试条数、构建哈希、切流比例等验证或部署证据。
 
-## 5. 统一人类提示词模板
-
-人类只需按下面模式说话（其余交给定义）：
+## 5. change 目录约定
 
 ```text
-你作为 <角色 / agent 名>，
-输入：<文件或目录，默认 openspec/changes/<change>/ 加相关 docs 路径>。
-在你的能力与工具范围内完成本职，产物写入 <目标目录，默认 openspec/changes/<change>/>。
-完成后只回报摘要（产物清单 + 关键结论 + 阻塞项）。
+openspec/changes/<change>/
+├── proposal.md                    # 为什么做、范围、Non-goals（OpenSpec）
+├── specs/<capability>/spec.md     # delta spec：SHALL + Gherkin AC（OpenSpec）
+├── plan.md                        # 实施方案（SuperPowers writing-plans）
+└── verification.md                # 验证记录：AC → 测试 → 结果
 ```
 
-**示例：**
+- `plan.md` 必须：引用本 change 的 FR/AC ID；遵循 STD-005（后端）/ STD-006（前端）；每个任务写明对应的测试；列出需要负责人确认的检查点。
+- `verification.md` 至少包含：AC ID、测试名、结果、未覆盖说明。测试命令、条数、部署记录只写这里。
+- **不写** OpenSpec 的 `design.md`、`tasks.md`；**不使用** `/opsx:apply`。若 CLI 强制要求 `tasks.md`，允许只含指向 `plan.md` 的链接的最小文件，不得重复任务内容。
 
-```text
-你作为 requirement-analyst，输入 docs/10-product/PRD-SaiFlow.md，
-产出本次变更 ocr-field-confidence 的 proposal 与 delta spec，写入 openspec/changes/ocr-field-confidence/。
-```
+## 6. 框架使用边界
 
-## 6. 交接契约（DoR / DoD）
-
-| 阶段 | 就绪（DoR，输入齐备） | 完成（DoD，产物合规） |
-|------|------------------------|------------------------|
-| 需求分析 | 变更名确定；产品诉求可定位到 docs/10-product 或 docs/20-requirements | proposal + spec 存在；每条需求 ≥1 条 Gherkin AC；`openspec validate` 通过 |
-| 架构设计 | proposal + delta spec 已就绪 | design.md 与 proposal/spec 一致；涉及架构决策已记 ADR |
-| 编码 | design.md + tasks.md 已就绪 | tasks 全部完成；lint/build/单测通过；提交引用 `<change>` |
-| 测试 / 验证 | 代码就绪 + AC 可枚举 | 测试已运行；结果映射到 AC；失败项与阻塞项已列明 |
+- **需求阶段（①②）只用 OpenSpec**，不调用 `superpowers:brainstorming`。SuperPowers 从 ③ `writing-plans` 开始接手，以已确认的 delta spec 为输入。项目规则优先于 skill 自带的触发要求。
+- SuperPowers 的 plan **不写入** `docs/superpowers/`，固定写入 `openspec/changes/<change>/plan.md`。
+- **不使用项目自定义 subagent**（已停用的定义在 `.claude/archive/`）。SuperPowers、OpenSpec 内部派生的 subagent（如代码审查）及其内部定义照常使用、不干预；仅当框架行为与本文件严重重复（如产出第二份规格或方案）时，才在本节加以约束。
+- **`/opsx:propose` 只生成到 specs 为止**：OpenSpec 官方 skill 与 `openspec status` 会提示继续生成 `design.md`、`tasks.md` 并运行 `/opsx:apply`，本项目忽略这些提示；`openspec status` 显示 `isPlanningComplete: false`、archive 报告 design/tasks 未完成均属预期。
+- 不手改 OpenSpec 生成物：`.claude/commands/opsx/**`、`.claude/skills/openspec-*`。
 
 ## 7. 命令速查
 
 ```bash
-# OpenSpec 变更流程（人类入口，主会话）
-/opsx:explore      # 探索 / 澄清想法（不写代码）
-/opsx:propose      # 新建变更并生成全部产物
-/opsx:update       # 修订已有变更的规划产物
-/opsx:apply        # 实现 tasks
-/opsx:sync         # delta 合并到主 specs
-/opsx:archive      # 归档完成的变更
+# 需求（OpenSpec，主会话）
+/opsx:explore                         # 澄清需求，不写代码
+/opsx:propose                         # 新建 change：proposal + delta spec
+openspec validate <change>          # 校验规格
+/opsx:archive                         # 合并 delta 到 openspec/specs/ 并归档
+openspec archive <change> --skip-specs   # 纯文档 / 基础设施 change 的归档（其 .openspec.yaml 须含 skip_specs: true）
 
-# 底层 CLI（subagent 通过 Bash 调用）
-openspec new change <name>
-openspec status --change <name> --json
-openspec instructions <artifact> --change <name> --json
-openspec validate --change <name>
-openspec sync
-openspec archive
+# 实现（SuperPowers）
+superpowers:writing-plans                       # 写 plan.md
+superpowers:using-git-worktrees                 # 隔离分支
+superpowers:test-driven-development             # 先测试后实现
+superpowers:executing-plans                     # 按 plan 执行
+superpowers:verification-before-completion      # 完成前验证
+superpowers:requesting-code-review              # 代码审查
+superpowers:finishing-a-development-branch      # 合并收尾
 ```
-
-## 8. 常见误区
-
-| 误区 | 纠正 |
-|------|------|
-| 由 subagent 调用 `/opsx:propose` | 不成立；subagent 走 `openspec` CLI 或预载 skill |
-| 为每个环节都建 subagent | 纯知识型环节用 skill 即可；subagent 只用于需要隔离/权限/并行的环节 |
-| 把 OpenSpec 步骤抄进自研 skill | 应叠加约束，复用官方 skill |
-| 依赖 subagent 摘要做交接 | 交接必须用产物文件；摘要只给主代理/人类看进度 |
-| 认为“开新上下文 = 省 token” | 省的是主上下文压力；总 token 常上升，除非配合模型分档 |
-| 重写一套 `saiflow-propose` 流程 | 报错/漂移的根源；只做增量约束 |
 
 ## Version History
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
+| 2.1.0 | 2026-10-30 | Product Engineering | §4：数据模型只写实体层，字段以代码为唯一来源（ADR-007） |
+| 2.0.0 | 2026-10-30 | Product Engineering | 按 ADR-006 重写：取消 subagent 阶段划分、subagent registry 与统一提示词模板；OpenSpec 管需求、SuperPowers 管实现；新增三级分级、文档分层与需求正本（`openspec/specs/`）、change 目录约定、框架使用边界 |
 | 1.1.0 | 2026-10-12 | Product Engineering | 随 saiflow-docs 迁移更新所有文档路径：`docs/product` → `docs/10-product`，`docs/architecture` → `docs/30-design` |
 | 1.0.0 | 2026-10-12 | Product Engineering | 初始 AI 协作工作流：分层、阶段↔OpenSpec 映射、subagent registry、统一提示词模板 |

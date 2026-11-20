@@ -1,0 +1,235 @@
+/* main views/ConfirmPage.vue in the prototype's card language: a preview card, a file card
+ * and a full-width 46px primary action (FR-SYS-118, 132). */
+.confirm {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+/* not a tab page: the action bar holds the safe area */
+.confirm.confirm {
+  padding-bottom: 0;
+}
+
+.content {
+  flex: 1;
+  padding: 16px var(--page-x, 16px) 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.review-context {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.file-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.switch-position {
+  flex: 1;
+  text-align: center;
+}
+
+.switch-btn {
+  min-width: var(--control-h);
+  min-height: var(--control-h);
+  border-radius: var(--control-radius);
+  border: 1px solid var(--brand-border);
+  background: var(--surface);
+  color: var(--brand-navy);
+  font-size: 18px;
+}
+
+.switch-btn:disabled {
+  opacity: 0.4;
+}
+
+.preview-wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border-radius: var(--card-radius);
+  overflow: hidden;
+  /* prototype .preview-stage: the sheet on a quiet stage */
+  padding: 16px;
+  background: color-mix(in srgb, var(--brand-blue-soft) 55%, var(--surface-muted));
+  border: 1px solid var(--brand-border);
+}
+
+.zoom-badge {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--brand-navy) 72%, transparent);
+  color: var(--brand-on-navy);
+}
+
+.preview {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.page-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: color-mix(in srgb, var(--brand-navy) 76%, transparent);
+  color: var(--brand-on-navy);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+
+.file-summary {
+  background: var(--surface);
+  border: 1px solid var(--brand-border);
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow-card);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.file-icon {
+  flex: none;
+  width: 44px;
+  height: 48px;
+  border-radius: 8px;
+  border: 1px solid var(--brand-border);
+  background: var(--surface-muted);
+  color: var(--icon);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+
+.file-ext {
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.file-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name {
+  font-size: 15px;
+  line-height: 1.5;
+  font-weight: 600;
+  color: var(--brand-navy);
+  overflow-wrap: anywhere;
+}
+
+.file-meta {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.file-state {
+  flex: none;
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--warning-bg);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--warning-text);
+}
+
+.file-state.started {
+  background: var(--success-bg);
+  color: var(--success-text);
+}
+
+.primary-btn {
+  min-height: 46px;
+  padding: 10px 16px;
+  border-radius: var(--control-radius);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 15px;
+  font-weight: 600;
+  transition: background-color 0.16s ease-out;
+}
+
+.primary-btn:active:not(:disabled) {
+  background: var(--primary-pressed);
+}
+
+.primary-btn:disabled {
+  opacity: 0.6;
+}
+
+.notice {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* prototype .actionbar: the caption, then the one primary action */
+.action-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: var(--surface);
+  border-top: 1px solid var(--brand-border);
+  padding: 8px var(--page-x, 16px) max(14px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bar-caption {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.status-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--control-radius);
+  background: var(--danger-bg);
+  text-align: center;
+  font-size: 13px;
+  color: var(--danger-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .primary-btn {
+    transition: none;
+  }
+}

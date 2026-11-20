@@ -1,123 +1,134 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
-import { App as AntApp, ConfigProvider } from 'antd';
-import thTH from 'antd/locale/th_TH';
-import enUS from 'antd/locale/en_US';
-import zhCN from 'antd/locale/zh_CN';
-import { useTranslation } from 'react-i18next';
-import type { UiLanguage } from './i18n/locales';
-import { ApiClientProvider } from './api/context';
-import { AuthProvider } from './auth/AuthContext';
-import { RequireAuth, RequirePermission } from './auth/guards';
-import AppLayout from './layouts/AppLayout';
-import LoginPage from './features/auth/LoginPage';
-import HomePage from './features/home/HomePage';
-import UploadPage from './features/upload/UploadPage';
-import VerificationPage from './features/verification/VerificationPage';
-import ReviewPage from './features/verification/ReviewPage';
-import BatchEditPage from './features/verification/BatchEditPage';
-import EntryArchivingPage from './features/entry/EntryArchivingPage';
-import ArchiveBrowserPage from './features/archive/ArchiveBrowserPage';
-import SettingsPage from './features/settings/SettingsPage';
-import OperationLogPage from './features/settings/OperationLogPage';
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { App as AntApp, Result } from "antd";
+import { useEffect } from "react";
+import { createBrowserRouter, Navigate, Route, RouterProvider, Routes } from "react-router-dom";
 
-const ANT_LOCALES: Record<UiLanguage, typeof thTH> = {
-  th: thTH,
-  en: enUS,
-  zh: zhCN,
-};
+import { AppConfig } from "./AppConfig";
+import { ImpersonatePage } from "./auth/ImpersonatePage";
+import { RequireUser } from "./auth/RequireUser";
+import { RequireVisitor } from "./auth/RequireVisitor";
+import { forgetSession, ME_KEY, type Me, useSessionNotice } from "./auth/session";
+import { useT } from "./i18n";
+import { AppLayout } from "./layout/AppLayout";
+import { ApplyOrgPage } from "./pages/ApplyOrgPage";
+import { DocumentPage } from "./pages/DocumentPage";
+import { HealthPage } from "./pages/HealthPage";
+import { HomePage } from "./pages/HomePage";
+import { LibraryPage } from "./pages/LibraryPage";
+import { OrgGate } from "./pages/OrgGate";
+import { OrgPage } from "./pages/OrgPage";
+import { ProfilePage } from "./pages/ProfilePage";
+import { LoginPage } from "./pages/LoginPage";
+import { NotificationsPage } from "./pages/NotificationsPage";
+import { PlansPage } from "./pages/PlansPage";
+import { RegisterGuidePage } from "./pages/RegisterGuidePage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
+import { ReportBrowserPage } from "./pages/ReportBrowserPage";
+import { ReportDesignPage } from "./pages/ReportDesignPage";
+import { ReportsPage } from "./pages/ReportsPage";
+import { ReportViewPage } from "./pages/ReportViewPage";
+import { ReviewDetailPage } from "./pages/ReviewDetailPage";
+import { ReviewSettingsPage } from "./pages/ReviewSettingsPage";
+import { ReviewsPage } from "./pages/ReviewsPage";
+import { RolesPage } from "./pages/RolesPage";
+import { TemplateDetailPage, TemplateNewPage } from "./pages/TemplateEditPage";
+import { TemplateSamplePage } from "./pages/TemplateSamplePage";
+import { TemplatesPage } from "./pages/TemplatesPage";
+import { UploadPage } from "./pages/UploadPage";
+import { VerifyPage } from "./pages/VerifyPage";
+import { setTenantGoneHandler, setUnauthenticatedHandler } from "./services/api";
+import { refreshTenants } from "./tenants/useCurrentTenant";
+import { useLanguage } from "./stores/language";
 
-/** 根组件：AntD locale 随 UI 语言联动（切换即时生效）。 */
-export default function App() {
-  const { i18n } = useTranslation();
-  const language = ((i18n.resolvedLanguage ?? i18n.language) as UiLanguage) ?? 'th';
+/** Any 401 outside login: forget who was signed in. A user's page then goes to
+ * /login?next= (090-04); a guest gets a new guest session from RequireVisitor (090-10). */
+function SessionWatcher() {
+  const queryClient = useQueryClient();
+  const setExpired = useSessionNotice((s) => s.setExpired);
+  const { message } = AntApp.useApp();
+  const t = useT();
+  useEffect(() => {
+    setUnauthenticatedHandler(() => {
+      const before = queryClient.getQueryData<Me | null>(ME_KEY);
+      if (before?.kind === "guest") void message.warning(t("err.guest_expired"));
+      else setExpired(true);
+      forgetSession(queryClient);
+    });
+    setTenantGoneHandler(() => void refreshTenants(queryClient));
+    return () => {
+      setUnauthenticatedHandler(() => {});
+      setTenantGoneHandler(() => {});
+    };
+  }, [queryClient, setExpired, message, t]);
+  return null;
+}
 
+function NotFound() {
+  const t = useT();
+  return <Result status="404" title={t("common.notFound")} />;
+}
+
+export function AppRoutes() {
+  const lang = useLanguage((s) => s.lang);
   return (
-    <ConfigProvider locale={ANT_LOCALES[language]}>
+    <AppConfig lang={lang}>
       <AntApp>
-        <ApiClientProvider>
-          <AuthProvider>
-            <BrowserRouter>
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route
-                element={
-                  <RequireAuth>
-                    <AppLayout />
-                  </RequireAuth>
-                }
-              >
-                <Route path="/" element={<HomePage />} />
-                <Route
-                  path="/upload"
-                  element={
-                    <RequirePermission permission="upload">
-                      <UploadPage />
-                    </RequirePermission>
-                  }
-                />
-                <Route
-                  path="/verification"
-                  element={
-                    <RequirePermission permission="verify">
-                      <VerificationPage />
-                    </RequirePermission>
-                  }
-                />
-                <Route
-                  path="/verification/batch"
-                  element={
-                    <RequirePermission permission="verify">
-                      <BatchEditPage />
-                    </RequirePermission>
-                  }
-                />
-                <Route
-                  path="/review"
-                  element={
-                    <RequirePermission permission="review">
-                      <ReviewPage />
-                    </RequirePermission>
-                  }
-                />
-                <Route
-                  path="/entry-archiving"
-                  element={
-                    <RequirePermission permission="entry">
-                      <EntryArchivingPage />
-                    </RequirePermission>
-                  }
-                />
-                <Route
-                  path="/archive"
-                  element={
-                    <RequirePermission permission="manage">
-                      <ArchiveBrowserPage />
-                    </RequirePermission>
-                  }
-                />
-                <Route
-                  path="/settings"
-                  element={
-                    <RequirePermission permission="configure">
-                      <SettingsPage />
-                    </RequirePermission>
-                  }
-                />
-                <Route
-                  path="/settings/operation-log"
-                  element={
-                    <RequirePermission permission="configure">
-                      <OperationLogPage />
-                    </RequirePermission>
-                  }
-                />
+        <SessionWatcher />
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/impersonate" element={<ImpersonatePage />} />
+          <Route path="/register" element={<RegisterGuidePage />} />
+          <Route path="/health" element={<HealthPage />} />
+          <Route element={<RequireVisitor />}>
+            {/* one layout for guest and user pages, so moving between them keeps it */}
+            <Route element={<AppLayout />}>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/upload" element={<UploadPage />} />
+              <Route path="/verify" element={<VerifyPage />} />
+              <Route path="/verify/:id" element={<VerifyPage />} />
+              <Route element={<RequireUser />}>
+                <Route path="/org" element={<OrgGate><OrgPage /></OrgGate>} />
+                <Route path="/org/apply" element={<ApplyOrgPage />} />
+                <Route path="/roles" element={<OrgGate><RolesPage /></OrgGate>} />
+                <Route path="/reviews" element={<ReviewsPage />} />
+                <Route path="/reviews/:id" element={<ReviewDetailPage />} />
+                <Route path="/review-settings" element={<ReviewSettingsPage />} />
+                <Route path="/templates" element={<TemplatesPage />} />
+                <Route path="/templates/new" element={<TemplateNewPage />} />
+                <Route path="/templates/samples/:id" element={<TemplateSamplePage />} />
+                <Route path="/templates/:id" element={<TemplateDetailPage />} />
+                <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/reports/:id/design" element={<ReportDesignPage />} />
+                <Route path="/reports/:id" element={<ReportViewPage />} />
+                <Route path="/report-view" element={<ReportBrowserPage />} />
+                <Route path="/report-view/:id" element={<ReportViewPage />} />
+                <Route path="/plans" element={<PlansPage />} />
+                <Route path="/notifications" element={<NotificationsPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/library" element={<LibraryPage />} />
+                <Route path="/documents/:id" element={<DocumentPage />} />
+                <Route path="/data" element={<Navigate to="/library" replace />} />
+                <Route path="*" element={<NotFound />} />
               </Route>
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-            </BrowserRouter>
-          </AuthProvider>
-        </ApiClientProvider>
+            </Route>
+          </Route>
+        </Routes>
       </AntApp>
-    </ConfigProvider>
+    </AppConfig>
+  );
+}
+
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+// A data router, so pages can block navigation with unsaved edits (FR-SYS-129); the
+// routes themselves stay in <AppRoutes>.
+const router = createBrowserRouter([{ path: "*", element: <AppRoutes /> }]);
+
+export function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
   );
 }

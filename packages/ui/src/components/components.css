@@ -1,0 +1,270 @@
+/* Shared component styles of @saiflow/ui (STD-008 tokens; fallbacks for apps without tokens.css). */
+
+.sf-visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.sf-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sf-btn {
+  min-height: 32px;
+  padding: 4px 14px;
+  border: 1px solid var(--border-strong, #cdd5e0);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: var(--text, #171a1c);
+  font: inherit;
+  cursor: pointer;
+}
+.sf-btn:hover {
+  border-color: var(--primary, #1a6fe8);
+  color: var(--primary-pressed, #124a9e);
+}
+.sf-btn:focus-visible,
+.sf-chart__table-wrap:focus-visible,
+.sf-rg-card:focus-visible {
+  outline: 2px solid var(--primary, #1a6fe8);
+  outline-offset: 2px;
+}
+
+/* ---------- ChartRenderer ---------- */
+.sf-chart {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  color: var(--text, #171a1c);
+  font-family: var(--font-stack, inherit);
+}
+.sf-chart__title {
+  flex: none;
+  margin: 0 0 8px;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.sf-chart__body {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+.sf-chart__canvas-wrap {
+  flex: 1 1 auto;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+}
+.sf-chart__canvas {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 160px;
+}
+.sf-chart__note {
+  margin: 0 0 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--info-bg, #eaf2ff);
+  color: var(--info-text, #1559c0);
+  font-size: 12px;
+  line-height: 18px;
+}
+.sf-chart__state {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 120px;
+  padding: 12px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--text-secondary, #5d6673);
+  overflow-wrap: anywhere;
+}
+.sf-chart__state--error {
+  color: var(--danger-text, #c4343a);
+}
+.sf-chart__state-title {
+  font-weight: 600;
+}
+.sf-chart__table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.sf-chart__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 20px;
+}
+.sf-chart__table th,
+.sf-chart__table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.sf-chart__table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-muted, #f0f3f7);
+  color: var(--text-secondary, #5d6673);
+  font-weight: 500;
+}
+.sf-chart__table tbody th {
+  font-weight: 400;
+}
+.sf-chart__table .sf-num {
+  text-align: right;
+}
+.sf-metric {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-content: center;
+  gap: 8px 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sf-metric__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  min-width: 0;
+}
+.sf-metric__value {
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.sf-metric__unit,
+.sf-metric__label {
+  color: var(--text-secondary, #5d6673);
+  font-size: 13px;
+}
+.sf-metric__label {
+  flex-basis: 100%;
+}
+
+/* ---------- ReportGrid ---------- */
+.sf-rg {
+  width: 100%;
+}
+.sf-rg-card {
+  box-sizing: border-box;
+  height: 100%;
+  padding: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  box-shadow: var(--shadow-card, var(--shadow-sm, none));
+}
+.sf-rg--design .sf-rg-card {
+  cursor: grab;
+}
+.sf-rg-card[aria-pressed="true"],
+.sf-rg-card.is-selected {
+  border-color: var(--primary, #1a6fe8);
+  box-shadow: 0 0 0 2px var(--primary-soft, #eaf2ff);
+}
+.sf-rg .react-grid-item.react-grid-placeholder {
+  background: var(--primary, #1a6fe8);
+  border-radius: 10px;
+  opacity: 0.15;
+}
+.sf-rg-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sf-rg-stack > li {
+  width: 100%;
+  min-width: 0;
+}
+.sf-rg-stack .sf-rg-card {
+  height: auto;
+}
+
+/* ---------- ReportCardInfo ---------- */
+.sf-card-info {
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border, #e2e8f0);
+  min-width: 0;
+  color: var(--text-secondary, #5d6673);
+  font-size: 12px;
+  line-height: 18px;
+}
+.sf-card-info__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.sf-card-info__line {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sf-card-info__line--warn {
+  color: var(--warning-text, #9a5b00);
+}
+.sf-card-info__actions {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  align-items: center;
+}
+.sf-card-info__list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 12px;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+}
+.sf-card-info__list dt {
+  font-weight: 600;
+  color: var(--text, #171a1c);
+}
+.sf-card-info__list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.sf-card-info__reasons {
+  margin: 0;
+  padding-left: 16px;
+}
