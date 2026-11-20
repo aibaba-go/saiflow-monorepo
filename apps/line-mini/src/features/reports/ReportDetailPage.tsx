@@ -6,6 +6,7 @@ import {
   type CardResult,
   type QueryResult,
   type ReportCard,
+  REPORT_PALETTES,
 } from "@saiflow/ui";
 import { RotateCw } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
@@ -31,6 +32,8 @@ import {
   parseCsv,
   reportData,
   useReport,
+  readReportAsset,
+  useReportContentPolicy,
   type Period,
   type Published,
   type ReportDetail,
@@ -57,6 +60,8 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
   const navigate = useNavigate();
   const labels = useReportLabels();
   const config = useMemo(() => configOf(detail.published.config), [detail.published.config]);
+  const contentPolicy = useReportContentPolicy(config.cards.some((card) => card.type === "html" && card.content?.mode === "url"));
+  const loadAsset = useCallback((id: string, signal: AbortSignal) => readReportAsset(id, detail.id, signal), [detail.id, detail.tenant_id]);
   const version = detail.published.version;
 
   // the whole-page period: null = as published (FR-REPORT-010)
@@ -268,7 +273,10 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
         locale={labels.locale}
         headingLevel={2}
         onRetry={() => void load(period, true)}
-        footer={info}
+        footer={card.type === "image" || card.type === "html" ? undefined : info}
+        loadAsset={loadAsset}
+        embedOrigins={contentPolicy.data?.origins}
+        palette={REPORT_PALETTES[config.appearance?.theme ?? "brand"]}
       />
     );
   };
@@ -351,6 +359,7 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
         <div className={`${s.cards} ${stale ? s.stale : ""}`} aria-busy={data.loading || undefined}>
           <ReportGrid
             mode="stack"
+            appearance={config.appearance}
             cards={config.cards}
             labels={labels.grid}
             stackItemHeight={stackHeight}

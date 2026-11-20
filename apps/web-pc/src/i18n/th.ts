@@ -39,6 +39,8 @@ export const th: Record<MessageKey, string> = {
   "brand.step3": "การตัดสินใจสุดท้ายเป็นของคุณ",
   "brand.step3Body": "ตรวจสอบเทียบกับต้นฉบับ เมื่อยืนยันแล้วจะเข้าสู่การทบทวนตามที่องค์กรกำหนด",
   "layout.mainNav": "เมนูหลัก",
+  "layout.collapseNav": "ย่อเมนูนำทาง",
+  "layout.expandNav": "ขยายเมนูนำทาง",
   "layout.navWorkspace": "พื้นที่ทำงาน",
   "layout.navManage": "องค์กรและการตั้งค่า",
   "layout.productSubtitle": "พื้นที่ทำงานเอกสาร",

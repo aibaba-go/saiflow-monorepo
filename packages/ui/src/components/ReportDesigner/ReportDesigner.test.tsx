@@ -53,6 +53,16 @@ function Harness({ initial, onConfig, ...rest }: Partial<ReportDesignerProps> & 
 }
 
 describe("ReportDesigner (FR-REPORT-005, -006, -013, -014)", () => {
+  it("adds static HTML with a content editor instead of dataset bindings", async () => {
+    const onConfig = vi.fn();
+    render(<Harness initial={EMPTY} onConfig={onConfig} />);
+    await userEvent.click(screen.getByRole("button", { name: L.add(L.chartTypes.html) }));
+    const added = onConfig.mock.calls.at(-1)![0] as ReportConfig;
+    expect(added.cards[0]?.data).toBeNull();
+    expect(await screen.findByRole("textbox", { name: "HTML" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: L.template })).not.toBeInTheDocument();
+  });
+
   it("adds a card from the palette and opens its panel", async () => {
     const onConfig = vi.fn();
     render(<Harness initial={EMPTY} onConfig={onConfig} />);
@@ -62,6 +72,17 @@ describe("ReportDesigner (FR-REPORT-005, -006, -013, -014)", () => {
     const added = onConfig.mock.calls.at(-1)![0] as ReportConfig;
     expect(added.cards).toHaveLength(1);
     expect(added.cards[0]).toMatchObject({ type: "bar", layout: { x: 0, y: 0, w: 6, h: 4 } });
+    expect(await screen.findByRole("region", { name: L.cardPanel })).toBeInTheDocument();
+  });
+
+  it.each(["bar", "line", "pie", "donut", "metric", "table"] as const)("keeps the %s palette tile accessible with a decorative chart icon", async (type) => {
+    const onConfig = vi.fn();
+    render(<Harness initial={EMPTY} onConfig={onConfig} />);
+    const tile = screen.getByRole("button", { name: L.add(L.chartTypes[type]) });
+    expect(tile.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    await userEvent.click(tile);
+    const added = onConfig.mock.calls.at(-1)![0] as ReportConfig;
+    expect(added.cards[0]?.type).toBe(type);
     expect(await screen.findByRole("region", { name: L.cardPanel })).toBeInTheDocument();
   });
 

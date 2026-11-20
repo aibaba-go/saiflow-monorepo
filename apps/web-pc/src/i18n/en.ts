@@ -38,6 +38,8 @@ export const en = {
   "brand.step3": "The final judgement is yours",
   "brand.step3Body": "Verify against the original; once confirmed it goes to review as your organization requires.",
   "layout.mainNav": "Main navigation",
+  "layout.collapseNav": "Collapse navigation",
+  "layout.expandNav": "Expand navigation",
   "layout.navWorkspace": "Workspace",
   "layout.navManage": "Organization & settings",
   "layout.productSubtitle": "Document workspace",

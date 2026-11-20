@@ -22,6 +22,15 @@ export interface Period {
 const rid = (id: number) => ({ params: { path: { report_id: id } } });
 
 export const listReports = () => call(api.GET("/api/v1/reports"));
+export const readReportAsset = (assetId: string, reportId: number, signal: AbortSignal) => call(api.GET("/api/v1/reports/assets/{asset_id}", {
+  signal, params: { path: { asset_id: assetId }, query: { report_id: reportId } }, parseAs: "blob",
+})) as Promise<Blob>;
+
+export function useReportContentPolicy(wanted: boolean) {
+  const { tenant } = useCurrentTenant();
+  return useQuery({ queryKey: ["report-content-policy", tenant?.tenant_id], queryFn: () => call(api.GET("/api/v1/reports/content-policy")), enabled: wanted && !!tenant });
+}
+
 export const getReport = (id: number) => call(api.GET("/api/v1/reports/{report_id}", rid(id)));
 export const reportData = (id: number, period: Period | null, refresh: boolean) =>
   call(api.POST("/api/v1/reports/{report_id}/data", { ...rid(id), body: { period, refresh } })) as Promise<QueryResult>;

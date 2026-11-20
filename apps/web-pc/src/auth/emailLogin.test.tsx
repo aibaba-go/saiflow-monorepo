@@ -29,6 +29,7 @@ function backend(routes: Record<string, (r: Request) => Response | Promise<Respo
   };
   return mockApi({
     "GET /api/v1/me": () => (me ? json(200, me) : json(401, { code: "unauthenticated" })),
+    "GET /api/v1/me/homepage": () => json(200, { report_id: null, default: "personal" }),
     "GET /api/v1/me/tenants": () => json(200, []),
     "GET /api/v1/me/notifications": () => json(200, { items: [], unread_count: 0, next_before: null }),
     "POST /api/v1/auth/email-code": () => json(204, null),

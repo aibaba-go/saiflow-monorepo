@@ -30,6 +30,8 @@ export interface ChartRendererProps {
   /** Extra content under the chart (e.g. diagnostics or "stale data" notice from the app). */
   footer?: ReactNode;
   className?: string;
+  loadAsset?: (id: string, signal: AbortSignal) => Promise<Blob>;
+  embedOrigins?: readonly string[];
 }
 
 function DataTable({ model, labels, caption, hidden }: { model: ChartModel; labels: ChartLabels; caption: string; hidden?: boolean }) {
@@ -132,6 +134,48 @@ function EChartCanvas({ option, label, failedText }: { option: EChartsCoreOption
   );
 }
 
+function StaticImage({ card, loadAsset, labels }: { card: ReportCard; loadAsset?: ChartRendererProps["loadAsset"]; labels: ChartLabels }) {
+  const [loaded, setLoaded] = useState<{ id: string; loader: ChartRendererProps["loadAsset"]; attempt: number; url: string | null; failed: boolean } | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const id = card.content?.asset_id;
+  const current = loaded?.id === id && loaded?.loader === loadAsset && loaded?.attempt === attempt ? loaded : null;
+  const url = current?.url;
+  const failed = !id || !loadAsset || current?.failed;
+  useEffect(() => {
+    if (!id || !loadAsset) return;
+    const controller = new AbortController();
+    let objectUrl: string | null = null;
+    loadAsset(id, controller.signal).then((blob) => {
+      if (controller.signal.aborted) return;
+      objectUrl = URL.createObjectURL(blob);
+      setLoaded({ id, loader: loadAsset, attempt, url: objectUrl, failed: false });
+    }).catch(() => { if (!controller.signal.aborted) setLoaded({ id, loader: loadAsset, attempt, url: null, failed: true }); });
+    return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [id, loadAsset, attempt]);
+  if (failed) return <StateBox kind="error">{labels.error}<button type="button" className="sf-btn" onClick={() => setAttempt(attempt + 1)}>{labels.retry}</button></StateBox>;
+  return url ? <img src={url} alt={card.content?.alt ?? ""} style={{ width: "100%", height: "100%", objectFit: card.content?.fit ?? "contain" }} /> : <StateBox kind="loading">{labels.loading}</StateBox>;
+}
+
+function safeHtml(html: string): string {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const tags = new Set("DIV SPAN P H1 H2 H3 H4 H5 H6 BR HR STRONG B EM I U SMALL UL OL LI TABLE THEAD TBODY TR TD TH BLOCKQUOTE PRE CODE".split(" "));
+  const styles = new Set("color background-color font-size font-weight text-align padding margin border border-radius line-height width max-width height".split(" "));
+  const clean = (parent: Element) => {
+    for (const el of [...parent.children]) {
+      if (!tags.has(el.tagName)) { el.remove(); continue; }
+      const declarations = (el.getAttribute("style") ?? "").split(";").filter((d) => {
+        const [name, value] = d.split(":");
+        return styles.has(name?.trim().toLowerCase() ?? "") && /^[a-zA-Z0-9#.%\s-]{1,100}$/.test(value?.trim() ?? "");
+      });
+      for (const attr of [...el.attributes]) el.removeAttribute(attr.name);
+      if (declarations.length) el.setAttribute("style", declarations.join(";"));
+      clean(el);
+    }
+  };
+  clean(doc.body);
+  return `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><style>body{font-family:system-ui;margin:16px;color:#243858}table{border-collapse:collapse;width:100%}td,th{padding:8px;border:1px solid #ddd}</style>${doc.body.innerHTML}`;
+}
+
 function StateBox({ kind, children }: { kind: "loading" | "empty" | "error" | "info"; children: ReactNode }) {
   return (
     <div className={`sf-chart__state sf-chart__state--${kind}`} role="status">
@@ -156,6 +200,8 @@ export function ChartRenderer({
   onRetry,
   footer,
   className,
+  loadAsset,
+  embedOrigins = [],
 }: ChartRendererProps) {
   const labels = useMemo(() => mergeChartLabels(labelsIn), [labelsIn]);
   const title = card.title?.trim() ?? "";
@@ -171,7 +217,26 @@ export function ChartRenderer({
   );
 
   let body: ReactNode;
-  if (loading || !result || !model) {
+  const isStatic = card.type === "image" || card.type === "html";
+  if (card.type === "image") {
+    body = <StaticImage card={card} loadAsset={loadAsset} labels={labels} />;
+  } else if (card.type === "html") {
+    const content = card.content;
+    const external = content?.mode === "url";
+    const url = content?.url ?? "";
+    let allowed = false;
+    if (external) {
+      try {
+        const parsed = new URL(url);
+        allowed = parsed.protocol === "https:" && !parsed.username && !parsed.password && !parsed.search && !parsed.hash && embedOrigins.includes(parsed.origin) && parsed.origin !== window.location.origin;
+      } catch { allowed = false; }
+    }
+    body = external && !allowed ? <StateBox kind="error">{labels.error}</StateBox> : (
+      <iframe title={title || labels.chartTypes.html} sandbox="" referrerPolicy="no-referrer" loading="lazy"
+        src={external ? url : undefined} srcDoc={external ? undefined : safeHtml(content?.html ?? "")}
+        style={{ width: "100%", height: "100%", border: 0 }} />
+    );
+  } else if (loading || !result || !model) {
     body = <StateBox kind="loading">{labels.loading}</StateBox>;
   } else if (result.status === "error" || negativeInPie) {
     const code = negativeInPie ? "negative_in_pie" : (result.error_code ?? "");
@@ -238,7 +303,8 @@ export function ChartRenderer({
   return (
     <section
       className={`sf-chart sf-chart--${card.type}${className ? ` ${className}` : ""}`}
-      aria-busy={loading || !result ? true : undefined}
+      aria-busy={!isStatic && (loading || !result) ? true : undefined}
+      style={card.style?.surface === "tinted" ? { background: `${colors[0]}12` } : undefined}
       data-card-id={card.id}
     >
       {showTitle && title && (

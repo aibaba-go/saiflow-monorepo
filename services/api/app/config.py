@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     # web-pc's public origin, e.g. https://saiflow-app.aibaba.asia: where an admin's
     # "log in as this user" link points (FR-SYS-145); unset = that link answers 503
     web_pc_origin: str | None = None
+    report_embed_origins: str = ""
     smtp_host: str | None = None
     smtp_port: int = 587
     smtp_username: str | None = None

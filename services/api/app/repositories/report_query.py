@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import text
@@ -186,6 +187,98 @@ def _iso(parts: str) -> str:
     )
 
 
+def _filter_ctes(spec: CardSpec, params: dict[str, Any]) -> list[str]:
+    if not spec.filters:
+        return []
+    rules = [r for group in spec.filters for r in group.rules]
+    raw, cleaned, states, dates, values = [], [], [], [], []
+    predicates = []
+    for i, rule in enumerate(rules):
+        name = f"f{i}"
+        slot = rule.slot
+        if slot.source == "header":
+            params[f"{name}_path"] = list(slot.keys)
+            source = f"i.doc #> CAST(:{name}_path AS text[])"
+        else:
+            params[f"{name}_col"] = slot.keys[0]
+            source = f"i.row -> CAST(:{name}_col AS text)"
+        raw.append(f"{source} AS {name}")
+        cleaned.append(f"{_cat_text(f'f.{name}')} AS {name}_empty")
+        txt = f"f.{name}_txt"
+        if slot.type == "string":
+            clean = (
+                f"CASE WHEN jsonb_typeof(f.{name}) IN ('string', 'number') "
+                f"THEN {_cat_text(f'f.{name}')} END"
+            )
+            val = txt
+        elif slot.type == "date":
+            clean = _date_text(f"f.{name}")
+            states.append(f"{_date_parts(txt)} AS {name}_parts")
+            dates.append(f"{_iso(f'f.{name}_parts')} AS {name}_iso")
+            val = (
+                f"CASE WHEN pg_input_is_valid(f.{name}_iso, 'date') "
+                f"THEN CAST(f.{name}_iso AS date) END"
+            )
+        else:
+            clean = _num_text(f"f.{name}")
+            states.append(f"{_number_state(txt, slot.type)} AS {name}_state")
+            val = f"CASE WHEN f.{name}_state = 'ok' THEN {_number_value(txt, slot.type)} END"
+        cleaned.append(f"{clean} AS {name}_txt")
+        values.append(f"{val} AS {name}_value")
+        expr = f"f.{name}_value"
+        sqltype = "text" if slot.type == "string" else "date" if slot.type == "date" else "numeric"
+        op = rule.op
+        if op in ("empty", "not_empty"):
+            predicates.append(f"f.{name}_empty IS {'NOT ' if op == 'not_empty' else ''}NULL")
+            continue
+        typed = [
+            date.fromisoformat(v)
+            if sqltype == "date"
+            else Decimal(v)
+            if sqltype == "numeric"
+            else v
+            for v in rule.values
+        ]
+        if op in ("in", "not_in"):
+            params[f"{name}_values"] = typed
+            cmp = "= ANY" if op == "in" else "<> ALL"
+            predicates.append(f"{expr} {cmp}(CAST(:{name}_values AS {sqltype}[]))")
+            continue
+        for j, value in enumerate(typed):
+            params[f"{name}_v{j}"] = value
+        right = f"CAST(:{name}_v0 AS {sqltype})"
+        if op == "between":
+            pred = f"{expr} BETWEEN {right} AND CAST(:{name}_v1 AS {sqltype})"
+        elif op == "contains":
+            pred = f"strpos(lower({expr}), lower({right})) > 0"
+        else:
+            operator = {"eq": "=", "neq": "<>", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}[op]
+            pred = f"{expr} {operator} {right}"
+        predicates.append(pred)
+    conditions, start = [], 0
+    for group in spec.filters:
+        end = start + len(group.rules)
+        conditions.append(
+            "(" + (" AND " if group.match == "and" else " OR ").join(predicates[start:end]) + ")"
+        )
+        start = end
+
+    def stage(name, source, projections):
+        extra = ", " + ", ".join(projections) if projections else ""
+        return f"{name} AS (SELECT f.*{extra} FROM {source} f OFFSET 0)"
+
+    return [
+        "filter_raw AS (SELECT i.*, " + ", ".join(raw) + " FROM items i OFFSET 0)",
+        stage("filter_text", "filter_raw", cleaned),
+        stage("filter_state", "filter_text", states),
+        stage("filter_dates", "filter_state", dates),
+        stage("filter_values", "filter_dates", values),
+        "filtered_items AS (SELECT f.job_id, f.doc, f.row, f.kind FROM filter_values f WHERE "
+        + " AND ".join(conditions)
+        + " OFFSET 0)",
+    ]
+
+
 def build(
     spec: CardSpec,
     *,
@@ -267,6 +360,8 @@ def build(
     # line rows at each stage. Only t is reused by groups/diagnostics and must be materialized.
     fence = "" if spec.grain == "table" else "MATERIALIZED "
     offset = " OFFSET 0" if spec.grain == "table" else ""
+    filter_ctes = _filter_ctes(spec, params)
+    source_items = "filtered_items" if filter_ctes else "items"
     x = (
         f"x AS {fence}(SELECT i.job_id, i.kind, "
         + ", ".join(
@@ -278,7 +373,7 @@ def build(
                 raw("u_raw", spec.unit),
             ]
         )
-        + f" FROM items i{offset})"
+        + f" FROM {source_items} i{offset})"
     )
     y = (
         f"y AS {fence}(SELECT x.job_id, x.kind, "
@@ -436,7 +531,7 @@ def build(
     # (FR-REPORT-017, plan Q11).
     sql = (
         "WITH "
-        + ",\n".join([base, items, x, y, z, w, calendar, v, t, d, g])
+        + ",\n".join([base, items, *filter_ctes, x, y, z, w, calendar, v, t, d, g])
         + "\nSELECT d.*, g.dimension, g.series, g.unit, g.value, g.cnt, g.valid, "
         "g.cnt IS NOT NULL AS grp FROM d LEFT JOIN g ON true "
         f"ORDER BY {order}"

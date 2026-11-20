@@ -3,9 +3,35 @@
  * Kept structural so the generated API client types can be passed in directly.
  */
 
-export type ChartType = "bar" | "line" | "pie" | "donut" | "metric" | "table";
+export type ChartType = "bar" | "line" | "pie" | "donut" | "metric" | "table" | "image" | "html";
 
-export const CHART_TYPES: readonly ChartType[] = ["bar", "line", "pie", "donut", "metric", "table"];
+export const CHART_TYPES: readonly ChartType[] = ["bar", "line", "pie", "donut", "metric", "table", "image", "html"];
+
+export interface FilterRule {
+  path: string;
+  op: "eq" | "neq" | "in" | "not_in" | "empty" | "not_empty" | "contains" | "gt" | "gte" | "lt" | "lte" | "between";
+  value?: string | string[];
+}
+
+export interface FilterGroup {
+  match: "and" | "or";
+  rules: FilterRule[];
+}
+
+export interface ReportAppearance {
+  theme?: "brand" | "ocean" | "sunset" | "forest";
+  background?: string;
+  radius?: number;
+  gap?: number;
+  shadow?: boolean;
+}
+
+export const REPORT_PALETTES = {
+  brand: ["#1764C0", "#18A999", "#F5AD3C", "#764EC4", "#E06484", "#34496E"],
+  ocean: ["#0869A6", "#13AAB4", "#6574CD", "#53BDA5", "#88A5DE", "#DE9862"],
+  sunset: ["#D96464", "#ED9B4B", "#9763BA", "#D5B455", "#528EA3", "#D26CA6"],
+  forest: ["#2B8866", "#89AE4A", "#D3AD48", "#439DA8", "#746CB5", "#BE7960"],
+} as const;
 
 export interface CardLayout {
   x: number;
@@ -15,6 +41,9 @@ export interface CardLayout {
 }
 
 export interface ReportCardStyle {
+  direction?: "vertical" | "horizontal";
+  fill?: boolean;
+  surface?: "white" | "tinted";
   precision?: number | null;
   colors?: string[] | null;
   legend?: boolean | null;
@@ -43,6 +72,7 @@ export interface ReportCardData {
   date_field?: { path?: string | null } | null;
   unit?: { mode?: "fixed" | "field" | null; value?: string | null; path?: string | null } | null;
   confirmed_paths?: string[] | null;
+  filters?: FilterGroup | null;
 }
 
 export interface ReportCard {
@@ -52,6 +82,14 @@ export interface ReportCard {
   layout: CardLayout;
   data?: ReportCardData | null;
   style?: ReportCardStyle | null;
+  content?: {
+    asset_id?: string;
+    alt?: string;
+    fit?: "contain" | "cover";
+    mode?: "html" | "url";
+    html?: string;
+    url?: string;
+  } | null;
 }
 
 export type CardResultStatus = "ok" | "error" | "not_applicable" | "empty";
@@ -114,6 +152,8 @@ export interface ReportConfig {
   period?: ReportPeriodConfig | null;
   grid?: { cols?: number; row_height?: number } | null;
   cards: ReportCard[];
+  filters?: (FilterGroup & { targets: Record<string, Record<string, string>> }) | null;
+  appearance?: ReportAppearance | null;
 }
 
 export interface QueryResult {

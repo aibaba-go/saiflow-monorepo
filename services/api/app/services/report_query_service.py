@@ -184,6 +184,8 @@ async def run_page(
         if spec is None:
             cards.append(_card(card_id, "error", "invalid_config", False))
             continue
+        if spec.type in ("image", "html"):
+            continue
         cards.append(
             await run_card(
                 db, spec, tenant_id=tenant_id, scope_user_id=scope_user_id, period=period
@@ -252,7 +254,7 @@ def synthetic_page(
     for card_id, spec in check.entries:
         if spec is None:
             cards.append(_card(card_id, "error", "invalid_config", False))
-        else:
+        elif spec.type not in ("image", "html"):
             cards.append(synthetic_card(spec, period))
     return {
         "generated_at": now,

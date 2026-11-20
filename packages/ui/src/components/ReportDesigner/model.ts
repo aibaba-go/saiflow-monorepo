@@ -74,6 +74,8 @@ export const DEFAULT_SIZES: Record<ChartType, { w: number; h: number }> = {
   donut: { w: 4, h: 4 },
   metric: { w: 3, h: 2 },
   table: { w: 6, h: 4 },
+  image: { w: 4, h: 3 },
+  html: { w: 6, h: 4 },
 };
 
 export function emptyReportConfig(): ReportConfig {
@@ -137,18 +139,37 @@ export function addCard(config: ReportConfig, type: ChartType, id?: string): { c
     type,
     title: "",
     layout: { ...place, ...size },
-    data: defaultCardData(type),
+    data: type === "image" || type === "html" ? null : defaultCardData(type),
+    content: type === "image" ? { alt: "", fit: "contain" } : type === "html" ? { mode: "html", html: "<h2></h2>" } : undefined,
     style: { precision: 2 },
   };
   return { config: { ...config, cards: [...config.cards, card] }, id: cardId };
 }
 
 export function removeCard(config: ReportConfig, id: string): ReportConfig {
-  return { ...config, cards: config.cards.filter((c) => c.id !== id) };
+  const targets = { ...config.filters?.targets };
+  delete targets[id];
+  return { ...config, cards: config.cards.filter((c) => c.id !== id), ...(config.filters ? { filters: Object.keys(targets).length ? { ...config.filters, targets } : null } : {}) };
 }
 
 export function updateCard(config: ReportConfig, id: string, fn: (card: ReportCard) => ReportCard): ReportConfig {
-  return { ...config, cards: config.cards.map((c) => (c.id === id ? fn(c) : c)) };
+  const previous = config.cards.find((c) => c.id === id);
+  if (!previous) return config;
+  let next = fn(previous);
+  let filters = config.filters;
+  if (filters?.targets[id]) {
+    if (next.type === "image" || next.type === "html") {
+      const targets = { ...filters.targets };
+      delete targets[id];
+      filters = Object.keys(targets).length ? { ...filters, targets } : null;
+    } else if (previous.data?.template_id !== next.data?.template_id || previous.data?.grain !== next.data?.grain || previous.data?.table_key !== next.data?.table_key) {
+      filters = { ...filters, targets: { ...filters.targets, [id]: {} } };
+    } else if (previous.type !== next.type && next.data) {
+      const mapped = Object.values(filters.targets[id]!);
+      next = { ...next, data: { ...next.data, confirmed_paths: [...new Set([...(next.data.confirmed_paths ?? []), ...(previous.data?.confirmed_paths ?? []).filter((p) => mapped.includes(p))])] } };
+    }
+  }
+  return { ...config, cards: config.cards.map((c) => (c.id === id ? next : c)), ...(config.filters ? { filters } : {}) };
 }
 
 /** New grid positions from the canvas (drag, resize or keyboard), kept inside the grid. */
@@ -168,6 +189,8 @@ export function applyLayouts(config: ReportConfig, layouts: LayoutsById): Report
 /** The chart type rules: metric has no dimension; metric, pie and donut have no series;
  * bar, line, pie and donut need a date or category dimension. */
 export function changeType(card: ReportCard, type: ChartType): ReportCard {
+  if (type === "image" || type === "html") return { ...card, type, data: null, content: type === "image" ? { alt: "", fit: "contain" } : { mode: "html", html: "<h2></h2>" } };
+  if (card.type === "image" || card.type === "html") return { ...card, type, content: null, data: defaultCardData(type) };
   const data: ReportCardData = { ...(card.data ?? {}) };
   if (type === "metric") {
     delete data.dimension;
@@ -197,12 +220,13 @@ export function usedPaths(data: ReportCardData | null | undefined): string[] {
   push(data.series?.path);
   push(data.date_field?.path);
   if (data.measure?.agg !== "count") push(data.unit?.path);
+  data.filters?.rules.forEach((rule) => push(rule.path));
   return out;
 }
 
 /** Keep only confirmations of paths still in use. */
-export function pruneConfirmed(data: ReportCardData): ReportCardData {
-  const used = usedPaths(data);
+export function pruneConfirmed(data: ReportCardData, pagePaths: readonly string[] = []): ReportCardData {
+  const used = [...usedPaths(data), ...pagePaths];
   const confirmed = (data.confirmed_paths ?? []).filter((p) => used.includes(p));
   return { ...data, confirmed_paths: confirmed };
 }

@@ -1,14 +1,16 @@
 """The signed-in customer's own identity and profile."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Response
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import (
     get_db,
     get_email_sender,
     get_principal,
+    get_tenant_context,
     require_csrf_header,
     require_registered_user,
     require_user,
@@ -61,6 +63,38 @@ async def send_email_code(
 
 
 Db = Annotated[AsyncSession, Depends(get_db)]
+
+
+class HomepageUpdate(BaseModel):
+    report_id: Annotated[int, Field(strict=True, gt=0, le=2**63 - 1)] | None
+
+
+class HomepageOut(BaseModel):
+    report_id: int | None
+    default: Literal["personal", "organization"]
+
+
+@router.get("/homepage", operation_id="getHomepage", response_model=HomepageOut)
+async def get_homepage(
+    db: Db,
+    ctx: Annotated[tenant_access.TenantContext, Depends(get_tenant_context)],
+    principal: Annotated[Principal, Depends(require_registered_user)],
+) -> dict:
+    from app.services import homepage_service
+
+    return await homepage_service.read(db, ctx)
+
+
+@router.put("/homepage", operation_id="setHomepage", response_model=HomepageOut)
+async def set_homepage(
+    req: HomepageUpdate,
+    db: Db,
+    ctx: Annotated[tenant_access.TenantContext, Depends(get_tenant_context)],
+    principal: Annotated[Principal, Depends(require_registered_user)],
+) -> dict:
+    from app.services import homepage_service
+
+    return await homepage_service.choose(db, ctx, req.report_id)
 
 
 @router.post("/registration", operation_id="register", response_model=MeResponse)

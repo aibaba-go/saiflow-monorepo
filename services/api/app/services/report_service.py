@@ -27,6 +27,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clock import utcnow
+from app.config import Settings
 from app.errors import AppError
 from app.models import (
     DocumentTemplate,
@@ -48,6 +49,7 @@ from app.services.report_config import (
     storable_errors,
     validate,
 )
+from app.services.report_content import sanitize_config
 from app.services.tenant_access import TenantContext, not_found, submitter_scope
 
 REPORT_PLANS = frozenset({"starter", "intermediate", "advance"})
@@ -587,6 +589,7 @@ async def save(
     revision: Any,
     name: Any,
     config: Any,
+    settings: Settings | None = None,
 ) -> Report:
     report = await get_report(db, tenant_id, report_id, for_update=True)
     _check_revision(report, revision)
@@ -595,6 +598,12 @@ async def save(
     if problems:
         raise invalid(problems)
     allowed = await allowed_versions(db, tenant_id, report.id)
+    config = sanitize_config(config, settings)
+    from app.services.report_asset_service import binding_errors as asset_errors
+
+    problems = await asset_errors(db, tenant_id, config)
+    if problems:
+        raise invalid(problems)
     report.name = clean
     report.draft = config
     _touch(report, actor)
@@ -605,16 +614,24 @@ async def save(
 
 
 async def publish(
-    db: AsyncSession, tenant_id: int, actor: Actor, report_id: int, revision: Any
+    db: AsyncSession,
+    tenant_id: int,
+    actor: Actor,
+    report_id: int,
+    revision: Any,
+    settings: Settings | None = None,
 ) -> Report:
     report = await get_report(db, tenant_id, report_id, for_update=True)
     _check_revision(report, revision)
-    config = report.draft
+    config = sanitize_config(report.draft, settings)
     problems = storable_errors(config)
     allowed = await allowed_versions(db, tenant_id, report.id)
     if not problems:
         problems = validate(config, allowed, for_publish=True).errors
         problems += await binding_errors(db, tenant_id, report.id, config)
+        from app.services.report_asset_service import binding_errors as asset_errors
+
+        problems += await asset_errors(db, tenant_id, config)
     if problems:
         raise invalid(problems)  # the old snapshot stays published
     problems = await _write_refs(
@@ -777,7 +794,12 @@ def _failure_codes(result: dict) -> str | None:
 
 
 async def preview(
-    db: AsyncSession, ctx: TenantContext, report_id: int, config: Any, period: Any
+    db: AsyncSession,
+    ctx: TenantContext,
+    report_id: int,
+    config: Any,
+    period: Any,
+    settings: Settings | None = None,
 ) -> dict:
     """The draft config on the caller's real data scope (manage only)."""
     report = await get_report(db, ctx.tenant_id, report_id)
@@ -787,7 +809,11 @@ async def preview(
     override = parse_period(period)
     rid, revision = report.id, report.revision  # the queries below end the transaction
     allowed = await allowed_versions(db, ctx.tenant_id, rid)
+    config = sanitize_config(config, settings)
+    from app.services.report_asset_service import binding_errors as asset_errors
+
     problems = await binding_errors(db, ctx.tenant_id, rid, config)
+    problems += await asset_errors(db, ctx.tenant_id, config)
     if problems:
         raise invalid(problems)
     scope_user = submitter_scope(ctx)
@@ -866,7 +892,13 @@ async def data(
 
 
 async def admin_preview(
-    db: AsyncSession, tenant_id: int, actor: Actor, report_id: int, config: Any, period: Any
+    db: AsyncSession,
+    tenant_id: int,
+    actor: Actor,
+    report_id: int,
+    config: Any,
+    period: Any,
+    settings: Settings | None = None,
 ) -> dict:
     """Synthetic rows from the configuration only: the admin never sees business data."""
     report = await get_report(db, tenant_id, report_id)
@@ -876,7 +908,11 @@ async def admin_preview(
     override = parse_period(period)
     rid, revision = report.id, report.revision
     allowed = await allowed_versions(db, tenant_id, rid)
+    config = sanitize_config(config, settings)
+    from app.services.report_asset_service import binding_errors as asset_binding_errors
+
     problems = await binding_errors(db, tenant_id, rid, config)
+    problems += await asset_binding_errors(db, tenant_id, config)
     if problems:
         raise invalid(problems)
     result = report_query_service.synthetic_page(

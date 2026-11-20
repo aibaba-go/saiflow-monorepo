@@ -1,4 +1,4 @@
-import { Card, Spin } from "antd";
+import { Button, Card, Spin } from "antd";
 import { Link } from "react-router-dom";
 
 import { ErrorText } from "../components/ErrorText";
@@ -13,14 +13,15 @@ const percent = (n: number) => new Intl.NumberFormat("en-US", { maximumFractionD
 
 /** Plan, validity, this month's scans and the free quota of the current tenant (FR-SYS-094, 053).
  * Every number is from GET /billing/usage; `plansLink` adds the way to the plans (home). */
-export function UsageCard({ plansLink = false }: { plansLink?: boolean }) {
+export function UsageCard({ plansLink = false, retry = false }: { plansLink?: boolean; retry?: boolean }) {
+  const t = useT();
   const usage = useUsage();
   return (
     <Card data-testid="usage-card" className="pc-usage">
       {usage.isPending ? (
         <Spin />
       ) : usage.isError ? (
-        <ErrorText error={usage.error} />
+        <><ErrorText error={usage.error} />{retry && <Button onClick={() => void usage.refetch()}>{t("common.retry")}</Button>}</>
       ) : (
         <UsageBody usage={usage.data} plansLink={plansLink} />
       )}

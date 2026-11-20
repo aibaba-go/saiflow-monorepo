@@ -9,6 +9,7 @@ published snapshot are bound to, so a referenced template cannot be deleted
 delete."""
 
 from datetime import datetime
+from uuid import UUID
 
 from sqlalchemy import (
     BigInteger,
@@ -24,6 +25,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -31,6 +33,24 @@ from app.db import Base
 _TS = DateTime(timezone=True)
 
 REPORT_REF_KINDS = ("DRAFT", "PUBLISHED")
+
+
+class ReportAsset(Base):
+    __tablename__ = "report_assets"
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenants.id"), index=True)
+    object_key: Mapped[str] = mapped_column(Text, unique=True)
+    content_type: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(_TS, server_default=func.now())
+
+
+class HomepagePreference(Base):
+    __tablename__ = "homepage_preferences"
+
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenants.id"), primary_key=True)
+    report_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("reports.id"))
 
 
 class Report(Base):

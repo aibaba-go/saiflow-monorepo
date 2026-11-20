@@ -1,7 +1,10 @@
-import { Button, Empty, Spin } from "antd";
+import { Alert, Button, Empty, Spin } from "antd";
 import { Link, useNavigate } from "react-router-dom";
 
-import { useMe } from "../auth/session";
+import { useIdentity, useMe } from "../auth/session";
+import { useHomepage } from "../reports/api";
+import { errorMessage } from "../services/errors";
+import { HomepageReport } from "./ReportViewPage";
 import { UsageCard } from "../billing/UsageCard";
 import { Page, TodayLabel } from "../components/Page";
 import { useT, type MessageKey } from "../i18n";
@@ -28,6 +31,10 @@ const METRICS: { stage: string; icon: IconName }[] = [
   { stage: "CONFIRMED", icon: "check" },
 ];
 const METRIC_STAGES = METRICS.map((m) => m.stage);
+const DEFAULT_HOMES = {
+  personal: { title: "rpt.personalHome", tone: "personal" },
+  organization: { title: "rpt.organizationHome", tone: "organization" },
+} as const;
 
 const PROCESS: { icon: IconName; label: MessageKey }[] = [
   { icon: "upload", label: "process.upload" },
@@ -51,11 +58,11 @@ export function MiniProcess() {
   );
 }
 
-function MetricStrip() {
+function MetricStrip({ systemDefault = false }: { systemDefault?: boolean }) {
   const t = useT();
   const counts = useStageCounts(METRIC_STAGES);
-  // Only real counts: the strip waits for all four and is left out when any read fails.
-  if (counts.some((c) => c.isError)) return null;
+  const failed = counts.find((c) => c.isError);
+  if (failed) return systemDefault ? <Alert role="alert" type="error" message={t("home.metrics")} description={errorMessage(failed.error, t)} action={<Button onClick={() => void Promise.all(counts.map((c) => c.refetch()))}>{t("common.retry")}</Button>} /> : null;
   if (counts.some((c) => c.data === undefined)) return null;
   return (
     <nav className="pc-metrics" aria-label={t("home.metrics")} data-testid="metric-strip">
@@ -78,7 +85,28 @@ function MetricStrip() {
 /** Home (FR-SYS-094): the current tenant's usage and the way to the plans; the number of
  * tasks to verify; per-stage totals; the latest five tasks, or the way to Upload when there
  * are none. The brand hero only describes the process; every number comes from the API. */
-export function HomePage() {
+export function HomeRoute() {
+  const me = useIdentity();
+  const { tenant } = useTenant();
+  return me.data?.kind === "user"
+    ? <SignedInHome key={`${me.data.user_id}:${tenant?.tenant_id}`} />
+    : <HomePage />;
+}
+
+function SignedInHome() {
+  const t = useT();
+  const { tenant } = useTenant();
+  const preference = useHomepage();
+  if (preference.isPending) return <Spin />;
+  if (preference.error) return <Alert role="alert" type="error" showIcon message={t("rpt.loadFailed")}
+    description={errorMessage(preference.error, t)} action={<Button onClick={() => void preference.refetch()}>{t("common.retry")}</Button>} />;
+  const fallback = <HomePage systemDefault={tenant?.kind === "organization" ? "organization" : "personal"} />;
+  return preference.data.report_id === null
+    ? fallback
+    : <HomepageReport id={preference.data.report_id} fallback={fallback} />;
+}
+
+export function HomePage({ systemDefault }: { systemDefault?: "personal" | "organization" } = {}) {
   const t = useT();
   const navigate = useNavigate();
   const { tenant } = useTenant();
@@ -93,7 +121,7 @@ export function HomePage() {
   return (
     <Page
       name="home"
-      title={t("nav.home")}
+      title={t(systemDefault ? DEFAULT_HOMES[systemDefault].title : "nav.home")}
       description={t("layout.desc.home")}
       meta={<TodayLabel />}
       extra={
@@ -104,7 +132,7 @@ export function HomePage() {
         )
       }
     >
-      <div className="pc-home">
+      <div className="pc-home" data-home-default={systemDefault && DEFAULT_HOMES[systemDefault].tone}>
         <div className="pc-home__top">
           <section className="pc-hero" aria-labelledby="pc-hero-title">
             <div className="pc-hero__copy">
@@ -113,9 +141,9 @@ export function HomePage() {
                 {t("brand.heroEyebrow")}
               </p>
               <h2 id="pc-hero-title" className="pc-hero__title">
-                {t("brand.heroTitle")}
-                <br />
-                <span className="pc-hero__accent">{t("brand.heroTitleAccent")}</span>
+                {systemDefault ? t("home.metrics") : (
+                  <>{t("brand.heroTitle")}<br /><span className="pc-hero__accent">{t("brand.heroTitleAccent")}</span></>
+                )}
               </h2>
               <p className="pc-hero__body">{t("brand.heroBody")}</p>
               {canVerify && (
@@ -127,12 +155,13 @@ export function HomePage() {
                     <span>{t("home.toVerifyCta")}</span>
                     {toVerify.isPending ? (
                       <Spin size="small" />
-                    ) : (
+                    ) : systemDefault && toVerify.error ? null : (
                       <span className="pc-hero__count num">({verifiable})</span>
                     )}
                   </Link>
                 </div>
               )}
+              {systemDefault && canVerify && toVerify.error && <Alert role="alert" type="error" message={t("home.toVerifyCta")} description={errorMessage(toVerify.error, t)} action={<Button onClick={() => void toVerify.refetch()}>{t("common.retry")}</Button>} />}
               <ul className="pc-hero__trust">
                 <li>
                   <Icon name="file" />
@@ -148,7 +177,7 @@ export function HomePage() {
                 </li>
               </ul>
             </div>
-            <div className="pc-flow">
+            {!systemDefault && <div className="pc-flow">
               <p className="pc-flow__kicker">{t("brand.flowKicker")}</p>
               <ol className="pc-flow__list" aria-label={t("brand.flowTitle")}>
                 {FLOW.map((step, i) => (
@@ -166,11 +195,11 @@ export function HomePage() {
                   </li>
                 ))}
               </ol>
-            </div>
+            </div>}
           </section>
-          <UsageCard plansLink />
+          <UsageCard plansLink retry={!!systemDefault} />
         </div>
-        <MetricStrip />
+        <MetricStrip systemDefault={!!systemDefault} />
         <section className="pc-panel pc-panel--table">
           <div className="pc-panel__heading">
             <div>
@@ -182,7 +211,9 @@ export function HomePage() {
               <Icon name="arrow" />
             </Link>
           </div>
-          {!recent.isPending && !rows.length ? (
+          {systemDefault && recent.error ? (
+            <Alert role="alert" type="error" message={t("home.recent")} description={errorMessage(recent.error, t)} action={<Button onClick={() => void recent.refetch()}>{t("common.retry")}</Button>} />
+          ) : !recent.isPending && !rows.length ? (
             <Empty className="pc-panel__empty" description={t("home.noTasks")}>
               {canUpload && (
                 <Button type="primary" onClick={() => navigate("/upload")}>

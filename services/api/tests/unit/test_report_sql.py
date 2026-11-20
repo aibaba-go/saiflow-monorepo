@@ -224,6 +224,29 @@ def test_count_has_no_unit_and_no_measure_reasons():
     assert "'invalid_number'" not in q.sql.split("t AS MATERIALIZED (")[1].split("d AS (")[0]
 
 
+def test_filter_values_and_paths_are_bound_before_aggregation():
+    c = card(date_field="header.doc_date")
+    hostile = "x'); DROP TABLE users; --%_"
+    c["data"]["filters"] = {
+        "match": "or",
+        "rules": [
+            {"path": "header.vendor", "op": "contains", "value": hostile},
+            {"path": "header.total", "op": "gte", "value": "0"},
+            {"path": "header.doc_date", "op": "between", "value": ["2026-03-01", "2026-06-01"]},
+        ],
+    }
+    q = build(spec_of(c), tenant_id=1, scope_user_id=777, period=PERIOD)
+    assert hostile not in q.sql
+    assert hostile in q.params.values()
+    assert ["header", "vendor"] in q.params.values()
+    assert "filtered_items" in q.sql
+    assert "FROM filtered_items i" in q.sql
+    assert "strpos(" in q.sql
+    assert " OR " in q.sql
+    assert q.params["period_from"] == PERIOD[0]
+    assert q.params["scope_user_id"] == 777
+
+
 class _Orig(Exception):
     def __init__(self, sqlstate):
         super().__init__("x")

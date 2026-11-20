@@ -17,6 +17,7 @@ import {
   setGrain,
   setVersions,
   usedPaths,
+  updateCard,
   type DesignerField,
 } from "./model";
 
@@ -64,6 +65,31 @@ describe("report designer model", () => {
     expect(addCard(emptyReportConfig(), "metric").config.cards[0]!.data?.dimension).toBeUndefined();
     expect(addCard(emptyReportConfig(), "table").config.cards[0]!.data?.dimension).toEqual({ kind: "none" });
     expect(removeCard(config, id).cards).toHaveLength(0);
+  });
+
+  it("invalidates page mappings on binding changes instead of querying without filters", () => {
+    const { config } = addCard(emptyReportConfig(), "bar", "a");
+    config.cards[0] = bindTemplate(config.cards[0]!, 12, [101]);
+    config.filters = { match: "and", rules: [{ path: "vendor", op: "eq", value: "Acme" }], targets: { a: { vendor: "h.vendor" } } };
+    const next = updateCard(config, "a", (card) => bindTemplate(card, 13, [102]));
+    expect(next.filters?.targets.a).toEqual({});
+    expect(next.filters?.rules).toEqual(config.filters.rules);
+    expect(config.filters.targets.a).toEqual({ vendor: "h.vendor" });
+  });
+
+  it("removes static cards from page mappings without dropping other targets", () => {
+    const { config } = addCard(emptyReportConfig(), "bar", "a");
+    config.filters = { match: "and", rules: [{ path: "vendor", op: "eq", value: "Acme" }], targets: { a: { vendor: "h.vendor" }, b: { vendor: "supplier" } } };
+    const next = updateCard(config, "a", (card) => changeType(card, "html"));
+    expect(next.filters?.targets).toEqual({ b: { vendor: "supplier" } });
+    expect(next.cards[0]?.data).toBeNull();
+  });
+
+  it("keeps mapped semantic confirmations during chart-type changes", () => {
+    const { config } = addCard(emptyReportConfig(), "bar", "a");
+    config.cards[0]!.data!.confirmed_paths = ["h.vendor"];
+    config.filters = { match: "and", rules: [{ path: "vendor", op: "eq", value: "Acme" }], targets: { a: { vendor: "h.vendor" } } };
+    expect(updateCard(config, "a", (card) => changeType(card, "pie")).cards[0]?.data?.confirmed_paths).toContain("h.vendor");
   });
 
   it("new ids never repeat an existing one", () => {

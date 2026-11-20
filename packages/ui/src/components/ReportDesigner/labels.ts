@@ -171,7 +171,7 @@ export const DEFAULT_REPORT_DESIGNER_LABELS: ReportDesignerLabels = {
   errorSummary: (n) => `${n} problem${n === 1 ? "" : "s"} to fix before publishing`,
   errorsStale: "Found when the draft was last saved; save again to check your changes.",
   cardProblems: (title, n) => `${title}: ${n} problem${n === 1 ? "" : "s"}`,
-  chartTypes: { bar: "Bar chart", line: "Line chart", pie: "Pie chart", donut: "Donut chart", metric: "Metric", table: "Table" },
+  chartTypes: { bar: "Bar chart", line: "Line chart", pie: "Pie chart", donut: "Donut chart", metric: "Metric", table: "Table", image: "Image", html: "HTML / embedded page" },
   errors: DEFAULT_REPORT_ERROR_LABELS,
 };
 

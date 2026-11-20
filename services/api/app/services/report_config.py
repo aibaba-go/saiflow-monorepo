@@ -17,8 +17,10 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from app.errors import AppError
+from app.services.report_content import STATIC_TYPES, content_errors
+from app.services.report_filters import FilterGroup, page_groups, parse_group
 
-CARD_TYPES = ("bar", "line", "pie", "donut", "metric", "table")
+CARD_TYPES = ("bar", "line", "pie", "donut", "metric", "table", "image", "html")
 AGGS = ("sum", "avg", "min", "max", "count")
 GRAINS = ("document", "table")
 DIM_KINDS = ("date", "category", "none")
@@ -230,6 +232,7 @@ class CardSpec:
     unit_value: str | None
     unit: Slot | None
     precision: int
+    filters: tuple[FilterGroup, ...] = ()
 
     @property
     def period_slot(self) -> Slot | None:
@@ -241,6 +244,13 @@ class CardSpec:
     @property
     def table_key(self) -> str | None:
         return ".".join(self.table) if self.table else None
+
+
+@dataclass(frozen=True)
+class StaticSpec:
+    id: str
+    type: str
+    title: str
 
 
 class _Errors:
@@ -347,7 +357,13 @@ def _style(card: dict, p: str, cid: str | None, errs: _Errors) -> int:
         for i, c in enumerate(colors):
             if not isinstance(c, str) or not COLOR_RE.match(c):
                 errs.add(cid, f"{p}.style.colors[{i}]", "a color is #RRGGBB")
-    for k in ("legend", "labels", "stacked"):
+    for key, choices in (
+        ("direction", ("horizontal", "vertical")),
+        ("surface", ("white", "tinted")),
+    ):
+        if key in style and style[key] not in choices:
+            errs.add(cid, f"{p}.style.{key}", "unsupported style value")
+    for k in ("legend", "labels", "stacked", "fill"):
         if k in style and not isinstance(style[k], bool):
             errs.add(cid, f"{p}.style.{k}", "must be true or false")
     axis = style.get("axis")
@@ -444,7 +460,8 @@ def _card(
     errs: _Errors,
     seen_ids: set[str],
     boxes: list[tuple[str, tuple[int, int, int, int]]],
-) -> CardSpec | None:
+    page_filter: Any = None,
+) -> CardSpec | StaticSpec | None:
     p = f"cards[{i}]"
     if not isinstance(card, dict):
         errs.add(None, p, "a card must be an object")
@@ -475,6 +492,12 @@ def _card(
                 break
         boxes.append((cid or p, box))
     precision = _style(card, p, cid, errs)
+    if ctype in STATIC_TYPES:
+        for path, message in content_errors(card):
+            errs.add(cid, f"{p}.{path}", message)
+        if card.get("data") is not None or page_filter is not None:
+            errs.add(cid, f"{p}.data", "static cards cannot bind datasets or filters")
+        return StaticSpec(cid, ctype, title) if cid and len(errs.items) == before else None
 
     data = card.get("data")
     dp = f"{p}.data"
@@ -637,6 +660,15 @@ def _card(
                 errs.add(cid, f"{dp}.unit.mode", "unit mode must be fixed or field")
                 unit_mode = None
 
+    filter_groups = []
+    for raw_group, path in (
+        (data.get("filters"), f"{dp}.filters"),
+        (page_filter, f"{p}.page_filters"),
+    ):
+        group = parse_group(raw_group, path, slot, lambda p, msg: errs.add(cid, p, msg))
+        if group is not None:
+            filter_groups.append(group)
+
     confirmed = data.get("confirmed_paths", [])
     if not isinstance(confirmed, list) or not all(isinstance(c, str) for c in confirmed):
         errs.add(cid, f"{dp}.confirmed_paths", "confirmed_paths must be a list of paths")
@@ -672,13 +704,14 @@ def _card(
         unit_value=unit_value,
         unit=unit,
         precision=precision,
+        filters=tuple(filter_groups),
     )
 
 
 @dataclass
 class Validation:
-    cards: dict[str, CardSpec]  # valid cards by id
-    entries: list[tuple[str | None, CardSpec | None]]  # every card in page order
+    cards: dict[str, CardSpec | StaticSpec]  # valid cards by id
+    entries: list[tuple[str | None, CardSpec | StaticSpec | None]]  # every card in page order
     errors: list[dict]
 
     @property
@@ -695,8 +728,8 @@ def validate(
     """Every problem of the page at once ({card_id, path, message}); `versions` are the
     template versions the caller may bind (anything else is "not available")."""
     errs = _Errors()
-    out: dict[str, CardSpec] = {}
-    ids: list[tuple[str | None, CardSpec | None]] = []
+    out: dict[str, CardSpec | StaticSpec] = {}
+    ids: list[tuple[str | None, CardSpec | StaticSpec | None]] = []
     if not isinstance(config, dict):
         errs.add(None, "", "the configuration must be an object")
         return Validation(out, ids, errs.items)
@@ -704,6 +737,30 @@ def validate(
         errs.add(None, "version", "configuration version must be 1")
     _validate_period(config.get("period"), errs)
     _validate_grid(config.get("grid"), errs)
+    appearance = config.get("appearance")
+    if appearance is not None:
+        if not isinstance(appearance, dict):
+            errs.add(None, "appearance", "appearance must be an object")
+        else:
+            if "theme" in appearance and appearance["theme"] not in (
+                "brand",
+                "ocean",
+                "sunset",
+                "forest",
+            ):
+                errs.add(None, "appearance.theme", "unsupported theme")
+            if "background" in appearance and (
+                not isinstance(appearance["background"], str)
+                or not COLOR_RE.fullmatch(appearance["background"])
+            ):
+                errs.add(None, "appearance.background", "a color is #RRGGBB")
+            for key, low, high in (("radius", 0, 24), ("gap", 8, 32)):
+                if key in appearance and (
+                    not _is_int(appearance[key]) or not low <= appearance[key] <= high
+                ):
+                    errs.add(None, f"appearance.{key}", f"must be an integer from {low} to {high}")
+            if "shadow" in appearance and not isinstance(appearance["shadow"], bool):
+                errs.add(None, "appearance.shadow", "must be true or false")
     cards = config.get("cards", [])
     if not isinstance(cards, list):
         errs.add(None, "cards", "cards must be a list")
@@ -714,8 +771,19 @@ def validate(
         errs.add(None, "cards", "add at least one card before publishing")
     seen: set[str] = set()
     boxes: list = []
+    groups = page_groups(
+        config.get("filters"),
+        {c["id"] for c in cards if isinstance(c, dict) and isinstance(c.get("id"), str)},
+        lambda p, msg: errs.add(None, p, msg),
+    )
+    invalid_page_filters = any(e["path"].startswith("filters") for e in errs.items)
     for i, card in enumerate(cards):
-        spec = _card(card, i, versions, errs, seen, boxes)
+        cid = card.get("id") if isinstance(card, dict) else None
+        spec = _card(
+            card, i, versions, errs, seen, boxes, groups.get(cid) if isinstance(cid, str) else None
+        )
+        if invalid_page_filters and spec is not None and spec.type not in STATIC_TYPES:
+            spec = None
         raw_id = card.get("id") if isinstance(card, dict) else None
         ids.append((raw_id if isinstance(raw_id, str) else None, spec))
         if spec is not None:
@@ -743,7 +811,11 @@ def bound_versions(config: Any) -> set[tuple[int, int]]:
     out: set[tuple[int, int]] = set()
     cards = config.get("cards") if isinstance(config, dict) else None
     for card in cards if isinstance(cards, list) else []:
-        data = card.get("data") if isinstance(card, dict) else None
+        data = (
+            card.get("data")
+            if isinstance(card, dict) and card.get("type") not in STATIC_TYPES
+            else None
+        )
         if not isinstance(data, dict):
             continue
         tid, vids = data.get("template_id"), data.get("template_version_ids")

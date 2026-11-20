@@ -40,7 +40,7 @@ function mayHoldReports(tenant: CurrentTenant | null): boolean {
   return !!tenant && tenant.kind === "organization" && (can(tenant, "report_manage") || can(tenant, "report_view"));
 }
 
-export function useReportAccess(): { access: ReportAccess; loading: boolean; error: unknown } {
+export function useReportAccess() {
   const { tenant } = useTenant();
   const wanted = mayHoldReports(tenant);
   const usage = useUsage(wanted);
@@ -48,6 +48,7 @@ export function useReportAccess(): { access: ReportAccess; loading: boolean; err
     access: reportAccess(tenant, usage.data),
     loading: wanted && usage.isPending,
     error: wanted ? usage.error : null,
+    retry: usage.refetch,
   };
 }
 

@@ -33,6 +33,25 @@ def paths(errors):
     return [e["path"] for e in errors]
 
 
+@pytest.mark.parametrize(
+    "appearance",
+    [{"theme": "sql"}, {"radius": 25}, {"gap": 7}, {"background": "url(evil)"}, {"shadow": "yes"}],
+)
+def test_invalid_page_appearance_is_rejected(appearance):
+    cfg = page(card("a"))
+    cfg["appearance"] = appearance
+    assert errors_of(cfg)
+
+
+@pytest.mark.parametrize(
+    "style", [{"direction": "diagonal"}, {"fill": "yes"}, {"surface": "javascript"}]
+)
+def test_invalid_v2_style_is_rejected(style):
+    c = card("a")
+    c["style"].update(style)
+    assert errors_of(page(c))
+
+
 def test_valid_cards_of_every_type():
     cfg = page(
         card("c_bar", type="bar"),
@@ -300,6 +319,98 @@ def test_units():
     c = card("c_1", unit={"mode": "fixed", "value": "baht", "path": "header.currency"})
     spec = validate(page(c), VERSIONS).cards["c_1"]
     assert spec.unit_value == "THB" and spec.unit.path == "header.currency"
+
+
+def test_static_cards_validate_without_templates_and_reject_unsafe_content():
+    image = {
+        "id": "image",
+        "type": "image",
+        "layout": {"x": 0, "y": 0, "w": 6, "h": 4},
+        "content": {"asset_id": "9b6f1a6e-5f42-4c36-a20c-e243473254af", "alt": "Logo"},
+    }
+    html = {
+        "id": "html",
+        "type": "html",
+        "layout": {"x": 6, "y": 0, "w": 6, "h": 4},
+        "content": {"mode": "html", "html": "<h2>Hello</h2>"},
+    }
+    check = validate({"version": 1, "cards": [image, html]}, {})
+    assert check.errors == []
+    assert check.cards["image"].type == "image"
+    assert bound_versions({"cards": [image, html]}) == set()
+    html["content"] = {"mode": "url", "url": "javascript:alert(1)"}
+    assert errors_of({"cards": [html]}, {})
+    image["content"]["asset_id"] = "https://evil.invalid/x.png"
+    assert errors_of({"cards": [image]}, {})
+
+
+def test_typed_filters_keep_zero_and_normalize_exact_operands():
+    c = card()
+    c["data"]["filters"] = {
+        "match": "or",
+        "rules": [
+            {"path": "header.total", "op": "between", "value": ["0", "20.00"]},
+            {"path": "header.vendor", "op": "contains", "value": " Acme "},
+            {"path": "header.doc_date", "op": "gte", "value": "2026-01-01"},
+        ],
+    }
+    check = validate(page(c), VERSIONS)
+    assert check.errors == []
+    group = check.cards["c_1"].filters[0]
+    assert group.match == "or"
+    assert group.rules[0].values == ("0", "20.00")
+    assert group.rules[1].values == ("Acme",)
+    assert group.rules[2].slot.type == "date"
+
+
+@pytest.mark.parametrize(
+    "rule",
+    [
+        {"path": "header.total", "op": "contains", "value": "1"},
+        {"path": "header.total", "op": "eq", "value": "1.001"},
+        {"path": "header.qty", "op": "eq", "value": "0.5"},
+        {"path": "header.rate", "op": "eq", "value": True},
+        {"path": "header.vendor", "op": "gt", "value": "a"},
+        {"path": "header.vendor", "op": "in", "value": []},
+        {"path": "header.vendor", "op": "eq", "value": " "},
+        {"path": "header.total", "op": "between", "value": ["20", "10"]},
+        {"path": "header.doc_date", "op": "eq", "value": "2026-02-30"},
+        {"path": "lines.items.amount", "op": "eq", "value": "10"},
+        {"path": "header.nope", "op": "empty"},
+        {"path": "header.vendor", "op": "sql", "value": "1=1"},
+    ],
+)
+def test_invalid_filter_rule_rejected(rule):
+    c = card()
+    c["data"]["filters"] = {"match": "and", "rules": [rule]}
+    errs = errors_of(page(c))
+    assert any(e["path"].startswith("cards[0].data.filters") for e in errs), errs
+
+
+def test_page_filters_require_explicit_complete_mapping():
+    cfg = page(card("a"), card("b"))
+    cfg["filters"] = {
+        "match": "and",
+        "rules": [{"path": "vendor", "op": "eq", "value": "Acme"}],
+        "targets": {"a": {"vendor": "header.vendor"}},
+    }
+    check = validate(cfg, VERSIONS)
+    assert check.errors == []
+    assert check.cards["a"].filters[0].rules[0].slot.path == "header.vendor"
+    assert check.cards["b"].filters == ()
+    cfg["filters"]["targets"]["b"] = {}
+    assert any(e["card_id"] == "b" for e in errors_of(cfg))
+    cfg["filters"]["targets"] = {"unknown": {"vendor": "header.vendor"}}
+    assert errors_of(cfg)
+
+
+def test_filter_paths_require_multi_version_semantic_confirmation():
+    c = card(version_ids=[10, 11], confirmed=["header.total", "header.vendor"])
+    c["data"]["filters"] = {
+        "match": "and",
+        "rules": [{"path": "header.qty", "op": "eq", "value": 0}],
+    }
+    assert any("header.qty" in e["message"] for e in errors_of(page(c)))
 
 
 def test_client_flags_and_unknown_keys_do_not_widen_anything():

@@ -39,7 +39,13 @@
   outline-offset: 2px;
 }
 
-/* ---------- ChartRenderer ---------- */
+.sf-report-appearance .sf-rg-card {
+  border-radius: var(--sf-report-radius, 12px);
+  box-shadow: var(--sf-report-shadow, none);
+}
+.sf-chart--image .sf-chart__body,
+.sf-chart--html .sf-chart__body { overflow: hidden; }
+
 .sf-chart {
   display: flex;
   flex-direction: column;
@@ -52,7 +58,8 @@
 }
 .sf-chart__title {
   flex: none;
-  margin: 0 0 8px;
+  margin: 0 0 12px;
+  color: var(--brand-navy, var(--text, #171a1c));
   font-size: 16px;
   line-height: 24px;
   font-weight: 600;
@@ -110,6 +117,7 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  border-radius: var(--control-radius, 8px);
 }
 .sf-chart__table {
   width: 100%;
@@ -119,7 +127,7 @@
 }
 .sf-chart__table th,
 .sf-chart__table td {
-  padding: 6px 8px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--border, #e2e8f0);
   text-align: left;
   vertical-align: top;
@@ -133,10 +141,20 @@
   font-weight: 500;
 }
 .sf-chart__table tbody th {
-  font-weight: 400;
+  font-weight: 500;
+  color: var(--brand-navy, var(--text));
+}
+.sf-chart__table tbody tr:hover {
+  background: var(--bg, #f5f7fa);
+}
+.sf-chart__table tbody tr:last-child > * {
+  border-bottom: 0;
 }
 .sf-chart__table .sf-num {
   text-align: right;
+}
+.sf-chart--metric {
+  container-type: inline-size;
 }
 .sf-metric {
   display: flex;
@@ -156,8 +174,9 @@
   min-width: 0;
 }
 .sf-metric__value {
-  font-size: 24px;
-  line-height: 32px;
+  color: var(--primary-pressed, #124a9e);
+  font-size: clamp(24px, 16cqw, 36px);
+  line-height: 1.35;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
@@ -181,7 +200,7 @@
   padding: 12px;
   overflow: hidden;
   border: 1px solid var(--border, #e2e8f0);
-  border-radius: 10px;
+  border-radius: var(--card-radius, 10px);
   background: var(--surface, #fff);
   box-shadow: var(--shadow-card, var(--shadow-sm, none));
 }

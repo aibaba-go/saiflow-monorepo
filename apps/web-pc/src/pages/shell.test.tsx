@@ -53,6 +53,30 @@ describe("branded shell (enterprise-ui-redesign, FR-SYS-135, FR-SYS-138)", () =>
   });
 });
 
+describe("collapsible navigation (FR-SYS-170)", () => {
+  it("keeps accessible clickable routes and persists collapse without changing the page", async () => {
+    signedIn({ "GET /api/v1/billing/usage": usageFor });
+    const first = renderAt("/upload");
+    const collapse = await screen.findByRole("button", { name: "Collapse navigation" });
+    expect(collapse).toHaveAttribute("aria-expanded", "true");
+    await userEvent.click(collapse);
+    const expand = screen.getByRole("button", { name: "Expand navigation" });
+    expect(expand).toHaveAttribute("aria-expanded", "false");
+    expect(expand).toHaveAttribute("aria-controls", "pc-main-navigation");
+    const menu = screen.getByRole("menu");
+    const upload = within(menu).getByRole("link", { name: en("nav.upload") });
+    expect(upload.querySelector("svg")).not.toBeNull();
+    expect(upload).toHaveAttribute("href", "/upload");
+    expect(await screen.findByTestId("page-upload")).toBeInTheDocument();
+    expect(localStorage.getItem("saiflow.pc.nav.collapsed")).toBe("true");
+    first.unmount();
+    renderAt("/upload");
+    expect(await screen.findByRole("button", { name: "Expand navigation" })).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(screen.getByRole("button", { name: "Expand navigation" }));
+    expect(localStorage.getItem("saiflow.pc.nav.collapsed")).toBe("false");
+  });
+});
+
 describe("layout and home (FR-SYS-094)", () => {
   it("home shows the organization's plan, period, scans left and free quota (094-01)", async () => {
     localStorage.setItem("saiflow.pc.tenant.7", "5");
@@ -137,7 +161,10 @@ describe("an organization that disappears mid-session (Review Focus 4)", () => {
     useTenantChoice.getState().reset();
     let gone = false;
     const api = signedIn(
-      { "GET /api/v1/billing/usage": (r) => (r.headers.get("X-Tenant-Id") === "5" && gone ? json(404, { code: "not_found" }) : usageFor(r)) },
+      {
+        "GET /api/v1/billing/usage": (r) => (r.headers.get("X-Tenant-Id") === "5" && gone ? json(404, { code: "not_found" }) : usageFor(r)),
+        "GET /api/v1/ocr/jobs": () => json(200, { items: [], total: 0, page: 1, page_size: 5 }),
+      },
       { tenants: [PERSONAL, ORG] },
     );
     renderAt("/");

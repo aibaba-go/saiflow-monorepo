@@ -119,6 +119,8 @@ async def export(
     if card_id not in check.card_ids:
         raise not_found()
     spec = check.cards.get(card_id)
+    if spec is not None and spec.type in ("image", "html"):
+        raise AppError(409, "report_export_failed", "error.report_export_failed")
     override = report_service.parse_period(period)
     result = await report_query_service.run_page(
         db,

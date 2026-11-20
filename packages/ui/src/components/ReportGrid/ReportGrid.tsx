@@ -1,4 +1,5 @@
-import { lazy, Suspense, useId, useMemo, type ComponentType, type ReactNode } from "react";
+import { lazy, Suspense, useId, useMemo, type ComponentType, type ReactNode, type CSSProperties } from "react";
+import type { ReportAppearance } from "../reportTypes";
 
 import { CardFrame, DEFAULT_REPORT_GRID_LABELS, type ReportGridLabels } from "./CardFrame";
 import type { GridCanvasProps } from "./GridCanvas";
@@ -28,6 +29,7 @@ export interface ReportGridProps<C extends GridCard> {
   labels?: Partial<ReportGridLabels>;
   /** Shown while the grid code loads. */
   fallback?: ReactNode;
+  appearance?: ReportAppearance | null;
 }
 
 const defaultStackHeight = (card: GridCard) => Math.min(420, Math.max(200, card.layout.h * 56));
@@ -46,14 +48,16 @@ export function ReportGrid<C extends GridCard>({
   stackItemHeight,
   labels: labelsIn,
   fallback = null,
+  appearance,
 }: ReportGridProps<C>) {
+  const style = appearance ? { background: appearance.background ?? "#F4F7FB", padding: 12, borderRadius: 12, "--sf-report-radius": `${appearance.radius ?? 12}px`, "--sf-report-shadow": appearance.shadow ? "0 4px 18px #24385816" : "none" } as CSSProperties : undefined;
   const labels = useMemo(() => ({ ...DEFAULT_REPORT_GRID_LABELS, ...labelsIn }), [labelsIn]);
   const helpId = useId();
   const ordered = useMemo(() => (mode === "stack" ? stackOrder(cards) : []), [cards, mode]);
 
   if (mode === "stack") {
     return (
-      <ul className="sf-rg-stack" aria-label={labels.grid}>
+      <ul className="sf-rg-stack sf-report-appearance" aria-label={labels.grid} style={{ ...style, gap: appearance?.gap }}>
         {ordered.map((c) => {
           const height = stackItemHeight?.(c) ?? defaultStackHeight(c);
           return (
@@ -71,7 +75,7 @@ export function ReportGrid<C extends GridCard>({
   }
 
   return (
-    <>
+    <div className="sf-report-appearance" style={style}>
       {mode === "design" && (
         <p id={helpId} className="sf-visually-hidden">
           {labels.designHelp}
@@ -84,7 +88,7 @@ export function ReportGrid<C extends GridCard>({
           mode={mode}
           cols={cols}
           rowHeight={rowHeight}
-          margin={margin}
+          margin={appearance?.gap ? [appearance.gap, appearance.gap] : margin}
           selectedId={selectedId}
           onSelect={onSelect}
           onLayoutChange={onLayoutChange}
@@ -92,6 +96,6 @@ export function ReportGrid<C extends GridCard>({
           helpId={mode === "design" ? helpId : undefined}
         />
       </Suspense>
-    </>
+    </div>
   );
 }

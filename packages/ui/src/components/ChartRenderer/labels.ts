@@ -53,6 +53,8 @@ export const DEFAULT_CHART_LABELS: ChartLabels = {
     donut: "Donut chart",
     metric: "Metric",
     table: "Table",
+    image: "Image",
+    html: "HTML / embedded page",
   },
   summary: ({ title, type, points, series }) =>
     `${title ? `${title}: ` : ""}${type}, ${points} data point${points === 1 ? "" : "s"}` +

@@ -24,6 +24,21 @@ body {
   display: block;
 }
 
+.pc-shell.pc-shell--collapsed { grid-template-columns: 76px minmax(0, 1fr); }
+.pc-shell .pc-sidebar .ant-menu-title-content { width: 100%; }
+.pc-shell .pc-sidebar .ant-menu.ant-menu-root .ant-menu-item { padding-inline: 0 !important; }
+.pc-shell .pc-sidebar .pc-nav-link { display: flex; align-items: center; gap: 10px; width: 100%; height: 100%; padding: 0 12px; box-sizing: border-box; }
+.pc-nav-link:focus-visible { outline: 2px solid var(--brand-teal); outline-offset: -2px; border-radius: 8px; }
+.pc-shell--collapsed .pc-sidebar { padding-inline: 8px; }
+.pc-shell--collapsed .pc-sidebar__lockup { justify-content: center; padding-inline: 0; }
+.pc-shell--collapsed .pc-sidebar__product,
+.pc-shell--collapsed .pc-sidebar__footer,
+.pc-shell--collapsed .ant-menu-item-group-title { display: none; }
+.pc-shell--collapsed .pc-nav-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.pc-shell--collapsed .pc-sidebar .pc-nav-link { justify-content: center; padding-inline: 0; }
+.pc-nav-toggle { flex-shrink: 0; }
+.pc-topbar .pc-breadcrumb { flex: 1; }
+
 /* ---------- shell: fixed navy sidebar + white topbar ---------- */
 .pc-shell {
   display: grid;
@@ -2452,8 +2467,8 @@ tr:hover .pc-file__name {
   gap: 16px;
 }
 .pc-report-card {
-  --tone: var(--brand-teal-ink);
-  --tone-soft: var(--brand-teal-soft);
+  --tone: var(--primary-pressed);
+  --tone-soft: var(--brand-blue-soft);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -2463,7 +2478,8 @@ tr:hover .pc-file__name {
   padding: 20px 20px 16px;
   border: 1px solid var(--pc-line);
   border-radius: var(--card-radius, 10px);
-  background: linear-gradient(160deg, var(--tone-soft) 0%, var(--surface) 46%);
+  background: linear-gradient(135deg, var(--tone-soft) 0%, var(--surface) 65%);
+  box-shadow: var(--shadow-card);
   color: var(--pc-ink);
   text-decoration: none;
   overflow: hidden;
@@ -2840,13 +2856,15 @@ tr:hover .pc-file__name {
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 12px 16px;
-  padding: 14px 20px;
+  padding: 20px;
+  border-color: var(--brand-border);
+  background: linear-gradient(110deg, var(--surface) 55%, var(--brand-blue-soft));
   overflow: visible;
 }
 .pc-report-toolbar__name {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
   flex: 1 1 320px;
   min-width: 240px;
   max-width: 520px;
@@ -2862,7 +2880,9 @@ tr:hover .pc-file__name {
   flex-direction: column;
   align-items: stretch;
   gap: 16px;
-  padding: 20px;
+  padding: 20px 24px;
+  border-color: var(--brand-border);
+  background: linear-gradient(120deg, var(--surface) 35%, var(--brand-blue-soft));
   overflow: visible;
 }
 .pc-report-bar__period {
@@ -2897,6 +2917,11 @@ tr:hover .pc-file__name {
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+  padding-inline-start: 12px;
+  border-inline-start: 3px solid var(--brand-border);
+}
+.pc-report-bar__facts > div:first-child {
+  border-inline-start-color: var(--brand-blue);
 }
 .pc-report-bar__facts dt {
   font-size: 12px;
@@ -2934,6 +2959,7 @@ tr:hover .pc-file__name {
   min-width: 0;
 }
 .pc-report-view .sf-rg-card {
+  padding: 16px 20px;
   border-color: var(--pc-line);
   border-radius: var(--card-radius, 10px);
   box-shadow: var(--shadow-card);
@@ -2976,6 +3002,47 @@ tr:hover .pc-file__name {
 /* The warning above supplies readable old-data text; do not reduce chart contrast. */
 .pc-report-view.is-stale .sf-rg-card {
   border-color: var(--warning);
+}
+.pc-page--reports > .pc-panel:has(> .sf-rd) {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  overflow: visible;
+}
+.pc-page--reports .sf-rd__canvas .sf-rg-card {
+  padding: 16px;
+}
+:is(.pc-report-view, .sf-rd__canvas) .sf-rg-card:has(.sf-chart--metric) {
+  background: linear-gradient(125deg, var(--primary-soft), var(--surface) 85%);
+  border-color: color-mix(in srgb, var(--brand-blue) 20%, var(--border));
+}
+:is(.pc-report-view, .sf-rd__canvas) .react-grid-item:first-child .sf-rg-card:has(.sf-chart--metric) {
+  background: linear-gradient(125deg, var(--brand-blue), var(--brand-blue-hover));
+  border-color: var(--brand-blue);
+}
+:is(.pc-report-view, .sf-rd__canvas) .react-grid-item:first-child .sf-chart--metric :is(.sf-chart__title, .sf-metric__value, .sf-metric__unit, .sf-metric__label) {
+  color: var(--on-primary);
+}
+:is(.pc-report-view, .sf-rd__canvas) .react-grid-item:first-child .sf-chart--metric .sf-card-info {
+  border-color: color-mix(in srgb, var(--on-primary) 25%, transparent);
+  color: var(--on-primary);
+}
+:is(.pc-report-view, .sf-rd__canvas) .react-grid-item:first-child .sf-chart--metric .sf-card-info__actions .ant-btn {
+  color: var(--on-primary);
+}
+:is(.pc-report-view, .sf-rd__canvas) .react-grid-item:first-child .sf-chart--metric .sf-card-info__actions .ant-btn:disabled {
+  opacity: 0.65;
+}
+.sf-chart--metric .sf-chart__state {
+  border-radius: var(--control-radius, 8px);
+  background: var(--surface);
+}
+:is(.pc-report-view, .sf-rd__canvas) .react-grid-item:first-child .sf-chart--metric .sf-card-info__line--warn {
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: var(--warning-bg);
+  color: var(--warning-text);
 }
 .pc-report-details {
   max-width: 360px;
@@ -3207,6 +3274,10 @@ tr:hover .pc-file__name {
   border-radius: 12px;
   box-shadow: var(--pc-shadow-lift);
 }
+.pc-home[data-home-default] .pc-hero { min-height: 0; grid-template-columns: 1fr; }
+.pc-home[data-home-default] .pc-hero__copy { padding: 28px; }
+.pc-home[data-home-default="personal"] .pc-hero { background: linear-gradient(130deg, var(--brand-navy), var(--brand-teal)); }
+.pc-home[data-home-default="organization"] .pc-hero { background: linear-gradient(130deg, var(--brand-navy), var(--brand-blue)); }
 .pc-content .ant-table-wrapper .ant-table-thead > tr > th {
   font-size: 11.5px;
   font-weight: 600;

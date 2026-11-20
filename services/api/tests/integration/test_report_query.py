@@ -39,6 +39,46 @@ async def run(org, *card_list, period=YEAR, override=None) -> dict:
     return cards(await data(org.owner, org, report["id"], override))
 
 
+async def test_typed_filters_apply_before_exact_aggregates(api, line, db):
+    org = await report_org(api, line, db)
+    for total in (0, 10, 20, "1.001", "about ten", None):
+        await formal(db, org, org.owner.user_id, doc(total))
+    configured = []
+    for agg in ("sum", "avg", "count"):
+        c = org.card(agg, type="metric", agg=agg)
+        c["data"]["filters"] = {
+            "match": "and",
+            "rules": [{"path": "header.total", "op": "gte", "value": "10.00"}],
+        }
+        configured.append(c)
+    got = await run(org, *configured)
+    assert [got[k]["rows"][0]["value"] for k in ("sum", "avg", "count")] == ["30.00", "15.00", "2"]
+    assert got["sum"]["diagnostics"]["documents"] == 2
+
+
+async def test_date_and_same_row_filters_intersect_page_period(api, line, db):
+    org = await report_org(api, line, db)
+    await formal(db, org, org.owner.user_id, doc(1, items=[row("a", "10"), row("b", "20")]))
+    await formal(db, org, org.owner.user_id, doc(2, doc_date="2025-03-15", items=[row("b", "999")]))
+    c = org.card(
+        "selected",
+        type="metric",
+        measure="lines.items.amount",
+        date_field="header.doc_date",
+        **ITEMS,
+    )
+    c["data"]["filters"] = {
+        "match": "and",
+        "rules": [
+            {"path": "lines.items.desc", "op": "eq", "value": "b"},
+            {"path": "header.doc_date", "op": "gte", "value": "2025-01-01"},
+        ],
+    }
+    got = await run(org, c)
+    assert got["selected"]["rows"][0]["value"] == "20.00"
+    assert got["selected"]["diagnostics"]["items"] == 1
+
+
 async def test_only_formal_results_of_the_job_itself(api, line, db):
     # AC-FR-REPORT-007-01 / 007-02
     org = await report_org(api, line, db)

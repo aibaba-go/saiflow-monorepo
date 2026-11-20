@@ -12,6 +12,14 @@ class _In(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class ReportAssetOut(BaseModel):
+    asset_id: str
+
+
+class ReportContentPolicyOut(BaseModel):
+    origins: list[str]
+
+
 class CreateReportIn(_In):
     name: Any = None
 

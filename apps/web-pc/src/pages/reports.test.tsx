@@ -127,6 +127,138 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("report homepage (FR-SYS-171)", () => {
+  it("default homepage can retry its usage card without showing fabricated numbers", async () => {
+    const api = inOrg(VIEWER, { [USAGE_ROUTE]: () => json(500, { code: "internal_error" }) });
+    renderAt("/");
+    const usage = await screen.findByTestId("usage-card", {}, WAIT);
+    const retry = await within(usage).findByRole("button", { name: en("common.retry") }, WAIT);
+    expect(within(usage).queryByRole("meter")).not.toBeInTheDocument();
+    api.set(USAGE_ROUTE, () => json(200, USAGE));
+    await userEvent.click(retry);
+    expect(await within(usage).findByRole("meter", {}, WAIT)).toHaveAttribute("aria-valuenow", "0");
+  }, LONG);
+
+  it.each(["personal", "organization"] as const)("uses the %s built-in dashboard configuration without a marketing flow", async (kind) => {
+    inOrg(VIEWER);
+    localStorage.setItem("saiflow.pc.tenant.7", kind === "personal" ? "70" : "5");
+    renderAt("/");
+    const page = await screen.findByTestId("page-home", {}, WAIT);
+    await within(page).findByRole("heading", { name: en(kind === "personal" ? "rpt.personalHome" : "rpt.organizationHome") }, WAIT);
+    expect(page.querySelector(".pc-home")).toHaveAttribute("data-home-default", kind);
+    expect(page.querySelector(".pc-flow")).not.toBeInTheDocument();
+  }, LONG);
+
+  it("does not restore a late homepage preference from the previous tenant", async () => {
+    let finish!: (response: Response) => void;
+    const api = inOrg(VIEWER, {
+      "GET /api/v1/me/homepage": (request) => request.headers.get("X-Tenant-Id") === "5"
+        ? new Promise<Response>((resolve) => { finish = resolve; })
+        : json(200, { report_id: null, default: "personal" }),
+      [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()),
+    });
+    renderAt("/");
+    await waitFor(() => expect(finish).toBeTypeOf("function"), WAIT);
+    act(() => useTenantChoice.getState().choose(PERSONAL.tenant_id));
+    await screen.findByRole("heading", { name: en("rpt.personalHome") }, WAIT);
+    await act(async () => { finish(json(200, { report_id: 31, default: "organization" })); });
+    expect(screen.queryByText("Sales overview")).not.toBeInTheDocument();
+    expect(api.count(DATA)).toBe(0);
+  }, LONG);
+
+  it("default homepage retries failed job reads rather than showing false empty data", async () => {
+    const api = inOrg(VIEWER, { "GET /api/v1/ocr/jobs": () => json(500, { code: "internal_error" }) });
+    renderAt("/");
+    await screen.findByRole("heading", { name: en("rpt.organizationHome") }, WAIT);
+    expect(await screen.findAllByRole("button", { name: en("common.retry") }, WAIT)).not.toHaveLength(0);
+    expect(screen.queryByText(en("home.noTasks"))).not.toBeInTheDocument();
+    expect(screen.queryByTestId("metric-strip")).not.toBeInTheDocument();
+    api.set("GET /api/v1/ocr/jobs", () => json(200, { items: [], total: 0, page: 1, page_size: 5 }));
+    for (const button of screen.getAllByRole("button", { name: en("common.retry") })) await userEvent.click(button);
+    expect(await screen.findByTestId("metric-strip", {}, WAIT)).toBeInTheDocument();
+    expect(await screen.findByText(en("home.noTasks"), {}, WAIT)).toBeInTheDocument();
+  }, LONG);
+
+  it("retries a custom homepage plan read without discarding its choice", async () => {
+    const api = inOrg(VIEWER, {
+      "GET /api/v1/me/homepage": () => json(200, { report_id: 31, default: "organization" }),
+      [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()),
+    }, null);
+    api.set(USAGE_ROUTE, () => json(500, { code: "internal_error" }));
+    renderAt("/");
+    await screen.findByRole("alert", {}, WAIT);
+    api.set(USAGE_ROUTE, () => json(200, USAGE));
+    await userEvent.click(screen.getByRole("button", { name: en("common.retry") }));
+    expect(await screen.findByText("Bangkok", {}, WAIT)).toBeInTheDocument();
+    expect(api.count("PUT /api/v1/me/homepage")).toBe(0);
+  }, LONG);
+
+  it("data permission revocation falls back without erasing the saved report", async () => {
+    const api = inOrg(VIEWER, {
+      "GET /api/v1/me/homepage": () => json(200, { report_id: 31, default: "organization" }),
+      [ONE]: () => json(200, detail()), [DATA]: () => json(403, { code: "forbidden" }),
+    });
+    renderAt("/");
+    expect(await screen.findByRole("heading", { name: en("rpt.organizationHome") }, WAIT)).toBeInTheDocument();
+    expect(api.count("PUT /api/v1/me/homepage")).toBe(0);
+  }, LONG);
+
+  it("opens the selected published report at root with Home still selected", async () => {
+    inOrg(VIEWER, {
+      "GET /api/v1/me/homepage": () => json(200, { report_id: 31, default: "organization" }),
+      [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()),
+    });
+    renderAt("/");
+    expect(await screen.findByText("Bangkok", {}, WAIT)).toBeInTheDocument();
+    expect(screen.getByTestId("page-home")).toHaveTextContent("Sales overview");
+    const home = within(screen.getByRole("menu")).getByRole("link", { name: en("nav.home") });
+    expect(home.closest("li")).toHaveClass("ant-menu-item-selected");
+    expect(screen.getByRole("button", { name: en("rpt.resetHome") })).toBeInTheDocument();
+  }, LONG);
+
+  it("an ordinary preference read failure offers retry, not a default dashboard", async () => {
+    const api = inOrg(VIEWER, { "GET /api/v1/me/homepage": () => json(500, { code: "internal_error" }) });
+    renderAt("/");
+    expect(await screen.findByRole("alert", {}, WAIT)).toHaveTextContent(en("rpt.loadFailed"));
+    expect(screen.queryByTestId("usage-card")).not.toBeInTheDocument();
+    api.set("GET /api/v1/me/homepage", () => json(200, { report_id: null, default: "organization" }));
+    await userEvent.click(screen.getByRole("button", { name: en("common.retry") }));
+    expect(await screen.findByRole("heading", { name: en("rpt.organizationHome") }, WAIT)).toBeInTheDocument();
+    expect(await screen.findByTestId("usage-card", {}, WAIT)).toBeInTheDocument();
+  }, LONG);
+
+  it("a selected report that disappears falls back without erasing the preference", async () => {
+    const api = inOrg(VIEWER, {
+      "GET /api/v1/me/homepage": () => json(200, { report_id: 31, default: "organization" }),
+      [ONE]: () => json(404, { code: "not_found" }),
+    });
+    renderAt("/");
+    expect(await screen.findByRole("heading", { name: en("rpt.organizationHome") }, WAIT)).toBeInTheDocument();
+    expect(api.count("PUT /api/v1/me/homepage")).toBe(0);
+  }, LONG);
+
+  it("sets a readable report as home and can reset it at root", async () => {
+    let choice: number | null = null;
+    const api = inOrg(VIEWER, {
+      "GET /api/v1/me/homepage": () => json(200, { report_id: choice, default: "organization" }),
+      "PUT /api/v1/me/homepage": async (r) => {
+        choice = (await r.json()).report_id;
+        return json(200, { report_id: choice, default: "organization" });
+      },
+      [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()),
+    });
+    renderAt("/report-view/31");
+    await screen.findByText("Bangkok", {}, WAIT);
+    await userEvent.click(screen.getByRole("button", { name: en("rpt.setHome") }));
+    await waitFor(async () => expect(await api.bodies("PUT /api/v1/me/homepage")).toEqual([{ report_id: 31 }]));
+    await userEvent.click(within(screen.getByRole("menu")).getByRole("link", { name: en("nav.home") }));
+    await screen.findByTestId("page-home", {}, WAIT);
+    await userEvent.click(screen.getByRole("button", { name: en("rpt.resetHome") }));
+    expect(await screen.findByRole("heading", { name: en("rpt.organizationHome") }, WAIT)).toBeInTheDocument();
+    expect(await api.bodies("PUT /api/v1/me/homepage")).toEqual([{ report_id: 31 }, { report_id: null }]);
+  }, LONG);
+});
+
 describe("report menu and gate (FR-SYS-141)", () => {
   it(
     "sends a report_view holder without report_manage from /reports to the view menu (AC-FR-SYS-159-02)",

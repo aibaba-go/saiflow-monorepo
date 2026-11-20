@@ -22,6 +22,19 @@ const rid = (id: number) => ({ params: { path: { report_id: id } } });
 const body = (config: ReportConfig) => config as unknown as Record<string, unknown>;
 
 export const reports = {
+  contentPolicy: () => call(api.GET("/api/v1/admin/reports/content-policy")),
+  uploadAsset: async (tenantId: number, file: File, signal: AbortSignal): Promise<string> => {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    signal.throwIfAborted();
+    const result = await call(api.POST("/api/v1/admin/reports/assets", {
+      signal, params: { query: { tenant_id: tenantId } }, body: bytes as never,
+      bodySerializer: (b: unknown) => b as BodyInit, headers: { "Content-Type": "application/octet-stream" },
+    }));
+    return result.asset_id;
+  },
+  readAsset: (tenantId: number, assetId: string, signal: AbortSignal) => call(api.GET("/api/v1/admin/reports/assets/{asset_id}", {
+    signal, params: { path: { asset_id: assetId }, query: { tenant_id: tenantId } }, parseAs: "blob",
+  })) as Promise<Blob>,
   list: (tenantId: number) =>
     call(api.GET("/api/v1/admin/reports", { params: { query: { tenant_id: tenantId } } })),
   create: (tenantId: number, name: string) =>

@@ -13,7 +13,7 @@ import { AppLayout } from "./layout/AppLayout";
 import { ApplyOrgPage } from "./pages/ApplyOrgPage";
 import { DocumentPage } from "./pages/DocumentPage";
 import { HealthPage } from "./pages/HealthPage";
-import { HomePage } from "./pages/HomePage";
+import { HomeRoute } from "./pages/HomePage";
 import { LibraryPage } from "./pages/LibraryPage";
 import { OrgGate } from "./pages/OrgGate";
 import { OrgPage } from "./pages/OrgPage";
@@ -83,7 +83,7 @@ export function AppRoutes() {
           <Route element={<RequireVisitor />}>
             {/* one layout for guest and user pages, so moving between them keeps it */}
             <Route element={<AppLayout />}>
-              <Route path="/" element={<HomePage />} />
+              <Route path="/" element={<HomeRoute />} />
               <Route path="/upload" element={<UploadPage />} />
               <Route path="/verify" element={<VerifyPage />} />
               <Route path="/verify/:id" element={<VerifyPage />} />

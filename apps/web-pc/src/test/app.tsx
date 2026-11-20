@@ -21,6 +21,7 @@ export function signedIn(
   return mockApi({
     "GET /api/v1/me": () => json(200, me),
     "GET /api/v1/me/tenants": () => json(200, tenants),
+    "GET /api/v1/me/homepage": (r) => json(200, { report_id: null, default: r.headers.get("X-Tenant-Id") ? "organization" : "personal" }),
     "GET /api/v1/me/notifications": () => json(200, { items: [], unread_count: 0, next_before: null }),
     ...routes,
   });

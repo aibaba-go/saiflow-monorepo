@@ -45,6 +45,8 @@ export const reportsTh: Record<ReportsKey, string> = {
   "rpc.type.donut": "แผนภูมิโดนัท",
   "rpc.type.metric": "ตัวชี้วัด",
   "rpc.type.table": "ตาราง",
+  "rpc.type.image": "รูปภาพ",
+  "rpc.type.html": "HTML / หน้าเว็บฝังตัว",
   "rpc.loading": "กำลังโหลด…",
   "rpc.empty": "ไม่มีข้อมูลในช่วงเวลานี้",
   "rpc.notApplicable": "ช่วงเวลาของหน้าไม่มีผลกับการ์ดนี้ (ไม่มีฟิลด์วันที่)",

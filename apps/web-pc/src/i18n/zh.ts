@@ -39,6 +39,8 @@ export const zh: Record<MessageKey, string> = {
   "brand.step3": "把判断交还给你",
   "brand.step3Body": "对照原件核验，确认后按组织配置进入复核。",
   "layout.mainNav": "主导航",
+  "layout.collapseNav": "收起导航",
+  "layout.expandNav": "展开导航",
   "layout.navWorkspace": "业务工作空间",
   "layout.navManage": "组织与管理",
   "layout.productSubtitle": "智能单据工作台",

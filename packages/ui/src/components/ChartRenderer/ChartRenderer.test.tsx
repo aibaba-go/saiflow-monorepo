@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 
 import type { CardResult, ChartType, ReportCard } from "../reportTypes";
 import { buildChartModel } from "./model";
+import { buildEchartsOption } from "./option";
 import { DEFAULT_CHART_LABELS } from "./labels";
 import { ChartRenderer } from "./ChartRenderer";
 
@@ -63,6 +64,30 @@ beforeEach(() => {
   ec.getInstanceByDom.mockClear();
 });
 
+it("refuses external frames without a server-approved origin", () => {
+  render(<ChartRenderer card={card("html", { data: null, content: { mode: "url", url: "https://unapproved.example/page" } })} />);
+  expect(document.querySelector("iframe")).toBeNull();
+});
+
+it("renders static HTML without a query using a restrictive sandbox", () => {
+  render(<ChartRenderer card={card("html", { data: null, content: { mode: "html", html: "<h2>Hello</h2>" } })} />);
+  const frame = screen.getAllByTitle("Sales").find((el) => el.tagName === "IFRAME")!;
+  expect(frame).toHaveAttribute("sandbox", "");
+  expect(frame).toHaveAttribute("referrerpolicy", "no-referrer");
+  expect(frame.getAttribute("srcdoc")).toContain("default-src 'none'");
+  expect(screen.queryByText("Loading…")).not.toBeInTheDocument();
+  expect(ec.init).not.toHaveBeenCalled();
+});
+
+it("uses numeric X and category Y for horizontal bars without changing exact points", () => {
+  const c = card("bar", { style: { direction: "horizontal" } });
+  const model = buildChartModel(c, ok([row("A", "10.00"), row("B", null)]), DEFAULT_CHART_LABELS);
+  const opt = buildEchartsOption(c, model, { colors: ["#123456"], noValue: "—" });
+  expect(opt.xAxis).toMatchObject({ type: "value" });
+  expect(opt.yAxis).toMatchObject({ type: "category", data: ["A", "B"] });
+  expect((opt.series as { data: unknown[] }[])[0]!.data).toEqual([expect.objectContaining({ exact: "10.00" }), null]);
+});
+
 describe("ChartRenderer chart types", () => {
   const rows = [row("Bangkok", "3244.8", { unit: "THB" }), row("Chiang Mai", "1000", { unit: "THB" })];
 
@@ -85,7 +110,7 @@ describe("ChartRenderer chart types", () => {
     await waitFor(() => expect(ec.init).toHaveBeenCalled());
     const s = lastOption().series[0]!;
     expect(s.type).toBe("pie");
-    expect(s.radius).toEqual(type === "donut" ? ["45%", "70%"] : "70%");
+    expect(s.radius).toEqual(type === "donut" ? ["58%", "76%"] : "72%");
     expect(s.data.map((d) => d?.name)).toEqual(["Bangkok", "Chiang Mai"]);
   });
 
@@ -161,6 +186,31 @@ describe("ChartRenderer data mapping", () => {
     );
     expect(model.series.map((s) => s.name)).toEqual(["Sales (THB)", "Sales (USD)"]);
     expect(model.units).toEqual(["THB", "USD"]);
+  });
+});
+
+describe("ChartRenderer presentation (FR-REPORT-013)", () => {
+  it("leaves category labels inside the plot while preserving gaps and exact values", () => {
+    const c = card("line", { style: { precision: 2, legend: true } });
+    const model = buildChartModel(c, ok([row("A", "1.234567"), row("B", null), row("C", "-2")]), DEFAULT_CHART_LABELS);
+    const opt = buildEchartsOption(c, model, { colors: ["#112233"], noValue: "—" }) as {
+      grid: { containLabel: boolean };
+      series: { areaStyle?: { opacity: number }; lineStyle: { width: number }; connectNulls: boolean; data: unknown[] }[];
+    };
+    expect(opt.grid.containLabel).toBe(true);
+    expect(opt.series[0]).toMatchObject({ connectNulls: false, lineStyle: { width: 3 }, areaStyle: { opacity: 0.08 } });
+    expect(opt.series[0]!.data).toEqual([
+      { value: 1.234567, exact: "1.234567", display: "1.23", unit: null },
+      null,
+      { value: -2, exact: "-2", display: "-2.00", unit: null },
+    ]);
+  });
+
+  it("does not layer area fills over stacked lines", () => {
+    const c = card("line", { style: { stacked: true } });
+    const model = buildChartModel(c, ok([row("A", "1")]), DEFAULT_CHART_LABELS);
+    const opt = buildEchartsOption(c, model, { colors: ["#112233"], noValue: "—" }) as { series: { areaStyle?: unknown }[] };
+    expect(opt.series[0]!.areaStyle).toBeUndefined();
   });
 });
 

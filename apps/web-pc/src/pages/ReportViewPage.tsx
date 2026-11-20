@@ -6,18 +6,19 @@ import {
   type CardResult,
   type QueryResult,
   type ReportCard,
+  REPORT_PALETTES,
 } from "@saiflow/ui";
 import { Alert, App, Button, DatePicker, Popover, Result, Space, Spin, Tag } from "antd";
 import type { Dayjs } from "dayjs";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { Page } from "../components/Page";
 import { formatBangkokDateTime } from "../format";
 import { useT } from "../i18n";
 import { Icon } from "../layout/icons";
-import { configOf, downloadCsv, reportData, useReport, type Period, type ReportDetail } from "../reports/api";
-import { ReportGate } from "../reports/common";
+import { configOf, downloadCsv, readReportAsset, reportData, useHomepageChoice, useReport, useReportContentPolicy, type Period, type ReportDetail } from "../reports/api";
+import { ReportGate, useReportAccess } from "../reports/common";
 import { useReportLabels } from "../reports/labels";
 import { ApiError, errorMessage } from "../services/errors";
 
@@ -37,13 +38,21 @@ interface DataState {
   loading: boolean;
 }
 
-function Viewer({ detail, onStale }: { detail: ReportDetail & { published: NonNullable<ReportDetail["published"]> }; onStale(): void }) {
+function Viewer({ detail, onStale, fallback }: { detail: ReportDetail & { published: NonNullable<ReportDetail["published"]> }; onStale(): void; fallback?: ReactNode }) {
   const t = useT();
   const navigate = useNavigate();
   const listPath = useListPath();
   const { message } = App.useApp();
   const labels = useReportLabels();
+  const homepage = useHomepageChoice();
+  const home = fallback !== undefined;
+  const chooseHome = async (id: number | null) => {
+    try { await homepage.choose(id); void message.success(t("rpt.homeSaved")); }
+    catch (e) { void message.error(errorMessage(e, t)); }
+  };
+  const loadAsset = useCallback((id: string, signal: AbortSignal) => readReportAsset(id, detail.id, signal), [detail.id, detail.tenant_id]);
   const config = useMemo(() => configOf(detail.published.config), [detail.published.config]);
+  const contentPolicy = useReportContentPolicy(config.cards.some((card) => card.type === "html" && card.content?.mode === "url"));
   const version = detail.published.version;
   const publication = useMemo(() => ({ tenantId: detail.tenant_id, id: detail.id, version }), [detail.tenant_id, detail.id, version]);
 
@@ -186,6 +195,7 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: NonNu
     }
   };
 
+  if (home && data.error instanceof ApiError && ([402, 403, 404].includes(data.error.status) || data.error.code === "report_not_published")) return <>{fallback}</>;
   const notPublished = data.error instanceof ApiError && data.error.code === "report_not_published";
   if (notPublished) {
     return (
@@ -246,7 +256,10 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: NonNu
         labels={labels.chart}
         locale={t("format.locale")}
         onRetry={data.loading ? undefined : () => void load(period, true)}
-        footer={info}
+        footer={card.type === "image" || card.type === "html" ? undefined : info}
+        loadAsset={loadAsset}
+        embedOrigins={contentPolicy.data?.origins}
+        palette={REPORT_PALETTES[config.appearance?.theme ?? "brand"]}
       />
     );
   };
@@ -260,17 +273,18 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: NonNu
 
   return (
     <Page
-      name={listPath === "/report-view" ? "report-view" : "reports"}
+      name={home ? "home" : listPath === "/report-view" ? "report-view" : "reports"}
       title={detail.published.name}
       description={t("rpt.readOnlyNote")}
       badge={<Tag className="pc-report-version">{t("rpt.version", { n: version })}</Tag>}
       meta={<time dateTime={detail.published.published_at}>{t("rpt.publishedAt", { at: formatBangkokDateTime(detail.published.published_at) })}</time>}
       extra={
         <Space wrap>
-          <Button icon={<Icon name="back" />} onClick={() => navigate(listPath)}>
-            {t("rpt.backToList")}
+          {!home && <Button icon={<Icon name="back" />} onClick={() => navigate(listPath)}>{t("rpt.backToList")}</Button>}
+          {!home && listPath === "/reports" && detail.can_manage && <Button onClick={() => navigate(`/reports/${detail.id}/design`)}>{t("rpt.design")}</Button>}
+          <Button loading={homepage.pending} disabled={homepage.pending} onClick={() => void chooseHome(home ? null : detail.id)}>
+            {t(home ? "rpt.resetHome" : "rpt.setHome")}
           </Button>
-          {listPath === "/reports" && detail.can_manage && <Button onClick={() => navigate(`/reports/${detail.id}/design`)}>{t("rpt.design")}</Button>}
           <Button type="primary" aria-label={t("rpt.refresh")} loading={data.loading} disabled={data.loading} onClick={() => void load(period, true)}>
             {t("rpt.refresh")}
           </Button>
@@ -353,6 +367,7 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: NonNu
           <div className={stale ? "pc-report-view is-stale" : "pc-report-view"} aria-busy={data.loading || undefined}>
             <ReportGrid
               mode="view"
+              appearance={config.appearance}
               cards={config.cards}
               rowHeight={config.grid?.row_height ?? 80}
               labels={labels.grid}
@@ -369,11 +384,12 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: NonNu
   );
 }
 
-function ViewLoader() {
+function ViewLoader({ reportId, fallback }: { reportId?: number; fallback?: ReactNode } = {}) {
   const t = useT();
   const navigate = useNavigate();
   const listPath = useListPath();
-  const id = Number(useParams().id);
+  const pathId = useParams().id;
+  const id = reportId ?? Number(pathId);
   const report = useReport(id);
   const { refetch } = report;
   const onStale = useCallback(() => void refetch(), [refetch]);
@@ -381,6 +397,7 @@ function ViewLoader() {
     return <div className="pc-panel pc-report-status" role="status" aria-busy="true"><Spin aria-hidden="true" /><span>{t("rpc.loading")}</span></div>;
   }
   if (report.error) {
+    if (fallback !== undefined && report.error instanceof ApiError && ([402, 403, 404].includes(report.error.status) || report.error.code === "report_not_published")) return <>{fallback}</>;
     if (report.error instanceof ApiError && report.error.status === 404) {
       return <Result status="404" title={t("rpt.notFound")} extra={<Button onClick={() => navigate(listPath)}>{t("rpt.backToList")}</Button>} />;
     }
@@ -397,6 +414,7 @@ function ViewLoader() {
   }
   const detail = report.data;
   if (!detail.published) {
+    if (fallback !== undefined) return <>{fallback}</>;
     return (
       <Result
         status="info"
@@ -414,11 +432,20 @@ function ViewLoader() {
       />
     );
   }
-  return <Viewer key={`${detail.tenant_id}:${detail.id}`} detail={detail as ReportDetail & { published: NonNullable<ReportDetail["published"]> }} onStale={onStale} />;
+  return <Viewer key={`${detail.tenant_id}:${detail.id}`} detail={detail as ReportDetail & { published: NonNullable<ReportDetail["published"]> }} onStale={onStale} fallback={fallback} />;
 }
 
 /** /reports/:id: one published report on the viewer's own data scope, queried on open and on
  * a manual refresh only (FR-REPORT-002, -010, -015, -016, -018). */
+export function HomepageReport({ id, fallback }: { id: number; fallback: ReactNode }) {
+  const t = useT();
+  const { access, loading, error, retry } = useReportAccess();
+  if (loading) return <Spin />;
+  if (error) return <Alert role="alert" type="error" message={t("rpt.loadFailed")} description={errorMessage(error, t)} action={<Button onClick={() => void retry()}>{t("common.retry")}</Button>} />;
+  if (!access.view) return <>{fallback}</>;
+  return <ViewLoader key={id} reportId={id} fallback={fallback} />;
+}
+
 export function ReportViewPage() {
   return (
     <ReportGate need="view">

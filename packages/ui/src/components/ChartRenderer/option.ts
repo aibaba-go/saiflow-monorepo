@@ -68,8 +68,17 @@ export function buildEchartsOption(card: ReportCard, model: ChartModel, ctx: Opt
   const showLabels = !!style.labels;
   const singleUnit = model.units.length === 1 ? model.units[0] : undefined;
   const legend = style.legend ?? model.series.length > 1;
-  const textStyle = { fontFamily: FONT_STACK, color: COLORS.text };
-  const base = { color: ctx.colors, textStyle, animationDuration: 300 };
+  const textStyle = { fontFamily: FONT_STACK, color: BRAND_COLORS["brand-navy"], fontSize: 12 };
+  const tooltipStyle = {
+    backgroundColor: COLORS.surface,
+    borderColor: BRAND_COLORS.border,
+    borderWidth: 1,
+    padding: [10, 14],
+    textStyle,
+    extraCssText: "border-radius:10px;line-height:1.6",
+  };
+  const legendStyle = { show: legend, type: "scroll" as const, bottom: 0, icon: "circle", itemWidth: 8, itemHeight: 8, itemGap: 16, textStyle };
+  const base = { color: ctx.colors, textStyle, animationDuration: 200 };
 
   if (card.type === "pie" || card.type === "donut") {
     const data = model.series.flatMap((s) =>
@@ -84,6 +93,7 @@ export function buildEchartsOption(card: ReportCard, model: ChartModel, ctx: Opt
     return {
       ...base,
       tooltip: {
+        ...tooltipStyle,
         trigger: "item",
         confine: true,
         formatter: (raw: unknown) => {
@@ -92,11 +102,12 @@ export function buildEchartsOption(card: ReportCard, model: ChartModel, ctx: Opt
           return `${p.marker ?? ""}${escapeHtml(p.name ?? "")}: <b>${escapeHtml(withUnit(p.data?.display ?? ctx.noValue, p.data?.unit))}</b>${pct}`;
         },
       },
-      legend: { show: legend, type: "scroll", bottom: 0, textStyle },
+      legend: legendStyle,
       series: [
         {
           type: "pie",
-          radius: card.type === "donut" ? ["45%", "70%"] : "70%",
+          radius: card.type === "donut" ? ["58%", "76%"] : "72%",
+          itemStyle: { borderColor: COLORS.surface, borderWidth: 2, borderRadius: 4 },
           center: ["50%", legend ? "45%" : "50%"],
           avoidLabelOverlap: true,
           label: {
@@ -119,10 +130,27 @@ export function buildEchartsOption(card: ReportCard, model: ChartModel, ctx: Opt
   const xTitle = axis.x_title?.trim() || "";
   // The y axis name defaults to the single unit/currency of the card (FR-REPORT-012/013).
   const yTitle = axis.y_title?.trim() || singleUnit || "";
+  const horizontal = card.type === "bar" && style.direction === "horizontal";
+  const categoryAxis = {
+    type: "category" as const,
+    data: model.categories,
+    axisLabel: { hideOverlap: true, overflow: "truncate", width: 96, color: COLORS["text-secondary"] },
+    axisLine: { lineStyle: { color: BRAND_COLORS.border } },
+    axisTick: { show: false, alignWithLabel: true },
+  };
+  const valueAxis = {
+    type: "value" as const,
+    axisLabel: { color: COLORS["text-secondary"], formatter: (v: number) => numberFormat.format(v) },
+    axisLine: { show: false },
+    axisTick: { show: false },
+    splitLine: { lineStyle: { color: BRAND_COLORS.border, type: "dashed" } },
+  };
   return {
     ...base,
     tooltip: {
+      ...tooltipStyle,
       trigger: "axis",
+      axisPointer: { type: "line", lineStyle: { color: BRAND_COLORS.border, type: "dashed" } },
       confine: true,
       formatter: (raw: unknown) => {
         const list = (Array.isArray(raw) ? raw : [raw]) as TooltipParam[];
@@ -136,35 +164,36 @@ export function buildEchartsOption(card: ReportCard, model: ChartModel, ctx: Opt
         return [head, ...lines].join("<br/>");
       },
     },
-    legend: { show: legend, type: "scroll", bottom: 0, textStyle },
+    legend: legendStyle,
     grid: {
-      left: 12,
+      containLabel: true,
+      left: 8,
       right: xTitle ? 48 : 16,
       top: showY && yTitle ? 36 : 20,
       bottom: legend ? 40 : 12,
     },
     xAxis: {
-      type: "category",
+      ...(horizontal ? valueAxis : categoryAxis),
       show: showX,
-      name: xTitle,
+      name: axis.x_title?.trim() || (horizontal ? singleUnit || "" : xTitle),
       nameTextStyle: { color: COLORS["text-secondary"] },
-      data: model.categories,
-      axisLabel: { hideOverlap: true, overflow: "truncate", width: 96, color: COLORS["text-secondary"] },
-      axisTick: { alignWithLabel: true },
     },
     yAxis: {
-      type: "value",
+      ...(horizontal ? categoryAxis : valueAxis),
       show: showY,
-      name: yTitle,
+      name: horizontal ? axis.y_title?.trim() || "" : yTitle,
       nameTextStyle: { color: COLORS["text-secondary"], align: "left" },
-      axisLabel: { color: COLORS["text-secondary"], formatter: (v: number) => numberFormat.format(v) },
-      splitLine: { lineStyle: { color: COLORS.border } },
     },
     series: model.series.map((s) => ({
       type: card.type === "line" ? "line" : "bar",
       name: s.name,
       stack: style.stacked ? "total" : undefined,
       connectNulls: false,
+      barMaxWidth: card.type === "bar" ? 36 : undefined,
+      itemStyle: card.type === "bar" ? { borderRadius: 3 } : undefined,
+      lineStyle: card.type === "line" ? { width: 3 } : undefined,
+      areaStyle: card.type === "line" && !style.stacked && (style.fill ?? true) ? { opacity: 0.08 } : undefined,
+      symbolSize: card.type === "line" ? 6 : undefined,
       showSymbol: card.type === "line" ? true : undefined,
       // ECharts' "auto" hides symbols on a long category axis, which loses an isolated point
       // between gaps (connectNulls is off); always show them (FR-REPORT-013).
@@ -172,7 +201,7 @@ export function buildEchartsOption(card: ReportCard, model: ChartModel, ctx: Opt
       emphasis: { focus: "series" },
       label: {
         show: showLabels,
-        position: card.type === "line" ? "top" : style.stacked ? "inside" : "top",
+        position: card.type === "line" ? "top" : style.stacked ? "inside" : horizontal ? "right" : "top",
         formatter: (raw: unknown) => (raw as TooltipParam).data?.display ?? "",
       },
       data: s.points.map(pointData),

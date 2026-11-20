@@ -45,6 +45,8 @@ export const reportsZh: Record<ReportsKey, string> = {
   "rpc.type.donut": "环形图",
   "rpc.type.metric": "指标卡",
   "rpc.type.table": "表格",
+  "rpc.type.image": "图片",
+  "rpc.type.html": "HTML / 内嵌页面",
   "rpc.loading": "加载中…",
   "rpc.empty": "该期间没有数据",
   "rpc.notApplicable": "整页期间不适用于此卡片（未配置日期字段）",

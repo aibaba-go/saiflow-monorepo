@@ -1,7 +1,8 @@
 import type { components } from "@saiflow/api-client";
 import type { QueryResult, ReportConfig } from "@saiflow/ui";
 import type { DesignerFields, DesignerTemplate, ReportProblem } from "@saiflow/ui/report-designer";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMe } from "../auth/session";
 
 import { api, call } from "../services/api";
 import { ApiError } from "../services/errors";
@@ -37,6 +38,12 @@ export const previewReport = (id: number, config: ReportConfig, period: Period |
 export const reportData = (id: number, period: Period | null, refresh: boolean) =>
   call(api.POST("/api/v1/reports/{report_id}/data", { ...rid(id), body: { period, refresh } })) as Promise<QueryResult>;
 
+export function useReportContentPolicy(wanted: boolean) {
+  const { tenant } = useTenant();
+  return useQuery({ queryKey: ["report-content-policy", tenant?.tenant_id],
+    queryFn: () => call(api.GET("/api/v1/reports/content-policy")), enabled: wanted && !!tenant });
+}
+
 export const catalogTemplates = (reportId: number) =>
   call(api.GET("/api/v1/reports/catalog/templates", { params: { query: { report_id: reportId } } }));
 export const catalogFields = (reportId: number, templateId: number, versionIds: number[]) =>
@@ -69,6 +76,47 @@ export async function downloadCsv(id: number, cardId: string, period: Period | n
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
+
+const homepageKey = (userId: number | null | undefined, tenantId: number | undefined) => ["homepage", userId, tenantId] as const;
+
+export function useHomepage() {
+  const me = useMe();
+  const { tenant } = useTenant();
+  return useQuery({
+    queryKey: homepageKey(me.data?.user_id, tenant?.tenant_id),
+    queryFn: ({ signal }) => call(api.GET("/api/v1/me/homepage", { signal })),
+    enabled: !!me.data && !!tenant,
+  });
+}
+
+export function useHomepageChoice() {
+  const client = useQueryClient();
+  const me = useMe();
+  const { tenant } = useTenant();
+  const key = homepageKey(me.data?.user_id, tenant?.tenant_id);
+  const mutation = useMutation({
+    mutationFn: async ({ id, key }: { id: number | null; key: ReturnType<typeof homepageKey> }) => ({
+      value: await call(api.PUT("/api/v1/me/homepage", { body: { report_id: id } })), key,
+    }),
+    onSuccess: ({ value, key }) => client.setQueryData(key, value),
+  });
+  return { choose: (id: number | null) => mutation.mutateAsync({ id, key }), pending: mutation.isPending, error: mutation.error };
+}
+
+export const uploadReportAsset = async (file: File, signal: AbortSignal): Promise<string> => {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  signal.throwIfAborted();
+  const result = await call(api.POST("/api/v1/reports/assets", {
+    signal, body: bytes as never, bodySerializer: (b: unknown) => b as BodyInit,
+    headers: { "Content-Type": "application/octet-stream" },
+  }));
+  return result.asset_id;
+};
+
+export const readReportAsset = (assetId: string, reportId: number, signal: AbortSignal) =>
+  call(api.GET("/api/v1/reports/assets/{asset_id}", {
+    signal, params: { path: { asset_id: assetId }, query: { report_id: reportId } }, parseAs: "blob",
+  })) as Promise<Blob>;
 
 export function useReports() {
   const { tenant } = useTenant();

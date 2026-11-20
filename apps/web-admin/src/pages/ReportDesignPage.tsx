@@ -52,6 +52,8 @@ function Designer({ detail, reload }: { detail: ReportDetail; reload: () => Prom
     queryFn: () => reports.templates(tenantId, detail.id),
   });
 
+  const loadAsset = useCallback((id: string, signal: AbortSignal) => reports.readAsset(tenantId, id, signal), [tenantId]);
+  const uploadAsset = useCallback((file: File, signal: AbortSignal) => reports.uploadAsset(tenantId, file, signal), [tenantId]);
   const serverConfig = useMemo(() => configOf(detail.draft), [detail.draft]);
   const [edit, setEdit] = useState<Edit | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
@@ -59,6 +61,8 @@ function Designer({ detail, reload }: { detail: ReportDetail; reload: () => Prom
   const [preview, setPreview] = useState<{ config: ReportConfig; result: QueryResult } | null>(null);
 
   const value = edit?.config ?? serverConfig;
+  const contentPolicy = useQuery({ queryKey: ["admin-report-content-policy"], queryFn: reports.contentPolicy,
+    enabled: value.cards.some((card) => card.type === "html" && card.content?.mode === "url") });
   const name = edit?.name ?? detail.name;
   const nameOk = name.trim().length > 0 && name.trim().length <= MAX_NAME;
   const dirty = edit !== null && !(edit.name === detail.name && sameJson(edit.config, serverConfig));
@@ -249,6 +253,9 @@ function Designer({ detail, reload }: { detail: ReportDetail; reload: () => Prom
             onChange={(next) => setEdit((e) => ({ ...start(e), config: next }))}
             templates={catalog.data ?? []}
             loadFields={loadFields}
+            onUpload={uploadAsset}
+            loadAsset={loadAsset}
+            embedOrigins={contentPolicy.data?.origins}
             preview={preview?.result ?? null}
             previewLoading={runPreview.pending}
             previewStale={preview !== null && !sameJson(preview.config, value)}

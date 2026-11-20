@@ -6,10 +6,18 @@
   min-width: 0;
   color: var(--text, #171a1c);
 }
+.sf-rd-filters { display: grid; gap: 12px; margin-bottom: 20px; }
+.sf-rd-filter-rule { display: grid; gap: 8px; padding: 12px; margin: 8px 0; border: 1px solid #DDE5F0; border-radius: 10px; background: #F7F9FC; }
+.sf-rd-themes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sf-rd-themes .ant-btn { height: auto; padding: 8px; }
+.sf-rd-swatches { display: flex; justify-content: center; gap: 4px; margin-top: 6px; }
+.sf-rd-swatches i { width: 16px; height: 6px; border-radius: 3px; }
+.sf-rd-type-icon--image { color: #D27E35; }
+.sf-rd-type-icon--html { color: #7B55BC; }
 .sf-rd__body {
   display: grid;
-  grid-template-columns: 148px minmax(0, 1fr) 340px;
-  gap: 12px;
+  grid-template-columns: 152px minmax(0, 1fr) 320px;
+  gap: 16px;
   align-items: start;
 }
 .sf-rd.is-readonly .sf-rd__body {
@@ -20,10 +28,11 @@
   position: sticky;
   top: 12px;
   box-sizing: border-box;
-  padding: 12px;
+  padding: 16px;
   border: 1px solid var(--border, #e2e8f0);
-  border-radius: 10px;
+  border-radius: var(--card-radius, 10px);
   background: var(--surface, #fff);
+  box-shadow: var(--shadow-card, none);
 }
 .sf-rd__panel {
   max-height: calc(100vh - 24px);
@@ -43,10 +52,12 @@
   box-sizing: border-box;
   min-width: 0;
   min-height: 480px;
-  padding: 8px;
-  border: 1px dashed var(--border-strong, #cbd5e1);
-  border-radius: 10px;
-  background: var(--surface-muted, #f6f8fa);
+  padding: 12px;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: var(--card-radius, 10px);
+  background-color: var(--bg, #f5f7fa);
+  background-image: radial-gradient(var(--border, #e2e8f0) 1px, transparent 1px);
+  background-size: 16px 16px;
 }
 .sf-rd__canvas > .ant-empty {
   margin-top: 160px;
@@ -63,8 +74,10 @@
   margin-bottom: 8px;
 }
 .sf-rd-panel__title {
-  margin: 0 0 8px;
+  margin: 0 0 16px;
+  color: var(--brand-navy, var(--text));
   font-size: 14px;
+  line-height: 22px;
   font-weight: 600;
 }
 .sf-rd-panel__head .sf-rd-panel__title {
@@ -86,9 +99,10 @@
 .sf-rd-group {
   min-width: 0;
   margin: 0 0 12px;
-  padding: 8px 12px 0;
+  padding: 12px 12px 0;
   border: 1px solid var(--border, #e2e8f0);
-  border-radius: 8px;
+  border-radius: var(--control-radius, 8px);
+  background: var(--bg, #f5f7fa);
 }
 .sf-rd-group > legend {
   width: auto;
@@ -196,7 +210,68 @@
   white-space: normal;
   text-align: left;
 }
-@media (max-width: 1100px) {
+.sf-rd-type-icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+.sf-rd-palette-tile.ant-btn {
+  justify-content: flex-start;
+  height: auto;
+  min-height: 56px;
+  padding: 12px;
+  border-color: var(--border);
+  border-radius: var(--control-radius, 8px);
+  color: var(--brand-navy, var(--text));
+  white-space: normal;
+  text-align: left;
+  line-height: 1.5;
+}
+.sf-rd-palette-tile .ant-btn-icon {
+  display: grid;
+  place-items: center;
+  padding: 6px;
+  border-radius: var(--control-radius, 8px);
+  color: var(--primary-pressed);
+  background: var(--primary-soft);
+}
+.sf-rd-palette-tile--pie .ant-btn-icon,
+.sf-rd-palette-tile--donut .ant-btn-icon {
+  color: var(--brand-teal-ink);
+  background: var(--brand-teal-soft);
+}
+.sf-rd-palette-tile:not(:disabled):hover {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+.sf-rd-palette-tile:disabled .ant-btn-icon {
+  color: var(--text-secondary);
+  background: var(--surface-muted);
+}
+.sf-rd-card__glyph {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 8px;
+  border-radius: var(--card-radius, 10px);
+  background: var(--primary-soft);
+  color: var(--primary-pressed);
+}
+.sf-rd-card__glyph .sf-rd-type-icon {
+  width: 32px;
+  height: 32px;
+}
+.sf-rd__panel .ant-tabs-nav {
+  padding: 0 12px;
+  border-radius: var(--control-radius, 8px);
+  background: var(--bg);
+}
+.sf-rd__panel .ant-form-item-label > label {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+@media (max-width: 1280px) {
   .sf-rd__body,
   .sf-rd.is-readonly .sf-rd__body {
     grid-template-columns: minmax(0, 1fr);

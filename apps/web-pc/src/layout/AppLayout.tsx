@@ -1,5 +1,5 @@
-import { App, Menu, Spin, Typography } from "antd";
-import { useEffect } from "react";
+import { App, Button, Menu, Spin, Typography } from "antd";
+import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 
 import { useIdentity, useMyTenants } from "../auth/session";
@@ -136,6 +136,15 @@ function useTenantsLoader(userId: number | null | undefined) {
 export function AppLayout() {
   const t = useT();
   const location = useLocation();
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem("saiflow.pc.nav.collapsed") === "true"; }
+    catch { return false; }
+  });
+  const toggleNavigation = () => setCollapsed((before) => {
+    const next = !before;
+    try { localStorage.setItem("saiflow.pc.nav.collapsed", String(next)); } catch { /* storage may be blocked */ }
+    return next;
+  });
   const me = useIdentity();
   const guest = me.data?.kind === "guest";
   const tenants = useTenantsLoader(guest ? null : me.data?.user_id);
@@ -162,12 +171,14 @@ export function AppLayout() {
   // The same items, order and permission filter as before; only grouped under two headings.
   const item = (m: MenuItem) => ({
     key: m.key,
-    icon: (
-      <span className={`pc-nav-icon pc-nav-icon--${TONES[m.key] ?? "blue"}`} aria-hidden="true">
-        <Icon name={ICONS[m.key] ?? "file"} />
-      </span>
+    label: (
+      <Link to={m.path} className="pc-nav-link" aria-label={t(m.label)} title={collapsed ? t(m.label) : undefined}>
+        <span className={`pc-nav-icon pc-nav-icon--${TONES[m.key] ?? "blue"}`} aria-hidden="true">
+          <Icon name={ICONS[m.key] ?? "file"} />
+        </span>
+        <span className="pc-nav-label">{t(m.label)}</span>
+      </Link>
     ),
-    label: <Link to={m.path}>{t(m.label)}</Link>,
   });
   const visible = MENU.filter((m) => !hidden.includes(m.key) && (!guest || GUEST_MENU.has(m.key)));
   const items = [
@@ -177,7 +188,7 @@ export function AppLayout() {
   const title = pageTitle(location.pathname);
   const name = me.data?.display_name ?? "";
   return (
-    <div className="pc-shell">
+    <div className={`pc-shell${collapsed ? " pc-shell--collapsed" : ""}`}>
       <aside className="pc-sidebar">
         <div className="pc-sidebar__lockup">
           <span className="pc-sidebar__mark">
@@ -188,7 +199,7 @@ export function AppLayout() {
             <small>{t("layout.productSubtitle")}</small>
           </span>
         </div>
-        <nav className="pc-sidebar__nav" aria-label={t("layout.mainNav")}>
+        <nav id="pc-main-navigation" className="pc-sidebar__nav" aria-label={t("layout.mainNav")}>
           <Menu theme="dark" mode="inline" selectedKeys={[selected(location.pathname)]} items={items} />
         </nav>
         <div className="pc-sidebar__footer">
@@ -209,6 +220,16 @@ export function AppLayout() {
       <div className="pc-workspace">
         {me.data?.impersonated && <ImpersonationBanner name={name || `#${me.data.user_id}`} />}
         <header className="pc-topbar">
+          <Button
+            type="text"
+            className="pc-nav-toggle"
+            aria-label={t(collapsed ? "layout.expandNav" : "layout.collapseNav")}
+            title={t(collapsed ? "layout.expandNav" : "layout.collapseNav")}
+            aria-expanded={!collapsed}
+            aria-controls="pc-main-navigation"
+            icon={<Icon name={collapsed ? "chevron" : "back"} />}
+            onClick={toggleNavigation}
+          />
           <nav className="pc-breadcrumb" aria-label={t("layout.breadcrumb")}>
             <span className="pc-breadcrumb__root">{t("app.title")}</span>
             {title && (

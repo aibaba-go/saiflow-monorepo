@@ -57,6 +57,8 @@ const chartTypes = (t: T) => ({
   donut: t("rpc.type.donut"),
   metric: t("rpc.type.metric"),
   table: t("rpc.type.table"),
+  image: t("rpc.type.image"),
+  html: t("rpc.type.html"),
 });
 
 export function chartLabels(t: T): ChartLabels {

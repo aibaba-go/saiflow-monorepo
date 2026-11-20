@@ -44,6 +44,8 @@ export const reportsEn = {
   "rpc.type.donut": "Donut chart",
   "rpc.type.metric": "Metric",
   "rpc.type.table": "Table",
+  "rpc.type.image": "Image",
+  "rpc.type.html": "HTML / embedded page",
   "rpc.loading": "Loading…",
   "rpc.empty": "No data for this period",
   "rpc.notApplicable": "The page period does not apply to this card (it has no date field)",

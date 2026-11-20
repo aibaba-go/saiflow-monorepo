@@ -15,6 +15,7 @@ from app.dependencies import (
     get_db,
     get_principal,
     get_settings,
+    get_store,
     get_tenant_context,
     require_csrf_header,
 )
@@ -28,6 +29,8 @@ from app.schemas.report import (
     DataIn,
     PreviewIn,
     QueryResult,
+    ReportAssetOut,
+    ReportContentPolicyOut,
     ReportDetail,
     ReportListOut,
     RevisionIn,
@@ -118,6 +121,52 @@ async def create_report(req: CreateReportIn, ctx: Tenant, db: Db) -> ReportDetai
     return await svc.audited(db, svc.user_actor(ctx), "create", None, run)
 
 
+@router.get(
+    "/content-policy", operation_id="getReportContentPolicy", response_model=ReportContentPolicyOut
+)
+async def content_policy(ctx: Tenant, db: Db, settings: Config):
+    from app.services.report_content import embed_origins
+
+    await svc.require(db, ctx, "any")
+    return {"origins": embed_origins(settings)}
+
+
+@router.post(
+    "/assets", operation_id="uploadReportAsset", status_code=201, response_model=ReportAssetOut
+)
+async def upload_asset(request: Request, ctx: Tenant, db: Db):
+    from app.services import report_asset_service
+
+    await svc.require(db, ctx, "manage")
+    raw = bytearray()
+    async for chunk in request.stream():
+        raw.extend(chunk)
+        if len(raw) > report_asset_service.MAX_BYTES:
+            raise AppError(422, "report_invalid", "error.report_invalid")
+    asset_id = await report_asset_service.upload(db, ctx, get_store(request), bytes(raw))
+    return {"asset_id": str(asset_id)}
+
+
+@router.get("/assets/{asset_id}", operation_id="readReportAsset")
+async def read_asset(
+    asset_id: str, request: Request, ctx: Tenant, db: Db, report_id: OptionalReportId = None
+):
+    from uuid import UUID
+
+    from app.services import report_asset_service
+
+    try:
+        key = UUID(asset_id)
+    except ValueError:
+        raise not_found() from None
+    raw = await report_asset_service.read(db, ctx, get_store(request), key, report_id)
+    return Response(
+        raw,
+        media_type="image/png",
+        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
+    )
+
+
 @router.get("/{report_id}", operation_id="getReport", response_model=ReportDetail)
 async def get_report(report_id: PathId, ctx: Tenant, db: Db) -> ReportDetail:
     async def run():
@@ -128,11 +177,20 @@ async def get_report(report_id: PathId, ctx: Tenant, db: Db) -> ReportDetail:
 
 
 @router.put("/{report_id}", operation_id="saveReport", response_model=ReportDetail)
-async def save_report(report_id: PathId, req: SaveReportIn, ctx: Tenant, db: Db) -> ReportDetail:
+async def save_report(
+    report_id: PathId, req: SaveReportIn, ctx: Tenant, db: Db, settings: Config
+) -> ReportDetail:
     async def run():
         await svc.require(db, ctx, "manage")
         await svc.save(
-            db, ctx.tenant_id, svc.user_actor(ctx), report_id, req.revision, req.name, req.config
+            db,
+            ctx.tenant_id,
+            svc.user_actor(ctx),
+            report_id,
+            req.revision,
+            req.name,
+            req.config,
+            settings,
         )
         return await _detail(db, ctx, report_id)
 
@@ -140,10 +198,12 @@ async def save_report(report_id: PathId, req: SaveReportIn, ctx: Tenant, db: Db)
 
 
 @router.post("/{report_id}/publish", operation_id="publishReport", response_model=ReportDetail)
-async def publish_report(report_id: PathId, req: RevisionIn, ctx: Tenant, db: Db) -> ReportDetail:
+async def publish_report(
+    report_id: PathId, req: RevisionIn, ctx: Tenant, db: Db, settings: Config
+) -> ReportDetail:
     async def run():
         await svc.require(db, ctx, "manage")
-        await svc.publish(db, ctx.tenant_id, svc.user_actor(ctx), report_id, req.revision)
+        await svc.publish(db, ctx.tenant_id, svc.user_actor(ctx), report_id, req.revision, settings)
         return await _detail(db, ctx, report_id)
 
     return await svc.audited(db, svc.user_actor(ctx), "publish", report_id, run)
@@ -175,10 +235,14 @@ async def delete_report(
 
 
 @router.post("/{report_id}/preview", operation_id="previewReport", response_model=QueryResult)
-async def preview_report(report_id: PathId, req: PreviewIn, ctx: Tenant, db: Db) -> QueryResult:
+async def preview_report(
+    report_id: PathId, req: PreviewIn, ctx: Tenant, db: Db, settings: Config
+) -> QueryResult:
     async def run():
         await svc.require(db, ctx, "manage")
-        return QueryResult(**await svc.preview(db, ctx, report_id, req.config, req.period))
+        return QueryResult(
+            **await svc.preview(db, ctx, report_id, req.config, req.period, settings)
+        )
 
     return await svc.audited(db, svc.user_actor(ctx), "preview", report_id, run)
 

@@ -5,7 +5,7 @@ import { ChartRenderer } from "../ChartRenderer/ChartRenderer";
 import type { ChartLabels } from "../ChartRenderer/labels";
 import type { ReportGridLabels } from "../ReportGrid/CardFrame";
 import { ReportGrid } from "../ReportGrid/ReportGrid";
-import { CHART_TYPES, type ChartType, type QueryResult, type ReportCard, type ReportCardData, type ReportCardStyle, type ReportConfig } from "../reportTypes";
+import { CHART_TYPES, REPORT_PALETTES, type ChartType, type QueryResult, type ReportCard, type ReportCardData, type ReportCardStyle, type ReportConfig } from "../reportTypes";
 import { mergeReportDesignerLabels, type ReportDesignerLabels } from "./labels";
 import { localizeReportError } from "./messages";
 import {
@@ -34,6 +34,7 @@ import {
 } from "./model";
 import "../components.css";
 import "./ReportDesigner.css";
+import { CardAppearance, ContentPanel, FiltersEditor, PageAppearance, PageFilters, filterFields, v2Labels } from "./V2Panels";
 
 export interface ReportDesignerProps {
   /** The page configuration being designed (a draft may be incomplete). */
@@ -60,6 +61,27 @@ export interface ReportDesignerProps {
   labels?: Partial<ReportDesignerLabels>;
   chartLabels?: Partial<ChartLabels>;
   gridLabels?: Partial<ReportGridLabels>;
+  onUpload?: (file: File, signal: AbortSignal) => Promise<string>;
+  loadAsset?: (id: string, signal: AbortSignal) => Promise<Blob>;
+  embedOrigins?: readonly string[];
+}
+
+function ChartTypeIcon({ type }: { type: ChartType }) {
+  const shapes: Record<ChartType, ReactNode> = {
+    bar: <><path d="M4 20h16" /><rect x="5" y="11" width="3" height="6" rx="1" /><rect x="10.5" y="5" width="3" height="12" rx="1" /><rect x="16" y="8" width="3" height="9" rx="1" /></>,
+    line: <><path d="M4 4v16h16M6 15l4-5 4 3 5-7" /></>,
+    pie: <><path d="M11 3a9 9 0 1 0 10 10H11Z" /><path d="M14 3.5V10h6.5A8 8 0 0 0 14 3.5Z" /></>,
+    donut: <><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4" /><path d="M12 3.5V8m0 8v4.5" /></>,
+    metric: <><rect x="3" y="5" width="18" height="14" rx="3" /><path d="M7 10h4m-4 4h7m2-4h1" /></>,
+    table: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18M3 14h18M9 9v11M15 9v11" /></>,
+    image: <><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="8" cy="9" r="2" /><path d="m4 18 5-5 4 3 4-6 4 8" /></>,
+    html: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="m9 9-3 3 3 3m6-6 3 3-3 3m-2-8-2 10" /></>,
+  };
+  return (
+    <svg className={`sf-rd-type-icon sf-rd-type-icon--${type}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      {shapes[type]}
+    </svg>
+  );
 }
 
 type FieldsEntry = { status: "loading" } | { status: "ok"; data: DesignerFields } | { status: "error"; error: unknown };
@@ -182,17 +204,23 @@ function DataTab({
   ctx,
   templates,
   fields,
+  pagePaths,
   onCard,
 }: {
   card: ReportCard;
   ctx: Ctx;
   templates: readonly DesignerTemplate[];
   fields: { entry: FieldsEntry | null; retry: () => void };
+  pagePaths: string[];
   onCard: (next: ReportCard) => void;
 }) {
   const l = ctx.labels;
   const data = card.data ?? {};
-  const set = (patch: Partial<ReportCardData>) => onCard({ ...card, data: pruneConfirmed({ ...data, ...patch }) });
+  const set = (patch: Partial<ReportCardData>) => {
+    const next = { ...data, ...patch };
+    const confirmed = new Set([...usedPaths(next), ...pagePaths]);
+    onCard({ ...card, data: { ...next, confirmed_paths: (next.confirmed_paths ?? []).filter((p) => confirmed.has(p)) } });
+  };
   const template = templates.find((t) => t.template_id === data.template_id);
   const templateOptions = templates
     .filter((t) => t.usable || t.template_id === data.template_id)
@@ -214,7 +242,7 @@ function DataTab({
   const seriesOpts = fieldOptions(all, data, "series").filter((f) => f.path !== data.dimension?.path);
   const dateOpts = fieldOptions(all, data, "date");
   const unitOpts = fieldOptions(all, data, "unit");
-  const used = usedPaths(data);
+  const used = [...new Set([...usedPaths(data), ...pagePaths])];
   const nameOf = (path: string) => {
     const f = all.find((x) => x.path === path);
     if (f) return `${localName(f, ctx.lang)} (${path})`;
@@ -321,7 +349,7 @@ function DataTab({
                     data: pruneConfirmed({
                       ...data,
                       measure: { agg: a, path: a === "count" ? null : (data.measure?.path ?? null) },
-                    }),
+                    }, pagePaths),
                   });
                 }}
                 style={{ width: "100%" }}
@@ -613,6 +641,8 @@ function CardPanel({
   unplaced,
   onCard,
   onRemove,
+  onUpload,
+  pagePaths,
 }: {
   card: ReportCard;
   ctx: Ctx;
@@ -622,6 +652,8 @@ function CardPanel({
   unplaced: string[];
   onCard: (next: ReportCard) => void;
   onRemove: () => void;
+  onUpload?: ReportDesignerProps["onUpload"];
+  pagePaths: string[];
 }) {
   const l = ctx.labels;
   const fields = useCardFields(cache, loadFields, card.data);
@@ -665,21 +697,24 @@ function CardPanel({
         activeKey={tab}
         onChange={setTab}
         items={[
-          { key: "data", label: l.tabData, children: <DataTab card={card} ctx={ctx} templates={templates} fields={fields} onCard={onCard} /> },
-          { key: "style", label: l.tabStyle, children: <StyleTab card={card} ctx={ctx} onCard={onCard} /> },
+          { key: "data", label: card.type === "image" || card.type === "html" ? v2Labels(ctx.lang).content : l.tabData, children: card.type === "image" || card.type === "html" ? <ContentPanel card={card} onCard={onCard} onUpload={onUpload} lang={ctx.lang} readOnly={ctx.readOnly} /> : <DataTab card={card} ctx={ctx} templates={templates} fields={fields} pagePaths={pagePaths} onCard={onCard} /> },
+          ...(card.type === "image" || card.type === "html" ? [] : [{ key: "filters", label: v2Labels(ctx.lang).filters, children: <FiltersEditor group={card.data?.filters} fields={filterFields(fields.entry?.status === "ok" ? fields.entry.data.fields : [], card)} lang={ctx.lang} readOnly={ctx.readOnly} onChange={(filters) => onCard({ ...card, data: { ...card.data, filters } })} /> }]),
+          { key: "style", label: l.tabStyle, children: <><CardAppearance card={card} onCard={onCard} lang={ctx.lang} readOnly={ctx.readOnly} />{card.type !== "image" && card.type !== "html" && <StyleTab card={card} ctx={ctx} onCard={onCard} />}</> },
         ]}
       />
     </section>
   );
 }
 
-function PagePanel({ value, ctx, onChange }: { value: ReportConfig; ctx: Ctx; onChange: (next: ReportConfig) => void }) {
+function PagePanel({ value, ctx, onChange, loadFields }: { value: ReportConfig; ctx: Ctx; onChange: (next: ReportConfig) => void; loadFields: ReportDesignerProps["loadFields"] }) {
   const l = ctx.labels;
   const period = value.period ?? { mode: "current_year" as const };
   const grid = value.grid ?? {};
   return (
     <section className="sf-rd-panel__body" aria-label={l.pagePanel}>
       <h3 className="sf-rd-panel__title">{l.pagePanel}</h3>
+      <PageAppearance value={value} onChange={onChange} lang={ctx.lang} readOnly={ctx.readOnly} />
+      <PageFilters value={value} onChange={onChange} loadFields={loadFields} lang={ctx.lang} readOnly={ctx.readOnly} />
       <Field ctx={ctx} label={l.period} htmlFor={ctx.id("pmode")} paths={["period", "period.mode"]} help={l.periodHelp}>
         <Radio.Group
           id={ctx.id("pmode")}
@@ -753,6 +788,9 @@ export function ReportDesigner({
   labels: labelsIn,
   chartLabels,
   gridLabels,
+  onUpload,
+  loadAsset,
+  embedOrigins,
 }: ReportDesignerProps) {
   const labels = useMemo(() => mergeReportDesignerLabels(labelsIn), [labelsIn]);
   const baseId = useId();
@@ -795,7 +833,7 @@ export function ReportDesigner({
     const result = results.get(c.id);
     const n = grouped.byCard.get(c.id)?.length ?? 0;
     const badge = n > 0 && <Tag color="error" className="sf-rd-card__badge">{n}</Tag>;
-    if (!result && !previewLoading) {
+    if (!result && !previewLoading && c.type !== "image" && c.type !== "html") {
       return (
         <div className="sf-rd-card">
           <div className="sf-rd-card__head">
@@ -805,6 +843,7 @@ export function ReportDesigner({
             {badge}
           </div>
           <div className="sf-rd-card__placeholder">
+            <span className="sf-rd-card__glyph"><ChartTypeIcon type={c.type} /></span>
             <span>{typeName(c)}</span>
             <small>{labels.previewHint}</small>
           </div>
@@ -814,7 +853,7 @@ export function ReportDesigner({
     return (
       <div className="sf-rd-card">
         {badge && <div className="sf-rd-card__corner">{badge}</div>}
-        <ChartRenderer card={{ ...c, title: titleOf(c) }} result={result} loading={previewLoading} labels={chartLabels} locale={locale} headingLevel={4} />
+        <ChartRenderer card={{ ...c, title: titleOf(c) }} result={result} loading={previewLoading} labels={chartLabels} locale={locale} headingLevel={4} loadAsset={loadAsset} embedOrigins={embedOrigins} palette={REPORT_PALETTES[value.appearance?.theme ?? "brand"]} />
       </div>
     );
   };
@@ -859,6 +898,8 @@ export function ReportDesigner({
                 <Button
                   key={t}
                   block
+                  className={`sf-rd-palette-tile sf-rd-palette-tile--${t}`}
+                  icon={<ChartTypeIcon type={t} />}
                   disabled={full}
                   aria-label={labels.add(labels.chartTypes[t])}
                   onClick={() => {
@@ -882,6 +923,7 @@ export function ReportDesigner({
               cards={cards}
               mode={readOnly ? "view" : "design"}
               rowHeight={value.grid?.row_height ?? 80}
+              appearance={value.appearance}
               selectedId={selected}
               onSelect={(id) => setSelected((s) => (s === id && readOnly ? null : id))}
               onLayoutChange={(layouts) => emit(applyLayouts(value, layouts))}
@@ -907,6 +949,8 @@ export function ReportDesigner({
                 cache={cache}
                 loadFields={loadFields}
                 unplaced={unplaced}
+                onUpload={onUpload}
+                pagePaths={Object.values(value.filters?.targets[card.id] ?? {}).filter(Boolean)}
                 onCard={(next) => emit(updateCard(value, card.id, () => next))}
                 onRemove={() => {
                   emit(removeCard(value, card.id));
@@ -914,7 +958,7 @@ export function ReportDesigner({
                 }}
               />
             ) : (
-              <PagePanel value={value} ctx={ctx} onChange={emit} />
+              <PagePanel value={value} ctx={ctx} onChange={emit} loadFields={loadFields} />
             )}
           </Form>
         </aside>

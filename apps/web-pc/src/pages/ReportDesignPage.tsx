@@ -22,6 +22,9 @@ import {
   unpublishReport,
   useCatalog,
   useReport,
+  readReportAsset,
+  uploadReportAsset,
+  useReportContentPolicy,
   type ReportDetail,
 } from "../reports/api";
 import { ReportGate, ReportStatusTag, useReportAccess } from "../reports/common";
@@ -155,6 +158,8 @@ function Designer({ detail, reload }: { detail: ReportDetail; reload: () => Prom
     }
   });
 
+  const loadAsset = useCallback((id: string, signal: AbortSignal) => readReportAsset(id, detail.id, signal), [detail.id, detail.tenant_id]);
+  const contentPolicy = useReportContentPolicy(value.cards.some((card) => card.type === "html" && card.content?.mode === "url"));
   const loadFields = useCallback(
     (templateId: number, versionIds: number[]) => catalogFields(detail.id, templateId, versionIds),
     [detail.id],
@@ -249,6 +254,9 @@ function Designer({ detail, reload }: { detail: ReportDetail; reload: () => Prom
           onChange={(next) => setEdit((e) => ({ ...start(e), config: next }))}
           templates={catalog.data ?? []}
           loadFields={loadFields}
+          loadAsset={loadAsset}
+          onUpload={uploadReportAsset}
+          embedOrigins={contentPolicy.data?.origins}
           preview={preview?.result ?? null}
           previewLoading={runPreview.pending}
           previewStale={preview !== null && !sameJson(preview.config, value)}
