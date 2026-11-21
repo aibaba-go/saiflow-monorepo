@@ -1,3 +1,5 @@
+from contextlib import aclosing
+
 import pytest
 from sqlalchemy import text
 
@@ -19,7 +21,7 @@ async def create(admin, email=EMAIL):
 
 
 async def test_admin_create_defaults_and_email_login(api, db):
-    async with await admin_client(api, db) as admin:
+    async with aclosing(await admin_client(api, db)) as admin:
         user = await create(admin, " NEW@Example.COM ")
         assert user["email"] == EMAIL and user["registered"] and not user["line_linked"]
         assert (await create(admin, "second@example.com"))["user_id"] != user["user_id"]
@@ -61,7 +63,7 @@ async def test_create_delete_require_admin_and_csrf(api, db):
     body = {"email": EMAIL, "display_name": "New", "password": PASSWORD}
     assert (await api.post("/api/v1/admin/users", json=body)).status_code == 401
     assert (await api.delete("/api/v1/admin/users/1")).status_code == 401
-    async with await admin_client(api, db) as admin:
+    async with aclosing(await admin_client(api, db)) as admin:
         user = await create(admin)
         admin.headers.pop("X-Requested-With")
         for response in (
@@ -72,7 +74,7 @@ async def test_create_delete_require_admin_and_csrf(api, db):
 
 
 async def test_delete_empty_account_invalidates_sessions_preserves_audit(api, db):
-    async with await admin_client(api, db) as admin, client_like(api) as customer:
+    async with aclosing(await admin_client(api, db)) as admin, client_like(api) as customer:
         user = await create(admin)
         uid, tid = user["user_id"], user["personal_tenant_id"]
         assert (
@@ -110,7 +112,7 @@ async def test_delete_empty_account_invalidates_sessions_preserves_audit(api, db
     ],
 )
 async def test_delete_protects_associations(api, db, association, error):
-    async with await admin_client(api, db) as admin:
+    async with aclosing(await admin_client(api, db)) as admin:
         user = await create(admin)
         uid, tid = user["user_id"], user["personal_tenant_id"]
         if association == "organization":
@@ -144,7 +146,7 @@ async def test_delete_protects_associations(api, db, association, error):
 
 
 async def test_link_password_preserves_identity_for_email_and_line(api, db, line):
-    async with await admin_client(api, db) as admin:
+    async with aclosing(await admin_client(api, db)) as admin:
         user = await create(admin)
     line.add("real-token", "real-sub", email="different@example.com")
     async with client_like(api) as customer:
@@ -165,7 +167,7 @@ async def test_link_password_preserves_identity_for_email_and_line(api, db, line
 
 
 async def test_link_email_code_single_use_and_wrong_password_lock(api, db, line, mail):
-    async with await admin_client(api, db) as admin:
+    async with aclosing(await admin_client(api, db)) as admin:
         await create(admin)
     line.add("real-token", "real-sub")
     async with client_like(api) as customer:
@@ -189,7 +191,7 @@ async def test_link_email_code_single_use_and_wrong_password_lock(api, db, line,
 
 
 async def test_link_conflict_does_not_merge_accounts(api, db, line):
-    async with await admin_client(api, db) as admin:
+    async with aclosing(await admin_client(api, db)) as admin:
         user = await create(admin)
     owner = await login(api, line, "taken")
     line.add("taken-token", "taken", email=EMAIL)
@@ -209,7 +211,7 @@ async def test_link_conflict_does_not_merge_accounts(api, db, line):
 
 
 async def test_link_requires_real_line_and_csrf(api, db, line):
-    async with await admin_client(api, db) as admin:
+    async with aclosing(await admin_client(api, db)) as admin:
         await create(admin)
     async with client_like(api) as customer:
         response = await customer.post(
@@ -225,11 +227,11 @@ async def test_link_impersonation_cannot_supply_customer_proof(api, db, line):
     from tests.integration.test_impersonation import configure, enter, issue
 
     configure(api)
-    async with await admin_client(api, db) as admin:
+    async with aclosing(await admin_client(api, db)) as admin:
         user = await create(admin)
         ticket = await issue(admin, user["user_id"])
         customer, _ = await enter(api, ticket)
-        async with customer:
+        async with aclosing(customer):
             line.add("real-token", "real-sub")
             response = await customer.post(
                 "/api/v1/auth/line-link",

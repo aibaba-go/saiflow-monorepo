@@ -24,12 +24,14 @@ async def test_search_by_email_and_name(api, db, line, mail):  # AC-FR-SYS-080-0
     assert r.status_code == 200, r.text
     [hit] = r.json()["items"]
     assert hit["email"] == "somchai@example.com" and hit["registered"] is True
+    assert hit["line_linked"] is True
     assert set(hit) == {
         "user_id",
         "display_name",
         "email",
         "phone",
         "registered",
+        "line_linked",
         "registered_at",
         "created_at",
         "personal_tenant_id",
