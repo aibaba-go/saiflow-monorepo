@@ -22,8 +22,9 @@ const USER = {
   avatar_url: null,
   registered: true,
   impersonated: false,
+  line_linked: true,
 };
-const GUEST = { ...USER, kind: "guest", user_id: null, tenant_id: 90, display_name: null, email: null, registered: false };
+const GUEST = { ...USER, line_linked: false, kind: "guest", user_id: null, tenant_id: 90, display_name: null, email: null, registered: false };
 // dialogs set pointer-events on the body while open; skip the pointer-events check
 const userEvent = userEventLib.setup({ pointerEventsCheck: 0 });
 
@@ -49,6 +50,48 @@ beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
   useSession.getState().reset();
+});
+
+describe("explicit LINE linking", () => {
+  it("links with both proofs without ordinary LINE login", async () => {
+    sessionStorage.setItem(INTENT_KEY, JSON.stringify({ returnTo: "/my", mode: "link", at: Date.now() }));
+    const api = mockApi(routes(GUEST));
+    api.set("POST /api/v1/auth/line-link", () => {
+      api.set("GET /api/v1/me", () => json(200, USER));
+      return json(200, USER);
+    });
+    start(api, fakeLiff({ loggedIn: true, idToken: "verified-token" }));
+    await screen.findByRole("button", { name: "Verify and link" });
+    await userEvent.type(screen.getByLabelText("Email"), "somchai@example.com");
+    await userEvent.type(screen.getByLabelText("Password"), "SafePass123");
+    await userEvent.click(screen.getByRole("button", { name: "Verify and link" }));
+    expect(await screen.findByText("Somchai")).toBeInTheDocument();
+    expect(await api.bodies("POST /api/v1/auth/line-link")).toEqual([{ id_token: "verified-token", email: "somchai@example.com", password: "SafePass123" }]);
+    expect(api.count("POST /api/v1/auth/line")).toBe(0);
+    expect(useSession.getState().lineLinkOpen).toBe(false);
+  });
+
+  it("displays email-code proof errors and retains the email", async () => {
+    sessionStorage.setItem(INTENT_KEY, JSON.stringify({ returnTo: "/my", mode: "link", at: Date.now() }));
+    const api = mockApi(routes(GUEST));
+    api.set("POST /api/v1/auth/line-link", () => json(400, { code: "email_code_invalid", fields: ["email_code"] }));
+    start(api, fakeLiff({ loggedIn: true }));
+    await screen.findByRole("button", { name: "Verify and link" });
+    await userEvent.click(screen.getByRole("tab", { name: "Email code" }));
+    await userEvent.type(screen.getByLabelText("Email"), "somchai@example.com");
+    await userEvent.type(screen.getByLabelText("Verification code"), "123456");
+    await userEvent.click(screen.getByRole("button", { name: "Verify and link" }));
+    expect(await screen.findByText("The code is wrong or has expired.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Email")).toHaveValue("somchai@example.com");
+  });
+  it("restores a linking intent without creating a separate LINE account", async () => {
+    sessionStorage.setItem(INTENT_KEY, JSON.stringify({ returnTo: "/my", mode: "link", at: Date.now() }));
+    const api = mockApi(routes(GUEST));
+    start(api, fakeLiff({ loggedIn: true }));
+    expect(await screen.findByRole("button", { name: "Verify and link" })).toBeInTheDocument();
+    expect(api.count("POST /api/v1/auth/line")).toBe(0);
+    expect(sessionStorage.getItem(INTENT_KEY)).toBeNull();
+  });
 });
 
 describe("boot (FR-SYS-040)", () => {

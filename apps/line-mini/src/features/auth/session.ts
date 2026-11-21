@@ -95,14 +95,14 @@ export async function refreshTenants(): Promise<void> {
   }
 }
 
-function takeIntent(): { returnTo: string } | null {
+function takeIntent(): { returnTo: string; mode?: "link" } | null {
   const raw = safe(() => sessionStorage.getItem(INTENT_KEY));
   safe(() => sessionStorage.removeItem(INTENT_KEY));
   if (!raw) return null;
   try {
-    const intent = JSON.parse(raw) as { returnTo?: string; at?: number };
+    const intent = JSON.parse(raw) as { returnTo?: string; at?: number; mode?: string };
     if (typeof intent.at !== "number" || Date.now() - intent.at > INTENT_MAX_AGE_MS) return null;
-    return { returnTo: typeof intent.returnTo === "string" ? intent.returnTo : "/" };
+    return { returnTo: typeof intent.returnTo === "string" ? intent.returnTo : "/", ...(intent.mode === "link" ? { mode: "link" as const } : {}) };
   } catch {
     return null;
   }
@@ -130,7 +130,10 @@ export async function boot(): Promise<void> {
       safe(() => sessionStorage.removeItem(JOIN_KEY));
       deps.navigate("/invite");
     }
-    if (intent && deps.liff.isLoggedIn()) {
+    if (intent?.mode === "link") {
+      store().set({ loginOpen: true, lineLinkOpen: true, registerOpen: false, loginReturnTo: intent.returnTo });
+      deps.navigate(intent.returnTo);
+    } else if (intent && deps.liff.isLoggedIn()) {
       await completeLogin(intent.returnTo);
     } else if (params.get("entry") === "register" && !(me.kind === "user" && me.registered)) {
       await startLogin("/my");
@@ -234,10 +237,26 @@ export function openLogin(returnTo: string = deps.currentPath()): void {
 /** The user closed the panel: keep the identity and the page, cancel the pending action. */
 export function closeLogin(): void {
   dropResumeFlags();
-  store().set({ loginOpen: false, loginReturnTo: null, loginError: null });
+  store().set({ loginOpen: false, lineLinkOpen: false, loginReturnTo: null, loginError: null });
 }
 
 /** "LINE 登录" in the panel (FR-SYS-041): the panel closes while LINE takes over. */
+export function startLineLink(fresh = false): void {
+  const returnTo = store().loginReturnTo ?? deps.currentPath();
+  store().set({ lineLinkOpen: true, loginOpen: true, registerOpen: false, loginReturnTo: returnTo });
+  if (!fresh && deps.liff.isLoggedIn() && deps.liff.getIDToken()) return;
+  safe(() => sessionStorage.setItem(INTENT_KEY, JSON.stringify({ returnTo, mode: "link", at: Date.now() })));
+  if (fresh && deps.liff.reauthorize) deps.liff.reauthorize(window.location.href);
+  else if (safe(() => deps.liff.isInClient())) window.location.reload();
+  else deps.liff.login(window.location.href);
+}
+
+export function linkLineAccount(email: string, proof: { password: string } | { email_code: string }): Promise<void> {
+  const id_token = deps.liff.getIDToken();
+  if (!id_token) return Promise.reject(new ApiError(400, "line_token_required", []));
+  return switchIdentity(() => call(api.POST("/api/v1/auth/line-link", { body: { email, id_token, ...proof } }), { own401: true }));
+}
+
 export async function loginWithLineFromPanel(): Promise<void> {
   const returnTo = store().loginReturnTo ?? deps.currentPath();
   store().set({ loginOpen: false, loginReturnTo: null });
@@ -252,7 +271,7 @@ async function switchIdentity(request: () => Promise<unknown>): Promise<void> {
     await request();
     deps.onIdentityChange();
     const me = await loadIdentity();
-    store().set({ loginOpen: false, loginReturnTo: null, loginError: null });
+    store().set({ loginOpen: false, lineLinkOpen: false, loginReturnTo: null, loginError: null });
     if (me.kind === "user" && !me.registered) store().set({ registerOpen: true });
     deps.navigate(returnTo);
   } finally {

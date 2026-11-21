@@ -87,6 +87,7 @@ async def search_users(db: AsyncSession, q: str, page: int) -> tuple[list[dict],
             "registered_at": u.registered_at,
             "created_at": u.created_at,
             "personal_tenant_id": tenant_id,
+            "line_linked": u.line_user_id is not None,
         }
         for u, tenant_id in rows[:USERS_PER_PAGE]
     ]

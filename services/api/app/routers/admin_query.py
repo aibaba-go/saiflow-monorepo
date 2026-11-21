@@ -6,7 +6,7 @@ field (like request bodies), never FastAPI's 422."""
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
@@ -20,8 +20,16 @@ from app.dependencies import (
     require_csrf_header,
 )
 from app.errors import AppError
-from app.schemas.admin_query import AuditEntryOut, AuditPageOut, ImpersonationLinkOut, UserPageOut
-from app.services import admin_query_service, impersonation_service
+from app.schemas.admin_query import (
+    AdminUserCreate,
+    AdminUserOut,
+    AuditEntryOut,
+    AuditPageOut,
+    ImpersonationLinkOut,
+    UserPageOut,
+)
+from app.schemas.loose import ensure_text
+from app.services import admin_query_service, admin_user_service, impersonation_service
 from app.services.admin_query_service import AuditFilter
 
 router = APIRouter(
@@ -110,6 +118,20 @@ async def search_users(
     number = _int(page, "page", 1, 10_000) or 1
     items, more = await admin_query_service.search_users(db, term, number)
     return UserPageOut(items=items, has_more=more)
+
+
+@router.post("/users", operation_id="adminCreateUser", status_code=201, response_model=AdminUserOut)
+async def create_user(req: AdminUserCreate, db: Db, admin: Admin) -> AdminUserOut:
+    ensure_text(req)
+    return await admin_user_service.create(
+        db, admin.account.id, req.email, req.display_name, req.phone, req.password
+    )
+
+
+@router.delete("/users/{user_id}", operation_id="adminDeleteUser", status_code=204)
+async def delete_user(user_id: PathId, db: Db, admin: Admin) -> Response:
+    await admin_user_service.remove(db, admin.account.id, user_id)
+    return Response(status_code=204)
 
 
 @router.post(

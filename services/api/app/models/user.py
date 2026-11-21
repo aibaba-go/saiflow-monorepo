@@ -10,7 +10,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
-    line_user_id: Mapped[str] = mapped_column(Text, unique=True)
+    line_user_id: Mapped[str | None] = mapped_column(Text, unique=True)
     display_name: Mapped[str | None] = mapped_column(Text)
     avatar_url: Mapped[str | None] = mapped_column(Text)
     line_email: Mapped[str | None] = mapped_column(Text)  # registration prefill only

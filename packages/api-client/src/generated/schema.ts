@@ -937,8 +937,26 @@ export interface paths {
          */
         get: operations["adminSearchUsers"];
         put?: never;
-        post?: never;
+        /** Create User */
+        post: operations["adminCreateUser"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete User */
+        delete: operations["adminDeleteUser"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1104,6 +1122,23 @@ export interface paths {
         put?: never;
         /** Login With Line */
         post: operations["loginWithLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/line-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Link Line Account */
+        post: operations["linkLineAccount"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2859,6 +2894,17 @@ export interface components {
              */
             updated_at: string;
         };
+        /** AdminUserCreate */
+        AdminUserCreate: {
+            /** Display Name */
+            display_name?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Password */
+            password?: string | null;
+            /** Phone */
+            phone?: string | null;
+        };
         /** AdminUserOut */
         AdminUserOut: {
             /**
@@ -2870,6 +2916,8 @@ export interface components {
             display_name: string | null;
             /** Email */
             email: string | null;
+            /** Line Linked */
+            line_linked: boolean;
             /** Personal Tenant Id */
             personal_tenant_id: number | null;
             /** Phone */
@@ -3543,6 +3591,21 @@ export interface components {
             /** Template Id */
             template_id?: unknown;
         };
+        /** LineLinkRequest */
+        LineLinkRequest: {
+            /** Code */
+            code?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Email Code */
+            email_code?: string | null;
+            /** Id Token */
+            id_token?: string | null;
+            /** Password */
+            password?: string | null;
+            /** Redirect Uri */
+            redirect_uri?: string | null;
+        };
         /**
          * LineLoginRequest
          * @description Either an ID token (LIFF) or an authorization code with its redirect URI (web-pc).
@@ -3616,6 +3679,11 @@ export interface components {
              * @enum {string}
              */
             kind: "guest" | "user";
+            /**
+             * Line Linked
+             * @default false
+             */
+            line_linked: boolean;
             /** Phone */
             phone?: string | null;
             /** Registered */
@@ -6976,6 +7044,68 @@ export interface operations {
             };
         };
     };
+    adminCreateUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminUserCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminDeleteUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     adminImpersonateUser: {
         parameters: {
             query?: never;
@@ -7231,6 +7361,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["LineLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    linkLineAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LineLinkRequest"];
             };
         };
         responses: {

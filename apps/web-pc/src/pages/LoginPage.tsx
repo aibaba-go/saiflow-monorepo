@@ -35,7 +35,7 @@ export function LineIcon() {
 
 /** Email + password or email + code (FR-SYS-149, 150 on web-pc, FR-SYS-090): failures stay
  * on this page with what was typed (AC-FR-SYS-090-07). */
-function EmailLogin({ next }: { next: string }) {
+function EmailLogin({ next, lineCode }: { next: string; lineCode?: string }) {
   const t = useT();
   const signedIn = useSignedIn();
   const [method, setMethod] = useState<Method>("password");
@@ -50,11 +50,16 @@ function EmailLogin({ next }: { next: string }) {
 
   const submit = useSubmit(async () => {
     setError(null);
-    const secret: Record<string, string> = method === "password" ? { password } : { code };
+    const secret: Record<string, string> = method === "password" ? { password } : lineCode ? { email_code: code } : { code };
     const bad = checkEmail(email) ?? requireFields(secret);
     if (bad) return setError(bad);
     try {
-      const signed = method === "password" ? await loginWithPassword(email, password) : await loginWithEmailCode(email, code);
+      const signed = lineCode
+        ? await call(api.POST("/api/v1/auth/line-link", { body: {
+          code: lineCode, redirect_uri: redirectUri(), email: email.trim(),
+          ...(method === "password" ? { password } : { email_code: code.trim() }),
+        } }), { own401: true })
+        : method === "password" ? await loginWithPassword(email, password) : await loginWithEmailCode(email, code);
       await signedIn(signed, next);
     } catch (err) {
       setError(err);
@@ -112,7 +117,7 @@ function EmailLogin({ next }: { next: string }) {
           />
         </Form.Item>
       ) : (
-        <Form.Item label={t("login.code")} htmlFor="login-code" {...item("code")}>
+        <Form.Item label={t("login.code")} htmlFor="login-code" {...item(lineCode ? "email_code" : "code")}>
           <Input
             id="login-code"
             size="large"
@@ -130,7 +135,7 @@ function EmailLogin({ next }: { next: string }) {
         </Link>
       </div>
       <Button type="primary" size="large" block htmlType="submit" loading={submit.pending}>
-        {t("login.submit")}
+        {t(lineCode ? "line.linkSubmit" : "login.submit")}
       </Button>
     </Form>
   );
@@ -148,6 +153,7 @@ export function LoginPage() {
   const isCallback = params.has("code") || params.has("error");
   const [outcome, setOutcome] = useState<Outcome>(isCallback ? { kind: "working" } : { kind: "idle" });
   const [next, setNext] = useState(() => safeNext(params.get("next")));
+  const [lineCode, setLineCode] = useState<string | null>(null);
   // NFR-DEV-002: only on a local Vite dev server with VITE_DEV_LOGIN=1 (dropped in builds)
   const [devLogin] = useState(() => import.meta.env.DEV && devLoginEnabled());
 
@@ -176,7 +182,10 @@ export function LoginPage() {
       if (!saved.ok) return setOutcome({ kind: "notice", key: "login.again" });
       setNext(saved.next);
       if (failed || !code) return setOutcome({ kind: "notice", key: "err.line_cancelled" });
-      await signIn({ code, redirect_uri: redirectUri() }, saved.next);
+      if (saved.mode === "link") {
+        setLineCode(code);
+        setOutcome({ kind: "idle" });
+      } else await signIn({ code, redirect_uri: redirectUri() }, saved.next);
     })();
   }, [isCallback, params, setParams, signIn]);
 
@@ -187,7 +196,7 @@ export function LoginPage() {
     void signIn(devLoginBody(), next);
   };
 
-  if (!isCallback && outcome.kind === "idle" && me.data) return <Navigate to={next} replace />;
+  if (!isCallback && !lineCode && outcome.kind === "idle" && me.data) return <Navigate to={next} replace />;
 
   const message =
     outcome.kind === "notice"
@@ -204,9 +213,9 @@ export function LoginPage() {
       <div className="pc-auth__head">
         <p className="pc-auth__eyebrow">{t("eyebrow.account")}</p>
         <Typography.Title level={3} className="pc-auth__title">
-          {t("login.title")}
+          {t(lineCode ? "line.bind" : "login.title")}
         </Typography.Title>
-        <Typography.Text type="secondary">{t("login.subtitle")}</Typography.Text>
+        <Typography.Text type="secondary">{t(lineCode ? "line.bindHint" : "login.subtitle")}</Typography.Text>
       </div>
       {message && <Alert role="alert" type={failed ? "error" : "warning"} showIcon message={message} />}
       {outcome.kind === "working" ? (
@@ -215,14 +224,23 @@ export function LoginPage() {
         </Spin>
       ) : (
         <>
-          <Button size="large" block className="pc-line-button" icon={<LineIcon />} onClick={() => startLineLogin(next)}>
-            {failed ? t("common.retry") : t("login.button")}
-          </Button>
-          <div className="pc-auth__divider">
-            <span>{t("login.orEmail")}</span>
-          </div>
-          <EmailLogin next={next} />
-          <p className="pc-auth__note">{t("login.noAccount")}</p>
+          {lineCode ? (
+            <>
+              <EmailLogin key="link" next={next} lineCode={lineCode} />
+              <Button block style={{ marginTop: 12 }} onClick={() => startLineLogin(next, "link")}>{t("line.retry")}</Button>
+              <Link to="/login" onClick={() => setLineCode(null)}>{t("login.backToLogin")}</Link>
+            </>
+          ) : (
+            <>
+              <Button size="large" block className="pc-line-button" icon={<LineIcon />} onClick={() => startLineLogin(next)}>
+                {failed ? t("common.retry") : t("login.button")}
+              </Button>
+              <Button block type="link" onClick={() => startLineLogin(next, "link")}>{t("line.bindExisting")}</Button>
+              <div className="pc-auth__divider"><span>{t("login.orEmail")}</span></div>
+              <EmailLogin key="login" next={next} />
+              <p className="pc-auth__note">{t("login.noAccount")}</p>
+            </>
+          )}
         </>
       )}
       {devLogin && outcome.kind !== "working" && (

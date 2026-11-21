@@ -40,10 +40,10 @@ export function authorizeUrl(state: string): string {
 }
 
 /** Remember where to return, then go to the LINE authorize page. */
-export function startLineLogin(next: string): void {
+export function startLineLogin(next: string, mode?: "link"): void {
   const state = randomState();
   try {
-    sessionStorage.setItem(LOGIN_STATE_KEY, JSON.stringify({ state, next: safeNext(next), at: Date.now() }));
+    sessionStorage.setItem(LOGIN_STATE_KEY, JSON.stringify({ state, next: safeNext(next), at: Date.now(), ...(mode ? { mode } : {}) }));
   } catch {
     // storage blocked: the callback will ask to log in again
   }
@@ -51,7 +51,7 @@ export function startLineLogin(next: string): void {
 }
 
 /** Read and remove the saved login state; ok only when it matches and is fresh. */
-export function takeLoginState(state: string | null): { ok: true; next: string } | { ok: false } {
+export function takeLoginState(state: string | null): { ok: true; next: string; mode?: "link" } | { ok: false } {
   let raw: string | null;
   try {
     raw = sessionStorage.getItem(LOGIN_STATE_KEY);
@@ -61,10 +61,10 @@ export function takeLoginState(state: string | null): { ok: true; next: string }
   }
   if (!raw || !state) return { ok: false };
   try {
-    const saved = JSON.parse(raw) as { state?: unknown; next?: unknown; at?: unknown };
+    const saved = JSON.parse(raw) as { state?: unknown; next?: unknown; at?: unknown; mode?: unknown };
     if (saved.state !== state || typeof saved.at !== "number") return { ok: false };
     if (Date.now() - saved.at > MAX_AGE_MS || saved.at > Date.now()) return { ok: false };
-    return { ok: true, next: safeNext(typeof saved.next === "string" ? saved.next : "/") };
+    return { ok: true, next: safeNext(typeof saved.next === "string" ? saved.next : "/"), ...(saved.mode === "link" ? { mode: "link" as const } : {}) };
   } catch {
     return { ok: false };
   }

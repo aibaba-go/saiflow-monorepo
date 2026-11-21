@@ -3,7 +3,7 @@ doc_id: DES-002
 title: "SaiFlow — 数据模型"
 type: data-model
 status: active
-version: 2.17.0
+version: 2.18.0
 updated: 2026-11-21
 owner: Product Engineering
 source: "PRD-001 v3.3 §3, §4, §4.9; ADR-008"
@@ -105,6 +105,7 @@ erDiagram
 - **`template-report-management` 已实现：** 模板（迁移 0014、0016）——`DM-DocumentTemplate` 增加归属（系统 / 个人 / 组织）、可编辑草稿与修订号（保存与生效分离，生效生成新的不可变版本）、系统模板授权对象（`template_grant_targets`）；`DM-TemplateSample` 记录样例生成过程，客户样例按页计量，平台 admin 样例不扣客户配额；样例原件与载荷最长 7 天，不进入长期备份。报表（迁移 0015、0017）——`DM-Report`、`DM-ReportSnapshot`、`DM-ReportTemplateRef`；报表只存配置，每次打开或手动刷新都按发布快照对正式业务数据（已确认结果版本）在数据库内实时聚合，不保存统计结果、不跨用户缓存；CSV 下载凭证为签名令牌，不落库。
 - 报表采用方式 A（实时查询正式业务数据）；方式 B 的报表汇总表（OQ-8）未实现，不登记实体。
 - **`admin-impersonate-user`（迁移 0018）：** 平台 admin 以用户身份进入 web-pc 用的一次性票据（`impersonation_tickets`：只存摘要、60 秒、单次）与登录会话上的代登录标记（`customer_sessions.impersonated_by_admin_id`；闲置 30 分钟、最长 2 小时、管理员停用即失效）。二者同属短期技术数据，不登记实体；签发与进入记入 `DM-OperationLog`。
+- **管理端邮箱账号与 LINE 绑定（迁移 0023）：** `DM-User.line_user_id` 改为可空并保留唯一约束；管理端创建的已注册邮箱用户初始无 LINE 身份，仍创建同一个人租户、默认 Kinder 订阅和现行注册免费额度。绑定必须同时验证真实 LINE 身份与已有邮箱账号的密码或登录验证码，不按邮箱自动合并，不替换其他 LINE 绑定，不接受管理员代登录作为本人验证。仅无业务数据、组织关联与受保护计费历史的用户允许硬删除；清理其短期技术数据，保留追加式操作日志。PC 与小程序的 LINE Channel 必须属于同一个 LINE Provider，才能以同一 LINE subject 识别两端账号。存在邮箱账号时，0023 降级拒绝恢复 LINE 非空约束，不生成虚假身份。
 - **`customer-email-login`（迁移 0019）：** `DM-User` 增加可选的密码（argon2 哈希；8–64 位、至少一个字母和一个数字）、连续输错次数与锁定截止时间（错 5 次锁 5 分钟，锁定不影响邮箱验证码登录）；邮箱验证码增加用途（验证邮箱 / 登录 / 重置密码），不同用途的验证码互不通用。邮箱验证码仍属短期技术数据，不登记实体；密码登录、验证码登录、重置密码与锁定记入 `DM-OperationLog`。
 - **`line-register-prefill`（无迁移）：** 未注册用户的 `DM-User.phone` 在 LINE 登录时取服务端验证的 LINE token 中的 `phone_number`（仅 LINE 批准的频道会下发），作为注册页手机号预填；token 未带手机号时保留原值，注册后不再被 LINE 覆盖。邮箱预填仍为 `line_email`（需频道 Email 权限与 LIFF `email` scope）。（VPS 本地 7 天、GCS 备份桶 30 天）是运维数据，不作为实体登记（ADR-008）。
 
@@ -162,6 +163,7 @@ erDiagram
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.18.0 | 2026-11-21 | Product Engineering | 管理端邮箱账号与显式 LINE 双重验证绑定：LINE 身份可空且唯一（迁移 0023），空账号安全硬删除与审计保留 |
 | 2.17.0 | 2026-11-21 | Product Engineering | `report-designer-v2`：新增私有图片 `DM-ReportAsset`、用户 × 租户首页偏好 `DM-HomepagePreference`（迁移 0022）；报表配置增加类型化筛选、静态内容和外观，静态内容不参与统计与 CSV |
 | 2.16.0 | 2026-11-15 | Product Engineering | `docai-backup-engine`：`DM-SystemSetting` 的 Vision 密钥改为 Document AI 配置；迁移 0020 把已保存的引擎 google_vision 改为 google_docai，任务与原始载荷的 google_vision 历史记录保留，`DM-OcrEngineHealth` 只跟踪 textin、google_docai |
 | 2.15.2 | 2026-11-13 | Product Engineering | `line-register-prefill`：未注册 `DM-User.phone` 预填取自服务端验证的 LINE `phone_number`（结构不变） |

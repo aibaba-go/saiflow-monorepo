@@ -7,7 +7,7 @@ import { useSubmit } from "../../hooks/useSubmit";
 import { useT } from "../../i18n";
 import { api, call } from "../../services/api";
 import { useSession, type Me } from "../../stores/session";
-import { reloadIdentity } from "../auth/session";
+import { reloadIdentity, startLineLink } from "../auth/session";
 import { EmailCodeButton } from "./EmailCodeButton";
 import { Button } from "../../components/ui/button";
 import { BottomSheet } from "../../components/ui/sheet";
@@ -100,6 +100,11 @@ function ProfileForm({ me }: { me: Me }) {
         <Button size="sm" onClick={() => setEmailOpen(true)}>
           {t("profile.changeEmail")}
         </Button>
+      </div>
+      <div className="field">
+        <div className="field__label">LINE</div>
+        <div>{t(me.line_linked ? "line.linked" : "line.notLinked")}</div>
+        {!me.line_linked && !me.impersonated && <Button size="sm" onClick={() => startLineLink()}>{t("line.bind")}</Button>}
       </div>
       <BottomSheet open={emailOpen} onClose={() => setEmailOpen(false)} label={t("profile.changeEmail")}>
         {emailOpen && <ChangeEmail onDone={() => setEmailOpen(false)} />}

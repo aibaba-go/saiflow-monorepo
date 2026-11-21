@@ -3,6 +3,7 @@ import { Button, Card, Descriptions, Form, Input, Modal, Space, Typography } fro
 import { useState } from "react";
 
 import { ME_KEY, useMe, type Me } from "../auth/session";
+import { startLineLogin } from "../auth/lineLogin";
 import { ErrorText } from "../components/ErrorText";
 import { fieldErrorText, formLevel } from "../components/FieldError";
 import { Page } from "../components/Page";
@@ -126,7 +127,12 @@ export function ProfilePage() {
             </Space>
           </Descriptions.Item>
           <Descriptions.Item label={t("profile.phone")}>{me.phone ?? t("common.notSet")}</Descriptions.Item>
-          <Descriptions.Item label={t("profile.line")}>{t("profile.lineLinked")}</Descriptions.Item>
+          <Descriptions.Item label={t("profile.line")}>
+            <Space>
+              {t(me.line_linked ? "line.linked" : "line.notLinked")}
+              {!me.line_linked && !me.impersonated && <Button size="small" onClick={() => startLineLogin("/profile", "link")}>{t("line.bind")}</Button>}
+            </Space>
+          </Descriptions.Item>
         </Descriptions>
         <ProfileForm me={me} />
       </Space>

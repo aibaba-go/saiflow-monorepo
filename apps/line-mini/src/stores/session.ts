@@ -20,6 +20,7 @@ export interface SessionState {
   registerOpen: boolean;
   /** The login panel (FR-SYS-153) and the page it returns to after login. */
   loginOpen: boolean;
+  lineLinkOpen: boolean;
   loginReturnTo: string | null;
   set(partial: Partial<SessionState>): void;
   reset(): void;
@@ -34,6 +35,7 @@ const initial = {
   notice: null,
   registerOpen: false,
   loginOpen: false,
+  lineLinkOpen: false,
   loginReturnTo: null,
 };
 

@@ -13,6 +13,73 @@ beforeEach(() => {
 const query = (r: Request) => new URL(r.url).searchParams;
 const lastUsers = (api: { calls: Request[] }) => query(api.calls.filter((c) => c.url.includes("/admin/users")).at(-1)!);
 
+describe("admin customer lifecycle", () => {
+  it("creates an email account and refreshes the list", async () => {
+    const api = signedIn({ "GET /api/v1/admin/users": () => json(200, { items: [], has_more: false }) });
+    api.set("POST /api/v1/admin/users", async (r) => {
+      const body = await r.json();
+      expect(body).toEqual({ email: "new@example.com", display_name: "New User", phone: null, password: "SafePass123" });
+      api.set("GET /api/v1/admin/users", () => json(200, { items: [{ ...user(31, body.email), line_linked: false }], has_more: false }));
+      return json(201, { ...user(31, body.email), line_linked: false });
+    });
+    renderAt("/users");
+    await userEvent.click(await screen.findByRole("button", { name: "新增用户" }));
+    await userEvent.type(screen.getByLabelText("邮箱"), "new@example.com");
+    await userEvent.type(screen.getByLabelText("昵称"), "New User");
+    await userEvent.type(screen.getByLabelText("初始密码"), "SafePass123");
+    await userEvent.click(screen.getByRole("button", { name: "创建用户" }));
+    expect(await screen.findByText("new@example.com")).toBeInTheDocument();
+    expect(api.count("POST /api/v1/admin/users")).toBe(1);
+  });
+
+  it("keeps entered fields when creation is rejected", async () => {
+    const api = signedIn({
+      "GET /api/v1/admin/users": () => json(200, { items: [], has_more: false }),
+      "POST /api/v1/admin/users": () => json(409, { code: "email_taken", fields: ["email"] }),
+    });
+    renderAt("/users");
+    await userEvent.click(await screen.findByRole("button", { name: "新增用户" }));
+    await userEvent.type(screen.getByLabelText("邮箱"), "used@example.com");
+    await userEvent.type(screen.getByLabelText("昵称"), "New User");
+    await userEvent.type(screen.getByLabelText("初始密码"), "SafePass123");
+    await userEvent.click(screen.getByRole("button", { name: "创建用户" }));
+    expect(await screen.findByText(zh("err.email_taken"))).toBeInTheDocument();
+    expect(screen.getByLabelText("邮箱")).toHaveValue("used@example.com");
+    expect(screen.getByLabelText("昵称")).toHaveValue("New User");
+    expect(api.count("POST /api/v1/admin/users")).toBe(1);
+  });
+
+  it("removes the row after a successful hard delete", async () => {
+    const api = signedIn({ "GET /api/v1/admin/users": () => json(200, { items: [user(31, "empty@example.com")], has_more: false }) });
+    api.set("DELETE /api/v1/admin/users/31", () => {
+      api.set("GET /api/v1/admin/users", () => json(200, { items: [], has_more: false }));
+      return json(204, null);
+    });
+    renderAt("/users");
+    const row = (await screen.findByText("empty@example.com")).closest("tr")!;
+    await userEvent.click(within(row).getByRole("button", { name: "删除用户" }));
+    await userEvent.click(screen.getByRole("button", { name: zh("common.confirm") }));
+    await waitFor(() => expect(screen.queryByText("empty@example.com")).not.toBeInTheDocument());
+    expect(api.count("DELETE /api/v1/admin/users/31")).toBe(1);
+  });
+
+  it("requires deletion confirmation and retains a blocked user", async () => {
+    const api = signedIn({
+      "GET /api/v1/admin/users": () => json(200, { items: [{ ...user(31, "kept@example.com"), line_linked: false }], has_more: false }),
+      "DELETE /api/v1/admin/users/31": () => json(409, { code: "user_has_data", fields: [] }),
+    });
+    renderAt("/users");
+    const row = (await screen.findByText("kept@example.com")).closest("tr")!;
+    await userEvent.click(within(row).getByRole("button", { name: "删除用户" }));
+    await userEvent.click(screen.getByRole("button", { name: zh("common.cancel") }));
+    expect(api.count("DELETE /api/v1/admin/users/31")).toBe(0);
+    await userEvent.click(within(row).getByRole("button", { name: "删除用户" }));
+    await userEvent.click(screen.getByRole("button", { name: zh("common.confirm") }));
+    expect(await screen.findByText("用户存在业务数据或历史记录，不能删除。" )).toBeInTheDocument();
+    expect(screen.getByText("kept@example.com")).toBeInTheDocument();
+  });
+});
+
 describe("user search (FR-SYS-070)", () => {
   it("finds Somchai and opens the personal tenant (070-01)", async () => {
     const api = signedIn({

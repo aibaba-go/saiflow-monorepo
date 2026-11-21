@@ -27,6 +27,7 @@ from app.schemas.auth import (
     EmailAuthCodeRequest,
     EmailCodeLoginRequest,
     ImpersonationRedeemRequest,
+    LineLinkRequest,
     LineLoginRequest,
     MeResponse,
     PasswordLoginRequest,
@@ -38,6 +39,7 @@ from app.services import (
     dev_login_service,
     email_auth_service,
     impersonation_service,
+    line_link_service,
     me_service,
     session_service,
 )
@@ -135,6 +137,27 @@ Limited = [Depends(limit_auth_requests)]
 def _check(req) -> None:
     """A field of the wrong JSON type is a 400 naming it, like every other loose body."""
     ensure_text(req)
+
+
+@router.post(
+    "/line-link", operation_id="linkLineAccount", response_model=MeResponse, dependencies=Limited
+)
+async def link_line_account(
+    req: LineLinkRequest,
+    response: Response,
+    db: Db,
+    current: Current,
+    line: Annotated[LineClient | None, Depends(get_optional_line_client)],
+    web: Annotated[LineClient | None, Depends(get_line_web_client)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> MeResponse:
+    _check(req)
+    if line is None:
+        raise AppError(503, "line_unavailable", "auth.line_unavailable")
+    allowed = {u.strip() for u in settings.line_login_redirect_uris.split(",") if u.strip()}
+    token, principal = await line_link_service.link(db, line, current, req, allowed, web)
+    set_customer_cookie(response, token)
+    return await me_service.me(db, principal)
 
 
 @router.post("/email-code", operation_id="sendAuthEmailCode", status_code=204, dependencies=Limited)

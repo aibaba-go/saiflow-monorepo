@@ -2,8 +2,8 @@
 wrong-password lock (FR-SYS-156), email code (FR-SYS-150), password reset by email code
 (FR-SYS-151), and sending login and reset codes without a session (FR-SYS-020).
 
-Only registered users can use these: a user is still created only by LINE login. Every
-path ends in auth_service.open_user_session, so a guest's data is claimed the same way."""
+Only registered users can use these. Every login ends in auth_service.open_user_session,
+so a guest's data is claimed the same way."""
 
 from datetime import timedelta
 
@@ -63,9 +63,7 @@ async def _open(
     return await auth_service.open_user_session(db, user, tenant.id, current, action)
 
 
-async def login_with_password(
-    db: AsyncSession, email: object, password: object, current: Principal | None
-) -> tuple[str, Principal]:
+async def _verify_password(db: AsyncSession, email: object, password: object) -> User:
     clean_email = email_code_service.normalize_email(_text(email))
     typed = _text(password)
     if not typed:
@@ -93,7 +91,36 @@ async def login_with_password(
         await _failure(db, user.id, LOGIN_PASSWORD)
         raise AppError(401, "password_invalid", "error.password_invalid", ["password"])
     user.password_failed_attempts = 0
+    return user
+
+
+async def login_with_password(
+    db: AsyncSession, email: object, password: object, current: Principal | None
+) -> tuple[str, Principal]:
+    user = await _verify_password(db, email, password)
     return await _open(db, user, current, LOGIN_PASSWORD)
+
+
+async def verify_for_link(
+    db: AsyncSession, email: object, password: object, email_code: object
+) -> User:
+    if (password is not None) == (email_code is not None):
+        raise AppError(400, "validation_error", "error.validation", ["password", "email_code"])
+    if password is not None:
+        return await _verify_password(db, email, password)
+    clean_email = email_code_service.normalize_email(_text(email))
+    user = await _registered(db, clean_email, lock=True)
+    if user is None:
+        await _failure(db, None, LOGIN_EMAIL_CODE)
+        raise _not_registered()
+    try:
+        await email_code_service.consume_code(db, user.id, clean_email, _text(email_code), "login")
+    except AppError as error:
+        await _failure(db, user.id, LOGIN_EMAIL_CODE)
+        if error.fields:
+            error.fields = ["email_code" if field == "code" else field for field in error.fields]
+        raise
+    return user
 
 
 async def login_with_code(

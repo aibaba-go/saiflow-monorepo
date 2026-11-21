@@ -14,7 +14,7 @@ async def by_line_id(db: AsyncSession, line_user_id: str) -> User | None:
     ).scalar_one_or_none()
 
 
-async def create(db: AsyncSession, line_user_id: str, **fields) -> User:
+async def create(db: AsyncSession, line_user_id: str | None, **fields) -> User:
     user = User(line_user_id=line_user_id, **fields)
     db.add(user)
     await db.flush()

@@ -11,6 +11,7 @@ export const USER: Me = {
   avatar_url: null,
   registered: true,
   impersonated: false,
+  line_linked: true,
 };
 export const UNREGISTERED: Me = {
   ...USER,
@@ -23,6 +24,7 @@ export const UNREGISTERED: Me = {
 export const GUEST: Me = {
   ...USER,
   kind: "guest",
+  line_linked: false,
   user_id: null,
   tenant_id: 90,
   display_name: null,

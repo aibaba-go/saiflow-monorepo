@@ -4,6 +4,15 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.schemas.loose import LooseRequest
+
+
+class AdminUserCreate(LooseRequest):
+    email: str | None = None
+    display_name: str | None = None
+    phone: str | None = None
+    password: str | None = None
+
 
 class AuditEntryOut(BaseModel):
     id: int
@@ -30,6 +39,7 @@ class AdminUserOut(BaseModel):
     registered_at: datetime | None
     created_at: datetime
     personal_tenant_id: int | None
+    line_linked: bool
 
 
 class UserPageOut(BaseModel):

@@ -23,5 +23,6 @@ async def me(db: AsyncSession, principal: Principal) -> MeResponse:
         email=user.email,
         phone=user.phone,
         email_suggestion=None if registered else user.line_email,
+        line_linked=user.line_user_id is not None,
         impersonated=principal.impersonated_by is not None,
     )

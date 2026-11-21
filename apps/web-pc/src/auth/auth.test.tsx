@@ -141,6 +141,43 @@ describe("LINE web login (FR-SYS-090)", () => {
   });
 });
 
+describe("explicit LINE linking", () => {
+  it("waits for customer proof and calls only the linking endpoint", async () => {
+    sessionStorage.setItem(LOGIN_STATE_KEY, JSON.stringify({ state: "a".repeat(32), next: "/plans", at: Date.now(), mode: "link" }));
+    let me: unknown = null;
+    const backend = mockApi({
+      "GET /api/v1/me": () => me ? json(200, me) : json(401, { code: "unauthenticated" }),
+      "GET /api/v1/me/tenants": () => json(200, []),
+      "GET /api/v1/me/notifications": () => json(200, { items: [], unread_count: 0, next_before: null }),
+      "POST /api/v1/auth/line-link": () => { me = USER; return json(200, USER); },
+    });
+    renderAt(`/login?code=real-code&state=${"a".repeat(32)}`);
+    await screen.findByRole("button", { name: en("line.linkSubmit") });
+    expect(backend.count("POST /api/v1/auth/line")).toBe(0);
+    expect(backend.count("POST /api/v1/auth/line-link")).toBe(0);
+    await userEvent.type(screen.getByLabelText(en("login.email")), "somchai@example.com");
+    await userEvent.type(screen.getByLabelText(en("login.password")), "SafePass123");
+    await userEvent.click(screen.getByRole("button", { name: en("line.linkSubmit") }));
+    expect(await screen.findByTestId("page-plans")).toBeInTheDocument();
+    expect(await backend.bodies("POST /api/v1/auth/line-link")).toEqual([{ email: "somchai@example.com", password: "SafePass123", code: "real-code", redirect_uri: `${ORIGIN}/login` }]);
+    expect(backend.count("POST /api/v1/auth/line")).toBe(0);
+    expect(sessionStorage.getItem(LOGIN_STATE_KEY)).toBeNull();
+  });
+
+  it("shows code proof failures at the code field", async () => {
+    sessionStorage.setItem(LOGIN_STATE_KEY, JSON.stringify({ state: "a".repeat(32), next: "/", at: Date.now(), mode: "link" }));
+    noSession({ "POST /api/v1/auth/line-link": () => json(400, { code: "email_code_invalid", fields: ["email_code"] }) });
+    renderAt(`/login?code=real-code&state=${"a".repeat(32)}`);
+    await screen.findByRole("button", { name: en("line.linkSubmit") });
+    await userEvent.click(screen.getByText(en("login.byCode")));
+    await userEvent.type(screen.getByLabelText(en("login.email")), "somchai@example.com");
+    await userEvent.type(screen.getByLabelText(en("login.code")), "123456");
+    await userEvent.click(screen.getByRole("button", { name: en("line.linkSubmit") }));
+    expect(await screen.findByText(en("err.email_code_invalid"))).toBeInTheDocument();
+    expect(screen.getByLabelText(en("login.email"))).toHaveValue("somchai@example.com");
+  });
+});
+
 describe("unregistered users (FR-SYS-091)", () => {
   it("see only the guide with the register link and a QR code (091-01)", async () => {
     signedIn({}, { me: UNREGISTERED });

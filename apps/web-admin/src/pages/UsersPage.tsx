@@ -1,6 +1,6 @@
 import type { components } from "@saiflow/api-client";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { App, Button, Input, Space, Table, Typography } from "antd";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Alert, App, Button, Form, Input, Modal, Space, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -8,6 +8,8 @@ import { Link } from "react-router-dom";
 import { ConfirmButton } from "../components/ConfirmButton";
 import { ErrorText } from "../components/ErrorText";
 import { Page } from "../components/Page";
+import { fieldErrorText, formLevel } from "../components/FieldError";
+import { useSubmit } from "../hooks/useSubmit";
 import { formatTime } from "../format";
 import { useT } from "../i18n";
 import { api, call } from "../services/api";
@@ -30,6 +32,17 @@ export function UsersPage() {
   const [text, setText] = useState("");
   const [search, setSearch] = useState<{ q: string; page: number }>({ q: "", page: 1 });
   const [tooShort, setTooShort] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const queryClient = useQueryClient();
+  async function remove(userId: number) {
+    try {
+      await call(api.DELETE("/api/v1/admin/users/{user_id}", { params: { path: { user_id: userId } } }));
+      void message.success(t("users.deleted"));
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
+    } catch (error) {
+      void message.error(errorMessage(error, t));
+    }
+  }
   const result = useQuery({
     queryKey: ["users", search],
     queryFn: () =>
@@ -56,6 +69,7 @@ export function UsersPage() {
     { title: t("col.email"), key: "email", render: (_, u) => u.email ?? "—" },
     { title: t("col.mobile"), key: "phone", render: (_, u) => u.phone ?? "—" },
     { title: t("col.registered"), key: "registered", render: (_, u) => t(u.registered ? "common.yes" : "common.no") },
+    { title: t("users.lineLinked"), key: "line", render: (_, u) => t(u.line_linked ? "common.yes" : "common.no") },
     {
       title: t("col.personalTenant"),
       key: "tenant",
@@ -72,15 +86,20 @@ export function UsersPage() {
     {
       title: t("col.actions"),
       key: "actions",
-      render: (_, u) =>
-        u.registered ? (
-          <ConfirmButton
+      render: (_, u) => (
+        <Space wrap>
+          {u.registered && <ConfirmButton
             label={t("users.impersonate")}
             title={t("users.impersonateTitle", { name: u.display_name ?? `#${u.user_id}` })}
             description={<div style={{ maxWidth: 320 }}>{t("users.impersonateBody")}</div>}
             onConfirm={() => impersonate(u.user_id)}
-          />
-        ) : null,
+          />}
+          <ConfirmButton danger label={t("users.delete")}
+            title={t("users.deleteTitle", { name: u.email ?? u.display_name ?? `#${u.user_id}` })}
+            description={<div style={{ maxWidth: 340 }}>{t("users.deleteBody")}</div>}
+            onConfirm={() => remove(u.user_id)} />
+        </Space>
+      ),
     },
   ];
 
@@ -128,6 +147,7 @@ export function UsersPage() {
             onSearch={submit}
             style={{ maxWidth: 420 }}
           />
+          <Button type="primary" onClick={() => setCreateOpen(true)}>{t("users.create")}</Button>
           {tooShort && <Typography.Text type="warning">{t("users.tooShort")}</Typography.Text>}
           <ErrorText error={result.error} />
         </div>
@@ -154,6 +174,51 @@ export function UsersPage() {
           </Space>
         </div>
       </div>
+      <Modal open={createOpen} title={t("users.create")} footer={null} destroyOnHidden onCancel={() => setCreateOpen(false)}>
+        {createOpen && <CreateUser onDone={async () => {
+          setCreateOpen(false);
+          setText("");
+          setSearch({ q: "", page: 1 });
+          await queryClient.invalidateQueries({ queryKey: ["users"] });
+        }} />}
+      </Modal>
     </Page>
   );
+}
+
+function CreateUser({ onDone }: { onDone(): Promise<void> }) {
+  const t = useT();
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<unknown>(null);
+  const props = (field: string) => {
+    const help = fieldErrorText(error, field, t);
+    return { help, validateStatus: help ? "error" as const : undefined };
+  };
+  const submit = useSubmit(async () => {
+    setError(null);
+    try {
+      await call(api.POST("/api/v1/admin/users", { body: { email, display_name: name, phone: phone.trim() || null, password } }));
+      await onDone();
+    } catch (e) { setError(e); }
+  });
+  return <Form layout="vertical" requiredMark={false} noValidate onFinish={() => void submit.run()}>
+    <Alert type="info" showIcon message={t("users.createHint")} style={{ marginBottom: 20 }} />
+    <Form.Item label={t("col.email")} htmlFor="create-email" {...props("email")}>
+      <Input id="create-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" />
+    </Form.Item>
+    <Form.Item label={t("col.nickname")} htmlFor="create-name" {...props("display_name")}>
+      <Input id="create-name" maxLength={128} value={name} onChange={(e) => setName(e.target.value)} />
+    </Form.Item>
+    <Form.Item label={t("users.initialPassword")} htmlFor="create-password" {...props("password")} extra={t("users.passwordHint")}>
+      <Input.Password id="create-password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+    </Form.Item>
+    <Form.Item label={t("users.phoneOptional")} htmlFor="create-phone" {...props("phone")}>
+      <Input id="create-phone" type="tel" maxLength={32} value={phone} onChange={(e) => setPhone(e.target.value)} />
+    </Form.Item>
+    <ErrorText error={formLevel(error)} />
+    <Button type="primary" htmlType="submit" loading={submit.pending}>{t("users.createSubmit")}</Button>
+  </Form>;
 }

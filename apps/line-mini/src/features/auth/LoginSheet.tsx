@@ -16,6 +16,8 @@ import {
   loginWithEmailCode,
   loginWithLineFromPanel,
   loginWithPassword,
+  linkLineAccount,
+  startLineLink,
   resetPassword,
   sendAuthEmailCode,
 } from "./session";
@@ -40,7 +42,7 @@ function LineIcon() {
 }
 
 /** Login view: LINE first, then email with a password or a login code (FR-SYS-153). */
-function LoginView({ onForgot }: { onForgot(): void }) {
+function LoginView({ onForgot, linking = false }: { onForgot(): void; linking?: boolean }) {
   const t = useT();
   const lineError = useSession((st) => st.loginError);
   const [method, setMethod] = useState<Method>("password");
@@ -52,11 +54,12 @@ function LoginView({ onForgot }: { onForgot(): void }) {
   const line = useSubmit(loginWithLineFromPanel);
   const submit = useSubmit(async () => {
     const problem =
-      method === "password" ? firstProblem(email, { password }) : firstProblem(email, { code });
+      method === "password" ? firstProblem(email, { password }) : firstProblem(email, linking ? { email_code: code } : { code });
     setError(problem);
     if (problem) return;
     try {
-      if (method === "password") await loginWithPassword(email.trim(), password);
+      if (linking) await linkLineAccount(email.trim(), method === "password" ? { password } : { email_code: code.trim() });
+      else if (method === "password") await loginWithPassword(email.trim(), password);
       else await loginWithEmailCode(email.trim(), code.trim());
     } catch (err) {
       setError(err);
@@ -70,15 +73,14 @@ function LoginView({ onForgot }: { onForgot(): void }) {
 
   return (
     <div className={s.view}>
-      <Button block variant="primary" className={s.line} loading={line.pending} onClick={() => void line.run()}>
-        <LineIcon />
-        {t("login.line")}
-      </Button>
-      <ErrorText error={lineError} />
-
-      <div className={s.divider}>
-        <span>{t("login.orEmail")}</span>
-      </div>
+      {linking ? <p className={s.hint}>{t("line.bindHint")}</p> : <>
+        <Button block variant="primary" className={s.line} loading={line.pending} onClick={() => void line.run()}>
+          <LineIcon />{t("login.line")}
+        </Button>
+        <Button block onClick={() => startLineLink()}>{t("line.bindExisting")}</Button>
+        <ErrorText error={lineError} />
+        <div className={s.divider}><span>{t("login.orEmail")}</span></div>
+      </>}
 
       <div className={s.switch} role="tablist" aria-label={t("login.method")}>
         <button
@@ -147,16 +149,17 @@ function LoginView({ onForgot }: { onForgot(): void }) {
             value={code}
             onChange={setCode}
             error={error}
-            field="code"
+            field={linking ? "email_code" : "code"}
           />
         )}
         <Button block variant="primary" type="submit" loading={submit.pending}>
-          {t("login.submit")}
+          {t(linking ? "line.linkSubmit" : "login.submit")}
         </Button>
       </form>
 
+      {linking && <Button block onClick={() => startLineLink(true)}>{t("line.retry")}</Button>}
       <button type="button" className={s.link} onClick={onForgot}>
-        {t("login.forgot")}
+        {t(linking ? "login.backToLogin" : "login.forgot")}
       </button>
     </div>
   );
@@ -242,7 +245,8 @@ function ResetView({ onBack }: { onBack(): void }) {
 function LoginPanel() {
   const t = useT();
   const [view, setView] = useState<"login" | "reset">("login");
-  const title = view === "login" ? t("login.title") : t("login.resetTitle");
+  const linking = useSession((st) => st.lineLinkOpen);
+  const title = linking ? t("line.bind") : view === "login" ? t("login.title") : t("login.resetTitle");
   return (
     <>
       <div className={s.head}>
@@ -257,7 +261,10 @@ function LoginPanel() {
           <X size={18} strokeWidth={1.9} aria-hidden="true" />
         </button>
       </div>
-      {view === "login" ? <LoginView onForgot={() => setView("reset")} /> : <ResetView onBack={() => setView("login")} />}
+      {linking ? <LoginView key="link" linking onForgot={() => {
+        useSession.getState().set({ lineLinkOpen: false });
+        setView("login");
+      }} /> : view === "login" ? <LoginView key="login" onForgot={() => setView("reset")} /> : <ResetView onBack={() => setView("login")} />}
     </>
   );
 }

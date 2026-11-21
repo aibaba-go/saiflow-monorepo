@@ -14,6 +14,12 @@ class LineLoginRequest(LooseRequest):
     redirect_uri: str | None = None
 
 
+class LineLinkRequest(LineLoginRequest):
+    email: str | None = None
+    password: str | None = None
+    email_code: str | None = None
+
+
 class MeResponse(BaseModel):
     kind: Literal["guest", "user"]
     tenant_id: int
@@ -24,6 +30,7 @@ class MeResponse(BaseModel):
     email: str | None = None
     phone: str | None = None
     email_suggestion: str | None = None  # LINE email, offered only before registration
+    line_linked: bool = False
     impersonated: bool = False  # a platform admin entered as this user (FR-SYS-148)
 
 
