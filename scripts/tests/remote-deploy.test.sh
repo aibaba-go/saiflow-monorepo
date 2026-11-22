@@ -37,7 +37,7 @@ s=$(order_of 'secrets-fix.sh')
 check "order pull<secrets fix<postgres" test -n "$s" -a "$p" -lt "$s" -a "$s" -lt "$pg"
 check "token not in call log" bash -c "! grep -q token-123 '$FAKE_LOG'"
 # harden-identity: roles set up, then migrations run as the migration account
-roles=$(order_of 'exec -T -e DB_MIGRATE_PASSWORD postgres')
+roles=$(order_of 'exec -T -e DB_MIGRATE_PASSWORD -e REPORT_DB_PASSWORD postgres')
 check "order postgres<roles<migrate" test -n "$roles" -a "$pg" -lt "$roles" -a "$roles" -lt "$m"
 check "migrations run in the migrate service" grep -q 'run --rm saiflow-be-migrate alembic upgrade head' "$FAKE_LOG"
 check "migration password not in call log" bash -c "! grep -q mig-secret-9 '$FAKE_LOG'"

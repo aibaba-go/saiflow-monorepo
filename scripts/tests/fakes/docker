@@ -8,10 +8,20 @@ case "$args" in
     [ "${FAKE_DUMP_FAIL:-0}" = "1" ] && { echo "pg_dump: connection refused" >&2; exit 1; }
     printf 'PGDMP-fake-dump'
     ;;
+  *pg_restore*)
+    if [ "${FAKE_RESTORE_NEEDS_REPORTER:-0}" = "1" ] && ! grep -q 'CREATE ROLE saiflow_v3_reporter' "$FAKE_LOG"; then
+      echo 'pg_restore: role saiflow_v3_reporter does not exist' >&2
+      exit 1
+    fi
+    cat >/dev/null
+    ;;
+  *"select count(*)"*alembic_version*)
+    printf '1\n'
+    ;;
   *"gcloud storage cp"*)
     [ "${FAKE_UPLOAD_FAIL:-0}" = "1" ] && { echo "AccessDenied" >&2; exit 1; }
     ;;
-  *"exec -T -e DB_MIGRATE_PASSWORD postgres"*)
+  *"exec -T -e DB_MIGRATE_PASSWORD -e REPORT_DB_PASSWORD postgres"*)
     cat >/dev/null
     # the value docker would pass into the container (kept out of the call log)
     [ -n "${FAKE_ENV_LOG:-}" ] && printf '%s' "${DB_MIGRATE_PASSWORD:-}" >"$FAKE_ENV_LOG"

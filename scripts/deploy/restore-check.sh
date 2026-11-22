@@ -22,6 +22,7 @@ done
 docker exec "$name" psql -U postgres -d restore -qc "CREATE ROLE saiflow_v3_app" >/dev/null
 # grants and default privileges in the dump name the migration account too
 docker exec "$name" psql -U postgres -d restore -qc "CREATE ROLE saiflow_v3_migrator" >/dev/null
+docker exec "$name" psql -U postgres -d restore -qc "CREATE ROLE saiflow_v3_reporter" >/dev/null
 docker exec -i "$name" pg_restore -U postgres -d restore --no-owner --exit-on-error <"$dump"
 
 result="$(docker exec "$name" psql -U postgres -d restore -tAc \
