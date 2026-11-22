@@ -1427,9 +1427,9 @@ describe("report designer page (FR-REPORT-014, FR-SYS-141)", () => {
     renderAt("/reports/31/design");
     await userEvent.click(await screen.findByRole("button", { name: "Sales by branch" }, WAIT));
     await userEvent.click(screen.getByRole("combobox", { name: "Data source" }));
-    await userEvent.click(await screen.findByText("Relational database", {}, WAIT));
-    await userEvent.click(screen.getByRole("combobox", { name: "Database" }));
     await userEvent.click(await screen.findByText("ERP · PostgreSQL", {}, WAIT));
+    await userEvent.click(screen.getByRole("combobox", { name: "Query mode" }));
+    await userEvent.click(await screen.findByText("Write SQL", {}, WAIT));
     await userEvent.type(screen.getByLabelText("SQL"), "SELECT item FROM inventory");
     await userEvent.click(screen.getByRole("button", { name: "Run and discover fields" }));
     expect(await screen.findByText("Result fields discovered: 1", {}, WAIT)).toBeInTheDocument();

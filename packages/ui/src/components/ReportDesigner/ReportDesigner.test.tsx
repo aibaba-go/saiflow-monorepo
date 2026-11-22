@@ -135,9 +135,11 @@ describe("ReportDesigner (FR-REPORT-005, -006, -013, -014)", () => {
     render(<Harness initial={ONE} onConfig={onConfig} sources={[{ id: "postgres:1", name: "ERP", kind: "postgresql", enabled: true }]} querySource={querySource} />);
     await userEvent.click(await screen.findByRole("button", { name: "Sales" }));
     await userEvent.click(screen.getByRole("combobox", { name: "Data source" }));
-    await userEvent.click(await screen.findByText("Relational database"));
-    await userEvent.click(screen.getByRole("combobox", { name: "Database" }));
     await userEvent.click(await screen.findByText("ERP · PostgreSQL"));
+    expect(screen.queryByRole("combobox", { name: L.template })).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: L.versions })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("combobox", { name: "Query mode" }));
+    await userEvent.click(await screen.findByText("Write SQL"));
     await userEvent.type(screen.getByRole("textbox", { name: "SQL" }), "SELECT amount FROM sales");
     await userEvent.click(screen.getByRole("button", { name: "Run and discover fields" }));
     expect(await screen.findByRole("combobox", { name: "Display fields" })).toBeInTheDocument();
@@ -145,6 +147,40 @@ describe("ReportDesigner (FR-REPORT-005, -006, -013, -014)", () => {
     expect(config.cards[0]!.data).toMatchObject({ source_id: "postgres:1", sql: "SELECT amount FROM sales", result_fields: [{ key: "amount", label: "amount", type: "decimal" }] });
     expect(config.cards[0]!.data!.template_id).toBeUndefined();
     expect(screen.queryByRole("combobox", { name: L.grain })).not.toBeInTheDocument();
+  });
+
+  it("selects a database directly and replaces template bindings with typed query fields (FR-REPORT-023)", async () => {
+    const onConfig = vi.fn();
+    const initial: ReportConfig = { ...ONE, cards: [{ ...ONE.cards[0]!, data: { template_id: 12, template_version_ids: [102], grain: "document", display_fields: [{ path: "header.total", label: "Total" }], date_field: { path: "header.date" }, confirmed_paths: ["header.total"] } }] };
+    render(<Harness initial={initial} onConfig={onConfig} sources={[
+      { id: "postgres:1", name: "ERP", kind: "postgresql", enabled: true },
+      { id: "postgres:2", name: "Disabled ERP", kind: "postgresql", enabled: false },
+      { id: "system-pg", name: "System PG", kind: "system_pg", enabled: true },
+    ]} loadTables={async () => [{ schema: "public", name: "sales", kind: "table" }]} querySource={async () => ({ columns: [{ key: "amount", label: "Amount", type: "decimal" }, { key: "posted", label: "Posted", type: "date" }], rows: [], page: 1, page_size: 20, total: 0 })} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Sales" }));
+    await screen.findByRole("combobox", { name: "Display fields" });
+    await userEvent.click(screen.getByRole("combobox", { name: "Data source" }));
+    expect(await screen.findByText("ERP · PostgreSQL")).toBeInTheDocument();
+    expect(screen.queryByText("Disabled ERP · PostgreSQL")).toBeNull();
+    expect(screen.queryByText("System PG")).toBeNull();
+    await userEvent.click(screen.getByText("ERP · PostgreSQL"));
+    expect((onConfig.mock.calls.at(-1)![0] as ReportConfig).cards[0]!.data).toEqual({ source_id: "postgres:1", query_mode: "table", sql: "", result_fields: [], display_fields: [], page_size: 20 });
+    expect(screen.queryByRole("combobox", { name: L.template })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: L.grain })).toBeNull();
+    expect(screen.queryByText(L.versions)).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Display fields" })).toBeNull();
+    await userEvent.click(screen.getByRole("combobox", { name: "Table or view" }));
+    await userEvent.click(await screen.findByText("public.sales · table"));
+    await userEvent.click(screen.getByRole("button", { name: "Run and discover fields" }));
+    expect(await screen.findByRole("combobox", { name: "Display fields" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Column label 1")).toHaveValue("Amount");
+    expect(screen.getByLabelText("Column label 2")).toHaveValue("Posted");
+    expect(screen.queryByText(/header.total/)).toBeNull();
+    await userEvent.click(screen.getByRole("combobox", { name: "Data source" }));
+    await userEvent.click(await screen.findByText("Document template"));
+    expect(screen.getByRole("combobox", { name: L.template })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "SQL" })).toBeNull();
+    expect((onConfig.mock.calls.at(-1)![0] as ReportConfig).cards[0]!.data!.source_id).toBeUndefined();
   });
 
   it("selects a quoted relation, persists table mode and clears fields when switching modes (FR-DATA-003)", async () => {
@@ -168,6 +204,13 @@ describe("ReportDesigner (FR-REPORT-005, -006, -013, -014)", () => {
     expect(screen.getByRole("textbox", { name: "SQL" })).not.toHaveAttribute("readonly");
   });
 
+  it("explains an empty database catalog without hiding the template path (FR-REPORT-023)", async () => {
+    render(<Harness initial={ONE} sources={[]} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Sales" }));
+    expect(screen.getByText("No enabled PostgreSQL sources. Add a connection in Data sources; document templates remain available.")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: L.template })).toBeInTheDocument();
+  });
+
   it("disables field discovery until a database is selected (FR-DATA-003)", async () => {
     const initial: ReportConfig = { ...ONE, cards: [{ ...ONE.cards[0]!, data: { query_mode: "sql", sql: "SELECT 1" } }] };
     render(<Harness initial={initial} querySource={async () => { throw new Error("No source"); }} />);
@@ -189,7 +232,7 @@ describe("ReportDesigner (FR-REPORT-005, -006, -013, -014)", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Sales" }));
     expect(await screen.findByText("Tables could not be loaded. Check source permissions and connection.")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Reload tables" }));
-    await userEvent.click(screen.getByRole("combobox", { name: "Database" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Data source" }));
     await userEvent.click(await screen.findByText("New ERP · PostgreSQL"));
     await userEvent.click(screen.getByRole("combobox", { name: "Table or view" }));
     expect(await screen.findByText("public.New orders · table")).toBeInTheDocument();

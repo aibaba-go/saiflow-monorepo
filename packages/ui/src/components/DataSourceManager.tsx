@@ -78,7 +78,7 @@ export function DataSourceManager({ api, lang, allowCreate = true, canQuery = tr
     {allowCreate && <Button type="primary" disabled={busy} onClick={() => edit()}>{l.add}</Button>}
     {error && !editing && <Alert role="alert" type="error" message={l.failed} action={<Button onClick={() => void operate(reload)}>{l.retry}</Button>} />}
     {notice && <p role="status">{l.connected}</p>}
-    <Table<SourceMetadata> rowKey="id" loading={loading} dataSource={items} pagination={false} columns={[
+    <Table<SourceMetadata> rowKey="id" loading={loading} dataSource={items.filter((source) => source.kind !== "template")} pagination={false} columns={[
       { key: "name", title: l.name, dataIndex: "name" },
       { key: "type", title: l.type, render: (_, r) => <Tag>{r.kind === "template" ? l.template : r.kind === "system_pg" ? l.system : "PostgreSQL"}</Tag> },
       { key: "host", title: l.host, render: (_, r) => r.host ? `${r.host}:${r.port}` : "—" },

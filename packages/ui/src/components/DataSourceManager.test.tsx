@@ -24,10 +24,16 @@ async function openEditor() {
 }
 
 describe("data source management (FR-DATA-001..003)", () => {
-  it("lists templates but exposes no editing controls for them", async () => {
+  it("manages only relational sources even when the catalog includes templates", async () => {
     render(<DataSourceManager api={service()} />);
-    const row = (await screen.findByText("Invoice")).closest("tr")!;
-    expect(within(row).queryByRole("button")).toBeNull();
+    const row = (await screen.findByText("ERP")).closest("tr")!;
+    expect(within(row).getByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(screen.queryByText("Invoice")).toBeNull();
+    expect(screen.queryByText("Document template")).toBeNull();
+    await openEditor();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("ERP")).toBeInTheDocument();
+    expect(screen.queryByText("Invoice")).toBeNull();
   });
   it("retains a saved password when editing with a blank password", async () => {
     const api = service(); let password: string | undefined;

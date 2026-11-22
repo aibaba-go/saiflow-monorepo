@@ -101,7 +101,7 @@ export const reportsEn: Record<ReportsKey, string> = {
   "rpc.value": "Value",
   "nav.dataSources": "Data sources",
   "page.dataSources.eyebrow": "Data sources",
-  "page.dataSources.description": "Manage PostgreSQL connections and document templates. Built-in PG is read-only and admin-only.",
+  "page.dataSources.description": "Manage PostgreSQL connections. Document templates are managed in Templates. Built-in PG is read-only and admin-only.",
   "rpc.count": "Count",
   "rpc.previousPage": "Previous page",
   "rpc.nextPage": "Next page",

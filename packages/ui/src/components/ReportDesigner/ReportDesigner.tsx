@@ -234,6 +234,7 @@ function DataTab({
   const data = card.data ?? {};
   const sql = !!data.query_mode || (data.source_id?.startsWith("postgres:") ?? false);
   const sl = sqlLabels(ctx.lang);
+  const databases = sources.filter((s) => s.kind === "postgresql" && s.enabled !== false && s.id.startsWith("postgres:"));
   const set = (patch: Partial<ReportCardData>) => {
     const next = { ...data, ...patch };
     const confirmed = new Set([...usedPaths(next), ...pagePaths]);
@@ -270,17 +271,12 @@ function DataTab({
 
   return (
     <div className="sf-rd-tab">
-      <Field ctx={ctx} label={sl.source} paths={["data.source_id"]}>
-        <Select aria-label={sl.source} value={sql ? "database" : "template"} disabled={ctx.readOnly} virtual={false}
-          options={[{ value: "template", label: sl.template }, { value: "database", label: sl.relational }]}
-          onChange={(kind) => onCard({ ...card, data: kind === "template" ? defaultCardData(card.type) : { query_mode: "sql", sql: "", result_fields: [], display_fields: [], page_size: 20 } })} style={{ width: "100%" }} />
+      <Field ctx={ctx} label={sl.source} paths={["data.source_id"]} help={!databases.length ? sl.noDatabases : undefined}>
+        <Select aria-label={sl.source} value={sql ? data.source_id ?? undefined : "template"} placeholder={sl.source} disabled={ctx.readOnly} virtual={false} showSearch optionFilterProp="label"
+          options={[{ value: "template", label: sl.template }, { label: sl.relational, options: databases.map((s) => ({ value: s.id, label: `${s.name} · PostgreSQL` })) }]}
+          onChange={(source_id: string) => onCard({ ...card, data: source_id === "template" ? defaultCardData(card.type) : { source_id, query_mode: sql ? data.query_mode ?? "sql" : "table", sql: "", result_fields: [], display_fields: [], page_size: data.page_size ?? 20 } })} style={{ width: "100%" }} />
       </Field>
       {sql ? <>
-        <Field ctx={ctx} label={sl.database} paths={["data.source_id"]}>
-          <Select aria-label={sl.database} virtual={false} showSearch optionFilterProp="label" disabled={ctx.readOnly} value={data.source_id ?? undefined}
-            options={sources.filter((s) => s.kind === "postgresql" && s.enabled !== false && s.id.startsWith("postgres:")).map((s) => ({ value: s.id, label: `${s.name} · PostgreSQL` }))}
-            onChange={(source_id: string) => onCard({ ...card, data: { source_id, query_mode: data.query_mode ?? "sql", sql: "", result_fields: [], display_fields: [], page_size: data.page_size ?? 20 } })} />
-        </Field>
         <SqlBinding key={`${card.id}:${data.source_id}`} card={card} onCard={onCard} querySource={querySource} loadTables={loadTables} lang={ctx.lang} readOnly={ctx.readOnly} />
       </> : <>
       <Field ctx={ctx} label={l.template} htmlFor={ctx.id("template")} paths={["data.template_id"]}>

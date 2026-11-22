@@ -12,7 +12,9 @@ describe("data source page (FR-DATA-001/002)", () => {
   it("shows the management menu and tenant source catalog to a permitted manager", async () => {
     const api = signedIn({ "GET /api/v1/billing/usage": () => json(200, USAGE), "GET /api/v1/data-sources": () => json(200, { items: [{ id: "template:1", name: "Invoice", kind: "template", enabled: true, password_configured: false }] }) }, { tenants: [PERSONAL, { ...ORG, permissions: ["report_manage", "data_browse"] }] });
     renderAt("/data-sources");
-    expect(await screen.findByText("Invoice")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Add PostgreSQL source" })).toBeInTheDocument();
+    expect((await screen.findAllByText("No data")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Invoice")).toBeNull();
     expect(within(screen.getByRole("menu")).getByRole("link", { name: "Data sources" })).toHaveAttribute("href", "/data-sources");
     expect(api.calls.find(r => new URL(r.url).pathname === "/api/v1/data-sources")!.headers.get("X-Tenant-Id")).toBe("5");
     expect(screen.queryByText("Built-in PostgreSQL")).toBeNull();

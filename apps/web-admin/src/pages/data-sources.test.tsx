@@ -22,6 +22,7 @@ it("shows organization CRUD controls while leaving built-in PG immutable (FR-DAT
     "GET /api/v1/admin/data-sources": () => json(200, { items: [
       { id: "system-pg", name: "System PG", kind: "system_pg", enabled: true, password_configured: true },
       { id: "postgres:1", name: "ERP", kind: "postgresql", enabled: true, password_configured: true, host: "erp.test", port: 5432, database: "erp", username: "reader" },
+      { id: "template:1", name: "Invoice template", kind: "template", enabled: true, password_configured: false },
     ] }),
   });
   renderAt("/data-sources?tenant=7");
@@ -29,6 +30,7 @@ it("shows organization CRUD controls while leaving built-in PG immutable (FR-DAT
   expect(await screen.findByRole("dialog")).toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
   const external = (await screen.findByText("ERP")).closest("tr")!;
+  expect(screen.queryByText("Invoice template")).toBeNull();
   expect(within(external).getByRole("button", { name: "Edit" })).toBeInTheDocument();
   expect(within(external).getByRole("button", { name: "Delete" })).toBeInTheDocument();
   const builtin = screen.getByText("System PG").closest("tr")!;

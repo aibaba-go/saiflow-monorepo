@@ -98,7 +98,7 @@ export const reportsZh = {
   "rpc.value": "数值",
   "nav.dataSources": "数据源管理",
   "page.dataSources.eyebrow": "数据源",
-  "page.dataSources.description": "管理 PostgreSQL 连接和单据模板。系统内置 PG 只读且仅限管理员访问。",
+  "page.dataSources.description": "管理 PostgreSQL 连接。单据模板请在模板模块中管理。系统内置 PG 只读且仅限管理员访问。",
   "rpc.count": "数量",
   "rpc.previousPage": "上一页",
   "rpc.nextPage": "下一页",
