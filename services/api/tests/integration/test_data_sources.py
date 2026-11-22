@@ -200,7 +200,11 @@ async def test_real_catalog_excludes_partial_column_and_missing_schema_privilege
             await conn.execute(
                 text(f'GRANT SELECT (a) ON "{schema}".partial TO saiflow_v3_reporter')
             )
-        options = {**connection_options(migrated_db), "user": "saiflow_v3_reporter"}
+        options = {
+            **connection_options(migrated_db),
+            "user": "saiflow_v3_reporter",
+            "password": "local-reporter",
+        }
         _, rows = await _execute(options, CATALOG_SQL)
         assert not [r for r in rows if r["schema"] == schema]
         async with engine.begin() as conn:
