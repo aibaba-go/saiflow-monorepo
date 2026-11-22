@@ -1,4 +1,5 @@
 import { Button, Menu, Typography } from "antd";
+import { useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useAdmin, useForgetAdmin } from "../auth/session";
@@ -22,6 +23,7 @@ export const MENU: { path: string; label: MessageKey }[] = [
   { path: "/ocr", label: "nav.ocr" },
   { path: "/templates", label: "nav.templates" },
   { path: "/reports", label: "nav.reports" },
+  { path: "/data-sources", label: "nav.dataSources" },
 ];
 
 /** The company behind SaiFlow, linked from the sidebar footer (FR-SYS-135). */
@@ -44,6 +46,7 @@ const ICONS: Record<string, IconName> = {
   "/ocr": "spark",
   "/templates": "template",
   "/reports": "chart",
+  "/data-sources": "template",
 };
 
 function selected(pathname: string): string {
@@ -71,6 +74,16 @@ export function AdminLayout() {
   const navigate = useNavigate();
   const admin = useAdmin();
   const forget = useForgetAdmin();
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem("saiflow.admin.menuCollapsed") === "true"; }
+    catch { return false; }
+  });
+  const toggleMenu = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    try { localStorage.setItem("saiflow.admin.menuCollapsed", String(next)); }
+    catch { /* Storage may be blocked by the browser. */ }
+  };
 
   const logout = useSubmit(async () => {
     try {
@@ -85,7 +98,8 @@ export function AdminLayout() {
   const item = (m: (typeof MENU)[number]) => ({
     key: m.path,
     icon: <Icon name={ICONS[m.path] ?? "home"} />,
-    label: <Link to={m.path}>{t(m.label)}</Link>,
+    title: t(m.label),
+    label: <Link to={m.path} aria-label={collapsed ? t(m.label) : undefined} title={collapsed ? t(m.label) : undefined}>{t(m.label)}</Link>,
   });
   const items = [
     { type: "group" as const, key: "g-ops", label: t("layout.navOperations"), children: MENU.filter((m) => OPERATIONS.has(m.path)).map(item) },
@@ -95,7 +109,7 @@ export function AdminLayout() {
   const name = admin.data?.username ?? "";
 
   return (
-    <div className="ad-shell">
+    <div className={`ad-shell${collapsed ? " ad-shell--collapsed" : ""}`}>
       <aside className="ad-sidebar" aria-label={t("layout.sidebar")}>
         <div className="ad-sidebar__lockup">
           <span className="ad-sidebar__mark">
@@ -106,7 +120,7 @@ export function AdminLayout() {
             <small>{t("layout.subtitle")}</small>
           </span>
         </div>
-        <nav className="ad-sidebar__nav" aria-label={t("layout.mainNav")}>
+        <nav id="admin-main-navigation" className="ad-sidebar__nav" aria-label={t("layout.mainNav")}>
           <Menu theme="dark" mode="inline" selectedKeys={[selected(location.pathname)]} items={items} />
         </nav>
         <div className="ad-sidebar__footer">
@@ -126,6 +140,8 @@ export function AdminLayout() {
       </aside>
       <div className="ad-workspace">
         <header className="ad-topbar">
+          <div className="ad-topbar__start">
+          <Button className={`ad-menu-toggle${collapsed ? " ad-menu-toggle--collapsed" : ""}`} aria-label={t(collapsed ? "layout.expandMenu" : "layout.collapseMenu")} title={t(collapsed ? "layout.expandMenu" : "layout.collapseMenu")} aria-expanded={!collapsed} aria-controls="admin-main-navigation" onClick={toggleMenu} icon={<Icon name="chevron" />} />
           <nav className="ad-breadcrumb" aria-label={t("layout.breadcrumb")}>
             <span className="ad-breadcrumb__root">{t("app.title")}</span>
             {title && (
@@ -137,6 +153,7 @@ export function AdminLayout() {
               </>
             )}
           </nav>
+          </div>
           <div className="ad-topbar__tools">
             <LanguageSwitch />
             <span className="ad-topbar__divider" aria-hidden="true" />

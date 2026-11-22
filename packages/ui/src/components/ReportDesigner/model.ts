@@ -120,9 +120,14 @@ export function defaultCardData(type: ChartType): ReportCardData {
     unit: { mode: "fixed", value: "" },
     confirmed_paths: [],
   };
+  if (type === "table") {
+    delete data.measure;
+    delete data.unit;
+    data.display_fields = [];
+    data.page_size = 20;
+  }
   if (type === "line") data.dimension = { kind: "date", path: null, time_grain: "month" };
   else if (type === "bar" || type === "pie" || type === "donut") data.dimension = { kind: "category", path: null };
-  else if (type === "table") data.dimension = { kind: "none" };
   return data;
 }
 
@@ -140,7 +145,7 @@ export function addCard(config: ReportConfig, type: ChartType, id?: string): { c
     title: "",
     layout: { ...place, ...size },
     data: type === "image" || type === "html" ? null : defaultCardData(type),
-    content: type === "image" ? { alt: "", fit: "contain" } : type === "html" ? { mode: "html", html: "<h2></h2>" } : undefined,
+    content: type === "image" ? { alt: "", fit: "cover" } : type === "html" ? { mode: "html", html: "<h2></h2>" } : undefined,
     style: { precision: 2 },
   };
   return { config: { ...config, cards: [...config.cards, card] }, id: cardId };
@@ -162,7 +167,7 @@ export function updateCard(config: ReportConfig, id: string, fn: (card: ReportCa
       const targets = { ...filters.targets };
       delete targets[id];
       filters = Object.keys(targets).length ? { ...filters, targets } : null;
-    } else if (previous.data?.template_id !== next.data?.template_id || previous.data?.grain !== next.data?.grain || previous.data?.table_key !== next.data?.table_key) {
+    } else if (previous.data?.template_id !== next.data?.template_id || previous.data?.source_id !== next.data?.source_id || previous.data?.sql !== next.data?.sql || previous.data?.grain !== next.data?.grain || previous.data?.table_key !== next.data?.table_key) {
       filters = { ...filters, targets: { ...filters.targets, [id]: {} } };
     } else if (previous.type !== next.type && next.data) {
       const mapped = Object.values(filters.targets[id]!);
@@ -189,19 +194,33 @@ export function applyLayouts(config: ReportConfig, layouts: LayoutsById): Report
 /** The chart type rules: metric has no dimension; metric, pie and donut have no series;
  * bar, line, pie and donut need a date or category dimension. */
 export function changeType(card: ReportCard, type: ChartType): ReportCard {
-  if (type === "image" || type === "html") return { ...card, type, data: null, content: type === "image" ? { alt: "", fit: "contain" } : { mode: "html", html: "<h2></h2>" } };
+  if (type === "image" || type === "html") return { ...card, type, data: null, content: type === "image" ? { alt: "", fit: "cover" } : { mode: "html", html: "<h2></h2>" } };
   if (card.type === "image" || card.type === "html") return { ...card, type, content: null, data: defaultCardData(type) };
   const data: ReportCardData = { ...(card.data ?? {}) };
+  if (type === "table") {
+    delete data.measure;
+    delete data.dimension;
+    delete data.unit;
+    data.series = null;
+    data.display_fields = card.type === "table" ? (data.display_fields ?? []) : [];
+    data.page_size = data.page_size ?? 20;
+    return { ...card, type, data: pruneConfirmed(data) };
+  }
+  if (card.type === "table") {
+    const fresh = defaultCardData(type);
+    delete data.display_fields;
+    delete data.page_size;
+    data.measure = fresh.measure;
+    data.unit = fresh.unit;
+  }
   if (type === "metric") {
     delete data.dimension;
     data.series = null;
   } else {
     if (type === "pie" || type === "donut") data.series = null;
     const kind = data.dimension?.kind ?? "none";
-    if (type !== "table" && kind === "none") {
+    if (kind === "none") {
       data.dimension = type === "line" ? { kind: "date", path: null, time_grain: "month" } : { kind: "category", path: null };
-    } else if (!data.dimension) {
-      data.dimension = { kind: "none" };
     }
   }
   return { ...card, type, data: pruneConfirmed(data) };
@@ -220,6 +239,7 @@ export function usedPaths(data: ReportCardData | null | undefined): string[] {
   push(data.series?.path);
   push(data.date_field?.path);
   if (data.measure?.agg !== "count") push(data.unit?.path);
+  data.display_fields?.forEach((field) => push(field.path));
   data.filters?.rules.forEach((rule) => push(rule.path));
   return out;
 }
@@ -274,6 +294,9 @@ export function fieldOptions(
     case "dimension-date":
     case "date":
       return fields.filter((f) => f.type === "date" && inScope(f));
+    case "dimension-category":
+    case "series":
+      return fields.filter((f) => (data?.source_id?.startsWith("postgres:") ? ["string", "integer", "decimal", "amount", "boolean"].includes(f.type) : f.type === "string") && inScope(f));
     default:
       return fields.filter((f) => f.type === "string" && inScope(f));
   }
@@ -295,6 +318,9 @@ export function setGrain(card: ReportCard, grain: "document" | "table", tableKey
   if (data.series?.path) data.series = keep(data.series.path, "series") ? data.series : null;
   if (data.date_field?.path) data.date_field = keep(data.date_field.path, "date") ? data.date_field : null;
   if (data.unit?.path) data.unit = { ...data.unit, path: keep(data.unit.path, "unit") };
+  if (data.display_fields) {
+    data.display_fields = data.display_fields.filter((d) => fields.some((f) => f.path === d.path && (f.grain === "document" || (grain === "table" && f.table_key === tableKey))));
+  }
   return { ...card, data: pruneConfirmed(data) };
 }
 

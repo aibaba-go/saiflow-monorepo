@@ -212,6 +212,12 @@ class Slot:
 
 
 @dataclass(frozen=True)
+class DisplayField:
+    slot: Slot
+    label: str
+
+
+@dataclass(frozen=True)
 class CardSpec:
     id: str
     type: str
@@ -233,6 +239,11 @@ class CardSpec:
     unit: Slot | None
     precision: int
     filters: tuple[FilterGroup, ...] = ()
+    display_fields: tuple[DisplayField, ...] = ()
+    page_size: int = 20
+    source_id: str | None = None
+    sql: str | None = None
+    sql_fields: tuple[DisplayField, ...] = ()
 
     @property
     def period_slot(self) -> Slot | None:
@@ -504,9 +515,23 @@ def _card(
     if not isinstance(data, dict):
         errs.add(cid, dp, "data must be an object")
         return None
+    source_id = data.get("source_id")
+    if source_id is not None and (
+        not isinstance(source_id, str) or not source_id.startswith("template:")
+    ):
+        from app.services.report_sql_config import validate_card
+
+        if cid is None or ctype is None:
+            return None
+        spec = validate_card(
+            card, dp, lambda path, msg: errs.add(cid, path, msg), precision, page_filter
+        )
+        return spec if cid and len(errs.items) == before else None
     used: list[str] = []
 
     template_id = data.get("template_id")
+    if source_id is not None and source_id != f"template:{template_id}":
+        errs.add(cid, f"{dp}.source_id", "the source must match the bound template")
     if not _is_int(template_id) or template_id <= 0:
         errs.add(cid, f"{dp}.template_id", "a template is required")
         template_id = None
@@ -567,6 +592,94 @@ def _card(
             types=types,
             used=used,
             **kw,
+        )
+
+    if ctype == "table":
+        raw_fields = data.get("display_fields")
+        if raw_fields is None:
+            raw_fields = [
+                {"path": f["path"], "label": f["name"]}
+                for f in catalog(selected)["fields"]
+                if f["compatible"]
+                and f["grain"] == grain
+                and (grain != "table" or f["table_key"] == tkey)
+            ]
+        display_fields = []
+        if not isinstance(raw_fields, list) or not 1 <= len(raw_fields) <= 50:
+            errs.add(cid, f"{dp}.display_fields", "choose 1-50 display fields")
+        else:
+            seen_paths = set()
+            for j, raw_field in enumerate(raw_fields):
+                fp = f"{dp}.display_fields[{j}]"
+                if not isinstance(raw_field, dict):
+                    errs.add(cid, fp, "a display field needs path and label")
+                    continue
+                value = slot(raw_field.get("path"), f"{fp}.path", FIELD_TYPES)
+                label = raw_field.get("label", raw_field.get("path"))
+                if not isinstance(label, str) or not 1 <= len(label.strip()) <= 100:
+                    errs.add(cid, f"{fp}.label", "a label is 1-100 characters")
+                elif value is not None:
+                    if value.path in seen_paths:
+                        errs.add(cid, f"{fp}.path", "display fields must be unique")
+                    seen_paths.add(value.path)
+                    display_fields.append(DisplayField(value, label.strip()))
+        page_size = data.get("page_size", 20)
+        if not _is_int(page_size) or not 5 <= page_size <= 100:
+            errs.add(cid, f"{dp}.page_size", "page size must be 5-100")
+        date_raw = data.get("date_field")
+        date_field = (
+            slot(
+                date_raw.get("path") if isinstance(date_raw, dict) else None,
+                f"{dp}.date_field.path",
+                {"date"},
+            )
+            if date_raw is not None
+            else None
+        )
+        filters = []
+        for raw_group, path in (
+            (data.get("filters"), f"{dp}.filters"),
+            (page_filter, f"{p}.page_filters"),
+        ):
+            group = parse_group(raw_group, path, slot, lambda p, msg: errs.add(cid, p, msg))
+            if group is not None:
+                filters.append(group)
+        confirmed = data.get("confirmed_paths", [])
+        if not isinstance(confirmed, list) or not all(isinstance(c, str) for c in confirmed):
+            errs.add(cid, f"{dp}.confirmed_paths", "confirmed_paths must be a list of paths")
+        elif len(vids) > 1:
+            for path in dict.fromkeys(used):
+                if path not in confirmed:
+                    errs.add(
+                        cid,
+                        f"{dp}.confirmed_paths",
+                        f"confirm that {path} means the same in every selected version",
+                    )
+        if len(errs.items) != before or fields is None:
+            return None
+        return CardSpec(
+            id=cid,
+            type=ctype,
+            title=title,
+            template_id=template_id,
+            version_ids=tuple(sorted(vids)),
+            grain=grain,
+            table=table,
+            columns=columns,
+            agg="count",
+            measure=None,
+            dim_kind="none",
+            dim=None,
+            time_grain=None,
+            series=None,
+            date_field=date_field,
+            unit_mode=None,
+            unit_value=None,
+            unit=None,
+            precision=precision,
+            filters=tuple(filters),
+            display_fields=tuple(display_fields),
+            page_size=page_size,
         )
 
     measure_raw = data.get("measure")

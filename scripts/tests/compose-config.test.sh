@@ -77,4 +77,9 @@ check "database volume can be isolated for test" grep -qF 'name: ${POSTGRES_VOLU
 check "env.example documents the database volume" grep -q '^POSTGRES_VOLUME=' "$deploy/env.example"
 check "backend receives REPORT_EMBED_ORIGINS with an empty default" grep -qF "REPORT_EMBED_ORIGINS: \${REPORT_EMBED_ORIGINS:-}" <<<"$backend"
 check "env.example lists REPORT_EMBED_ORIGINS" grep -q '^REPORT_EMBED_ORIGINS=' "$deploy/env.example"
+for var in DATA_SOURCE_KEY DATA_SOURCE_ALLOWED_HOSTS REPORT_DB_PASSWORD; do
+  check "backend receives $var" grep -q "$var: \${$var:-" <<<"$backend"
+  check "env.example lists $var" grep -q "^$var=" "$deploy/env.example"
+done
+check "backend pins the reporting account" grep -q 'REPORT_DB_USER: saiflow_v3_reporter' <<<"$backend"
 finish

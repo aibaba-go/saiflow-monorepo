@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # "log in as this user" link points (FR-SYS-145); unset = that link answers 503
     web_pc_origin: str | None = None
     report_embed_origins: str = ""
+    data_source_key: SecretStr | None = None
+    data_source_allowed_hosts: str = ""
+    report_db_user: str = "saiflow_v3_reporter"
+    report_db_password: SecretStr | None = None
     smtp_host: str | None = None
     smtp_port: int = 587
     smtp_username: str | None = None

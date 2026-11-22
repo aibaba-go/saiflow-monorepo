@@ -167,9 +167,11 @@ async def test_results_follow_the_callers_scope(api, line, db):
     }
     assert cards(everyone)["c_1"]["diagnostics"]["documents"] == 4
     # the member sees only their own documents, freshly queried
-    mine = await data(
+    forged = await query(
         u, org, pub["id"], can_browse_all=True, scope="all", tenant_id=other.tenant_id
     )
+    assert forged.status_code == 422 and forged.json()["code"] == "validation_error"
+    mine = await data(u, org, pub["id"])
     assert mine["scope"] == "own"
     c = cards(mine)["c_1"]
     assert {r["dimension"]: r["value"] for r in c["rows"]} == {"ACME": "10.00", "Beta": "5.00"}

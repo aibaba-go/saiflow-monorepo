@@ -3,6 +3,7 @@
 from app.models.admin import AdminAccount, AdminSession
 from app.models.audit import AuditLog
 from app.models.billing import FreeQuota, Plan, PlanApplication, QuotaReservation, Subscription
+from app.models.data_source import DataSource, ReportSourceRef
 from app.models.document import Export, File, OcrJob, OcrRawResult, ResultVersion
 from app.models.email_code import EmailCode
 from app.models.impersonation import ImpersonationTicket
@@ -34,6 +35,8 @@ __all__ = [
     "AdminAccount",
     "AdminSession",
     "AuditLog",
+    "DataSource",
+    "ReportSourceRef",
     "DocumentTemplate",
     "DocumentTemplateVersion",
     "Export",

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, call } from "../services/api";
 import { useLanguage } from "../stores/language";
 import { useTenantChoice } from "../tenants/useCurrentTenant";
-import { en, renderAt, signedIn, userEvent } from "../test/app";
+import { dashboard, en, renderAt, signedIn, userEvent } from "../test/app";
 import { ORG, OTHER, PERSONAL, UNREGISTERED, USER } from "../test/fixtures";
 import { json, mockApi } from "../test/mockApi";
 import { external, LOGIN_STATE_KEY } from "./lineLogin";
@@ -114,6 +114,7 @@ describe("LINE web login (FR-SYS-090)", () => {
       mockApi({
         "GET /api/v1/me": () => (me ? json(200, me) : json(401, { code: "unauthenticated" })),
         "GET /api/v1/me/homepage": () => json(200, { report_id: null, default: "personal" }),
+        "GET /api/v1/me/dashboard": () => json(200, dashboard("personal")),
         "GET /api/v1/me/tenants": () => json(200, []),
         "GET /api/v1/me/notifications": () => json(200, { items: [], unread_count: 0, next_before: null }),
         "POST /api/v1/auth/line": () => {

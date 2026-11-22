@@ -3,8 +3,8 @@ doc_id: DES-001
 title: "SaiFlow — 系统架构"
 type: design
 status: active
-version: 3.10.0
-updated: 2026-11-15
+version: 3.11.0
+updated: 2026-11-22
 owner: Product Engineering
 source: "PRD-001 v3.3 §3.1, §3.2, §4, §4.9, §5; ADR-008"
 related: [DM-FormDocument, DM-ExtractionPayload, DM-OcrJob, OCR-Pipeline, API-Spec, NFR-SEC, ADR-006, ADR-008]
@@ -102,7 +102,11 @@ graph TB
 
 三端复用 `packages/ui` 的受控设计器、网格与六图型 renderer；应用层承担认证、租户、API 编排和语言，纯组件不持有业务权限或数据访问。PC 使用发布网格，LINE 按相同卡片标识与位置排列，admin 的配置预览使用合成数据。
 
-报表服务只持久化草稿、不可变发布配置及卡片级模板版本引用。统计由受控 SQL 直接读取正式结果及其自身 mapping，在 PostgreSQL 内安全转换并以 numeric 聚合；诊断与分组共享单条 statement 的读取范围，不拉取原始单据到前端或 Python 聚合，也不建立统计缓存或预聚合实体。查看/预览/CSV 的授权和提交人范围由服务端重新计算；配置管理不扩大业务数据可见范围。CSV 下载凭证不落库，兑换时重新认证会话与权限。
+报表服务只持久化草稿、不可变发布配置及模板版本 / 数据源引用。模板报表由受控 SQL 读取正式结果及其自身 mapping，在 PostgreSQL 内安全转换并以 numeric 聚合；诊断与分组共享单条 statement 的读取范围，不拉取原始单据到前端聚合。明细表不要求聚合值，只投影选定字段并分页，页码不持久化。查看/预览/CSV 的授权和提交人范围由服务端重新计算；配置管理不扩大业务数据可见范围。CSV 下载凭证不落库，兑换时重新认证会话与权限。
+
+组织可配置 PostgreSQL 数据源：单条只读 SELECT 经 AST 正向语法校验，以 TLS verify-full 和已校验地址固定连接目标；私网主机须显式允许，拒绝元数据地址与系统数据库地址。连接密码以绑定租户 / 数据源 ID 的 AES-GCM 密文保存，主密钥仅在服务器环境变量中。查询使用只读事务、10 秒 statement timeout，最多 50,000 行 / 8 MiB；类型化结果可在后端有界聚合或明细分页，实际列与保存的字段快照不符时拒绝显示旧结果。外部 SQL 不能证明单据提交人归属，因此实时查询要求组织全量数据浏览权限；admin 报表配置预览仍只用合成数据。
+
+内置 `system-pg` 仅允许平台 admin 直接查询 `reporting` 安全视图；独立 `saiflow_v3_reporter` 账号无系统原始表及写入权限，不能绑定客户报表。个人 / 组织内置基础 Dashboard 由后端以固定 SQL 和服务端授权的租户 / 用户参数读取同一来源，保留原有套餐与单据权限，不受运营报表套餐门槛限制。所有路径均不建立统计缓存或预聚合实体。
 
 ## 4. 端到端数据流
 
@@ -174,6 +178,7 @@ v2 中列为 proposed 的 ADR-002（可插拔 OCR 引擎）已由 PRD §4.6 的�
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 3.11.0 | 2026-11-22 | Product Engineering | PostgreSQL 数据源 TLS / 只读 / 有界查询边界、明细分页与固定系统来源 Dashboard |
 | 3.10.0 | 2026-11-15 | Product Engineering | `docai-backup-engine`：OCR 引擎改为 TextIn、Google Document AI OCR（asia-southeast1） |
 | 3.9.0 | 2026-11-11 | Product Engineering | 补充三端报表与模板管理职责、共享组件边界、配置持久化/实时 numeric 查询和 admin 合成预览隔离 |
 | 3.8.0 | 2026-11-07 | Product Engineering | 前端表按 ADR-010：小程序改用 Tailwind CSS + shadcn/ui，三个前端的界面按 STD-008（变更 `ui-restyle`） |

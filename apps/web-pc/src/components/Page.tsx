@@ -54,10 +54,12 @@ export function Page({
   badge,
   meta,
   extra,
+  hideHeading = false,
   children,
 }: {
   name: string;
   title: string;
+  hideHeading?: boolean;
   description?: string;
   /** e.g. the stage of the open document, next to the title */
   badge?: ReactNode;
@@ -71,7 +73,7 @@ export function Page({
   const desc = description ?? (DESCRIPTION[name] ? t(DESCRIPTION[name]) : undefined);
   return (
     <div data-testid={`page-${name}`} className={`pc-page pc-page--${name}`}>
-      <div className="pc-page__heading">
+      {!hideHeading && <div className="pc-page__heading">
         <div className="pc-page__titles">
           {eyebrow && <p className="pc-page__eyebrow">{t(eyebrow)}</p>}
           <div className="pc-page__title-row">
@@ -88,7 +90,7 @@ export function Page({
             {extra}
           </div>
         )}
-      </div>
+      </div>}
       {children}
     </div>
   );

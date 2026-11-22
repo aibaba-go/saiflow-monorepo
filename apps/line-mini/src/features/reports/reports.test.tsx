@@ -188,6 +188,20 @@ describe("LINE report list (FR-SYS-056)", () => {
 });
 
 describe("LINE report detail (FR-REPORT-018, -010, -015, -016)", () => {
+  it("pages raw records within the displayed period (FR-REPORT-022)", async () => {
+    testAuth(); inOrg();
+    const api = mockApi({ [ONE]: () => json(200, detail()), [DATA]: async (r) => {
+      const body = await r.json();
+      const page = body.pages?.c_a ?? 1;
+      return json(200, RESULT({ cards: [{ card_id: "c_a", status: "ok", rows: [], table: { columns: [{ key: "item", label: "Item", type: "string" }], rows: [{ item: page === 1 ? "First item" : "Second item" }], page, page_size: 5, total: 6 } }] }));
+    } });
+    pages("/report/31");
+    expect(await screen.findByText("First item")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Next page" }));
+    expect(await screen.findByText("Second item")).toBeInTheDocument();
+    expect(await api.bodies(DATA)).toEqual([{ period: null, refresh: false }, { period: { from: "2026-01-01", to: "2026-12-31" }, refresh: false, pages: { c_a: 2 } }]);
+  });
+
   it("shows the cards in one column by y, x and id (018-01), with the facts and no designer", async () => {
     testAuth();
     inOrg();

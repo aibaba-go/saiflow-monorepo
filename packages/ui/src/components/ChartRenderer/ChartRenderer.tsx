@@ -2,7 +2,7 @@ import type { EChartsCoreOption } from "echarts/core";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { isNegativeDecimal } from "../decimal";
-import type { CardResult, ReportCard } from "../reportTypes";
+import type { CardResult, ReportCard, TableResult } from "../reportTypes";
 import { loadEcharts, type EchartsApi } from "./echartsLoader";
 import { mergeChartLabels, type ChartLabels } from "./labels";
 import { buildChartModel, type ChartModel } from "./model";
@@ -32,6 +32,28 @@ export interface ChartRendererProps {
   className?: string;
   loadAsset?: (id: string, signal: AbortSignal) => Promise<Blob>;
   embedOrigins?: readonly string[];
+  /** Allow embedded-page interaction; disabled in the designer so clicks select the card. */
+  interactive?: boolean;
+  onPageChange?: (page: number) => void;
+}
+
+function RawTable({ result, labels, caption, onPageChange }: { result: TableResult; labels: ChartLabels; caption: string; onPageChange?: (page: number) => void }) {
+  const pages = Math.max(1, Math.ceil(result.total / result.page_size));
+  return <>
+    <div className="sf-chart__table-wrap" role="region" aria-label={caption} tabIndex={0}>
+      <table className="sf-chart__table">
+        <caption className="sf-visually-hidden">{caption}</caption>
+        <thead><tr>{result.columns.map((c) => <th key={c.key} scope="col">{c.label}</th>)}</tr></thead>
+        <tbody>{result.rows.map((row, i) => <tr key={i}>{result.columns.map((c) => <td key={c.key} title={row[c.key] ?? undefined} className={["integer", "decimal", "amount"].includes(c.type) ? "sf-num" : undefined}>{row[c.key] ?? labels.noValue}</td>)}</tr>)}</tbody>
+      </table>
+      {!result.rows.length && <StateBox kind="empty">{labels.empty}</StateBox>}
+    </div>
+    <div className="sf-chart__pager">
+      <button type="button" className="sf-btn" aria-label={labels.previousPage} disabled={!onPageChange || result.page <= 1} onClick={() => onPageChange?.(result.page - 1)}>‹</button>
+      <span aria-live="polite">{labels.pagination(result.page, pages, result.total)}</span>
+      <button type="button" className="sf-btn" aria-label={labels.nextPage} disabled={!onPageChange || result.page >= pages} onClick={() => onPageChange?.(result.page + 1)}>›</button>
+    </div>
+  </>;
 }
 
 function DataTable({ model, labels, caption, hidden }: { model: ChartModel; labels: ChartLabels; caption: string; hidden?: boolean }) {
@@ -173,7 +195,7 @@ function safeHtml(html: string): string {
     }
   };
   clean(doc.body);
-  return `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><style>body{font-family:system-ui;margin:16px;color:#243858}table{border-collapse:collapse;width:100%}td,th{padding:8px;border:1px solid #ddd}</style>${doc.body.innerHTML}`;
+  return `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><style>html,body{margin:0;width:100%;height:100%}body{font-family:system-ui;color:#243858}table{border-collapse:collapse;width:100%}td,th{padding:8px;border:1px solid #ddd}</style>${doc.body.innerHTML}`;
 }
 
 function StateBox({ kind, children }: { kind: "loading" | "empty" | "error" | "info"; children: ReactNode }) {
@@ -202,6 +224,8 @@ export function ChartRenderer({
   className,
   loadAsset,
   embedOrigins = [],
+  interactive = true,
+  onPageChange,
 }: ChartRendererProps) {
   const labels = useMemo(() => mergeChartLabels(labelsIn), [labelsIn]);
   const title = card.title?.trim() ?? "";
@@ -234,7 +258,8 @@ export function ChartRenderer({
     body = external && !allowed ? <StateBox kind="error">{labels.error}</StateBox> : (
       <iframe title={title || labels.chartTypes.html} sandbox="" referrerPolicy="no-referrer" loading="lazy"
         src={external ? url : undefined} srcDoc={external ? undefined : safeHtml(content?.html ?? "")}
-        style={{ width: "100%", height: "100%", border: 0 }} />
+        tabIndex={interactive ? undefined : -1}
+        style={{ width: "100%", height: "100%", border: 0, pointerEvents: interactive ? undefined : "none" }} />
     );
   } else if (loading || !result || !model) {
     body = <StateBox kind="loading">{labels.loading}</StateBox>;
@@ -252,6 +277,8 @@ export function ChartRenderer({
         )}
       </StateBox>
     );
+  } else if (card.type === "table" && result.table) {
+    body = <RawTable result={result.table} labels={labels} caption={title || labels.chartTypes.table} onPageChange={onPageChange} />;
   } else if (result.status === "empty" || model.rows.length === 0) {
     body = (
       <>

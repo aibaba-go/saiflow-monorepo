@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useLanguage } from "../stores/language";
 import { useTenantChoice } from "../tenants/useCurrentTenant";
-import { en, renderAt, userEvent } from "../test/app";
+import { dashboard, en, renderAt, userEvent } from "../test/app";
 import { USER } from "../test/fixtures";
 import { json, mockApi, type MockApi } from "../test/mockApi";
 import { translate } from "../i18n";
@@ -30,6 +30,7 @@ function backend(routes: Record<string, (r: Request) => Response | Promise<Respo
   return mockApi({
     "GET /api/v1/me": () => (me ? json(200, me) : json(401, { code: "unauthenticated" })),
     "GET /api/v1/me/homepage": () => json(200, { report_id: null, default: "personal" }),
+    "GET /api/v1/me/dashboard": () => json(200, dashboard("personal")),
     "GET /api/v1/me/tenants": () => json(200, []),
     "GET /api/v1/me/notifications": () => json(200, { items: [], unread_count: 0, next_before: null }),
     "POST /api/v1/auth/email-code": () => json(204, null),

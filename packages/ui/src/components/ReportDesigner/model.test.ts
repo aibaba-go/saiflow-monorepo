@@ -6,6 +6,7 @@ import {
   bindTemplate,
   changeType,
   emptyReportConfig,
+  defaultCardData,
   fieldOptions,
   findPlace,
   groupProblems,
@@ -42,6 +43,13 @@ const FIELDS = [
 ];
 
 describe("report designer model", () => {
+  it("starts new image cards in cover mode without changing existing contain cards (FR-REPORT-020)", () => {
+    const { config } = addCard(emptyReportConfig(), "image", "image");
+    expect(config.cards[0]?.content?.fit).toBe("cover");
+    const existing = { ...config.cards[0]!, content: { asset_id: "asset", fit: "contain" as const } };
+    expect(changeType(config.cards[0]!, "image").content?.fit).toBe("cover");
+    expect(updateCard({ ...config, cards: [existing] }, "image", (c) => ({ ...c, title: "Photo" })).cards[0]?.content).toEqual({ asset_id: "asset", fit: "contain" });
+  });
   it("adds all six types with unique valid ids and no overlap, inside the grid", () => {
     let config = emptyReportConfig();
     for (let i = 0; i < 3; i += 1) for (const t of CHART_TYPES) config = addCard(config, t).config;
@@ -63,7 +71,10 @@ describe("report designer model", () => {
     const card = config.cards.find((c) => c.id === id)!;
     expect(card.data?.dimension).toEqual({ kind: "date", path: null, time_grain: "month" });
     expect(addCard(emptyReportConfig(), "metric").config.cards[0]!.data?.dimension).toBeUndefined();
-    expect(addCard(emptyReportConfig(), "table").config.cards[0]!.data?.dimension).toEqual({ kind: "none" });
+    expect(addCard(emptyReportConfig(), "table").config.cards[0]!.data).toMatchObject({ display_fields: [], page_size: 20 });
+    expect(defaultCardData("table").measure).toBeUndefined();
+    expect(defaultCardData("table").dimension).toBeUndefined();
+    expect(defaultCardData("table").unit).toBeUndefined();
     expect(removeCard(config, id).cards).toHaveLength(0);
   });
 
@@ -120,7 +131,13 @@ describe("report designer model", () => {
     expect(pie.data?.series).toBeNull();
     expect(pie.data?.dimension?.path).toBe("h.vendor");
     expect(changeType(metric, "line").data?.dimension).toEqual({ kind: "date", path: null, time_grain: "month" });
-    expect(changeType(metric, "table").data?.dimension).toEqual({ kind: "none" });
+    const raw = changeType(metric, "table");
+    expect(raw.data?.measure).toBeUndefined();
+    expect(raw.data?.dimension).toBeUndefined();
+    expect(raw.data?.unit).toBeUndefined();
+    expect(raw.data?.display_fields).toEqual([]);
+    expect(changeType(raw, "bar").data?.measure).toEqual({ agg: "sum", path: null });
+    expect(changeType(raw, "bar").data?.display_fields).toBeUndefined();
   });
 
   it("lists used paths (table key included, count without a measure) and prunes confirmations", () => {
@@ -200,6 +217,28 @@ describe("report designer model", () => {
       date_field: null,
       confirmed_paths: ["h.vendor"],
     });
+  });
+
+  it("drops raw columns outside the new grain while retaining header columns", () => {
+    const card: ReportCard = { id: "raw", type: "table", layout: { x: 0, y: 0, w: 6, h: 4 }, data: { grain: "table", table_key: "h.lines", display_fields: [{ path: "h.vendor", label: "Vendor" }, { path: "h.lines.product", label: "Product" }], confirmed_paths: ["h.vendor", "h.lines.product"] } };
+    const next = setGrain(card, "document", null, FIELDS);
+    expect(next.data?.display_fields).toEqual([{ path: "h.vendor", label: "Vendor" }]);
+    expect(next.data?.confirmed_paths).toEqual(["h.vendor"]);
+  });
+
+  it("offers typed SQL categories without broadening template categories", () => {
+    const fields = [...FIELDS, f("enabled", "boolean")];
+    expect(fieldOptions(fields, { source_id: "postgres:1" }, "dimension-category").map((x) => x.path)).toEqual(["h.total", "h.vendor", "h.currency", "enabled"]);
+    expect(fieldOptions(fields, {}, "dimension-category").map((x) => x.path)).toEqual(["h.vendor", "h.currency"]);
+  });
+
+  it("invalidates explicit mappings on source or SQL changes but preserves filter rules", () => {
+    const config: ReturnType<typeof emptyReportConfig> = { version: 1, cards: [{ id: "sql", type: "table", layout: { x: 0, y: 0, w: 6, h: 4 }, data: { source_id: "postgres:1", sql: "SELECT vendor FROM sales" } }], filters: { match: "and", rules: [{ path: "supplier", op: "eq", value: "Acme" }], targets: { sql: { supplier: "vendor" } } } };
+    for (const patch of [{ source_id: "postgres:2" }, { sql: "SELECT vendor FROM purchases" }]) {
+      const next = updateCard(config, "sql", (card) => ({ ...card, data: { ...card.data, ...patch } }));
+      expect(next.filters?.targets.sql).toEqual({});
+      expect(next.filters?.rules).toEqual(config.filters?.rules);
+    }
   });
 
   it("groups problems by card id or index, the rest on the page", () => {

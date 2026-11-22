@@ -834,6 +834,23 @@ tr:hover .pc-file__name {
   flex-direction: column;
   gap: 20px;
 }
+.pc-system-dashboard__body {
+  display: grid;
+  gap: 20px;
+  align-items: stretch;
+}
+.pc-system-dashboard__body > section { min-width: 0; }
+.pc-progress__body { display: grid; gap: 22px; padding: 24px; }
+.pc-progress__label { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.pc-progress__track { height: 10px; border-radius: 6px; background: var(--brand-bg); overflow: hidden; }
+.pc-progress__track span { display: block; height: 100%; background: var(--brand-blue); border-radius: inherit; }
+.pc-progress__row[data-stage="OCR_PROCESSING"] span[style] { background: var(--brand-teal); }
+.pc-progress__row[data-stage="PENDING_REVIEW"] span[style] { background: var(--warning); }
+.pc-progress__row[data-stage="CONFIRMED"] span[style] { background: var(--success); }
+@media (max-width: 900px) {
+  .pc-system-dashboard__body { grid-template-columns: 1fr !important; }
+}
+
 .pc-home__top {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 288px;

@@ -43,8 +43,25 @@
   border-radius: var(--sf-report-radius, 12px);
   box-shadow: var(--sf-report-shadow, none);
 }
+.sf-rg-card:has(.sf-chart--image),
+.sf-rg-card:has(.sf-chart--html) {
+  padding: 0;
+}
+.sf-chart--image .sf-chart__title,
+.sf-chart--html .sf-chart__title {
+  margin: 0;
+  padding: 12px;
+}
 .sf-chart--image .sf-chart__body,
 .sf-chart--html .sf-chart__body { overflow: hidden; }
+.sf-chart--image .sf-chart__body > img,
+.sf-chart--html .sf-chart__body > iframe {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
 
 .sf-chart {
   display: flex;

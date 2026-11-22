@@ -153,7 +153,7 @@ export const DEFAULT_REPORT_DESIGNER_LABELS: ReportDesignerLabels = {
   confirmHelp: "These fields have the same path and type in every selected version. Confirm that each means the same.",
   fieldIncompatible: "not in every selected version",
   fieldUnavailable: "This field is not available for the selected versions or grain.",
-  fieldTypes: { string: "Text", integer: "Integer", decimal: "Decimal", amount: "Amount", date: "Date" },
+  fieldTypes: { string: "Text", integer: "Integer", decimal: "Decimal", amount: "Amount", date: "Date", boolean: "Yes / No" },
   chooseField: "Choose a field",
   precision: "Decimals",
   colors: "Colors",

@@ -6,7 +6,7 @@ import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { AppRoutes } from "../App";
 import { useLanguage } from "../stores/language";
 import { useTenantChoice } from "../tenants/useCurrentTenant";
-import { en, renderAt, signedIn, userEvent } from "../test/app";
+import { dashboard, en, renderAt, signedIn, userEvent } from "../test/app";
 import { USER } from "../test/fixtures";
 import { json, mockApi } from "../test/mockApi";
 
@@ -37,6 +37,7 @@ const routes = (redeem: () => Response) => {
     "GET /api/v1/me": () => (me ? json(200, me) : json(401, { code: "unauthenticated" })),
     "GET /api/v1/me/tenants": () => json(200, [{ tenant_id: 70, kind: "personal", name: null, is_owner: true, role: null, permissions: [] }]),
     "GET /api/v1/me/homepage": () => json(200, { report_id: null, default: "personal" }),
+    "GET /api/v1/me/dashboard": () => json(200, dashboard("personal")),
     "GET /api/v1/me/notifications": () => json(200, { items: [], unread_count: 0, next_before: null }),
     "POST /api/v1/auth/impersonation": () => {
       const res = redeem();

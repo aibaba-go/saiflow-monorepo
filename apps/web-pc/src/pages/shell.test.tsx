@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { useTenantChoice } from "../tenants/useCurrentTenant";
 import { useLanguage } from "../stores/language";
-import { en, renderAt, signedIn, userEvent } from "../test/app";
+import { dashboard, en, renderAt, signedIn, userEvent } from "../test/app";
 import { ORG, PERSONAL, USER } from "../test/fixtures";
 import { json } from "../test/mockApi";
 import { translate } from "../i18n";
@@ -21,6 +21,14 @@ const PERSONAL_USAGE = {
   free: { remaining: 100, expires_at: null, paused: false },
 };
 const usageFor = (r: Request) => json(200, r.headers.get("X-Tenant-Id") === "5" ? USAGE : PERSONAL_USAGE);
+const dashboardFor = (r: Request) => {
+  const org = r.headers.get("X-Tenant-Id") === "5";
+  const usage = org ? USAGE : PERSONAL_USAGE;
+  return json(200, { ...dashboard(org ? "organization" : "personal"), usage: {
+    plan_code: usage.plan.code, ends_at: usage.plan.ends_at, plan_active: usage.active,
+    ...usage.month, free_remaining: usage.free.remaining, free_expires_at: usage.free.expires_at, free_paused: usage.free.paused,
+  } });
+};
 
 beforeEach(() => {
   localStorage.clear();
@@ -35,7 +43,7 @@ async function openSwitcher() {
 
 describe("branded shell (enterprise-ui-redesign, FR-SYS-135, FR-SYS-138)", () => {
   it("keeps the menu order, shows the page title and links AIbaba in a new window", async () => {
-    signedIn({ "GET /api/v1/billing/usage": usageFor });
+    signedIn({ "GET /api/v1/billing/usage": usageFor, "GET /api/v1/me/dashboard": dashboardFor });
     renderAt("/upload");
     const menu = await screen.findByRole("menu");
     const labels = within(menu)
@@ -55,7 +63,7 @@ describe("branded shell (enterprise-ui-redesign, FR-SYS-135, FR-SYS-138)", () =>
 
 describe("collapsible navigation (FR-SYS-170)", () => {
   it("keeps accessible clickable routes and persists collapse without changing the page", async () => {
-    signedIn({ "GET /api/v1/billing/usage": usageFor });
+    signedIn({ "GET /api/v1/billing/usage": usageFor, "GET /api/v1/me/dashboard": dashboardFor });
     const first = renderAt("/upload");
     const collapse = await screen.findByRole("button", { name: "Collapse navigation" });
     expect(collapse).toHaveAttribute("aria-expanded", "true");
@@ -81,7 +89,7 @@ describe("layout and home (FR-SYS-094)", () => {
   it("home shows the organization's plan, period, scans left and free quota (094-01)", async () => {
     localStorage.setItem("saiflow.pc.tenant.7", "5");
     useTenantChoice.getState().reset();
-    signedIn({ "GET /api/v1/billing/usage": usageFor }, { tenants: [PERSONAL, ORG] });
+    signedIn({ "GET /api/v1/billing/usage": usageFor, "GET /api/v1/me/dashboard": dashboardFor }, { tenants: [PERSONAL, ORG] });
     renderAt("/");
     const card = await screen.findByTestId("usage-card");
     expect(await within(card).findByText("Starter")).toBeInTheDocument();
@@ -95,7 +103,7 @@ describe("layout and home (FR-SYS-094)", () => {
   });
 
   it("personal tenant: the org page asks to switch and the menu has no Roles (094-02)", async () => {
-    signedIn({ "GET /api/v1/billing/usage": usageFor });
+    signedIn({ "GET /api/v1/billing/usage": usageFor, "GET /api/v1/me/dashboard": dashboardFor });
     renderAt("/org");
     expect(await screen.findByText(en("org.none"))).toBeInTheDocument();
     const menu = screen.getByRole("menu");
@@ -104,7 +112,7 @@ describe("layout and home (FR-SYS-094)", () => {
   });
 
   it("switching the language changes the menu at once and is kept (093-02)", async () => {
-    signedIn({ "GET /api/v1/billing/usage": usageFor });
+    signedIn({ "GET /api/v1/billing/usage": usageFor, "GET /api/v1/me/dashboard": dashboardFor });
     renderAt("/");
     await screen.findByTestId("usage-card");
     await userEvent.click(screen.getByRole("combobox", { name: en("my.language") }));
@@ -116,7 +124,7 @@ describe("layout and home (FR-SYS-094)", () => {
 
 describe("tenant switching (FR-SYS-096)", () => {
   it("switching to Siam Tools sends its tenant id and is kept (096-01)", async () => {
-    const api = signedIn({ "GET /api/v1/billing/usage": usageFor }, { tenants: [PERSONAL, ORG] });
+    const api = signedIn({ "GET /api/v1/billing/usage": usageFor, "GET /api/v1/me/dashboard": dashboardFor }, { tenants: [PERSONAL, ORG] });
     const first = renderAt("/");
     await screen.findByText(en("usage.left", { n: "1,000" }));
     await openSwitcher();
@@ -131,7 +139,7 @@ describe("tenant switching (FR-SYS-096)", () => {
   });
 
   it("opening the switcher re-reads the tenants: a new org appears; a failed read keeps the list (096-02)", async () => {
-    const api = signedIn({ "GET /api/v1/billing/usage": usageFor }, { tenants: [PERSONAL] });
+    const api = signedIn({ "GET /api/v1/billing/usage": usageFor, "GET /api/v1/me/dashboard": dashboardFor }, { tenants: [PERSONAL] });
     renderAt("/");
     await screen.findByText(en("usage.left", { n: "1,000" }));
     api.set("GET /api/v1/me/tenants", () => json(200, [PERSONAL, ORG]));
@@ -147,7 +155,7 @@ describe("tenant switching (FR-SYS-096)", () => {
   it("a stored organization the user left falls back to personal with a notice (096-03)", async () => {
     localStorage.setItem("saiflow.pc.tenant.7", "5");
     useTenantChoice.getState().reset();
-    signedIn({ "GET /api/v1/billing/usage": usageFor }, { tenants: [PERSONAL] });
+    signedIn({ "GET /api/v1/billing/usage": usageFor, "GET /api/v1/me/dashboard": dashboardFor }, { tenants: [PERSONAL] });
     renderAt("/");
     expect(await screen.findByText(en("tenant.gone"))).toBeInTheDocument();
     expect(await screen.findByText(en("usage.left", { n: "1,000" }))).toBeInTheDocument();
@@ -162,7 +170,8 @@ describe("an organization that disappears mid-session (Review Focus 4)", () => {
     let gone = false;
     const api = signedIn(
       {
-        "GET /api/v1/billing/usage": (r) => (r.headers.get("X-Tenant-Id") === "5" && gone ? json(404, { code: "not_found" }) : usageFor(r)),
+        "GET /api/v1/billing/usage": usageFor,
+        "GET /api/v1/me/dashboard": (r) => (r.headers.get("X-Tenant-Id") === "5" && gone ? json(404, { code: "not_found" }) : dashboardFor(r)),
         "GET /api/v1/ocr/jobs": () => json(200, { items: [], total: 0, page: 1, page_size: 5 }),
       },
       { tenants: [PERSONAL, ORG] },

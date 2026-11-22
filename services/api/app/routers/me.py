@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +17,7 @@ from app.dependencies import (
 )
 from app.integrations.email import SmtpSender
 from app.schemas.auth import MeResponse
+from app.schemas.dashboard import DashboardOut
 from app.schemas.loose import ensure_text
 from app.schemas.me import (
     EmailChangeRequest,
@@ -83,6 +84,17 @@ async def get_homepage(
     from app.services import homepage_service
 
     return await homepage_service.read(db, ctx)
+
+
+@router.get("/dashboard", operation_id="getDashboard", response_model=DashboardOut)
+async def get_dashboard(
+    request: Request,
+    ctx: Annotated[tenant_access.TenantContext, Depends(get_tenant_context)],
+    principal: Annotated[Principal, Depends(require_registered_user)],
+) -> dict:
+    from app.services import dashboard_service
+
+    return await dashboard_service.read(request.app.state.settings, ctx)
 
 
 @router.put("/homepage", operation_id="setHomepage", response_model=HomepageOut)

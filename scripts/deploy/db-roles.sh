@@ -21,8 +21,14 @@ if [ -z "$value" ]; then
 fi
 [ "${1:-}" = "--check" ] && exit 0
 export DB_MIGRATE_PASSWORD="$value"
+report_value="$(sed -n 's/^REPORT_DB_PASSWORD=//p' "$DEPLOY_DIR/.env" | tail -n 1)"
+case "$report_value" in
+  \"*\") report_value="${report_value#\"}"; report_value="${report_value%\"}" ;;
+  \'*\') report_value="${report_value#\'}"; report_value="${report_value%\'}" ;;
+esac
+export REPORT_DB_PASSWORD="$report_value"
 
 docker compose --project-directory "$DEPLOY_DIR" -f "$DEPLOY_DIR/compose.yaml" \
-  exec -T -e DB_MIGRATE_PASSWORD postgres \
+  exec -T -e DB_MIGRATE_PASSWORD -e REPORT_DB_PASSWORD postgres \
   sh -c 'psql -q -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d saiflow' <"$here/db-roles.sql"
 echo "db-roles: accounts ready"

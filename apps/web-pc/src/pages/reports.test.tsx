@@ -7,7 +7,7 @@ import { formatBangkokDateTime } from "../format";
 import { translate } from "../i18n";
 import type { ReportDetail, ReportSummary } from "../reports/api";
 import { useLanguage } from "../stores/language";
-import { en, renderAt, signedIn, userEvent } from "../test/app";
+import { dashboard, en, renderAt, signedIn, userEvent } from "../test/app";
 import { ORG, PERSONAL, type UsableTenant } from "../test/fixtures";
 import { json } from "../test/mockApi";
 import { useTenantChoice } from "../tenants/useCurrentTenant";
@@ -128,15 +128,15 @@ afterEach(() => {
 });
 
 describe("report homepage (FR-SYS-171)", () => {
-  it("default homepage can retry its usage card without showing fabricated numbers", async () => {
-    const api = inOrg(VIEWER, { [USAGE_ROUTE]: () => json(500, { code: "internal_error" }) });
+  it("default dashboard retries a failed PG read without fabricated numbers", async () => {
+    const api = inOrg(VIEWER, { "GET /api/v1/me/dashboard": () => json(503, { code: "data_source_unavailable" }) });
     renderAt("/");
-    const usage = await screen.findByTestId("usage-card", {}, WAIT);
-    const retry = await within(usage).findByRole("button", { name: en("common.retry") }, WAIT);
-    expect(within(usage).queryByRole("meter")).not.toBeInTheDocument();
-    api.set(USAGE_ROUTE, () => json(200, USAGE));
+    const retry = await screen.findByRole("button", { name: en("common.retry") }, WAIT);
+    expect(screen.queryByTestId("usage-card")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("metric-strip")).not.toBeInTheDocument();
+    api.set("GET /api/v1/me/dashboard", () => json(200, dashboard("organization")));
     await userEvent.click(retry);
-    expect(await within(usage).findByRole("meter", {}, WAIT)).toHaveAttribute("aria-valuenow", "0");
+    expect(await screen.findByRole("meter", {}, WAIT)).toHaveAttribute("aria-valuenow", "0");
   }, LONG);
 
   it.each(["personal", "organization"] as const)("uses the %s built-in dashboard configuration without a marketing flow", async (kind) => {
@@ -144,9 +144,10 @@ describe("report homepage (FR-SYS-171)", () => {
     localStorage.setItem("saiflow.pc.tenant.7", kind === "personal" ? "70" : "5");
     renderAt("/");
     const page = await screen.findByTestId("page-home", {}, WAIT);
-    await within(page).findByRole("heading", { name: en(kind === "personal" ? "rpt.personalHome" : "rpt.organizationHome") }, WAIT);
+    await within(page).findByRole("region", { name: en(kind === "personal" ? "rpt.personalHome" : "rpt.organizationHome") }, WAIT);
     expect(page.querySelector(".pc-home")).toHaveAttribute("data-home-default", kind);
     expect(page.querySelector(".pc-flow")).not.toBeInTheDocument();
+    expect(page.querySelector(".pc-page__heading")).not.toBeInTheDocument();
   }, LONG);
 
   it("does not restore a late homepage preference from the previous tenant", async () => {
@@ -160,23 +161,23 @@ describe("report homepage (FR-SYS-171)", () => {
     renderAt("/");
     await waitFor(() => expect(finish).toBeTypeOf("function"), WAIT);
     act(() => useTenantChoice.getState().choose(PERSONAL.tenant_id));
-    await screen.findByRole("heading", { name: en("rpt.personalHome") }, WAIT);
+    await screen.findByRole("region", { name: en("rpt.personalHome") }, WAIT);
     await act(async () => { finish(json(200, { report_id: 31, default: "organization" })); });
     expect(screen.queryByText("Sales overview")).not.toBeInTheDocument();
     expect(api.count(DATA)).toBe(0);
   }, LONG);
 
-  it("default homepage retries failed job reads rather than showing false empty data", async () => {
-    const api = inOrg(VIEWER, { "GET /api/v1/ocr/jobs": () => json(500, { code: "internal_error" }) });
+  it("does not restore a late dashboard response after switching tenants", async () => {
+    let finish!: (response: Response) => void;
+    inOrg(VIEWER, { "GET /api/v1/me/dashboard": (r) => r.headers.get("X-Tenant-Id") === "5"
+      ? new Promise<Response>((resolve) => { finish = resolve; }) : json(200, dashboard("personal")) });
     renderAt("/");
-    await screen.findByRole("heading", { name: en("rpt.organizationHome") }, WAIT);
-    expect(await screen.findAllByRole("button", { name: en("common.retry") }, WAIT)).not.toHaveLength(0);
-    expect(screen.queryByText(en("home.noTasks"))).not.toBeInTheDocument();
-    expect(screen.queryByTestId("metric-strip")).not.toBeInTheDocument();
-    api.set("GET /api/v1/ocr/jobs", () => json(200, { items: [], total: 0, page: 1, page_size: 5 }));
-    for (const button of screen.getAllByRole("button", { name: en("common.retry") })) await userEvent.click(button);
-    expect(await screen.findByTestId("metric-strip", {}, WAIT)).toBeInTheDocument();
-    expect(await screen.findByText(en("home.noTasks"), {}, WAIT)).toBeInTheDocument();
+    await waitFor(() => expect(finish).toBeTypeOf("function"), WAIT);
+    act(() => useTenantChoice.getState().choose(PERSONAL.tenant_id));
+    await screen.findByRole("region", { name: en("rpt.personalHome") }, WAIT);
+    await act(async () => finish(json(200, { ...dashboard("organization"), counts: { VERIFYING: 999999 } })));
+    expect(screen.queryByText("999,999")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: en("rpt.organizationHome") })).not.toBeInTheDocument();
   }, LONG);
 
   it("retries a custom homepage plan read without discarding its choice", async () => {
@@ -199,7 +200,7 @@ describe("report homepage (FR-SYS-171)", () => {
       [ONE]: () => json(200, detail()), [DATA]: () => json(403, { code: "forbidden" }),
     });
     renderAt("/");
-    expect(await screen.findByRole("heading", { name: en("rpt.organizationHome") }, WAIT)).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: en("rpt.organizationHome") }, WAIT)).toBeInTheDocument();
     expect(api.count("PUT /api/v1/me/homepage")).toBe(0);
   }, LONG);
 
@@ -210,10 +211,12 @@ describe("report homepage (FR-SYS-171)", () => {
     });
     renderAt("/");
     expect(await screen.findByText("Bangkok", {}, WAIT)).toBeInTheDocument();
-    expect(screen.getByTestId("page-home")).toHaveTextContent("Sales overview");
+    expect(screen.getByTestId("page-home")).not.toHaveTextContent("Sales overview");
+    expect(screen.queryByRole("region", { name: en("rpt.periodBar") })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: en("rpt.refresh") })).not.toBeInTheDocument();
     const home = within(screen.getByRole("menu")).getByRole("link", { name: en("nav.home") });
     expect(home.closest("li")).toHaveClass("ant-menu-item-selected");
-    expect(screen.getByRole("button", { name: en("rpt.resetHome") })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: en("rpt.resetHome") })).not.toBeInTheDocument();
   }, LONG);
 
   it("an ordinary preference read failure offers retry, not a default dashboard", async () => {
@@ -223,7 +226,7 @@ describe("report homepage (FR-SYS-171)", () => {
     expect(screen.queryByTestId("usage-card")).not.toBeInTheDocument();
     api.set("GET /api/v1/me/homepage", () => json(200, { report_id: null, default: "organization" }));
     await userEvent.click(screen.getByRole("button", { name: en("common.retry") }));
-    expect(await screen.findByRole("heading", { name: en("rpt.organizationHome") }, WAIT)).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: en("rpt.organizationHome") }, WAIT)).toBeInTheDocument();
     expect(await screen.findByTestId("usage-card", {}, WAIT)).toBeInTheDocument();
   }, LONG);
 
@@ -233,11 +236,11 @@ describe("report homepage (FR-SYS-171)", () => {
       [ONE]: () => json(404, { code: "not_found" }),
     });
     renderAt("/");
-    expect(await screen.findByRole("heading", { name: en("rpt.organizationHome") }, WAIT)).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: en("rpt.organizationHome") }, WAIT)).toBeInTheDocument();
     expect(api.count("PUT /api/v1/me/homepage")).toBe(0);
   }, LONG);
 
-  it("sets a readable report as home and can reset it at root", async () => {
+  it("sets and resets a readable homepage from its normal report viewer", async () => {
     let choice: number | null = null;
     const api = inOrg(VIEWER, {
       "GET /api/v1/me/homepage": () => json(200, { report_id: choice, default: "organization" }),
@@ -245,7 +248,7 @@ describe("report homepage (FR-SYS-171)", () => {
         choice = (await r.json()).report_id;
         return json(200, { report_id: choice, default: "organization" });
       },
-      [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()),
+      [LIST]: () => json(200, { items: [summary()] }), [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()),
     });
     renderAt("/report-view/31");
     await screen.findByText("Bangkok", {}, WAIT);
@@ -253,8 +256,11 @@ describe("report homepage (FR-SYS-171)", () => {
     await waitFor(async () => expect(await api.bodies("PUT /api/v1/me/homepage")).toEqual([{ report_id: 31 }]));
     await userEvent.click(within(screen.getByRole("menu")).getByRole("link", { name: en("nav.home") }));
     await screen.findByTestId("page-home", {}, WAIT);
-    await userEvent.click(screen.getByRole("button", { name: en("rpt.resetHome") }));
-    expect(await screen.findByRole("heading", { name: en("rpt.organizationHome") }, WAIT)).toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole("menu")).getByRole("link", { name: en("nav.reportView") }));
+    await userEvent.click(await screen.findByRole("link", { name: /Sales overview/ }, WAIT));
+    await userEvent.click(await screen.findByRole("button", { name: en("rpt.resetHome") }, WAIT));
+    await userEvent.click(within(screen.getByRole("menu")).getByRole("link", { name: en("nav.home") }));
+    expect(await screen.findByRole("region", { name: en("rpt.organizationHome") }, WAIT)).toBeInTheDocument();
     expect(await api.bodies("PUT /api/v1/me/homepage")).toEqual([{ report_id: 31 }, { report_id: null }]);
   }, LONG);
 });
@@ -816,8 +822,7 @@ describe("PC report presentation (FR-SYS-161, -163, -164)", () => {
   it("ignores a departed component's refusal even after the same publication is reopened (164-03)", async () => {
     let finishOld!: (response: Response) => void;
     const api = inOrg(VIEWER, {
-      [LIST]: () => json(200, { items: [summary()] }),
-      [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()),
+      [LIST]: () => json(200, { items: [summary()] }), [ONE]: () => json(200, detail()), [DATA]: () => json(200, RESULT()),
     });
     renderAt("/report-view/31");
     await screen.findByRole("rowheader", { name: "Bangkok" }, WAIT);
@@ -941,6 +946,23 @@ describe("PC report presentation (FR-SYS-161, -163, -164)", () => {
 });
 
 describe("published report view (FR-REPORT-002, -010, -015, -016)", () => {
+  it("pages raw records without changing the publication (FR-REPORT-022)", async () => {
+    const api = inOrg(VIEWER, {
+      [ONE]: () => json(200, detail()),
+      [DATA]: async (r) => {
+        const body = await r.json();
+        const page = body.pages?.c1 ?? 1;
+        return json(200, RESULT({ cards: [{ card_id: "c1", status: "ok", rows: [], table: { columns: [{ key: "item", label: "Item", type: "string" }], rows: [{ item: page === 1 ? "First item" : "Second item" }], page, page_size: 5, total: 6 } }] }));
+      },
+    });
+    renderAt("/reports/31");
+    expect(await screen.findByText("First item", {}, WAIT)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Next page" }));
+    expect(await screen.findByText("Second item", {}, WAIT)).toBeInTheDocument();
+    expect(await api.bodies(DATA)).toEqual([{ period: null, refresh: false }, { period: { from: "2026-01-01", to: "2026-12-31" }, refresh: false, pages: { c1: 2 } }]);
+    expect(api.count("PUT /api/v1/reports/31")).toBe(0);
+  }, LONG);
+
   it(
     "queries on open and shows the period, scope, source and counts",
     async () => {
@@ -1375,7 +1397,44 @@ describe("published report view (FR-REPORT-002, -010, -015, -016)", () => {
 describe("report designer page (FR-REPORT-014, FR-SYS-141)", () => {
   const draftDetail = (over: Partial<ReportDetail> = {}) =>
     detail({ can_manage: true, status: "changed", draft: CONFIG, revision: 4, ...over });
-  const catalog = { "GET /api/v1/reports/catalog/templates": () => json(200, { items: [] }) };
+  const catalog = { "GET /api/v1/reports/catalog/templates": () => json(200, { items: [] }), "GET /api/v1/data-sources": () => json(200, { items: [] }) };
+
+  it("pages the raw preview without editing the draft (FR-REPORT-022)", async () => {
+    const api = inOrg(DESIGNER, {
+      ...catalog, [ONE]: () => json(200, draftDetail()),
+      "POST /api/v1/reports/31/preview": async (r) => {
+        const body = await r.json();
+        const page = body.pages?.c1 ?? 1;
+        return json(200, RESULT({ report_version: null, cards: [{ card_id: "c1", status: "ok", rows: [], table: { columns: [{ key: "item", label: "Item", type: "string" }], rows: [{ item: page === 1 ? "First item" : "Second item" }], page, page_size: 5, total: 6 } }] }));
+      },
+    });
+    renderAt("/reports/31/design");
+    await userEvent.click(await screen.findByRole("button", { name: en("rpt.preview") }, WAIT));
+    expect(await screen.findByText("First item", {}, WAIT)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Next page" }));
+    expect(await screen.findByText("Second item", {}, WAIT)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: en("rpt.saveDraft") })).toBeDisabled();
+    const bodies = await api.bodies("POST /api/v1/reports/31/preview");
+    expect(bodies).toEqual([{ config: CONFIG, period: null }, { config: CONFIG, period: { from: "2026-01-01", to: "2026-12-31" }, pages: { c1: 2 } }]);
+  }, LONG);
+
+  it("binds the SQL catalog and discovers raw table fields (FR-REPORT-023)", async () => {
+    const api = inOrg({ ...DESIGNER, permissions: ["report_manage", "data_browse"] }, {
+      ...catalog, [ONE]: () => json(200, draftDetail()),
+      "GET /api/v1/data-sources": () => json(200, { items: [{ id: "postgres:1", name: "ERP", kind: "postgresql", enabled: true }] }),
+      "POST /api/v1/data-sources/postgres%3A1/query": () => json(200, { columns: [{ key: "item", label: "Item", type: "string" }], rows: [], page: 1, page_size: 20, total: 0 }),
+    });
+    renderAt("/reports/31/design");
+    await userEvent.click(await screen.findByRole("button", { name: "Sales by branch" }, WAIT));
+    await userEvent.click(screen.getByRole("combobox", { name: "Data source" }));
+    await userEvent.click(await screen.findByText("Relational database", {}, WAIT));
+    await userEvent.click(screen.getByRole("combobox", { name: "Database" }));
+    await userEvent.click(await screen.findByText("ERP · PostgreSQL", {}, WAIT));
+    await userEvent.type(screen.getByLabelText("SQL"), "SELECT item FROM inventory");
+    await userEvent.click(screen.getByRole("button", { name: "Run and discover fields" }));
+    expect(await screen.findByText("Result fields discovered: 1", {}, WAIT)).toBeInTheDocument();
+    expect(await api.bodies("POST /api/v1/data-sources/postgres%3A1/query")).toEqual([{ sql: "SELECT item FROM inventory", page: 1, page_size: 20 }]);
+  }, LONG);
 
   it(
     "saves the renamed draft with its revision",

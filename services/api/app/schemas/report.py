@@ -1,9 +1,13 @@
 """Organization report DTOs (template-report-management contract §5/§6)."""
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.data_source import TableResult
+
+PageNumber = Annotated[int, Field(ge=1, le=10000, strict=True)]
 
 
 class _In(BaseModel):
@@ -44,11 +48,15 @@ class PeriodIn(_In):
 class PreviewIn(_In):
     config: Any = None
     period: PeriodIn | None = None
+    pages: dict[str, PageNumber] = Field(default_factory=dict, max_length=30)
 
 
 class DataIn(_In):
+    model_config = ConfigDict(extra="forbid")
+
     period: PeriodIn | None = None
     refresh: bool = False  # a manual refresh (audited as report.refresh)
+    pages: dict[str, PageNumber] = Field(default_factory=dict, max_length=30)
 
 
 class CsvTicketIn(_In):
@@ -201,11 +209,21 @@ class QueryCard(BaseModel):
     card_id: str | None
     status: Literal["ok", "error", "not_applicable", "empty"]
     error_code: (
-        Literal["query_timeout", "group_limit", "mixed_units", "negative_in_pie", "invalid_config"]
+        Literal[
+            "query_timeout",
+            "group_limit",
+            "mixed_units",
+            "negative_in_pie",
+            "invalid_config",
+            "row_limit",
+            "source_unavailable",
+            "source_fields_changed",
+        ]
         | None
     )
     period_applied: bool
     rows: list[QueryRow]
+    table: TableResult | None = None
     diagnostics: Diagnostics
 
 

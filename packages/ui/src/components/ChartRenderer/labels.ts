@@ -9,6 +9,9 @@ export interface ChartLabels {
   error: string;
   errors: Partial<Record<CardErrorCode | string, string>>;
   retry: string;
+  previousPage: string;
+  nextPage: string;
+  pagination: (page: number, pages: number, total: number) => string;
   /** Label of a null dimension / series value. */
   unknown: string;
   value: string;
@@ -36,8 +39,14 @@ export const DEFAULT_CHART_LABELS: ChartLabels = {
     mixed_units: "Values use different units or currencies. Group by the unit field.",
     negative_in_pie: "Pie and donut charts cannot show negative values. Use a bar or line chart.",
     invalid_config: "This card is not configured correctly.",
+    row_limit: "Too many records or bytes. Narrow the query or filters.",
+    source_unavailable: "The data source is unavailable or you do not have access.",
+    source_fields_changed: "The result fields changed. Rediscover the fields and publish again.",
   },
   retry: "Retry",
+  previousPage: "Previous page",
+  nextPage: "Next page",
+  pagination: (page, pages, total) => `${page} / ${pages} · ${total} records`,
   unknown: "Unknown",
   value: "Value",
   count: "Count",

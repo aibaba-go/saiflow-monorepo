@@ -16,6 +16,7 @@ type Handler = Parameters<typeof mockApi>[0][string];
 export function signedIn(routes: Record<string, Handler>) {
   return mockApi({
     "GET /api/v1/admin/me": () => json(200, { admin_id: 1, username: "ops" }),
+    "GET /api/v1/admin/data-sources": () => json(200, { items: [] }),
     ...routes,
   });
 }

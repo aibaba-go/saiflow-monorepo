@@ -57,7 +57,41 @@ export interface ReportCardStyle {
   } | null;
 }
 
+export interface DesignerSource {
+  id: string;
+  name: string;
+  kind: string;
+  enabled?: boolean;
+}
+
+export interface SourceRelation {
+  schema: string;
+  name: string;
+  kind: "table" | "view";
+}
+
+export interface DataColumn {
+  key: string;
+  label: string;
+  type: string;
+}
+
+export interface TableResult {
+  columns: DataColumn[];
+  rows: Record<string, string | null>[];
+  page: number;
+  page_size: number;
+  total: number;
+}
+
 export interface ReportCardData {
+  source_id?: string | null;
+  sql?: string | null;
+  query_mode?: "sql" | "table";
+  relation?: { schema: string; name: string } | null;
+  result_fields?: DataColumn[] | null;
+  display_fields?: { path: string; label: string }[] | null;
+  page_size?: number;
   template_id?: number | null;
   template_version_ids?: number[] | null;
   grain?: "document" | "table" | null;
@@ -99,7 +133,10 @@ export type CardErrorCode =
   | "group_limit"
   | "mixed_units"
   | "negative_in_pie"
-  | "invalid_config";
+  | "invalid_config"
+  | "row_limit"
+  | "source_unavailable"
+  | "source_fields_changed";
 
 export interface CardResultRow {
   dimension: string | null;
@@ -137,6 +174,7 @@ export interface CardResult {
   /** Whether the page period filtered this card (false = no date field: "not applicable"). */
   period_applied?: boolean;
   rows: CardResultRow[];
+  table?: TableResult | null;
   diagnostics?: CardDiagnostics | null;
 }
 

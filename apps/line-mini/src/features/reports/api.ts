@@ -32,8 +32,8 @@ export function useReportContentPolicy(wanted: boolean) {
 }
 
 export const getReport = (id: number) => call(api.GET("/api/v1/reports/{report_id}", rid(id)));
-export const reportData = (id: number, period: Period | null, refresh: boolean) =>
-  call(api.POST("/api/v1/reports/{report_id}/data", { ...rid(id), body: { period, refresh } })) as Promise<QueryResult>;
+export const reportData = (id: number, period: Period | null, refresh: boolean, pages?: Record<string, number>) =>
+  call(api.POST("/api/v1/reports/{report_id}/data", { ...rid(id), body: { period, refresh, ...(pages && Object.keys(pages).length ? { pages } : {}) } })) as Promise<QueryResult>;
 
 /** Only published reports belong in LINE: a manager's list also has drafts. */
 export function useReports() {

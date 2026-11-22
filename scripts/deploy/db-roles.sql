@@ -48,3 +48,33 @@ BEGIN
 END
 $$;
 COMMIT;
+
+\getenv report_password REPORT_DB_PASSWORD
+SELECT coalesce(:'report_password', '') = '' AS missing_report_password \gset
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'saiflow_v3_reporter') THEN
+    CREATE ROLE saiflow_v3_reporter NOLOGIN;
+  END IF;
+END $$;
+ALTER ROLE saiflow_v3_reporter NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+ALTER ROLE saiflow_v3_reporter SET default_transaction_read_only = on;
+ALTER ROLE saiflow_v3_reporter SET statement_timeout = '10s';
+ALTER ROLE saiflow_v3_reporter SET lock_timeout = '1s';
+\if :missing_report_password
+  ALTER ROLE saiflow_v3_reporter NOLOGIN;
+\else
+  ALTER ROLE saiflow_v3_reporter LOGIN PASSWORD :'report_password';
+\endif
+GRANT CONNECT ON DATABASE saiflow TO saiflow_v3_reporter;
+REVOKE CREATE ON DATABASE saiflow FROM saiflow_v3_reporter;
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM pg_namespace WHERE nspname = 'saiflow_v3') THEN
+    REVOKE ALL ON SCHEMA saiflow_v3 FROM saiflow_v3_reporter;
+    REVOKE ALL ON ALL TABLES IN SCHEMA saiflow_v3 FROM saiflow_v3_reporter;
+    REVOKE ALL ON ALL SEQUENCES IN SCHEMA saiflow_v3 FROM saiflow_v3_reporter;
+  END IF;
+  IF EXISTS (SELECT FROM pg_namespace WHERE nspname = 'reporting') THEN
+    GRANT USAGE ON SCHEMA reporting TO saiflow_v3_reporter;
+    GRANT SELECT ON ALL TABLES IN SCHEMA reporting TO saiflow_v3_reporter;
+  END IF;
+END $$;

@@ -5,7 +5,7 @@ import { ChartRenderer } from "../ChartRenderer/ChartRenderer";
 import type { ChartLabels } from "../ChartRenderer/labels";
 import type { ReportGridLabels } from "../ReportGrid/CardFrame";
 import { ReportGrid } from "../ReportGrid/ReportGrid";
-import { CHART_TYPES, REPORT_PALETTES, type ChartType, type QueryResult, type ReportCard, type ReportCardData, type ReportCardStyle, type ReportConfig } from "../reportTypes";
+import { CHART_TYPES, REPORT_PALETTES, type ChartType, type DesignerSource, type QueryResult, type ReportCard, type ReportCardData, type ReportCardStyle, type ReportConfig } from "../reportTypes";
 import { mergeReportDesignerLabels, type ReportDesignerLabels } from "./labels";
 import { localizeReportError } from "./messages";
 import {
@@ -13,6 +13,7 @@ import {
   AGGS,
   applyLayouts,
   bindTemplate,
+  defaultCardData,
   changeType,
   fieldOptions,
   groupProblems,
@@ -35,6 +36,7 @@ import {
 import "../components.css";
 import "./ReportDesigner.css";
 import { CardAppearance, ContentPanel, FiltersEditor, PageAppearance, PageFilters, filterFields, v2Labels } from "./V2Panels";
+import { RawFields, SqlBinding, sqlLabels, type SourceQuery, type SourceTables } from "./DataPanels";
 
 export interface ReportDesignerProps {
   /** The page configuration being designed (a draft may be incomplete). */
@@ -42,6 +44,10 @@ export interface ReportDesignerProps {
   onChange?: (next: ReportConfig) => void;
   /** Templates a card may bind (the report catalog). */
   templates: readonly DesignerTemplate[];
+  sources?: readonly DesignerSource[];
+  querySource?: SourceQuery;
+  loadTables?: SourceTables;
+  onPreviewPage?: (cardId: string, page: number) => void;
   /** Grains and fields of the chosen versions of a template; cached per template + versions. */
   loadFields: (templateId: number, versionIds: number[]) => Promise<DesignerFields>;
   /** The latest preview (real data in the caller's scope, or synthetic for admin). */
@@ -116,6 +122,10 @@ function useCardFields(
       },
     );
   }, [key, tick, cache, loadFields, templateId, ids]);
+  if (data?.source_id?.startsWith("postgres:")) return {
+    entry: data.result_fields?.length ? { status: "ok", data: { grains: [], fields: data.result_fields.map((f) => ({ path: f.key, name: f.label, type: f.type, grain: "document", compatible: true, versions: [] })) } } : null,
+    retry: () => {},
+  };
   return {
     entry: key ? (cache.get(key) ?? { status: "loading" }) : null,
     retry: () => {
@@ -203,6 +213,9 @@ function DataTab({
   card,
   ctx,
   templates,
+  sources,
+  querySource,
+  loadTables,
   fields,
   pagePaths,
   onCard,
@@ -210,12 +223,17 @@ function DataTab({
   card: ReportCard;
   ctx: Ctx;
   templates: readonly DesignerTemplate[];
+  sources: readonly DesignerSource[];
+  querySource?: SourceQuery;
+  loadTables?: SourceTables;
   fields: { entry: FieldsEntry | null; retry: () => void };
   pagePaths: string[];
   onCard: (next: ReportCard) => void;
 }) {
   const l = ctx.labels;
   const data = card.data ?? {};
+  const sql = !!data.query_mode || (data.source_id?.startsWith("postgres:") ?? false);
+  const sl = sqlLabels(ctx.lang);
   const set = (patch: Partial<ReportCardData>) => {
     const next = { ...data, ...patch };
     const confirmed = new Set([...usedPaths(next), ...pagePaths]);
@@ -252,6 +270,19 @@ function DataTab({
 
   return (
     <div className="sf-rd-tab">
+      <Field ctx={ctx} label={sl.source} paths={["data.source_id"]}>
+        <Select aria-label={sl.source} value={sql ? "database" : "template"} disabled={ctx.readOnly} virtual={false}
+          options={[{ value: "template", label: sl.template }, { value: "database", label: sl.relational }]}
+          onChange={(kind) => onCard({ ...card, data: kind === "template" ? defaultCardData(card.type) : { query_mode: "sql", sql: "", result_fields: [], display_fields: [], page_size: 20 } })} style={{ width: "100%" }} />
+      </Field>
+      {sql ? <>
+        <Field ctx={ctx} label={sl.database} paths={["data.source_id"]}>
+          <Select aria-label={sl.database} virtual={false} showSearch optionFilterProp="label" disabled={ctx.readOnly} value={data.source_id ?? undefined}
+            options={sources.filter((s) => s.kind === "postgresql" && s.enabled !== false && s.id.startsWith("postgres:")).map((s) => ({ value: s.id, label: `${s.name} · PostgreSQL` }))}
+            onChange={(source_id: string) => onCard({ ...card, data: { source_id, query_mode: data.query_mode ?? "sql", sql: "", result_fields: [], display_fields: [], page_size: data.page_size ?? 20 } })} />
+        </Field>
+        <SqlBinding key={`${card.id}:${data.source_id}`} card={card} onCard={onCard} querySource={querySource} loadTables={loadTables} lang={ctx.lang} readOnly={ctx.readOnly} />
+      </> : <>
       <Field ctx={ctx} label={l.template} htmlFor={ctx.id("template")} paths={["data.template_id"]}>
         <Select<number>
           id={ctx.id("template")}
@@ -293,6 +324,7 @@ function DataTab({
           />
         </Field>
       )}
+      </>}
       {fields.entry?.status === "loading" && <Spin size="small" tip={l.loadingFields}><div className="sf-rd-spin" /></Spin>}
       {fields.entry?.status === "error" && (
         <Alert
@@ -308,7 +340,7 @@ function DataTab({
       )}
       {catalog && (
         <>
-          <Field ctx={ctx} label={l.grain} htmlFor={ctx.id("grain")} paths={["data.grain", "data.table_key"]}>
+          {!sql && <Field ctx={ctx} label={l.grain} htmlFor={ctx.id("grain")} paths={["data.grain", "data.table_key"]}>
             <Select<string>
               id={ctx.id("grain")}
               aria-label={l.grain}
@@ -326,9 +358,9 @@ function DataTab({
               onChange={(v) => onCard(v === "document" ? setGrain(card, "document", null, all) : setGrain(card, "table", v.slice(6), all))}
               style={{ width: "100%" }}
             />
-          </Field>
+          </Field>}
 
-          <fieldset className="sf-rd-group">
+          {card.type === "table" ? <RawFields card={card} fields={all} onCard={onCard} typeLabel={(t) => ctx.labels.fieldTypes[t] ?? t} lang={ctx.lang} readOnly={ctx.readOnly} /> : <fieldset className="sf-rd-group">
             <legend>{l.measure}</legend>
             <Field ctx={ctx} label={l.agg} htmlFor={ctx.id("agg")} paths={["data.measure.agg", "data.measure"]}>
               <Select<Agg>
@@ -374,9 +406,9 @@ function DataTab({
                 />
               </Field>
             )}
-          </fieldset>
+          </fieldset>}
 
-          {!isMetric && (
+          {!isMetric && card.type !== "table" && (
             <fieldset className="sf-rd-group">
               <legend>{l.dimension}</legend>
               <Field ctx={ctx} label={l.dimension} htmlFor={ctx.id("dimkind")} paths={["data.dimension.kind", "data.dimension"]}>
@@ -386,7 +418,7 @@ function DataTab({
                   disabled={ctx.readOnly}
                   value={kind}
                   optionType="button"
-                  options={(card.type === "table" ? (["category", "date", "none"] as const) : (["category", "date"] as const)).map((k) => ({
+                  options={(["category", "date"] as const).map((k) => ({
                     value: k,
                     label: l.dimensionKinds[k],
                   }))}
@@ -466,7 +498,7 @@ function DataTab({
             />
           </Field>
 
-          {agg !== "count" && (
+          {card.type !== "table" && agg !== "count" && (
             <fieldset className="sf-rd-group">
               <legend>{l.unit}</legend>
               <Field ctx={ctx} label={l.unit} htmlFor={ctx.id("unitmode")} paths={["data.unit.mode", "data.unit"]}>
@@ -636,23 +668,31 @@ function CardPanel({
   card,
   ctx,
   templates,
+  sources,
+  querySource,
+  loadTables,
   cache,
   loadFields,
   unplaced,
   onCard,
   onRemove,
   onUpload,
+  embedOrigins,
   pagePaths,
 }: {
   card: ReportCard;
   ctx: Ctx;
   templates: readonly DesignerTemplate[];
+  sources: readonly DesignerSource[];
+  querySource?: SourceQuery;
+  loadTables?: SourceTables;
   cache: Map<string, FieldsEntry>;
   loadFields: ReportDesignerProps["loadFields"];
   unplaced: string[];
   onCard: (next: ReportCard) => void;
   onRemove: () => void;
   onUpload?: ReportDesignerProps["onUpload"];
+  embedOrigins?: readonly string[];
   pagePaths: string[];
 }) {
   const l = ctx.labels;
@@ -697,7 +737,7 @@ function CardPanel({
         activeKey={tab}
         onChange={setTab}
         items={[
-          { key: "data", label: card.type === "image" || card.type === "html" ? v2Labels(ctx.lang).content : l.tabData, children: card.type === "image" || card.type === "html" ? <ContentPanel card={card} onCard={onCard} onUpload={onUpload} lang={ctx.lang} readOnly={ctx.readOnly} /> : <DataTab card={card} ctx={ctx} templates={templates} fields={fields} pagePaths={pagePaths} onCard={onCard} /> },
+          { key: "data", label: card.type === "image" || card.type === "html" ? v2Labels(ctx.lang).content : l.tabData, children: card.type === "image" || card.type === "html" ? <ContentPanel card={card} onCard={onCard} onUpload={onUpload} embedOrigins={embedOrigins} lang={ctx.lang} readOnly={ctx.readOnly} /> : <DataTab card={card} ctx={ctx} templates={templates} sources={sources} querySource={querySource} loadTables={loadTables} fields={fields} pagePaths={pagePaths} onCard={onCard} /> },
           ...(card.type === "image" || card.type === "html" ? [] : [{ key: "filters", label: v2Labels(ctx.lang).filters, children: <FiltersEditor group={card.data?.filters} fields={filterFields(fields.entry?.status === "ok" ? fields.entry.data.fields : [], card)} lang={ctx.lang} readOnly={ctx.readOnly} onChange={(filters) => onCard({ ...card, data: { ...card.data, filters } })} /> }]),
           { key: "style", label: l.tabStyle, children: <><CardAppearance card={card} onCard={onCard} lang={ctx.lang} readOnly={ctx.readOnly} />{card.type !== "image" && card.type !== "html" && <StyleTab card={card} ctx={ctx} onCard={onCard} />}</> },
         ]}
@@ -776,6 +816,10 @@ export function ReportDesigner({
   value,
   onChange,
   templates,
+  sources = [],
+  querySource,
+  loadTables,
+  onPreviewPage,
   loadFields,
   preview,
   previewLoading,
@@ -853,7 +897,7 @@ export function ReportDesigner({
     return (
       <div className="sf-rd-card">
         {badge && <div className="sf-rd-card__corner">{badge}</div>}
-        <ChartRenderer card={{ ...c, title: titleOf(c) }} result={result} loading={previewLoading} labels={chartLabels} locale={locale} headingLevel={4} loadAsset={loadAsset} embedOrigins={embedOrigins} palette={REPORT_PALETTES[value.appearance?.theme ?? "brand"]} />
+        <ChartRenderer card={{ ...c, title: titleOf(c) }} result={result} onPageChange={onPreviewPage && !previewLoading && !previewStale ? (page) => onPreviewPage(c.id, page) : undefined} loading={previewLoading} labels={chartLabels} locale={locale} headingLevel={4} loadAsset={loadAsset} embedOrigins={embedOrigins} interactive={false} palette={REPORT_PALETTES[value.appearance?.theme ?? "brand"]} />
       </div>
     );
   };
@@ -946,10 +990,14 @@ export function ReportDesigner({
                 card={card}
                 ctx={ctx}
                 templates={templates}
+                sources={sources}
+                querySource={querySource}
+                loadTables={loadTables}
                 cache={cache}
                 loadFields={loadFields}
                 unplaced={unplaced}
                 onUpload={onUpload}
+                embedOrigins={embedOrigins}
                 pagePaths={Object.values(value.filters?.targets[card.id] ?? {}).filter(Boolean)}
                 onCard={(next) => emit(updateCard(value, card.id, () => next))}
                 onRemove={() => {

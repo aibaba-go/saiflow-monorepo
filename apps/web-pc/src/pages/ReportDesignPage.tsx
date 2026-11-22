@@ -1,8 +1,8 @@
 import type { QueryResult, ReportConfig } from "@saiflow/ui";
 import { ReportDesigner, type ReportProblem } from "@saiflow/ui/report-designer";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, App, Button, Input, Result, Space, Spin, Typography } from "antd";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { ConfirmButton } from "../components/ConfirmButton";
@@ -27,6 +27,7 @@ import {
   useReportContentPolicy,
   type ReportDetail,
 } from "../reports/api";
+import { dataSources } from "../reports/dataSources";
 import { ReportGate, ReportStatusTag, useReportAccess } from "../reports/common";
 import { useReportLabels } from "../reports/labels";
 import { ApiError } from "../services/errors";
@@ -63,14 +64,20 @@ function Designer({ detail, reload }: { detail: ReportDetail; reload: () => Prom
   const labels = useReportLabels();
   const key = ["report", tenant?.tenant_id, detail.id];
   const catalog = useCatalog(detail.id, true);
+  const sources = useQuery({ queryKey: ["data-sources", tenant?.tenant_id], queryFn: ({ signal }) => dataSources.list(signal) });
+  const querySource = useCallback((id: string, sql: string, signal: AbortSignal) => dataSources.query(id, sql, 1, signal), []);
+  const loadTables = useCallback(async (id: string, signal: AbortSignal) => (await dataSources.tables!(id, signal)).items, []);
 
   const serverConfig = useMemo(() => configOf(detail.draft), [detail.draft]);
   const [edit, setEdit] = useState<Edit | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [judged, setJudged] = useState<Judged | null>(null);
-  const [preview, setPreview] = useState<{ config: ReportConfig; result: QueryResult } | null>(null);
+  const [preview, setPreview] = useState<{ config: ReportConfig; result: QueryResult; pages?: Record<string, number> } | null>(null);
+  const previewRequest = useRef<AbortController | null>(null);
+  useLayoutEffect(() => () => previewRequest.current?.abort(), []);
 
   const value = edit?.config ?? serverConfig;
+  useLayoutEffect(() => { previewRequest.current?.abort(); }, [value, detail.revision]);
   const name = edit?.name ?? detail.name;
   const nameOk = name.trim().length > 0 && name.trim().length <= MAX_NAME;
   const dirty = edit !== null && !(edit.name === detail.name && sameJson(edit.config, serverConfig));
@@ -146,12 +153,17 @@ function Designer({ detail, reload }: { detail: ReportDetail; reload: () => Prom
     });
 
   // the draft on screen, on the designer's own data scope (FR-REPORT-005)
-  const runPreview = useSubmit(async () => {
+  const runPreview = useSubmit(async (pages?: Record<string, number>, period: QueryResult["period"] | null = null) => {
     setProblem(null);
     const config = value;
+    previewRequest.current?.abort();
+    const controller = new AbortController();
+    previewRequest.current = controller;
     try {
-      setPreview({ config, result: await previewReport(detail.id, config, null) });
+      const result = await previewReport(detail.id, config, period, pages, controller.signal);
+      if (!controller.signal.aborted) setPreview({ config, result, pages });
     } catch (e) {
+      if (controller.signal.aborted) return;
       const errors = reportErrors(e);
       if (errors.length) setJudged({ config, errors });
       setProblem({ kind: "error", error: e });
@@ -248,17 +260,22 @@ function Designer({ detail, reload }: { detail: ReportDetail; reload: () => Prom
         </Typography.Text>
       </section>
       <ErrorText error={catalog.error} />
+      <ErrorText error={sources.error} />
       <section className="pc-panel" aria-label={t("rpt.designer")}>
         <ReportDesigner
           value={value}
           onChange={(next) => setEdit((e) => ({ ...start(e), config: next }))}
           templates={catalog.data ?? []}
+          sources={sources.data?.items ?? []}
+          querySource={querySource}
+          loadTables={loadTables}
           loadFields={loadFields}
           loadAsset={loadAsset}
           onUpload={uploadReportAsset}
           embedOrigins={contentPolicy.data?.origins}
           preview={preview?.result ?? null}
           previewLoading={runPreview.pending}
+          onPreviewPage={preview && !runPreview.pending && sameJson(preview.config, value) ? (id, page) => void runPreview.run({ ...preview.pages, [id]: page }, preview.result.period) : undefined}
           previewStale={preview !== null && !sameJson(preview.config, value)}
           errors={shown.errors}
           errorsStale={errorsStale}
@@ -284,7 +301,7 @@ function DesignLoader() {
     return <ErrorText error={report.error} />;
   }
   if (!report.data.can_manage) return <Result status="403" title={t("rpt.noAccess")} subTitle={t("rpt.noManage")} />;
-  return <Designer detail={report.data} reload={() => report.refetch()} />;
+  return <Designer key={`${report.data.tenant_id}:${report.data.id}`} detail={report.data} reload={() => report.refetch()} />;
 }
 
 /** /reports/:id/design: the draft of one report, with save, preview, publish (FR-REPORT-014,

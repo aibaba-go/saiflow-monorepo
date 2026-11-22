@@ -187,7 +187,7 @@ def _iso(parts: str) -> str:
     )
 
 
-def _filter_ctes(spec: CardSpec, params: dict[str, Any]) -> list[str]:
+def _filter_ctes(spec: CardSpec, params: dict[str, Any], *, ordinal: bool = False) -> list[str]:
     if not spec.filters:
         return []
     rules = [r for group in spec.filters for r in group.rules]
@@ -273,7 +273,9 @@ def _filter_ctes(spec: CardSpec, params: dict[str, Any]) -> list[str]:
         stage("filter_state", "filter_text", states),
         stage("filter_dates", "filter_state", dates),
         stage("filter_values", "filter_dates", values),
-        "filtered_items AS (SELECT f.job_id, f.doc, f.row, f.kind FROM filter_values f WHERE "
+        "filtered_items AS (SELECT f.job_id, f.doc, f.row, f.kind"
+        + (", f.ordinal" if ordinal else "")
+        + " FROM filter_values f WHERE "
         + " AND ".join(conditions)
         + " OFFSET 0)",
     ]
@@ -537,6 +539,131 @@ def build(
         f"ORDER BY {order}"
     )
     return CardQuery(sql, params)
+
+
+def build_table(
+    spec: CardSpec,
+    *,
+    tenant_id: int,
+    scope_user_id: int | None,
+    period: tuple[date, date] | None,
+    page: int,
+    export_all: bool,
+) -> CardQuery:
+    params = {
+        **PATTERNS,
+        "tenant_id": tenant_id,
+        "version_ids": list(spec.version_ids),
+        "page_offset": 0 if export_all else (page - 1) * spec.page_size,
+        "page_limit": 50001 if export_all else spec.page_size,
+    }
+    scope = ""
+    if scope_user_id is not None:
+        scope = " AND j.created_by_user_id = :scope_user_id"
+        params["scope_user_id"] = scope_user_id
+    base = (
+        "base AS MATERIALIZED (SELECT j.id AS job_id, CAST(r.structured AS jsonb) AS doc "
+        "FROM ocr_jobs j "
+        "JOIN result_versions r ON r.id = j.confirmed_version_id AND r.job_id = j.id "
+        "JOIN template_mappings m ON m.id = r.mapping_id AND m.job_id = j.id "
+        "WHERE j.tenant_id = :tenant_id AND j.review_status = 'CONFIRMED' "
+        "AND j.official_at IS NOT NULL "
+        f"AND m.template_version_id = ANY(CAST(:version_ids AS bigint[])){scope})"
+    )
+    if spec.table is not None:
+        params["table_path"] = list(spec.table)
+        items = (
+            "items AS (SELECT b.job_id, b.doc, e.value AS row, e.ordinality AS ordinal, "
+            "CASE WHEN jsonb_typeof(e.value) = 'object' THEN 'row' ELSE 'bad_row' END AS kind "
+            "FROM base b CROSS JOIN LATERAL jsonb_array_elements("
+            "CASE WHEN jsonb_typeof(b.doc #> CAST(:table_path AS text[])) = 'array' "
+            "THEN b.doc #> CAST(:table_path AS text[]) ELSE CAST('[]' AS jsonb) END) "
+            "WITH ORDINALITY AS e(value, ordinality))"
+        )
+    else:
+        items = (
+            "items AS (SELECT b.job_id, b.doc, CAST(NULL AS jsonb) AS row, "
+            "1 AS ordinal, 'row' AS kind FROM base b)"
+        )
+    ctes = [base, items]
+    filters = _filter_ctes(spec, params, ordinal=True)
+    ctes.extend(filters)
+    source = "filtered_items" if filters else "items"
+    if period is not None and spec.period_slot is not None:
+        slot = spec.period_slot
+        if slot.source == "header":
+            params["period_path"] = list(slot.keys)
+            value = "i.doc #> CAST(:period_path AS text[])"
+        else:
+            params["period_col"] = slot.keys[0]
+            value = "i.row -> CAST(:period_col AS text)"
+        params["period_from"], params["period_to"] = period
+        ctes.extend(
+            [
+                f"period_raw AS (SELECT i.*, {value} AS period_value FROM {source} i)",
+                f"period_text AS (SELECT i.*, {_date_text('i.period_value')} AS period_txt "
+                "FROM period_raw i)",
+                f"period_parts AS (SELECT i.*, {_date_parts('i.period_txt')} AS period_parts "
+                "FROM period_text i)",
+                f"period_iso AS (SELECT i.*, {_iso('i.period_parts')} AS period_iso "
+                "FROM period_parts i)",
+                "period_rows AS (SELECT i.* FROM period_iso i WHERE CASE "
+                "WHEN pg_input_is_valid(i.period_iso, 'date') THEN CAST(i.period_iso AS date) "
+                "BETWEEN CAST(:period_from AS date) AND CAST(:period_to AS date) ELSE false END)",
+            ]
+        )
+        source = "period_rows"
+    pairs = []
+    for index, field in enumerate(spec.display_fields):
+        name = f"display_{index}"
+        params[f"{name}_key"] = field.slot.path
+        if field.slot.source == "header":
+            params[f"{name}_path"] = list(field.slot.keys)
+            value = f"i.doc #>> CAST(:{name}_path AS text[])"
+        else:
+            params[f"{name}_col"] = field.slot.keys[0]
+            value = f"i.row ->> CAST(:{name}_col AS text)"
+        pairs.append(f"CAST(:{name}_key AS text), {value}")
+    ctes.append(
+        "selected AS MATERIALIZED (SELECT i.job_id, i.ordinal, jsonb_build_object("
+        + ", ".join(pairs)
+        + f") AS payload FROM {source} i WHERE i.kind = 'row')"
+    )
+    ctes.append(
+        "d AS (SELECT count(DISTINCT job_id) AS documents, count(*) AS total, "
+        "sum(octet_length(payload::text)) AS bytes FROM selected)"
+    )
+    ctes.append(
+        "p AS (SELECT i.job_id, i.ordinal, i.payload FROM selected i "
+        "ORDER BY i.job_id, i.ordinal LIMIT :page_limit OFFSET :page_offset)"
+    )
+    return CardQuery(
+        "WITH "
+        + ",\n".join(ctes)
+        + " SELECT d.*, p.payload FROM d LEFT JOIN p ON true ORDER BY p.job_id, p.ordinal",
+        params,
+    )
+
+
+async def run_table(db: AsyncSession, query: CardQuery) -> tuple[dict, list[dict]]:
+    try:
+        await db.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
+        await db.execute(
+            text("SELECT set_config('statement_timeout', :v, true)"),
+            {"v": f"{int(STATEMENT_TIMEOUT_MS)}ms"},
+        )
+        result = [dict(r) for r in (await db.execute(text(query.sql), query.params)).mappings()]
+    except DBAPIError as exc:
+        await db.rollback()
+        if is_timeout(exc):
+            raise QueryTimeout() from exc
+        raise
+    await db.rollback()
+    return {
+        "documents": result[0]["documents"],
+        "total": result[0]["total"],
+        "bytes": result[0]["bytes"],
+    }, [r["payload"] for r in result if r["payload"] is not None]
 
 
 def is_timeout(exc: BaseException) -> bool:

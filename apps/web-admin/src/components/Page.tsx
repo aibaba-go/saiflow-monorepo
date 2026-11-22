@@ -19,6 +19,7 @@ export type PageName =
   | "ocr"
   | "templates"
   | "template"
+  | "dataSources"
   | "reports"
   | "report"
   | "password";

@@ -5,6 +5,7 @@ import { useIdentity, useMe } from "../auth/session";
 import { useHomepage } from "../reports/api";
 import { errorMessage } from "../services/errors";
 import { HomepageReport } from "./ReportViewPage";
+import { SystemDashboard } from "./SystemDashboard";
 import { UsageCard } from "../billing/UsageCard";
 import { Page, TodayLabel } from "../components/Page";
 import { useT, type MessageKey } from "../i18n";
@@ -31,10 +32,6 @@ const METRICS: { stage: string; icon: IconName }[] = [
   { stage: "CONFIRMED", icon: "check" },
 ];
 const METRIC_STAGES = METRICS.map((m) => m.stage);
-const DEFAULT_HOMES = {
-  personal: { title: "rpt.personalHome", tone: "personal" },
-  organization: { title: "rpt.organizationHome", tone: "organization" },
-} as const;
 
 const PROCESS: { icon: IconName; label: MessageKey }[] = [
   { icon: "upload", label: "process.upload" },
@@ -58,11 +55,11 @@ export function MiniProcess() {
   );
 }
 
-function MetricStrip({ systemDefault = false }: { systemDefault?: boolean }) {
+function MetricStrip() {
   const t = useT();
   const counts = useStageCounts(METRIC_STAGES);
   const failed = counts.find((c) => c.isError);
-  if (failed) return systemDefault ? <Alert role="alert" type="error" message={t("home.metrics")} description={errorMessage(failed.error, t)} action={<Button onClick={() => void Promise.all(counts.map((c) => c.refetch()))}>{t("common.retry")}</Button>} /> : null;
+  if (failed) return null;
   if (counts.some((c) => c.data === undefined)) return null;
   return (
     <nav className="pc-metrics" aria-label={t("home.metrics")} data-testid="metric-strip">
@@ -95,18 +92,17 @@ export function HomeRoute() {
 
 function SignedInHome() {
   const t = useT();
-  const { tenant } = useTenant();
   const preference = useHomepage();
   if (preference.isPending) return <Spin />;
   if (preference.error) return <Alert role="alert" type="error" showIcon message={t("rpt.loadFailed")}
     description={errorMessage(preference.error, t)} action={<Button onClick={() => void preference.refetch()}>{t("common.retry")}</Button>} />;
-  const fallback = <HomePage systemDefault={tenant?.kind === "organization" ? "organization" : "personal"} />;
+  const fallback = <SystemDashboard />;
   return preference.data.report_id === null
     ? fallback
     : <HomepageReport id={preference.data.report_id} fallback={fallback} />;
 }
 
-export function HomePage({ systemDefault }: { systemDefault?: "personal" | "organization" } = {}) {
+export function HomePage() {
   const t = useT();
   const navigate = useNavigate();
   const { tenant } = useTenant();
@@ -121,7 +117,7 @@ export function HomePage({ systemDefault }: { systemDefault?: "personal" | "orga
   return (
     <Page
       name="home"
-      title={t(systemDefault ? DEFAULT_HOMES[systemDefault].title : "nav.home")}
+      title={t("nav.home")}
       description={t("layout.desc.home")}
       meta={<TodayLabel />}
       extra={
@@ -132,7 +128,7 @@ export function HomePage({ systemDefault }: { systemDefault?: "personal" | "orga
         )
       }
     >
-      <div className="pc-home" data-home-default={systemDefault && DEFAULT_HOMES[systemDefault].tone}>
+      <div className="pc-home">
         <div className="pc-home__top">
           <section className="pc-hero" aria-labelledby="pc-hero-title">
             <div className="pc-hero__copy">
@@ -141,9 +137,7 @@ export function HomePage({ systemDefault }: { systemDefault?: "personal" | "orga
                 {t("brand.heroEyebrow")}
               </p>
               <h2 id="pc-hero-title" className="pc-hero__title">
-                {systemDefault ? t("home.metrics") : (
-                  <>{t("brand.heroTitle")}<br /><span className="pc-hero__accent">{t("brand.heroTitleAccent")}</span></>
-                )}
+                {t("brand.heroTitle")}<br /><span className="pc-hero__accent">{t("brand.heroTitleAccent")}</span>
               </h2>
               <p className="pc-hero__body">{t("brand.heroBody")}</p>
               {canVerify && (
@@ -155,13 +149,12 @@ export function HomePage({ systemDefault }: { systemDefault?: "personal" | "orga
                     <span>{t("home.toVerifyCta")}</span>
                     {toVerify.isPending ? (
                       <Spin size="small" />
-                    ) : systemDefault && toVerify.error ? null : (
+                    ) : (
                       <span className="pc-hero__count num">({verifiable})</span>
                     )}
                   </Link>
                 </div>
               )}
-              {systemDefault && canVerify && toVerify.error && <Alert role="alert" type="error" message={t("home.toVerifyCta")} description={errorMessage(toVerify.error, t)} action={<Button onClick={() => void toVerify.refetch()}>{t("common.retry")}</Button>} />}
               <ul className="pc-hero__trust">
                 <li>
                   <Icon name="file" />
@@ -177,7 +170,7 @@ export function HomePage({ systemDefault }: { systemDefault?: "personal" | "orga
                 </li>
               </ul>
             </div>
-            {!systemDefault && <div className="pc-flow">
+            <div className="pc-flow">
               <p className="pc-flow__kicker">{t("brand.flowKicker")}</p>
               <ol className="pc-flow__list" aria-label={t("brand.flowTitle")}>
                 {FLOW.map((step, i) => (
@@ -195,11 +188,11 @@ export function HomePage({ systemDefault }: { systemDefault?: "personal" | "orga
                   </li>
                 ))}
               </ol>
-            </div>}
+            </div>
           </section>
-          <UsageCard plansLink retry={!!systemDefault} />
+          <UsageCard plansLink />
         </div>
-        <MetricStrip systemDefault={!!systemDefault} />
+        <MetricStrip />
         <section className="pc-panel pc-panel--table">
           <div className="pc-panel__heading">
             <div>
@@ -211,9 +204,7 @@ export function HomePage({ systemDefault }: { systemDefault?: "personal" | "orga
               <Icon name="arrow" />
             </Link>
           </div>
-          {systemDefault && recent.error ? (
-            <Alert role="alert" type="error" message={t("home.recent")} description={errorMessage(recent.error, t)} action={<Button onClick={() => void recent.refetch()}>{t("common.retry")}</Button>} />
-          ) : !recent.isPending && !rows.length ? (
+          {!recent.isPending && !rows.length ? (
             <Empty className="pc-panel__empty" description={t("home.noTasks")}>
               {canUpload && (
                 <Button type="primary" onClick={() => navigate("/upload")}>

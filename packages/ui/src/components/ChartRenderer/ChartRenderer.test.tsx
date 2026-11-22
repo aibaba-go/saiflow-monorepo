@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import { render, screen, waitFor, within } from "@testing-library/react";
+import { ReportGrid } from "../ReportGrid/ReportGrid";
 import userEvent from "@testing-library/user-event";
 
 import type { CardResult, ChartType, ReportCard } from "../reportTypes";
@@ -64,9 +66,43 @@ beforeEach(() => {
   ec.getInstanceByDom.mockClear();
 });
 
+it.each(["image", "html"] as const)("removes frame padding around %s content but not ordinary charts (FR-REPORT-021)", (type) => {
+  const stylesheet = document.createElement("style");
+  stylesheet.textContent = readFileSync("src/components/components.css", "utf8");
+  document.head.append(stylesheet);
+  try {
+    const media = card(type, { data: null, content: type === "html" ? { mode: "html", html: "<p>Hello</p>" } : {} });
+    const chart = card("table");
+    render(<ReportGrid cards={[media, chart]} mode="stack" renderCard={(c) => <ChartRenderer card={c} />} />);
+    const frames = document.querySelectorAll(".sf-rg-card");
+    expect(frames[0]).toHaveStyle({ padding: "0px" });
+    expect(frames[1]).toHaveStyle({ padding: "12px" });
+    if (type === "html") {
+      const iframe = frames[0]!.querySelector("iframe")!;
+      expect(iframe).toHaveStyle({ position: "absolute", inset: "0" });
+      expect(iframe).not.toHaveAttribute("tabindex", "-1");
+      expect(iframe.style.pointerEvents).not.toBe("none");
+    }
+  } finally {
+    stylesheet.remove();
+  }
+});
+
 it("refuses external frames without a server-approved origin", () => {
   render(<ChartRenderer card={card("html", { data: null, content: { mode: "url", url: "https://unapproved.example/page" } })} />);
   expect(document.querySelector("iframe")).toBeNull();
+});
+
+it("does not add body margins inside sanitized HTML (FR-REPORT-020)", () => {
+  render(<ChartRenderer card={card("html", { data: null, content: { mode: "html", html: "<div style='height:100%;background-color:#123456'>Content</div>" } })} />);
+  const frame = document.querySelector("iframe")!;
+  const doc = frame.contentDocument!;
+  doc.open();
+  doc.write(frame.getAttribute("srcdoc")!);
+  doc.close();
+  expect(doc.defaultView!.getComputedStyle(doc.body).margin).toBe("0px");
+  expect(doc.body.textContent).toBe("Content");
+  expect(frame).toHaveAttribute("sandbox", "");
 });
 
 it("renders static HTML without a query using a restrictive sandbox", () => {
@@ -128,14 +164,34 @@ describe("ChartRenderer chart types", () => {
     expect(ec.init).not.toHaveBeenCalled();
   });
 
-  it("renders a table card as a visible, keyboard-scrollable table", () => {
-    render(<ChartRenderer card={card("table")} result={ok(rows)} />);
+  it("renders only raw selected columns, duplicates and nulls with server pagination", async () => {
+    const onPageChange = vi.fn();
+    const result = { ...ok([]), table: {
+      columns: [{ key: "vendor", label: "Customer", type: "string" }, { key: "amount", label: "Amount", type: "decimal" }],
+      rows: [{ vendor: "ACME", amount: "12.00" }, { vendor: "ACME", amount: "12.00" }, { vendor: null, amount: null }],
+      page: 1, page_size: 5, total: 12,
+    } };
+    render(<ChartRenderer card={card("table")} result={result} onPageChange={onPageChange} />);
     const region = screen.getByRole("region", { name: "Sales" });
     expect(region).toHaveAttribute("tabindex", "0");
-    expect(within(region).getByRole("columnheader", { name: "Value" })).toBeInTheDocument();
-    expect(within(region).getByRole("cell", { name: "1,000.00" })).toBeInTheDocument();
-    expect(within(region).getAllByRole("cell", { name: "THB" })).toHaveLength(2);
+    expect(within(region).getByRole("columnheader", { name: "Customer" })).toBeInTheDocument();
+    expect(within(region).getAllByRole("cell", { name: "12.00" })).toHaveLength(2);
+    expect(within(region).getAllByRole("cell", { name: "—" })).toHaveLength(2);
+    expect(screen.queryByRole("columnheader", { name: "Count" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Next page" }));
+    expect(onPageChange).toHaveBeenCalledWith(2);
     expect(ec.init).not.toHaveBeenCalled();
+  });
+
+  it("keeps the pager usable on an empty out-of-range page", async () => {
+    const onPageChange = vi.fn();
+    render(<ChartRenderer card={card("table")} onPageChange={onPageChange} result={{ ...ok([]), table: {
+      columns: [{ key: "vendor", label: "Customer", type: "string" }], rows: [], page: 4, page_size: 5, total: 12,
+    } }} />);
+    expect(screen.getByRole("button", { name: "Next page" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Previous page" }));
+    expect(onPageChange).toHaveBeenCalledWith(3);
   });
 
   it("uses style.colors, else the token palette", async () => {

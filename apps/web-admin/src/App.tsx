@@ -14,6 +14,7 @@ import {
   VerificationApplicationsPage,
 } from "./pages/ApplicationPages";
 import { AuditLogPage } from "./pages/AuditLogPage";
+import { DataSourcesPage } from "./pages/DataSourcesPage";
 import { ChangePasswordPage } from "./pages/ChangePasswordPage";
 import { HealthPage } from "./pages/HealthPage";
 import { HomePage } from "./pages/HomePage";
@@ -85,6 +86,7 @@ export function AppRoutes() {
             <Route path="/templates/samples/:id" element={<TemplateSamplePage />} />
             <Route path="/templates/:id" element={<TemplateDetailPage />} />
             <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/data-sources" element={<DataSourcesPage />} />
             <Route path="/reports/:id" element={<ReportDesignPage />} />
             <Route path="/password" element={<ChangePasswordPage />} />
             <Route path="*" element={<NotFound />} />

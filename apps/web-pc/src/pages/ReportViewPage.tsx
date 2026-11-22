@@ -17,7 +17,7 @@ import { Page } from "../components/Page";
 import { formatBangkokDateTime } from "../format";
 import { useT } from "../i18n";
 import { Icon } from "../layout/icons";
-import { configOf, downloadCsv, readReportAsset, reportData, useHomepageChoice, useReport, useReportContentPolicy, type Period, type ReportDetail } from "../reports/api";
+import { configOf, downloadCsv, readReportAsset, reportData, useHomepage, useHomepageChoice, useReport, useReportContentPolicy, type Period, type ReportDetail } from "../reports/api";
 import { ReportGate, useReportAccess } from "../reports/common";
 import { useReportLabels } from "../reports/labels";
 import { ApiError, errorMessage } from "../services/errors";
@@ -45,6 +45,8 @@ function Viewer({ detail, onStale, fallback }: { detail: ReportDetail & { publis
   const { message } = App.useApp();
   const labels = useReportLabels();
   const homepage = useHomepageChoice();
+  const preference = useHomepage();
+  const selectedHome = preference.data?.report_id === detail.id;
   const home = fallback !== undefined;
   const chooseHome = async (id: number | null) => {
     try { await homepage.choose(id); void message.success(t("rpt.homeSaved")); }
@@ -61,6 +63,7 @@ function Viewer({ detail, onStale, fallback }: { detail: ReportDetail & { publis
   const [range, setRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
   const [data, setData] = useState<DataState>({ result: null, periodSource: null, error: null, loading: true });
   const [exporting, setExporting] = useState<ReadonlySet<string>>(() => new Set());
+  const pages = useRef<Record<string, number>>({});
   const seq = useRef(0);
   const active = useRef(true);
   const currentPublication = useRef(publication);
@@ -76,12 +79,12 @@ function Viewer({ detail, onStale, fallback }: { detail: ReportDetail & { publis
   // Only the latest ordinary answer lands. A refusal invalidates even newer period
   // requests, but only within this active viewer's current publication (FR-SYS-164).
   const load = useCallback(
-    async (p: Period | null, refresh: boolean) => {
+    async (p: Period | null, refresh: boolean, requestedPages = pages.current, pinnedPeriod?: Period) => {
       if (!active.current || currentPublication.current !== publication) return;
       const n = ++seq.current;
       setData((d) => ({ ...d, loading: true, error: null }));
       try {
-        const result = await reportData(detail.id, p, refresh);
+        const result = await reportData(detail.id, pinnedPeriod ?? p, refresh, requestedPages);
         if (!active.current || currentPublication.current !== publication || n !== seq.current) return;
         if (result.report_version !== version) {
           cancelDownloads();
@@ -121,6 +124,7 @@ function Viewer({ detail, onStale, fallback }: { detail: ReportDetail & { publis
     // Metadata can advance before the data endpoint answers; preserve the selected period,
     // but invalidate old values, requests and downloads before the new definitions paint.
     currentPublication.current = publication;
+    pages.current = {};
     seq.current += 1;
     cancelDownloads();
     setData({ result: null, periodSource: null, error: null, loading: true });
@@ -152,9 +156,11 @@ function Viewer({ detail, onStale, fallback }: { detail: ReportDetail & { publis
   const rangeOk = !!range?.[0] && !!range?.[1] && !range[0].isAfter(range[1], "day");
   const apply = () => {
     if (!rangeOk || !range?.[0] || !range[1]) return;
+    pages.current = {};
     setPeriod({ from: range[0].format(DAY), to: range[1].format(DAY) });
   };
   const reset = () => {
+    pages.current = {};
     setRange(null);
     setPeriod(null);
   };
@@ -256,6 +262,10 @@ function Viewer({ detail, onStale, fallback }: { detail: ReportDetail & { publis
         labels={labels.chart}
         locale={t("format.locale")}
         onRetry={data.loading ? undefined : () => void load(period, true)}
+        onPageChange={result && !data.loading && !stale ? (page) => {
+          pages.current = { ...pages.current, [card.id]: page };
+          void load(period, false, pages.current, result.period);
+        } : undefined}
         footer={card.type === "image" || card.type === "html" ? undefined : info}
         loadAsset={loadAsset}
         embedOrigins={contentPolicy.data?.origins}
@@ -275,6 +285,7 @@ function Viewer({ detail, onStale, fallback }: { detail: ReportDetail & { publis
     <Page
       name={home ? "home" : listPath === "/report-view" ? "report-view" : "reports"}
       title={detail.published.name}
+      hideHeading={home}
       description={t("rpt.readOnlyNote")}
       badge={<Tag className="pc-report-version">{t("rpt.version", { n: version })}</Tag>}
       meta={<time dateTime={detail.published.published_at}>{t("rpt.publishedAt", { at: formatBangkokDateTime(detail.published.published_at) })}</time>}
@@ -282,8 +293,8 @@ function Viewer({ detail, onStale, fallback }: { detail: ReportDetail & { publis
         <Space wrap>
           {!home && <Button icon={<Icon name="back" />} onClick={() => navigate(listPath)}>{t("rpt.backToList")}</Button>}
           {!home && listPath === "/reports" && detail.can_manage && <Button onClick={() => navigate(`/reports/${detail.id}/design`)}>{t("rpt.design")}</Button>}
-          <Button loading={homepage.pending} disabled={homepage.pending} onClick={() => void chooseHome(home ? null : detail.id)}>
-            {t(home ? "rpt.resetHome" : "rpt.setHome")}
+          <Button loading={homepage.pending} disabled={homepage.pending} onClick={() => void chooseHome(selectedHome ? null : detail.id)}>
+            {t(selectedHome ? "rpt.resetHome" : "rpt.setHome")}
           </Button>
           <Button type="primary" aria-label={t("rpt.refresh")} loading={data.loading} disabled={data.loading} onClick={() => void load(period, true)}>
             {t("rpt.refresh")}
@@ -291,7 +302,7 @@ function Viewer({ detail, onStale, fallback }: { detail: ReportDetail & { publis
         </Space>
       }
     >
-      <section className="pc-panel pc-report-bar" aria-label={t("rpt.periodBar")}>
+      {!home && <section className="pc-panel pc-report-bar" aria-label={t("rpt.periodBar")}>
         <div className="pc-report-bar__period">
           <span className="pc-report-bar__label">{t("rpt.periodOverride")}</span>
           <DatePicker.RangePicker
@@ -327,7 +338,7 @@ function Viewer({ detail, onStale, fallback }: { detail: ReportDetail & { publis
           </dl>
         )}
         <span className="pc-report-bar__note">{t("rpt.noAutoRefresh")}</span>
-      </section>
+      </section>}
       {stale && (
         <Alert
           role="alert"

@@ -30,6 +30,45 @@ def both(q):
     return q.sql
 
 
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("2026-11-22", date(2026, 11, 22)),
+        ("2026-11-22T00:30:00+07:00", date(2026, 11, 22)),
+        ("2026-11-22T23:30:00-07:00", date(2026, 11, 22)),
+        ("2026-11-22T13:30:00", date(2026, 11, 22)),
+        ("2026-11-22Tgarbage", None),
+        ("2026-02-30T13:30:00+07:00", None),
+        (None, None),
+    ],
+)
+def test_sql_date_parser_validates_whole_value_without_timezone_shift(value, expected):
+    from app.services.report_sql_query import _date
+
+    assert _date(value) == expected
+
+
+def test_raw_table_query_selects_only_requested_fields_and_stable_rows():
+    c = card(type="table", grain="table", table_key="lines.items")
+    c["data"]["display_fields"] = [
+        {"path": "header.vendor", "label": "Vendor"},
+        {"path": "lines.items.amount", "label": "Amount"},
+    ]
+    c["data"]["page_size"] = 5
+    query = report_query.build_table(
+        spec_of(c), tenant_id=42, scope_user_id=9, period=None, page=2, export_all=False
+    )
+    assert "j.tenant_id = :tenant_id" in query.sql
+    assert "j.created_by_user_id = :scope_user_id" in query.sql
+    assert "WITH ORDINALITY" in query.sql
+    assert "ORDER BY i.job_id, i.ordinal" in query.sql
+    assert "GROUP BY" not in query.sql
+    assert query.params["display_0_path"] == ["header", "vendor"]
+    assert query.params["display_1_col"] == "amount"
+    assert query.params["page_offset"] == 5
+    assert query.params["page_limit"] == 5
+
+
 def test_formal_base_set_is_exact_and_bound():
     q = build(spec_of(card()), tenant_id=4242, scope_user_id=None, period=PERIOD)
     sql = both(q)

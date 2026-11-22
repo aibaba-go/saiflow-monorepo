@@ -33,7 +33,7 @@ export function FiltersEditor({ group, fields, onChange, lang, readOnly }: { gro
   </div>;
 }
 
-export function ContentPanel({ card, onCard, onUpload, lang, readOnly }: { card: ReportCard; onCard(c: ReportCard): void; onUpload?: (file: File, signal: AbortSignal) => Promise<string>; lang?: string; readOnly?: boolean }) {
+export function ContentPanel({ card, onCard, onUpload, embedOrigins = [], lang, readOnly }: { card: ReportCard; onCard(c: ReportCard): void; onUpload?: (file: File, signal: AbortSignal) => Promise<string>; embedOrigins?: readonly string[]; lang?: string; readOnly?: boolean }) {
   const l = v2Labels(lang);
   const content = card.content ?? {};
   const [busy, setBusy] = useState(false);
@@ -63,6 +63,7 @@ export function ContentPanel({ card, onCard, onUpload, lang, readOnly }: { card:
       <Form.Item label={l.mode}><Select aria-label={l.mode} value={content.mode ?? "html"} disabled={readOnly} options={[{ value: "html", label: l.html }, { value: "url", label: l.url }]} onChange={(mode) => patch({ mode })} /></Form.Item>
       <Form.Item label={content.mode === "url" ? l.url : l.html}>{content.mode === "url" ? <Input aria-label={l.url} maxLength={2000} disabled={readOnly} value={content.url ?? ""} onChange={(e) => patch({ url: e.target.value })} /> : <Input.TextArea aria-label={l.html} maxLength={20000} rows={10} disabled={readOnly} value={content.html ?? ""} onChange={(e) => patch({ html: e.target.value })} />}</Form.Item>
       <Alert type="info" message={l.safe} />
+      {content.mode === "url" && <Alert type={embedOrigins.length ? "info" : "warning"} message={embedOrigins.length ? `${lang === "zh" ? "允许的 HTTPS 来源" : lang === "th" ? "แหล่ง HTTPS ที่อนุญาต" : "Approved HTTPS origins"}: ${embedOrigins.join(", ")}` : lang === "zh" ? "尚未允许任何 HTTPS 来源，请先由管理员配置页面来源再内嵌。" : lang === "th" ? "ยังไม่มีแหล่ง HTTPS ที่อนุญาต โปรดให้ผู้ดูแลระบบตั้งค่าแหล่งข้อมูลก่อนฝังหน้า" : "No HTTPS origins are approved. Ask the administrator to configure the page origin before embedding it."} />}
     </>}
   </div>;
 }

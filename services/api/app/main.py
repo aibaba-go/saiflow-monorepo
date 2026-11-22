@@ -23,6 +23,7 @@ from app.request_context import RequestIdMiddleware
 from app.routers import (
     admin_auth,
     admin_billing,
+    admin_data_sources,
     admin_ocr,
     admin_organizations,
     admin_query,
@@ -31,6 +32,7 @@ from app.routers import (
     admin_templates,
     auth,
     billing,
+    data_sources,
     exports,
     health,
     imports,
@@ -138,6 +140,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(reports.router)
     app.include_router(reports.downloads_router)
     app.include_router(admin_reports.router)
+    app.include_router(data_sources.router)
+    app.include_router(admin_data_sources.router)
     return app
 
 

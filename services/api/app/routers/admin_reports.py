@@ -20,6 +20,7 @@ from app.dependencies import (
     require_csrf_header,
 )
 from app.errors import AppError
+from app.schemas.dashboard import HomepageTemplatesOut
 from app.schemas.report import (
     AdminCreateReportIn,
     CatalogFieldsOut,
@@ -89,6 +90,29 @@ async def catalog_fields(
     return CatalogFieldsOut(
         **await svc.catalog_fields(db, tid, report_id, template_id, version_ids)
     )
+
+
+@router.get(
+    "/reports/homepage-templates",
+    operation_id="adminListHomepageTemplates",
+    response_model=HomepageTemplatesOut,
+)
+async def homepage_templates(admin: Admin):
+    from app.services.dashboard_service import configuration
+
+    return {
+        "items": [
+            {
+                "id": f"homepage-{kind}",
+                "kind": kind,
+                "name": name,
+                "source_id": "system-pg",
+                "readonly": True,
+                "config": configuration(kind),
+            }
+            for kind, name in (("personal", "个人默认首页"), ("organization", "组织默认首页"))
+        ]
+    }
 
 
 @router.get("/reports", operation_id="adminListReports", response_model=ReportListOut)

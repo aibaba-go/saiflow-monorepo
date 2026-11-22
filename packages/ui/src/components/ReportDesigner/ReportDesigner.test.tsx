@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 
@@ -53,6 +53,22 @@ function Harness({ initial, onConfig, ...rest }: Partial<ReportDesignerProps> & 
 }
 
 describe("ReportDesigner (FR-REPORT-005, -006, -013, -014)", () => {
+  it("keeps HTML selectable after selecting another card (FR-REPORT-020)", async () => {
+    const initial: ReportConfig = { ...ONE, cards: [...ONE.cards, { id: "html", type: "html", title: "Embedded content", layout: { x: 6, y: 0, w: 6, h: 4 }, data: null, content: { mode: "html", html: "<p>Hello</p>" } }] };
+    render(<Harness initial={initial} />);
+    const html = await screen.findByRole("button", { name: "Embedded content" });
+    await userEvent.click(html);
+    await userEvent.click(screen.getByRole("button", { name: "Sales" }));
+    expect(html).toHaveAttribute("aria-pressed", "false");
+    const iframe = html.querySelector("iframe")!;
+    expect(iframe).toHaveStyle({ pointerEvents: "none" });
+    expect(iframe).toHaveAttribute("tabindex", "-1");
+    await userEvent.click(iframe.parentElement!);
+    expect(html).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("textbox", { name: "HTML" })).toBeInTheDocument();
+    expect(iframe).toHaveAttribute("sandbox", "");
+  });
+
   it("adds static HTML with a content editor instead of dataset bindings", async () => {
     const onConfig = vi.fn();
     render(<Harness initial={EMPTY} onConfig={onConfig} />);
@@ -61,6 +77,14 @@ describe("ReportDesigner (FR-REPORT-005, -006, -013, -014)", () => {
     expect(added.cards[0]?.data).toBeNull();
     expect(await screen.findByRole("textbox", { name: "HTML" })).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: L.template })).not.toBeInTheDocument();
+  });
+
+  it.each([{ origins: [] }, { origins: ["https://approved.example"] }])("explains the configured HTTPS page policy %j (FR-REPORT-020)", async ({ origins }) => {
+    render(<Harness initial={EMPTY} embedOrigins={origins} />);
+    await userEvent.click(screen.getByRole("button", { name: L.add(L.chartTypes.html) }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Content mode" }));
+    await userEvent.click(await screen.findByText("Embedded HTTPS page", { selector: ".ant-select-item-option-content" }));
+    expect(await screen.findByText(origins.length ? "Approved HTTPS origins: https://approved.example" : "No HTTPS origins are approved. Ask the administrator to configure the page origin before embedding it.")).toBeInTheDocument();
   });
 
   it("adds a card from the palette and opens its panel", async () => {
@@ -84,6 +108,132 @@ describe("ReportDesigner (FR-REPORT-005, -006, -013, -014)", () => {
     const added = onConfig.mock.calls.at(-1)![0] as ReportConfig;
     expect(added.cards[0]?.type).toBe(type);
     expect(await screen.findByRole("region", { name: L.cardPanel })).toBeInTheDocument();
+  });
+
+  it("configures raw display columns and page size without aggregation controls", async () => {
+    const onConfig = vi.fn();
+    const bound: ReportConfig = { ...ONE, cards: [{ ...ONE.cards[0]!, data: { template_id: 12, template_version_ids: [102], grain: "document", display_fields: [] } }] };
+    render(<Harness initial={bound} onConfig={onConfig} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Sales" }));
+    expect(await screen.findByRole("combobox", { name: "Display fields" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: L.agg })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: L.dimension })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("combobox", { name: "Display fields" }));
+    await userEvent.click(await screen.findByText("Total · Amount"));
+    const config = onConfig.mock.calls.at(-1)![0] as ReportConfig;
+    expect(config.cards[0]!.data!.display_fields).toEqual([{ path: "header.total", label: "Total" }]);
+    const pageSize = screen.getByRole("spinbutton", { name: "Rows per page" });
+    await userEvent.clear(pageSize);
+    await userEvent.type(pageSize, "5");
+    await userEvent.tab();
+    expect((onConfig.mock.calls.at(-1)![0] as ReportConfig).cards[0]!.data!.page_size).toBe(5);
+  });
+
+  it("discovers SQL fields and configures a raw table without template grains", async () => {
+    const onConfig = vi.fn();
+    const querySource = vi.fn(async () => ({ columns: [{ key: "amount", label: "amount", type: "decimal" }], rows: [{ amount: "12.00" }], page: 1, page_size: 5, total: 1 }));
+    render(<Harness initial={ONE} onConfig={onConfig} sources={[{ id: "postgres:1", name: "ERP", kind: "postgresql", enabled: true }]} querySource={querySource} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Sales" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Data source" }));
+    await userEvent.click(await screen.findByText("Relational database"));
+    await userEvent.click(screen.getByRole("combobox", { name: "Database" }));
+    await userEvent.click(await screen.findByText("ERP · PostgreSQL"));
+    await userEvent.type(screen.getByRole("textbox", { name: "SQL" }), "SELECT amount FROM sales");
+    await userEvent.click(screen.getByRole("button", { name: "Run and discover fields" }));
+    expect(await screen.findByRole("combobox", { name: "Display fields" })).toBeInTheDocument();
+    const config = onConfig.mock.calls.at(-1)![0] as ReportConfig;
+    expect(config.cards[0]!.data).toMatchObject({ source_id: "postgres:1", sql: "SELECT amount FROM sales", result_fields: [{ key: "amount", label: "amount", type: "decimal" }] });
+    expect(config.cards[0]!.data!.template_id).toBeUndefined();
+    expect(screen.queryByRole("combobox", { name: L.grain })).not.toBeInTheDocument();
+  });
+
+  it("selects a quoted relation, persists table mode and clears fields when switching modes (FR-DATA-003)", async () => {
+    const onConfig = vi.fn();
+    const initial: ReportConfig = { ...ONE, cards: [{ ...ONE.cards[0]!, data: { source_id: "postgres:1", sql: "", query_mode: "sql" } }] };
+    render(<Harness initial={initial} onConfig={onConfig} loadTables={async () => [{ schema: 'Sales"East', name: "Orders", kind: "table" }]} querySource={async () => ({ columns: [{ key: "amount", label: "Amount", type: "decimal" }], rows: [], page: 1, page_size: 20, total: 0 })} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Sales" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Query mode" }));
+    await userEvent.click(await screen.findByText("Select table"));
+    await userEvent.click(screen.getByRole("combobox", { name: "Table or view" }));
+    await userEvent.click(await screen.findByText('Sales"East.Orders · table'));
+    const sql = 'SELECT * FROM "Sales""East"."Orders"';
+    expect(screen.getByRole("textbox", { name: "SQL" })).toHaveValue(sql);
+    expect(screen.getByRole("textbox", { name: "SQL" })).toHaveAttribute("readonly");
+    await userEvent.click(screen.getByRole("button", { name: "Run and discover fields" }));
+    await screen.findByText(/Result fields discovered/);
+    expect((onConfig.mock.calls.at(-1)![0] as ReportConfig).cards[0]!.data).toMatchObject({ query_mode: "table", relation: { schema: 'Sales"East', name: "Orders" }, sql, result_fields: [{ key: "amount", label: "Amount", type: "decimal" }] });
+    await userEvent.click(screen.getByRole("combobox", { name: "Query mode" }));
+    await userEvent.click(await screen.findByText("Write SQL"));
+    expect((onConfig.mock.calls.at(-1)![0] as ReportConfig).cards[0]!.data).toMatchObject({ query_mode: "sql", result_fields: [], display_fields: [] });
+    expect(screen.getByRole("textbox", { name: "SQL" })).not.toHaveAttribute("readonly");
+  });
+
+  it("disables field discovery until a database is selected (FR-DATA-003)", async () => {
+    const initial: ReportConfig = { ...ONE, cards: [{ ...ONE.cards[0]!, data: { query_mode: "sql", sql: "SELECT 1" } }] };
+    render(<Harness initial={initial} querySource={async () => { throw new Error("No source"); }} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Sales" }));
+    expect(screen.getByRole("button", { name: "Run and discover fields" })).toBeDisabled();
+  });
+
+  it("retries a failed catalog and ignores a late response after changing database (FR-DATA-003)", async () => {
+    let resolve!: (items: { schema: string; name: string; kind: "table" }[]) => void;
+    let attempt = 0;
+    const old = new Promise<Parameters<typeof resolve>[0]>(r => { resolve = r; });
+    const loadTables = async (id: string) => {
+      if (id === "postgres:2") return [{ schema: "public", name: "New orders", kind: "table" as const }];
+      if (++attempt === 1) throw new Error("Connection unavailable");
+      return old;
+    };
+    const initial: ReportConfig = { ...ONE, cards: [{ ...ONE.cards[0]!, data: { source_id: "postgres:1", query_mode: "table", sql: "" } }] };
+    render(<Harness initial={initial} loadTables={loadTables} sources={[{ id: "postgres:1", name: "Old ERP", kind: "postgresql", enabled: true }, { id: "postgres:2", name: "New ERP", kind: "postgresql", enabled: true }]} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Sales" }));
+    expect(await screen.findByText("Tables could not be loaded. Check source permissions and connection.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Reload tables" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Database" }));
+    await userEvent.click(await screen.findByText("New ERP · PostgreSQL"));
+    await userEvent.click(screen.getByRole("combobox", { name: "Table or view" }));
+    expect(await screen.findByText("public.New orders · table")).toBeInTheDocument();
+    await act(async () => resolve([{ schema: "public", name: "Stale orders", kind: "table" }]));
+    expect(screen.queryByText("public.Stale orders · table")).not.toBeInTheDocument();
+    expect(screen.queryByText("Tables could not be loaded. Check source permissions and connection.")).not.toBeInTheDocument();
+  });
+
+  it("keeps title edits made while SQL field discovery is pending", async () => {
+    let resolve!: (value: { columns: { key: string; label: string; type: string }[]; rows: []; page: number; page_size: number; total: number }) => void;
+    const pending = new Promise<Parameters<typeof resolve>[0]>((r) => { resolve = r; });
+    const onConfig = vi.fn();
+    const bound: ReportConfig = { ...ONE, cards: [{ ...ONE.cards[0]!, data: { source_id: "postgres:1", sql: "SELECT amount FROM sales" } }] };
+    render(<Harness initial={bound} onConfig={onConfig} querySource={async () => pending} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Sales" }));
+    await userEvent.click(screen.getByRole("button", { name: "Run and discover fields" }));
+    await userEvent.type(screen.getByLabelText(L.cardTitle), " updated");
+    await act(async () => resolve({ columns: [{ key: "amount", label: "Amount", type: "decimal" }], rows: [], page: 1, page_size: 5, total: 0 }));
+    expect((onConfig.mock.calls.at(-1)![0] as ReportConfig).cards[0]!.title).toBe("Sales updated");
+  });
+
+  it("does not accept fields from a SQL query after switching to a template", async () => {
+    let resolve!: (value: { columns: { key: string; label: string; type: string }[]; rows: []; page: number; page_size: number; total: number }) => void;
+    const pending = new Promise<Parameters<typeof resolve>[0]>((r) => { resolve = r; });
+    const onConfig = vi.fn();
+    const bound: ReportConfig = { ...ONE, cards: [{ ...ONE.cards[0]!, data: { source_id: "postgres:1", sql: "SELECT amount FROM sales" } }] };
+    render(<Harness initial={bound} onConfig={onConfig} querySource={async () => pending} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Sales" }));
+    await userEvent.click(screen.getByRole("button", { name: "Run and discover fields" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Data source" }));
+    await userEvent.click(await screen.findByText("Document template"));
+    await act(async () => resolve({ columns: [{ key: "amount", label: "Amount", type: "decimal" }], rows: [], page: 1, page_size: 5, total: 0 }));
+    expect((onConfig.mock.calls.at(-1)![0] as ReportConfig).cards[0]!.data?.source_id).toBeUndefined();
+    expect(screen.queryByRole("textbox", { name: "SQL" })).not.toBeInTheDocument();
+  });
+
+  it("forwards raw preview pagination without editing the report definition", async () => {
+    const onConfig = vi.fn();
+    const onPreviewPage = vi.fn();
+    const preview: QueryResult = { report_version: null, generated_at: "2026-11-22T00:00:00Z", period: { from: "2026-01-01", to: "2026-12-31" }, scope: "own", synthetic: false, cards: [{ card_id: "c1", status: "ok", rows: [], table: { columns: [{ key: "amount", label: "Amount", type: "decimal" }], rows: [{ amount: "12.00" }], page: 1, page_size: 5, total: 6 } }] };
+    render(<Harness initial={ONE} preview={preview} onPreviewPage={onPreviewPage} onConfig={onConfig} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Next page" }));
+    expect(onPreviewPage).toHaveBeenCalledWith("c1", 2);
+    expect(onConfig).not.toHaveBeenCalled();
   });
 
   it("binds a template on its current version and loads that version's fields", async () => {
@@ -123,7 +273,7 @@ describe("ReportDesigner (FR-REPORT-005, -006, -013, -014)", () => {
     const onConfig = vi.fn();
     const bound: ReportConfig = {
       ...ONE,
-      cards: [{ ...ONE.cards[0]!, data: { template_id: 12, template_version_ids: [102], grain: "document" } }],
+      cards: [{ ...ONE.cards[0]!, type: "bar", data: { template_id: 12, template_version_ids: [102], grain: "document" } }],
     };
     render(<Harness initial={bound} onConfig={onConfig} />);
     await userEvent.click(await screen.findByRole("button", { name: "Sales" }));

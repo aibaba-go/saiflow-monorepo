@@ -132,6 +132,17 @@ afterEach(() => {
 });
 
 describe("admin report list (FR-SYS-143)", () => {
+  it("shows both read-only default homepage templates without choosing an organization (FR-SYS-172)", async () => {
+    signedIn({ ...base, "GET /api/v1/admin/reports/homepage-templates": () => json(200, { items: ["personal", "organization"].map(kind => ({ id: `homepage-${kind}`, kind, name: `Default ${kind}`, source_id: "system-pg", readonly: true, config: { grid: { cols: 12, row_height: 80 }, cards: [{ id: "progress", type: "bar", layout: { x: 0, y: 2, w: 5, h: 4 } }] } })) }) });
+    renderAt("/reports");
+    const templates = await screen.findByTestId("homepage-templates");
+    expect(await within(templates).findByText("Default personal")).toBeInTheDocument();
+    expect(within(templates).getByText("Default organization")).toBeInTheDocument();
+    expect(within(templates).getAllByText("system-pg")).toHaveLength(2);
+    expect(within(templates).queryByRole("button", { name: "Edit" })).toBeNull();
+    await userEvent.click(within(templates).getAllByRole("button")[0]!);
+    expect(await screen.findByRole("dialog")).toHaveTextContent(zh("rpa.homeSynthetic"));
+  });
   it(
     "lists the chosen organization's reports from the menu",
     async () => {
@@ -191,6 +202,23 @@ describe("admin report list (FR-SYS-143)", () => {
 });
 
 describe("admin report designer (FR-SYS-143)", () => {
+  it("pages synthetic raw rows without changing the draft (FR-REPORT-022)", async () => {
+    const raw = { ...CONFIG, cards: [{ ...CONFIG.cards[0]!, type: "table" }] };
+    const api = signedIn({ ...base, [ONE]: () => json(200, detail({ draft: raw })), [PREVIEW]: async (r) => {
+      const body = await r.json();
+      const page = body.pages?.c1 ?? 1;
+      return json(200, { ...SYNTHETIC, cards: [{ card_id: "c1", status: "ok", rows: [], table: { columns: [{ key: "item", label: "Item", type: "string" }], rows: [{ item: page === 1 ? "First item" : "Second item" }], page, page_size: 5, total: 6 } }] });
+    } });
+    renderAt("/reports/31");
+    await userEvent.click(await screen.findByRole("button", { name: zh("rpt.preview") }, WAIT));
+    expect(await screen.findByText("First item", {}, WAIT)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: zh("rpc.nextPage") }));
+    expect(await screen.findByText("Second item", {}, WAIT)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: zh("rpt.saveDraft") })).toBeDisabled();
+    expect(await api.bodies(PREVIEW)).toEqual([{ config: raw, period: null }, { config: raw, period: { from: "2026-01-01", to: "2026-12-31" }, pages: { c1: 2 } }]);
+    noBusinessData(api.calls);
+  }, LONG);
+
   it(
     "previews over synthetic rows only, labelled as such",
     async () => {

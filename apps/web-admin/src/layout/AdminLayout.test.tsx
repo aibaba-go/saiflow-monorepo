@@ -12,6 +12,26 @@ beforeEach(() => {
 });
 
 describe("branded admin shell (FR-SYS-135, FR-SYS-138)", () => {
+  it("collapses with keyboard, preserves links and remembers the admin preference (FR-SYS-170)", async () => {
+    signedIn({ "GET /api/v1/admin/audit-log": () => json(200, { items: [], next_before: null }) });
+    const view = renderAt("/audit-log");
+    const toggle = await screen.findByRole("button", { name: "收起菜单" });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    toggle.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(screen.getByRole("button", { name: "展开菜单" })).toHaveAttribute("aria-expanded", "false");
+    const nav = screen.getByRole("navigation", { name: zh("layout.mainNav") });
+    expect(nav).toHaveAttribute("id", toggle.getAttribute("aria-controls"));
+    expect(within(nav).getAllByRole("link").map(a => a.getAttribute("href"))).toEqual(MENU.map(m => m.path));
+    expect(within(nav).getByRole("link", { name: zh("nav.auditLog") }).closest("li")).toHaveClass("ant-menu-item-selected");
+    expect(document.querySelector(".ad-shell")).toHaveClass("ad-shell--collapsed");
+    view.unmount();
+    renderAt("/audit-log");
+    expect(await screen.findByRole("button", { name: "展开菜单" })).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(screen.getByRole("button", { name: "展开菜单" }));
+    expect(document.querySelector(".ad-shell")).not.toHaveClass("ad-shell--collapsed");
+  });
+
   it("shows the sidebar navigation with every menu item in order and the page in the topbar (AC-FR-SYS-135-02)", async () => {
     signedIn({ "GET /api/v1/admin/audit-log": () => json(200, { items: [], next_before: null }) });
     renderAt("/audit-log");

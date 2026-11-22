@@ -20,6 +20,189 @@ from app.services.report_config import (
 )
 from tests.report_samples import GROUPS, card, groups_v2, page
 
+
+def sql_card(type="table"):
+    c = card("sql", type=type)
+    c["data"] = {
+        "source_id": "postgres:1",
+        "sql": "SELECT amount, vendor FROM sales ORDER BY vendor, amount",
+        "result_fields": [
+            {"key": "amount", "label": "Amount", "type": "decimal"},
+            {"key": "vendor", "label": "Vendor", "type": "string"},
+        ],
+        "display_fields": [
+            {"path": "vendor", "label": "Customer"},
+            {"path": "amount", "label": "Amount"},
+        ],
+        "page_size": 5,
+    }
+    if type != "table":
+        c["data"].update(
+            measure={"path": "amount", "agg": "sum"},
+            dimension={"kind": "category", "path": "vendor", "time_grain": None},
+        )
+    return c
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"query_mode": "table", "relation": {"schema": "sales", "name": "orders"}},
+        {
+            "query_mode": "table",
+            "relation": {"schema": "sales", "name": "orders"},
+            "sql": 'SELECT * FROM "sales"."other"',
+        },
+        {"query_mode": "unknown"},
+        {"query_mode": "table", "relation": {"schema": "\u0000", "name": "orders"}},
+    ],
+)
+def test_table_binding_rejects_missing_or_inconsistent_generated_sql(change):
+    c = sql_card()
+    c["data"].update(change)
+    check = validate(page(c), {})
+    assert check.errors and "sql" not in check.cards
+
+
+def test_table_binding_accepts_quoted_relation():
+    c = sql_card()
+    c["data"].update(
+        query_mode="table",
+        relation={"schema": "Sales", "name": "Orders"},
+        sql='SELECT * FROM "Sales"."Orders"',
+    )
+    assert validate(page(c), {}).errors == []
+
+
+@pytest.mark.parametrize("type", ["table", "bar", "metric"])
+def test_sql_card_binds_typed_result_keys_without_template(type):
+    c = sql_card(type)
+    if type == "metric":
+        c["data"]["dimension"] = {"kind": "none", "path": None, "time_grain": None}
+    check = validate(page(c), {})
+    assert check.errors == []
+    spec = check.cards["sql"]
+    assert spec.source_id == "postgres:1" and spec.sql
+    assert spec.version_ids == ()
+    assert [f.slot.path for f in spec.sql_fields] == ["amount", "vendor"]
+    if type == "table":
+        assert spec.measure is None and spec.page_size == 5
+        assert [f.slot.path for f in spec.display_fields] == ["vendor", "amount"]
+    else:
+        assert spec.measure.path == "amount"
+
+
+@pytest.mark.parametrize(
+    "change, expected",
+    [
+        ({"source_id": "system-pg"}, "source_id"),
+        ({"sql": "DELETE FROM sales"}, "sql"),
+        ({"result_fields": []}, "result_fields"),
+        ({"display_fields": [{"path": "absent", "label": "Missing"}]}, "display_fields"),
+    ],
+)
+def test_sql_card_rejects_unsafe_or_unknown_bindings(change, expected):
+    c = sql_card()
+    c["data"].update(change)
+    check = validate(page(c), {})
+    assert "sql" not in check.cards
+    assert any(expected in e["path"] for e in check.errors)
+
+
+@pytest.mark.parametrize("value", [None, [], {}, True])
+def test_sql_result_field_type_is_validated_without_crashing(value):
+    c = sql_card()
+    c["data"]["result_fields"][0]["type"] = value
+    check = validate(page(c), {})
+    assert check.errors and "sql" not in check.cards
+
+
+@pytest.mark.parametrize("missing", ["id", "type"])
+def test_sql_card_missing_identity_is_a_validation_error(missing):
+    c = sql_card()
+    del c[missing]
+    check = validate(page(c), {})
+    assert any(e["path"] == f"cards[0].{missing}" for e in check.errors)
+    assert check.cards == {}
+
+
+def test_template_source_id_must_match_bound_template():
+    c = card()
+    c["data"]["source_id"] = "template:999"
+    check = validate(page(c), {10: V10})
+    assert any(e["path"].endswith("source_id") for e in check.errors)
+
+
+@pytest.mark.parametrize("value", [0, -1, 10001, True, "2", 1.5])
+def test_report_pages_reject_invalid_page_numbers(value):
+    from pydantic import ValidationError
+
+    from app.schemas.report import DataIn, PreviewIn
+
+    for model in (DataIn, PreviewIn):
+        with pytest.raises(ValidationError):
+            model(pages={"raw": value})
+
+
+def test_admin_raw_preview_uses_only_synthetic_selected_fields():
+    from datetime import date
+
+    from app.services.report_query_service import synthetic_card
+
+    c = card(type="table")
+    c["data"]["display_fields"] = [{"path": "header.vendor", "label": "Vendor"}]
+    check = validate(page(c), {10: V10})
+    result = synthetic_card(check.cards[c["id"]], (date(2026, 1, 1), date(2026, 12, 31)))
+    assert result["rows"] == []
+    assert result["table"]["total"] == 3
+    assert result["table"]["columns"] == [
+        {"key": "header.vendor", "label": "Vendor", "type": "string"}
+    ]
+    assert result["table"]["rows"] == [
+        {"header.vendor": name} for name in ("Sample A", "Sample B", "Sample C")
+    ]
+
+
+def test_raw_table_has_selected_fields_without_measure_or_group():
+    from app.services.report_config import VersionDef, validate
+    from tests.report_samples import GROUPS, card, page
+
+    config = card(type="table")
+    config["data"] = {
+        "template_id": 1,
+        "template_version_ids": [10],
+        "grain": "document",
+        "display_fields": [
+            {"path": "header.vendor", "label": "Vendor"},
+            {"path": "header.total", "label": "Amount"},
+        ],
+        "page_size": 5,
+    }
+    result = validate(page(config), {10: VersionDef(10, 1, 1, GROUPS)})
+    assert result.errors == []
+    spec = result.cards["c_1"]
+    assert [(f.slot.path, f.label) for f in spec.display_fields] == [
+        ("header.vendor", "Vendor"),
+        ("header.total", "Amount"),
+    ]
+    assert spec.page_size == 5
+    assert spec.measure is None and spec.dim is None and spec.series is None
+
+
+@pytest.mark.parametrize("value", [4, 101, True, "20", 1.5])
+def test_raw_table_rejects_invalid_page_size(value):
+    from app.services.report_config import VersionDef, validate
+    from tests.report_samples import GROUPS, card, page
+
+    config = card(type="table")
+    config["data"]["display_fields"] = [{"path": "header.vendor", "label": "Vendor"}]
+    config["data"]["page_size"] = value
+    assert any(
+        e["path"].endswith("page_size")
+        for e in validate(page(config), {10: VersionDef(10, 1, 1, GROUPS)}).errors
+    )
+
+
 V10 = VersionDef(10, 1, 1, GROUPS)
 V11 = VersionDef(11, 1, 2, groups_v2())
 VERSIONS = {10: V10, 11: V11}
@@ -76,8 +259,8 @@ def test_valid_cards_of_every_type():
     assert check.errors == []
     assert sorted(check.cards) == sorted(c["id"] for c in cfg["cards"])
     table = check.cards["c_table"]
-    assert table.measure.source == "column" and table.measure.keys == ("amount",)
-    assert table.series.source == "header" and table.series.keys == ("header", "vendor")
+    assert table.measure is None and table.series is None
+    assert {f.slot.keys for f in table.display_fields} == {("desc",), ("amount",), ("line_date",)}
     assert table.columns == ("desc", "amount", "line_date")
 
 

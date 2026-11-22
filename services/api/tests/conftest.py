@@ -6,6 +6,15 @@ from app.config import Settings
 from app.main import create_app
 
 
+def pytest_asyncio_loop_factories():
+    import asyncio
+    import sys
+
+    if sys.platform == "win32":
+        return {"selector": asyncio.SelectorEventLoop}
+    return None
+
+
 @pytest.fixture
 def settings() -> Settings:
     return Settings(

@@ -3,8 +3,8 @@ doc_id: DES-002
 title: "SaiFlow — 数据模型"
 type: data-model
 status: active
-version: 2.18.0
-updated: 2026-11-21
+version: 2.19.0
+updated: 2026-11-22
 owner: Product Engineering
 source: "PRD-001 v3.3 §3, §4, §4.9; ADR-008"
 related: [ADR-008, DM-FormDocument, DM-ExtractionPayload, DM-OcrJob, DM-DocumentTemplate, DM-Tenant, DM-Subscription]
@@ -48,6 +48,9 @@ erDiagram
     DM-User ||--o{ DM-HomepagePreference : "选择"
     DM-Report ||--o{ DM-HomepagePreference : "作为首页"
     DM-Report ||--o{ DM-ReportSnapshot : "发布"
+    DM-Tenant ||--o{ DM-DataSource : "数据源"
+    DM-Report ||--o{ DM-ReportSourceRef : "引用数据源"
+    DM-DataSource ||--o{ DM-ReportSourceRef : "被引用"
     DM-Report ||--o{ DM-ReportTemplateRef : "引用"
     DM-DocumentTemplate ||--o{ DM-ReportTemplateRef : "被引用"
     DM-Tenant ||--o{ DM-OperationLog : "审计"
@@ -91,7 +94,10 @@ erDiagram
 | `DM-ReportTemplateRef` | 报表卡片对模板版本的引用（草稿 / 已发布两类），用于模板删除保护和原卡片历史授权延续；无卡片标识的兼容引用仅保护删除，不授予新绑定 | PostgreSQL | 组织租户（随报表） | N:1 报表、模板、模板版本 | 随保存草稿 / 发布重写；撤销发布、删除时移除 |
 | `DM-ReportAsset` | 报表静态图片的私有资源元数据；JPEG/PNG 上传经解码重编码为 PNG，配置只引用不透明 UUID | PostgreSQL + 私有 GCS（图片） | 组织租户 | N:1 租户；草稿与发布快照引用资源 UUID | 上传后不可变；管理者可在本组织读取，查看者仅可读取当前可读发布报表引用的图片 |
 | `DM-HomepagePreference` | 用户在当前租户的自选报表首页；无记录时使用个人或组织内置基础首页 | PostgreSQL | 用户 × 租户 | N:1 用户、租户；0..1 报表 | 设置 → 替换 / 恢复默认（删除偏好）；所选报表失效只回退显示，不删除偏好；每次读取重新检查授权与发布状态 |
+| `DM-DataSource` | 组织 PostgreSQL 数据源的连接配置；密码用绑定租户与数据源 ID 的 AES-GCM 密文保存，主密钥只在服务器环境变量中 | PostgreSQL | 组织租户 | N:1 租户；1:N 报表引用 | 创建 → 修改 / 停用 → 删除；有草稿或发布引用时禁止删除 |
+| `DM-ReportSourceRef` | 报表草稿与发布配置对 SQL 数据源的引用；与模板引用分开保护删除 | PostgreSQL | 组织租户（随报表） | N:1 报表、数据源 | 随保存 / 发布重写；撤销发布或删除报表时移除对应引用 |
 
+- **`report-designer-v2`（迁移 0024、0025）：** 模板作为现有模板实体的虚拟数据源，不复制连接记录；内置 `system-pg` 也是虚拟来源，只允许平台 admin 通过受限 `reporting` 视图查询，不可绑定客户报表。个人与组织基础 Dashboard 使用固定 SQL，并由服务端绑定租户及提交人范围；不新增统计缓存或报表实体。明细表仅分页投影选定字段，页码为请求状态，不保存到草稿或发布配置。
 - **`report-designer-v2`（迁移 0022）：** 新增 `DM-ReportAsset`、`DM-HomepagePreference`；`DM-Report` 草稿和 `DM-ReportSnapshot` 配置支持类型化卡片筛选、显式映射的页面筛选、静态图片/安全 HTML 与页面/卡片外观。静态内容不查询正式数据、不产生 CSV；图片经后端鉴权读取，外部页面默认拒绝，仅允许服务端配置的 HTTPS 来源；不执行 HTML 脚本。基础首页不受运营报表套餐门槛限制，数据仍走原有授权接口。
 - 登录会话、邮箱验证码等短期技术数据不作为实体登记，设计见 B-2a 的 `openspec/changes/archive/2026-11-03-rebuild-identity/plan.md`。
 - **`ocr-ui-parity`：** `DM-DocumentTemplate` 的字段与明细列可带“角色”（数量、单价、行金额、合计、税额等），供金额校验使用（迁移 0011 为两个系统模板写入新版本）；`DM-TemplateMapping` 保存每个模板的匹配度，自动匹配低于 70% 时记为“没有合适的模板”，结果按自由格式显示；按链接导入的文件与上传的文件同为 `DM-File`。
@@ -163,6 +169,7 @@ erDiagram
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
+| 2.19.0 | 2026-11-22 | Product Engineering | PostgreSQL 数据源、报表数据源引用与固定 SQL 基础 Dashboard（迁移 0024、0025）；明细表分页不持久化页码 |
 | 2.18.0 | 2026-11-21 | Product Engineering | 管理端邮箱账号与显式 LINE 双重验证绑定：LINE 身份可空且唯一（迁移 0023），空账号安全硬删除与审计保留 |
 | 2.17.0 | 2026-11-21 | Product Engineering | `report-designer-v2`：新增私有图片 `DM-ReportAsset`、用户 × 租户首页偏好 `DM-HomepagePreference`（迁移 0022）；报表配置增加类型化筛选、静态内容和外观，静态内容不参与统计与 CSV |
 | 2.16.0 | 2026-11-15 | Product Engineering | `docai-backup-engine`：`DM-SystemSetting` 的 Vision 密钥改为 Document AI 配置；迁移 0020 把已保存的引擎 google_vision 改为 google_docai，任务与原始载荷的 google_vision 历史记录保留，`DM-OcrEngineHealth` 只跟踪 textin、google_docai |

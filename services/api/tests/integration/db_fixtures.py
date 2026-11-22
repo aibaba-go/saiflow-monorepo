@@ -71,6 +71,19 @@ async def _ensure_app_role(settings) -> None:
         # always reset: a local role left over with another password must still work (M6)
         await conn.execute(text(f"ALTER ROLE {APP_ROLE} LOGIN PASSWORD '{APP_ROLE_PASSWORD}'"))
         await conn.execute(text(f'GRANT CONNECT ON DATABASE "{settings.db_name}" TO {APP_ROLE}'))
+        if not await conn.scalar(
+            text("select 1 from pg_roles where rolname = 'saiflow_v3_reporter'")
+        ):
+            await conn.execute(text("CREATE ROLE saiflow_v3_reporter LOGIN"))
+        await conn.execute(
+            text(
+                "ALTER ROLE saiflow_v3_reporter LOGIN PASSWORD 'local-reporter' "
+                "NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS"
+            )
+        )
+        await conn.execute(
+            text("ALTER ROLE saiflow_v3_reporter SET default_transaction_read_only = on")
+        )
     await engine.dispose()
 
 

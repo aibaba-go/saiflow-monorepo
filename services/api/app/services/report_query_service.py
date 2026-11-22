@@ -11,6 +11,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import Settings
 from app.repositories import report_query
 from app.repositories.report_query import GROUP_LIMIT, QueryTimeout
 from app.services.report_config import (
@@ -114,8 +115,60 @@ async def run_card(
     tenant_id: int,
     scope_user_id: int | None,
     period: tuple[date, date],
+    page: int = 1,
+    export_all: bool = False,
+    settings: Settings | None = None,
 ) -> dict:
+    if spec.source_id is not None:
+        from app.services.report_sql_query import run
+
+        return await run(
+            db,
+            spec,
+            settings=settings,
+            tenant_id=tenant_id,
+            scope_user_id=scope_user_id,
+            period=period,
+            page=page,
+            export_all=export_all,
+        )
     applied = spec.period_slot is not None
+    if spec.type == "table":
+        query = report_query.build_table(
+            spec,
+            tenant_id=tenant_id,
+            scope_user_id=scope_user_id,
+            period=period if applied else None,
+            page=page,
+            export_all=export_all,
+        )
+        try:
+            counts, rows = await report_query.run_table(db, query)
+        except QueryTimeout:
+            return _card(spec.id, "error", "query_timeout", applied)
+        total = int(counts["total"])
+        diag = zero_diagnostics()
+        diag.update(documents=int(counts["documents"]), items=total)
+        if (export_all and total > 50000) or int(counts["bytes"] or 0) > 8 * 1024 * 1024:
+            return _card(spec.id, "error", "row_limit", applied, diag=diag)
+        result = _card(
+            spec.id,
+            "empty" if total == 0 else ("ok" if applied else "not_applicable"),
+            None,
+            applied,
+            diag=diag,
+        )
+        result["table"] = {
+            "columns": [
+                {"key": f.slot.path, "label": f.label, "type": f.slot.type}
+                for f in spec.display_fields
+            ],
+            "rows": rows,
+            "page": page,
+            "page_size": spec.page_size,
+            "total": total,
+        }
+        return result
     query = report_query.build(
         spec, tenant_id=tenant_id, scope_user_id=scope_user_id, period=period if applied else None
     )
@@ -171,6 +224,9 @@ async def run_page(
     override: Any,
     now: datetime,
     only_card: str | None = None,
+    pages: Mapping[str, int] | None = None,
+    export_all: bool = False,
+    settings: Settings | None = None,
 ) -> dict:
     """Every card of the page (or one), each in its own read-only snapshot under the
     statement timeout. `override` is already a {from, to} dict or None."""
@@ -188,7 +244,14 @@ async def run_page(
             continue
         cards.append(
             await run_card(
-                db, spec, tenant_id=tenant_id, scope_user_id=scope_user_id, period=period
+                db,
+                spec,
+                tenant_id=tenant_id,
+                scope_user_id=scope_user_id,
+                period=period,
+                page=(pages or {}).get(spec.id, 1),
+                export_all=export_all,
+                settings=settings,
             )
         )
     return {
@@ -218,6 +281,27 @@ def _synthetic_value(spec: CardSpec, i: int) -> str:
 
 def synthetic_card(spec: CardSpec, period: tuple[date, date]) -> dict:
     """Made-up rows from the configuration only: never a business value (FR-REPORT-003)."""
+    if spec.type == "table":
+        result = _card(spec.id, "not_applicable", None, False)
+        result["table"] = {
+            "columns": [
+                {"key": f.slot.path, "label": f.label, "type": f.slot.type}
+                for f in spec.display_fields
+            ],
+            "rows": [
+                {
+                    f.slot.path: name
+                    if f.slot.type == "string"
+                    else ("2026-01-01" if f.slot.type == "date" else str(index + 1))
+                    for f in spec.display_fields
+                }
+                for index, name in enumerate(_SAMPLE_CATEGORIES)
+            ],
+            "page": 1,
+            "page_size": spec.page_size,
+            "total": 3,
+        }
+        return result
     if spec.dim_kind == "date":
         dims: list[str | None] = buckets(period[0], period[1], spec.time_grain or "month")[:3]
     elif spec.dim_kind == "category":

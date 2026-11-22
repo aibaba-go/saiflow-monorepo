@@ -35,6 +35,7 @@ from app.models import (
     Organization,
     Tenant,
 )
+from app.models.data_source import ReportSourceRef
 from app.models.report import Report, ReportSnapshot, ReportTemplateRef
 from app.permissions import Permission
 from app.services import audit_service, report_query_service, template_access
@@ -379,7 +380,9 @@ async def binding_errors(
     usable = await usable_template_ids(db, tenant_id)
     kept = await _kept_bindings(db, report_id)
     rejected = {p for p in _card_bindings(config) if p[1] not in usable and p not in kept}
-    return _binding_problems(config, rejected)
+    from app.services.data_source_service import binding_errors as source_errors
+
+    return _binding_problems(config, rejected) + await source_errors(db, tenant_id, config)
 
 
 async def _write_refs(
@@ -436,6 +439,11 @@ async def _write_refs(
                 )
             )
     await db.flush()
+    from app.services.data_source_service import write_refs as write_source_refs
+
+    problems += await write_source_refs(
+        db, report.id, tenant_id, tuple(k.lower() for k in kinds), config, strict=strict
+    )
     return problems
 
 
@@ -681,6 +689,11 @@ async def unpublish(
             ReportTemplateRef.report_id == report.id, ReportTemplateRef.kind == "PUBLISHED"
         )
     )
+    await db.execute(
+        delete(ReportSourceRef).where(
+            ReportSourceRef.report_id == report.id, ReportSourceRef.kind == "published"
+        )
+    )
     await audit(
         db,
         actor,
@@ -699,6 +712,7 @@ async def remove(
     report.deleted_at = utcnow()
     _touch(report, actor)
     await db.execute(delete(ReportTemplateRef).where(ReportTemplateRef.report_id == report.id))
+    await db.execute(delete(ReportSourceRef).where(ReportSourceRef.report_id == report.id))
     await audit(db, actor, "delete", audit_target(tenant_id, report.id, revision=report.revision))
     await db.commit()
 
@@ -800,6 +814,7 @@ async def preview(
     config: Any,
     period: Any,
     settings: Settings | None = None,
+    pages: dict[str, int] | None = None,
 ) -> dict:
     """The draft config on the caller's real data scope (manage only)."""
     report = await get_report(db, ctx.tenant_id, report_id)
@@ -825,6 +840,8 @@ async def preview(
         scope_user_id=scope_user,
         override=override,
         now=utcnow(),
+        pages=pages,
+        settings=settings,
     )
     result["report_version"] = None
     code = _failure_codes(result)
@@ -856,7 +873,13 @@ async def published_page(
 
 
 async def data(
-    db: AsyncSession, ctx: TenantContext, report_id: int, period: Any, refresh: bool
+    db: AsyncSession,
+    ctx: TenantContext,
+    report_id: int,
+    period: Any,
+    refresh: bool,
+    pages: dict[str, int] | None = None,
+    settings: Settings | None = None,
 ) -> dict:
     """The published snapshot on the caller's data scope, queried again every time."""
     report, snap = await published_page(db, ctx, report_id)
@@ -871,6 +894,8 @@ async def data(
         scope_user_id=submitter_scope(ctx),
         override=override,
         now=utcnow(),
+        pages=pages,
+        settings=settings,
     )
     result["report_version"] = version
     code = _failure_codes(result)

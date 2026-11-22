@@ -22,6 +22,7 @@ const rid = (id: number) => ({ params: { path: { report_id: id } } });
 const body = (config: ReportConfig) => config as unknown as Record<string, unknown>;
 
 export const reports = {
+  homepageTemplates: (signal: AbortSignal) => call(api.GET("/api/v1/admin/reports/homepage-templates", { signal })),
   contentPolicy: () => call(api.GET("/api/v1/admin/reports/content-policy")),
   uploadAsset: async (tenantId: number, file: File, signal: AbortSignal): Promise<string> => {
     const bytes = new Uint8Array(await file.arrayBuffer());
@@ -49,9 +50,9 @@ export const reports = {
   unpublish: (id: number, revision: number) =>
     call(api.POST("/api/v1/admin/reports/{report_id}/unpublish", { ...rid(id), body: { revision } })),
   /** The draft on screen over synthetic rows (the result carries `synthetic: true`). */
-  preview: (id: number, config: ReportConfig) =>
+  preview: (id: number, config: ReportConfig, pages?: Record<string, number>, period: { from: string; to: string } | null = null, signal?: AbortSignal) =>
     call(
-      api.POST("/api/v1/admin/reports/{report_id}/preview", { ...rid(id), body: { config: body(config), period: null } }),
+      api.POST("/api/v1/admin/reports/{report_id}/preview", { ...rid(id), signal, body: { config: body(config), period, ...(pages ? { pages } : {}) } }),
     ) as Promise<QueryResult>,
   /** The templates the organization's cards may bind. */
   templates: async (tenantId: number, reportId: number) =>

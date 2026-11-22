@@ -37,6 +37,7 @@ export const MENU: MenuItem[] = [
   { key: "roles", path: "/roles", label: "nav.roles" },
   { key: "templates", path: "/templates", label: "nav.templates" },
   { key: "reports", path: "/reports", label: "nav.reports" },
+  { key: "dataSources", path: "/data-sources", label: "nav.dataSources" },
   { key: "plans", path: "/plans", label: "nav.plans" },
   { key: "notifications", path: "/notifications", label: "nav.notifications" },
   { key: "profile", path: "/profile", label: "nav.profile" },
@@ -70,6 +71,7 @@ const ICONS: Record<string, IconName> = {
   templates: "file",
   reportView: "chart",
   reports: "report",
+  dataSources: "file",
   plans: "plan",
   notifications: "bell",
   profile: "user",
@@ -88,6 +90,7 @@ const TONES: Record<string, string> = {
   roles: "violet",
   templates: "amber",
   reports: "rose",
+  dataSources: "indigo",
   plans: "emerald",
   notifications: "amber",
   profile: "teal",
@@ -166,7 +169,7 @@ export function AppLayout() {
     // On a Starter+ plan: View reports for report_view holders, Manage reports for
     // report_manage holders; the owner holds both (FR-SYS-141, FR-SYS-159)
     ...(reports.view ? [] : ["reportView"]),
-    ...(reports.manage ? [] : ["reports"]),
+    ...(reports.manage ? [] : ["reports", "dataSources"]),
   ];
   // The same items, order and permission filter as before; only grouped under two headings.
   const item = (m: MenuItem) => ({

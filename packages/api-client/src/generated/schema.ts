@@ -58,6 +58,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/data-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Sources */
+        get: operations["adminListDataSources"];
+        put?: never;
+        /** Create Source */
+        post: operations["adminCreateDataSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/data-sources/{source_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Source */
+        get: operations["adminGetDataSource"];
+        /** Update Source */
+        put: operations["adminUpdateDataSource"];
+        post?: never;
+        /** Delete Source */
+        delete: operations["adminDeleteDataSource"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/data-sources/{source_id}/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Query Source */
+        post: operations["adminQueryDataSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/data-sources/{source_id}/tables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tables */
+        get: operations["adminListDataSourceTables"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/data-sources/{source_id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test Source */
+        post: operations["adminTestDataSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/me": {
         parameters: {
             query?: never;
@@ -430,6 +518,23 @@ export interface paths {
         };
         /** Content Policy */
         get: operations["adminGetReportContentPolicy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reports/homepage-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Homepage Templates */
+        get: operations["adminListHomepageTemplates"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1263,6 +1368,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/data-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Sources */
+        get: operations["listDataSources"];
+        put?: never;
+        /** Create Source */
+        post: operations["createDataSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data-sources/{source_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Source */
+        get: operations["getDataSource"];
+        /** Update Source */
+        put: operations["updateDataSource"];
+        post?: never;
+        /** Delete Source */
+        delete: operations["deleteDataSource"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data-sources/{source_id}/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Query Source */
+        post: operations["queryDataSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data-sources/{source_id}/tables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tables */
+        get: operations["listDataSourceTables"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data-sources/{source_id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test Source */
+        post: operations["testDataSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/export-downloads/{token}": {
         parameters: {
             query?: never;
@@ -1632,6 +1825,23 @@ export interface paths {
         head?: never;
         /** Update Me */
         patch: operations["updateMe"];
+        trace?: never;
+    };
+    "/api/v1/me/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Dashboard */
+        get: operations["getDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/me/email": {
@@ -3159,6 +3369,11 @@ export interface components {
             /** Path */
             path: string;
         };
+        /** ConnectionTestOut */
+        ConnectionTestOut: {
+            /** Ok */
+            ok: boolean;
+        };
         /** CreateReportIn */
         CreateReportIn: {
             /** Name */
@@ -3206,8 +3421,80 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** DashboardJob */
+        DashboardJob: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Original Name */
+            original_name: string;
+            /** Stage */
+            stage: string;
+        };
+        /** DashboardOut */
+        DashboardOut: {
+            /** Config */
+            config: {
+                [key: string]: unknown;
+            };
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "personal" | "organization";
+            /** Recent */
+            recent: components["schemas"]["DashboardJob"][];
+            usage: components["schemas"]["DashboardUsage"];
+        };
+        /** DashboardUsage */
+        DashboardUsage: {
+            /** Ends At */
+            ends_at: string | null;
+            /** Free Expires At */
+            free_expires_at: string | null;
+            /** Free Paused */
+            free_paused: boolean;
+            /** Free Remaining */
+            free_remaining: number;
+            /** Plan Active */
+            plan_active: boolean;
+            /** Plan Code */
+            plan_code: string | null;
+            /** Quota */
+            quota: number;
+            /** Remaining */
+            remaining: number;
+            /** Used */
+            used: number;
+        };
+        /** DataColumn */
+        DataColumn: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Type */
+            type: string;
+        };
         /** DataIn */
         DataIn: {
+            /** Pages */
+            pages?: {
+                [key: string]: number;
+            };
             period?: components["schemas"]["PeriodIn"] | null;
             /**
              * Refresh
@@ -3433,6 +3720,37 @@ export interface components {
             default: "personal" | "organization";
             /** Report Id */
             report_id: number | null;
+        };
+        /** HomepageTemplate */
+        HomepageTemplate: {
+            /** Config */
+            config: {
+                [key: string]: unknown;
+            };
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "personal" | "organization";
+            /** Name */
+            name: string;
+            /**
+             * Readonly
+             * @constant
+             */
+            readonly: true;
+            /**
+             * Source Id
+             * @constant
+             */
+            source_id: "system-pg";
+        };
+        /** HomepageTemplatesOut */
+        HomepageTemplatesOut: {
+            /** Items */
+            items: components["schemas"]["HomepageTemplate"][];
         };
         /** HomepageUpdate */
         HomepageUpdate: {
@@ -3998,6 +4316,10 @@ export interface components {
         PreviewIn: {
             /** Config */
             config?: unknown;
+            /** Pages */
+            pages?: {
+                [key: string]: number;
+            };
             period?: components["schemas"]["PeriodIn"] | null;
         };
         /**
@@ -4036,7 +4358,7 @@ export interface components {
             card_id: string | null;
             diagnostics: components["schemas"]["Diagnostics"];
             /** Error Code */
-            error_code: ("query_timeout" | "group_limit" | "mixed_units" | "negative_in_pie" | "invalid_config") | null;
+            error_code: ("query_timeout" | "group_limit" | "mixed_units" | "negative_in_pie" | "invalid_config" | "row_limit" | "source_unavailable" | "source_fields_changed") | null;
             /** Period Applied */
             period_applied: boolean;
             /** Rows */
@@ -4046,6 +4368,7 @@ export interface components {
              * @enum {string}
              */
             status: "ok" | "error" | "not_applicable" | "empty";
+            table?: components["schemas"]["TableResult"] | null;
         };
         /** QueryPeriod */
         QueryPeriod: {
@@ -4517,12 +4840,118 @@ export interface components {
             /** Verified */
             verified?: boolean | null;
         };
+        /** SourceIn */
+        SourceIn: {
+            /** Database */
+            database: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Host */
+            host: string;
+            /** Name */
+            name: string;
+            /**
+             * Password
+             * Format: password
+             * @default
+             */
+            password: string;
+            /**
+             * Port
+             * @default 5432
+             */
+            port: number;
+            /**
+             * Ssl Mode
+             * @default verify-full
+             * @constant
+             */
+            ssl_mode: "verify-full";
+            /** Username */
+            username: string;
+        };
+        /** SourceOut */
+        SourceOut: {
+            /** Database */
+            database?: string | null;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Host */
+            host?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "template" | "postgresql" | "system_pg";
+            /** Name */
+            name: string;
+            /**
+             * Password Configured
+             * @default false
+             */
+            password_configured: boolean;
+            /** Port */
+            port?: number | null;
+            /** Ssl Mode */
+            ssl_mode?: string | null;
+            /** Template Id */
+            template_id?: number | null;
+            /** Tenant Id */
+            tenant_id?: number | null;
+            /** Username */
+            username?: string | null;
+        };
+        /** SourceQueryIn */
+        SourceQueryIn: {
+            /**
+             * Page
+             * @default 1
+             */
+            page: number;
+            /**
+             * Page Size
+             * @default 20
+             */
+            page_size: number;
+            /** Sql */
+            sql: string;
+        };
+        /** SourceRelation */
+        SourceRelation: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "table" | "view";
+            /** Name */
+            name: string;
+            /** Schema */
+            schema: string;
+        };
+        /** SourceTablesOut */
+        SourceTablesOut: {
+            /** Items */
+            items: components["schemas"]["SourceRelation"][];
+        };
         /** SourceVersion */
         SourceVersion: {
             /** Id */
             id: number;
             /** Version */
             version: number;
+        };
+        /** SourcesOut */
+        SourcesOut: {
+            /** Items */
+            items: components["schemas"]["SourceOut"][];
         };
         /** StatusIn */
         StatusIn: {
@@ -4581,6 +5010,21 @@ export interface components {
              * Format: date-time
              */
             starts_at: string;
+        };
+        /** TableResult */
+        TableResult: {
+            /** Columns */
+            columns: components["schemas"]["DataColumn"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Rows */
+            rows: {
+                [key: string]: string | null;
+            }[];
+            /** Total */
+            total: number;
         };
         /** TemplateDetail */
         TemplateDetail: {
@@ -5065,6 +5509,276 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    adminListDataSources: {
+        parameters: {
+            query?: {
+                tenant_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourcesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminCreateDataSource: {
+        parameters: {
+            query: {
+                tenant_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminGetDataSource: {
+        parameters: {
+            query?: {
+                tenant_id?: number | null;
+            };
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminUpdateDataSource: {
+        parameters: {
+            query: {
+                tenant_id: number;
+            };
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminDeleteDataSource: {
+        parameters: {
+            query: {
+                tenant_id: number;
+            };
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminQueryDataSource: {
+        parameters: {
+            query?: {
+                tenant_id?: number | null;
+            };
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceQueryIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TableResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminListDataSourceTables: {
+        parameters: {
+            query?: {
+                tenant_id?: number | null;
+            };
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceTablesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adminTestDataSource: {
+        parameters: {
+            query?: {
+                tenant_id?: number | null;
+            };
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionTestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -5818,6 +6532,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReportContentPolicyOut"];
+                };
+            };
+        };
+    };
+    adminListHomepageTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HomepageTemplatesOut"];
                 };
             };
         };
@@ -7621,6 +8355,284 @@ export interface operations {
             };
         };
     };
+    listDataSources: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourcesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    createDataSource: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getDataSource: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    updateDataSource: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deleteDataSource: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    queryDataSource: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceQueryIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TableResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listDataSourceTables: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceTablesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    testDataSource: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionTestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     redeemDownloadTicket: {
         parameters: {
             query?: never;
@@ -8475,6 +9487,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getDashboard: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Tenant this request acts on; omit for your own tenant (FR-SYS-017). */
+                "X-Tenant-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardOut"];
                 };
             };
             /** @description Validation Error */

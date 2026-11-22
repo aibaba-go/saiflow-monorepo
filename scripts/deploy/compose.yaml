@@ -55,6 +55,10 @@ services:
       # web-pc's public origin: the admin's "log in as this user" link points here (FR-SYS-145)
       WEB_PC_ORIGIN: https://${APP_HOST:?}
       REPORT_EMBED_ORIGINS: ${REPORT_EMBED_ORIGINS:-}
+      DATA_SOURCE_KEY: ${DATA_SOURCE_KEY:-}
+      DATA_SOURCE_ALLOWED_HOSTS: ${DATA_SOURCE_ALLOWED_HOSTS:-}
+      REPORT_DB_USER: saiflow_v3_reporter
+      REPORT_DB_PASSWORD: ${REPORT_DB_PASSWORD:-}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USERNAME: ${SMTP_USERNAME:-}

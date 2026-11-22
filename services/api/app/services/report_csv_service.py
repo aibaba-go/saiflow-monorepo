@@ -85,6 +85,12 @@ def render(
     for row in meta:
         w.writerow(row)
     w.writerow([])
+    if spec.type == "table":
+        columns = card["table"]["columns"]
+        w.writerow([guard(c["label"]) for c in columns])
+        for row in card["table"]["rows"]:
+            w.writerow([guard(row.get(c["key"])) for c in columns])
+        return ("\ufeff" + buf.getvalue()).encode("utf-8")
     w.writerow(HEADER)
     for r in card["rows"]:
         w.writerow(
@@ -107,6 +113,7 @@ async def export(
     card_id: str,
     period: Any,
     expected_version: int | None = None,
+    settings: Settings | None = None,
 ) -> tuple[bytes, str]:
     """Same published definition as the view; compare the very snapshot used by the query."""
     report, snap = await report_service.published_page(db, ctx, report_id)
@@ -131,6 +138,8 @@ async def export(
         override=override,
         now=utcnow(),
         only_card=card_id,
+        export_all=True,
+        settings=settings,
     )
     card = result["cards"][0]
     target = audit_target(

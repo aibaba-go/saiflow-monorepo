@@ -11,6 +11,7 @@ import { forgetSession, ME_KEY, type Me, useSessionNotice } from "./auth/session
 import { useT } from "./i18n";
 import { AppLayout } from "./layout/AppLayout";
 import { ApplyOrgPage } from "./pages/ApplyOrgPage";
+import { DataSourcesPage } from "./pages/DataSourcesPage";
 import { DocumentPage } from "./pages/DocumentPage";
 import { HealthPage } from "./pages/HealthPage";
 import { HomeRoute } from "./pages/HomePage";
@@ -99,6 +100,7 @@ export function AppRoutes() {
                 <Route path="/templates/samples/:id" element={<TemplateSamplePage />} />
                 <Route path="/templates/:id" element={<TemplateDetailPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/data-sources" element={<DataSourcesPage />} />
                 <Route path="/reports/:id/design" element={<ReportDesignPage />} />
                 <Route path="/reports/:id" element={<ReportViewPage />} />
                 <Route path="/report-view" element={<ReportBrowserPage />} />

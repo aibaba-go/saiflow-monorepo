@@ -78,6 +78,7 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
     const rows = parseCsv(prepared.text).filter((r) => r.some((c) => c !== ""));
     return { rows: rows.slice(0, PREVIEW_ROWS), total: rows.length };
   }, [prepared]);
+  const pages = useRef<Record<string, number>>({});
   const seq = useRef(0);
   const active = useRef(true);
   const currentPeriod = useRef<Period | null>(null);
@@ -92,11 +93,11 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
   // Only the latest answer lands. Non-auth failures may retain marked older data;
   // an authorization refusal also closes details and clears statistics immediately.
   const load = useCallback(
-    async (p: Period | null, refresh: boolean) => {
+    async (p: Period | null, refresh: boolean, requestedPages = pages.current, pinnedPeriod?: Period) => {
       const n = ++seq.current;
       setData((d) => ({ ...d, loading: true, error: null }));
       try {
-        const result = await reportData(detail.id, p, refresh);
+        const result = await reportData(detail.id, pinnedPeriod ?? p, refresh, requestedPages);
         if (n !== seq.current) return;
         if (result.report_version !== version) {
           cancelDownloads();
@@ -132,6 +133,7 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
   useLayoutEffect(() => {
     // A newly published configuration invalidates the old values and details before paint,
     // without resetting the viewer's selected period.
+    pages.current = {};
     seq.current += 1;
     cancelDownloads();
     setSheet(null);
@@ -163,9 +165,13 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
   const both = from !== "" && to !== "";
   const ordered = both && from <= to;
   const apply = () => {
-    if (ordered) setPeriod({ from, to });
+    if (ordered) {
+      pages.current = {};
+      setPeriod({ from, to });
+    }
   };
   const reset = () => {
+    pages.current = {};
     setFrom("");
     setTo("");
     setPeriod(null);
@@ -273,6 +279,10 @@ function Viewer({ detail, onStale }: { detail: ReportDetail & { published: Publi
         locale={labels.locale}
         headingLevel={2}
         onRetry={() => void load(period, true)}
+        onPageChange={result && !data.loading && !stale ? (page) => {
+          pages.current = { ...pages.current, [card.id]: page };
+          void load(period, false, pages.current, result.period);
+        } : undefined}
         footer={card.type === "image" || card.type === "html" ? undefined : info}
         loadAsset={loadAsset}
         embedOrigins={contentPolicy.data?.origins}

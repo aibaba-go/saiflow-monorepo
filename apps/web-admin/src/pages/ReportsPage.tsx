@@ -1,5 +1,6 @@
+import type { ReportConfig } from "@saiflow/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, Empty, Form, Input, Modal, Select, Space, Table, Tag, Typography } from "antd";
+import { Alert, Button, Empty, Form, Input, Modal, Progress, Select, Space, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -11,6 +12,33 @@ import { useSubmit } from "../hooks/useSubmit";
 import { useT } from "../i18n";
 import { idParam, orgKeys, organizations } from "../services/organizations";
 import { reportKeys, reports, type ReportSummary } from "../services/reports";
+
+type HomepageTemplate = Awaited<ReturnType<typeof reports.homepageTemplates>>["items"][number];
+
+function HomepageTemplates() {
+  const t = useT();
+  const list = useQuery({ queryKey: ["admin-homepage-templates"], queryFn: ({ signal }) => reports.homepageTemplates(signal) });
+  const [preview, setPreview] = useState<HomepageTemplate | null>(null);
+  const names: Record<string, string> = { VERIFYING: t("rpa.homeVerifying"), OCR_PROCESSING: t("rpa.homeProcessing"), PENDING_REVIEW: t("rpa.homeReviewing"), CONFIRMED: t("rpa.homeConfirmed"), progress: t("rpa.homeProgress"), usage: t("rpa.homeUsage"), recent: t("rpa.homeRecent") };
+  const counts = [12, 8, 6, 24];
+  return <section className="ad-panel" aria-label={t("rpa.homeTemplates")}>
+    <Typography.Title level={4}>{t("rpa.homeTemplates")}</Typography.Title>
+    <ErrorText error={list.error} />
+    <Table data-testid="homepage-templates" rowKey="id" loading={list.isPending} pagination={false} dataSource={list.data?.items ?? []} columns={[
+      { key: "name", title: t("rpt.name"), dataIndex: "name" },
+      { key: "source", title: t("nav.dataSources"), dataIndex: "source_id" },
+      { key: "readonly", title: t("rpa.homeState"), render: () => <Tag>{t("rpa.homeReadonly")}</Tag> },
+      { key: "preview", render: (_, item) => <Button onClick={() => setPreview(item)}>{t("rpa.homePreview")}</Button> },
+    ]} />
+    <Modal title={preview?.name} open={!!preview} onCancel={() => setPreview(null)} footer={null} width={980} destroyOnHidden>
+      <Alert type="info" showIcon message={t("rpa.homeSynthetic")} />
+      {preview && <div className="ad-home-preview">{(preview.config as unknown as ReportConfig).cards.map((c, i) => <section key={c.id} className="ad-home-preview__card" style={{ gridColumn: `${c.layout.x + 1} / span ${c.layout.w}`, gridRow: `${c.layout.y + 1} / span ${c.layout.h}` }}>
+        <Typography.Text strong>{names[c.id] ?? c.id}</Typography.Text>
+        {c.id === "progress" ? counts.map((n, index) => <div key={index}><span>{Object.values(names)[index]}</span><Progress percent={n * 2} /></div>) : c.id === "usage" ? <><Typography.Title level={2}>900 / 2,000</Typography.Title><Progress percent={45} /></> : c.id === "recent" ? <Table size="small" pagination={false} rowKey="id" dataSource={Array.from({ length: 5 }, (_, n) => ({ id: n, name: `Sample document ${n + 1}` }))} columns={[{ title: t("rpa.homeRecent"), dataIndex: "name" }]} /> : <Typography.Title level={2}>{counts[i]}</Typography.Title>}
+      </section>)}</div>}
+    </Modal>
+  </section>;
+}
 
 const MAX_NAME = 120;
 
@@ -160,6 +188,7 @@ export function ReportsPage() {
     <Page name="reports" title={t("nav.reports")}>
       <Space direction="vertical" size="middle" style={{ width: "100%" }}>
         <Alert type="info" showIcon message={t("rpa.note")} />
+        <HomepageTemplates />
         <Form layout="inline">
           <Form.Item label={t("rpa.org")} htmlFor="rpa-org">
             <OrgPicker value={tenantId} onChange={choose} />

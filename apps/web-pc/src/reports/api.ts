@@ -33,10 +33,10 @@ export const publishReport = (id: number, revision: number) =>
   call(api.POST("/api/v1/reports/{report_id}/publish", { ...rid(id), body: { revision } }));
 export const unpublishReport = (id: number, revision: number) =>
   call(api.POST("/api/v1/reports/{report_id}/unpublish", { ...rid(id), body: { revision } }));
-export const previewReport = (id: number, config: ReportConfig, period: Period | null) =>
-  call(api.POST("/api/v1/reports/{report_id}/preview", { ...rid(id), body: { config: body(config), period } })) as Promise<QueryResult>;
-export const reportData = (id: number, period: Period | null, refresh: boolean) =>
-  call(api.POST("/api/v1/reports/{report_id}/data", { ...rid(id), body: { period, refresh } })) as Promise<QueryResult>;
+export const previewReport = (id: number, config: ReportConfig, period: Period | null, pages?: Record<string, number>, signal?: AbortSignal) =>
+  call(api.POST("/api/v1/reports/{report_id}/preview", { ...rid(id), signal, body: { config: body(config), period, ...(pages ? { pages } : {}) } })) as Promise<QueryResult>;
+export const reportData = (id: number, period: Period | null, refresh: boolean, pages?: Record<string, number>) =>
+  call(api.POST("/api/v1/reports/{report_id}/data", { ...rid(id), body: { period, refresh, ...(pages && Object.keys(pages).length ? { pages } : {}) } })) as Promise<QueryResult>;
 
 export function useReportContentPolicy(wanted: boolean) {
   const { tenant } = useTenant();
@@ -85,6 +85,16 @@ export function useHomepage() {
   return useQuery({
     queryKey: homepageKey(me.data?.user_id, tenant?.tenant_id),
     queryFn: ({ signal }) => call(api.GET("/api/v1/me/homepage", { signal })),
+    enabled: !!me.data && !!tenant,
+  });
+}
+
+export function useDashboard() {
+  const me = useMe();
+  const { tenant } = useTenant();
+  return useQuery({
+    queryKey: ["dashboard", me.data?.user_id, tenant?.tenant_id],
+    queryFn: ({ signal }) => call(api.GET("/api/v1/me/dashboard", { signal })),
     enabled: !!me.data && !!tenant,
   });
 }

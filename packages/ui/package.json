@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./template-editor": "./src/components/TemplateEditor/index.ts",
     "./report-designer": "./src/components/ReportDesigner/index.ts",
+    "./data-sources": "./src/components/DataSourceManager.tsx",
     "./styles/tokens.css": "./src/styles/tokens.css",
     "./styles/theme.css": "./src/styles/theme.css",
     "./styles/brand.css": "./src/styles/brand.css",

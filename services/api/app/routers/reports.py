@@ -241,19 +241,23 @@ async def preview_report(
     async def run():
         await svc.require(db, ctx, "manage")
         return QueryResult(
-            **await svc.preview(db, ctx, report_id, req.config, req.period, settings)
+            **await svc.preview(db, ctx, report_id, req.config, req.period, settings, req.pages)
         )
 
     return await svc.audited(db, svc.user_actor(ctx), "preview", report_id, run)
 
 
 @router.post("/{report_id}/data", operation_id="queryReportData", response_model=QueryResult)
-async def report_data(report_id: PathId, req: DataIn, ctx: Tenant, db: Db) -> QueryResult:
+async def report_data(
+    report_id: PathId, req: DataIn, ctx: Tenant, db: Db, settings: Config
+) -> QueryResult:
     action = "refresh" if req.refresh else "view"
 
     async def run():
         await svc.require(db, ctx, "view")
-        return QueryResult(**await svc.data(db, ctx, report_id, req.period, req.refresh))
+        return QueryResult(
+            **await svc.data(db, ctx, report_id, req.period, req.refresh, req.pages, settings)
+        )
 
     return await svc.audited(db, svc.user_actor(ctx), action, report_id, run)
 
@@ -266,12 +270,13 @@ async def _csv(
     period: dict | None,
     report_version: int | None = None,
     *,
+    settings: Settings | None = None,
     head_only: bool = False,
 ) -> Response:
     async def run():
         await svc.require(db, ctx, "view", "export")
         body, name = await report_csv_service.export(
-            db, ctx, report_id, card_id, period, report_version
+            db, ctx, report_id, card_id, period, report_version, settings
         )
         response = Response(
             body,
@@ -296,6 +301,7 @@ async def export_csv(
     request: Request,
     ctx: Tenant,
     db: Db,
+    settings: Config,
     card_id: Annotated[str, Query(min_length=1, max_length=64)],
     from_: Annotated[str | None, Query(alias="from", max_length=10)] = None,
     to: Annotated[str | None, Query(max_length=10)] = None,
@@ -303,7 +309,14 @@ async def export_csv(
 ) -> Response:
     period = None if from_ is None and to is None else {"from": from_, "to": to}
     return await _csv(
-        db, ctx, report_id, card_id, period, report_version, head_only=request.method == "HEAD"
+        db,
+        ctx,
+        report_id,
+        card_id,
+        period,
+        report_version,
+        settings=settings,
+        head_only=request.method == "HEAD",
     )
 
 
@@ -333,7 +346,14 @@ async def redeem_csv_ticket(token: str, request: Request, db: Db, settings: Conf
             db, settings, token
         )
         return await _csv(
-            db, ctx, report_id, card_id, period, version, head_only=request.method == "HEAD"
+            db,
+            ctx,
+            report_id,
+            card_id,
+            period,
+            version,
+            settings=settings,
+            head_only=request.method == "HEAD",
         )
     except AppError as exc:
         # AC-FR-REPORT-016-03: a revoked/ended ticket is opaque. _csv has already
