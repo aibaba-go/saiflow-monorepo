@@ -834,21 +834,54 @@ tr:hover .pc-file__name {
   flex-direction: column;
   gap: 20px;
 }
+.pc-system-dashboard {
+  container-type: inline-size;
+  gap: 20px;
+}
+.pc-system-dashboard .pc-metrics { gap: 20px; }
+.pc-system-dashboard .pc-metric { min-height: 96px; box-sizing: border-box; }
+.pc-system-dashboard .pc-panel__heading { padding: 24px 24px 16px; flex-wrap: wrap; }
+.pc-system-dashboard .pc-panel__heading h2 { font-size: 16px; line-height: 24px; letter-spacing: -0.2px; }
 .pc-system-dashboard__body {
   display: grid;
   gap: 20px;
   align-items: stretch;
 }
 .pc-system-dashboard__body > section { min-width: 0; }
-.pc-progress__body { display: grid; gap: 22px; padding: 24px; }
-.pc-progress__label { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
-.pc-progress__track { height: 10px; border-radius: 6px; background: var(--brand-bg); overflow: hidden; }
-.pc-progress__track span { display: block; height: 100%; background: var(--brand-blue); border-radius: inherit; }
-.pc-progress__row[data-stage="OCR_PROCESSING"] span[style] { background: var(--brand-teal); }
-.pc-progress__row[data-stage="PENDING_REVIEW"] span[style] { background: var(--warning); }
-.pc-progress__row[data-stage="CONFIRMED"] span[style] { background: var(--success); }
-@media (max-width: 900px) {
+.pc-progress__body { display: grid; gap: 20px; padding: 8px 24px 24px; }
+.pc-progress__label { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 10px; font-size: 13px; line-height: 20px; }
+.pc-progress__label strong { font-weight: 600; color: var(--pc-ink); }
+.pc-progress__track { height: 8px; border-radius: 6px; background: var(--brand-bg); overflow: hidden; }
+.pc-progress__track span { display: block; height: 100%; background: var(--tone); border-radius: inherit; }
+.pc-system-dashboard .pc-usage {
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(400px 160px at 100% 0, color-mix(in srgb, var(--accent-indigo-soft) 50%, transparent), transparent 80%), var(--surface);
+}
+.pc-system-dashboard .pc-usage__body { flex: 1; display: flex; flex-direction: column; padding: 0 24px 24px; }
+.pc-system-dashboard .pc-usage__number { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin-top: 6px; font-size: 42px; line-height: 1.2; letter-spacing: -1.4px; }
+.pc-system-dashboard .pc-usage__number span { font-size: 13px; }
+.pc-system-dashboard .pc-usage__bar { height: 8px; margin: 22px 0 12px; }
+.pc-system-dashboard .pc-usage__meta { font-size: 13px; line-height: 20px; color: var(--pc-ink-2); }
+.pc-system-dashboard .pc-usage__bottom { margin-top: auto; padding-top: 16px; padding-bottom: 2px; font-size: 12px; line-height: 20px; }
+.pc-system-dashboard .pc-usage__expiry { font-size: 12px; line-height: 20px; }
+.pc-system-dashboard .ant-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 208px; box-sizing: border-box; margin: 0; padding: 20px 24px 32px; }
+.pc-system-dashboard .ant-empty-image { height: 48px; margin-bottom: 14px; }
+.pc-system-dashboard .ant-empty-description { font-size: 14px; line-height: 22px; color: var(--pc-muted); }
+.pc-system-dashboard .ant-empty-footer { margin-top: 20px; }
+.pc-system-dashboard__stage { display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px; border-radius: 6px; background: var(--tone-soft); color: var(--tone-ink); font-size: 12px; line-height: 20px; white-space: nowrap; }
+.pc-system-dashboard__stage::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--tone); }
+.pc-system-dashboard__date { color: var(--pc-muted); white-space: nowrap; }
+@container (max-width: 740px) {
   .pc-system-dashboard__body { grid-template-columns: 1fr !important; }
+  .pc-system-dashboard .pc-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pc-system-dashboard .pc-usage__body { min-height: 230px; }
+}
+@container (max-width: 420px) {
+  .pc-system-dashboard .pc-metric { gap: 10px; padding: 16px; }
+  .pc-system-dashboard .pc-metric__symbol { width: 32px; height: 32px; }
+  .pc-system-dashboard .pc-metric__end { display: none; }
 }
 
 .pc-home__top {

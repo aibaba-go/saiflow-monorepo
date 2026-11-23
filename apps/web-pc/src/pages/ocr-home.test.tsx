@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 
 import { useLanguage } from "../stores/language";
 import { dashboard, en, renderAt, signedIn, userEvent } from "../test/app";
@@ -46,6 +47,41 @@ describe("menu (FR-SYS-094)", () => {
 });
 
 describe("PG dashboard (FR-SYS-094/172)", () => {
+  let sheet: HTMLStyleElement;
+  beforeEach(() => {
+    sheet = document.createElement("style");
+    sheet.textContent = readFileSync("src/styles/app.css", "utf8");
+    document.head.append(sheet);
+  });
+  afterEach(() => sheet.remove());
+
+  it.each(["personal", "organization"] as const)("fills and pads the %s usage card without the plans-page width cap", async (kind) => {
+    if (kind === "organization") {
+      localStorage.setItem("saiflow.pc.tenant.7", "5");
+      useTenantChoice.getState().reset();
+    }
+    signedIn({}, { tenants: [PERSONAL, ORG] });
+    renderAt("/");
+    const usage = await screen.findByTestId("usage-card");
+    expect(usage.closest("[data-home-default]")).toHaveAttribute("data-home-default", kind);
+    expect(getComputedStyle(usage).maxWidth).toBe("none");
+    const heading = within(usage).getByRole("heading", { name: en("usage.title") });
+    expect(getComputedStyle(heading.parentElement!).paddingLeft).toBe("24px");
+    expect(getComputedStyle(heading.parentElement!).paddingRight).toBe("24px");
+    const strip = screen.getByTestId("metric-strip");
+    expect(getComputedStyle(strip).gap).toBe(getComputedStyle(usage.parentElement!).gap);
+  });
+
+  it("keeps the empty-state upload action inside a padded recent-documents body", async () => {
+    signedIn();
+    renderAt("/");
+    await screen.findByText(en("home.noTasks"));
+    const button = screen.getByRole("button", { name: en("nav.upload") });
+    const empty = button.closest(".ant-empty")!;
+    expect(getComputedStyle(empty).paddingBottom).toBe("32px");
+    expect(getComputedStyle(empty).marginBottom).toBe("0px");
+  });
+
   it("shows the server's recent five without the removed to-verify panel", async () => {
     signedIn({
       "GET /api/v1/me/dashboard": () => json(200, {

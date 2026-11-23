@@ -34,7 +34,7 @@ export function SystemDashboard() {
           <Icon name="chevron" className="pc-metric__end" />
         </Link>)}
       </nav>
-      <div className="pc-system-dashboard__body" style={{ gridTemplateColumns: `${progressCard.layout.w}fr ${12 - progressCard.layout.w}fr` }}>
+      <div className="pc-system-dashboard__body" style={{ gridTemplateColumns: `minmax(0, ${progressCard.layout.w}fr) minmax(0, ${12 - progressCard.layout.w}fr)` }}>
         <section className="pc-panel pc-progress" data-testid="progress-card">
           <div className="pc-panel__heading"><h2>{t("home.metrics")}</h2></div>
           <div className="pc-progress__body">{metrics.map(c => <div key={c.id} className="pc-progress__row" data-stage={c.id}>
@@ -43,8 +43,8 @@ export function SystemDashboard() {
           </div>)}</div>
         </section>
         <section className="pc-panel pc-usage" data-testid="usage-card">
+          <div className="pc-panel__heading"><h2>{t("usage.title")}</h2><span className="pc-usage__plan">{usage.plan_code ? planName(usage.plan_code, t) : t("usage.noPlan")}</span></div>
           <div className="pc-usage__body">
-            <div className="pc-usage__head"><h2 className="pc-usage__eyebrow">{t("usage.title")}</h2><span className="pc-usage__plan">{usage.plan_code ? planName(usage.plan_code, t) : t("usage.noPlan")}</span></div>
             <div className="pc-usage__number num">{formatCount(usage.used)} <span>{t("usage.ofQuota", { n: formatCount(usage.quota) })}</span></div>
             <div className="pc-usage__bar" role="meter" aria-label={t("usage.title")} aria-valuemin={0} aria-valuemax={usage.quota} aria-valuenow={usage.used}>
               <span style={{ width: `${usage.quota ? Math.min(100, usage.used / usage.quota * 100) : 0}%` }} />
@@ -59,12 +59,12 @@ export function SystemDashboard() {
       </div>
         <section className="pc-panel pc-panel--table">
           <div className="pc-panel__heading"><h2>{t("home.recent")}</h2><Link to="/library" className="pc-text-link">{t("home.viewAll")}<Icon name="arrow" /></Link></div>
-          {recent.length ? <Table data-testid="recent-tasks" rowKey="id" dataSource={recent} pagination={false} columns={[
-            { key: "file", title: t("table.file"), render: (_, row) => <Link to={`/documents/${row.id}`}>{row.original_name}</Link> },
-            { key: "stage", title: t("table.stage"), render: (_, row) => t(`stage.${row.stage}` as MessageKey) },
-            { key: "at", title: t("table.created"), render: (_, row) => formatBangkokDateTime(row.created_at) },
-          ]} /> : <Empty description={t("home.noTasks")}>
-            {can(tenant, "upload_ocr") && <Button type="primary" onClick={() => navigate("/upload")}>{t("nav.upload")}</Button>}
+          {recent.length ? <Table data-testid="recent-tasks" rowKey="id" dataSource={recent} pagination={false} tableLayout="fixed" scroll={{ x: 640 }} columns={[
+            { key: "file", title: t("table.file"), width: "50%", ellipsis: true, render: (_, row) => <Link to={`/documents/${row.id}`} title={row.original_name}>{row.original_name}</Link> },
+            { key: "stage", title: t("table.stage"), width: "22%", render: (_, row) => <span className="pc-system-dashboard__stage" data-stage={row.stage}>{t(`stage.${row.stage}` as MessageKey)}</span> },
+            { key: "at", title: t("table.created"), width: "28%", render: (_, row) => <span className="pc-system-dashboard__date num">{formatBangkokDateTime(row.created_at)}</span> },
+          ]} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("home.noTasks")}>
+            {can(tenant, "upload_ocr") && <Button type="primary" icon={<Icon name="upload" />} onClick={() => navigate("/upload")}>{t("nav.upload")}</Button>}
           </Empty>}
         </section>
     </section>
