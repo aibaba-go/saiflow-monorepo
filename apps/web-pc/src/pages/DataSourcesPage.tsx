@@ -12,6 +12,6 @@ export function DataSourcesPage() {
   const { tenant } = useTenant();
   const lang = useLanguage(s => s.lang);
   return <ReportGate need="manage"><Page name="data-sources" title={t("nav.dataSources")}>
-    <section className="pc-panel"><DataSourceManager key={tenant?.tenant_id} api={dataSources} lang={lang} canQuery={can(tenant, "data_browse")} /></section>
+    <section className="pc-panel"><DataSourceManager key={tenant?.tenant_id} api={dataSources} lang={lang} canQuery={can(tenant, "data_browse")} showSystemNotice /></section>
   </Page></ReportGate>;
 }

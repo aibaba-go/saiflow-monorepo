@@ -24,6 +24,48 @@ async function openEditor() {
 }
 
 describe("data source management (FR-DATA-001..003)", () => {
+  it.each([
+    ["en", "Built-in PostgreSQL", "System managed", "Display only · Not editable"],
+    ["zh", "内置 PostgreSQL", "系统管理", "仅展示 · 不可编辑"],
+    ["th", "PostgreSQL ในระบบ", "จัดการโดยระบบ", "แสดงข้อมูลเท่านั้น · แก้ไขไม่ได้"],
+  ])("shows an actionless system notice in %s even when the source catalog is empty", async (lang, type, status, help) => {
+    render(<DataSourceManager api={service([])} lang={lang} showSystemNotice />);
+    const row = (await screen.findByText("SaiFlow PostgreSQL")).closest("tr")!;
+    expect(within(row).getByText(type!)).toBeInTheDocument();
+    expect(within(row).getByText(status!)).toBeInTheDocument();
+    expect(within(row).getByText(help!)).toBeInTheDocument();
+    expect(within(row).getByText("—")).toBeInTheDocument();
+    expect(within(row).queryByRole("button")).toBeNull();
+    expect(within(row).queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByLabelText("SQL")).toBeNull();
+  });
+  it("keeps external source actions separate from the system notice after a reload", async () => {
+    render(<DataSourceManager api={service()} showSystemNotice />);
+    const row = (await screen.findByText("ERP")).closest("tr")!;
+    for (const name of ["Edit", "Delete", "Test connection", "Query"]) expect(within(row).getByRole("button", { name })).toBeInTheDocument();
+    await openEditor();
+    await user.clear(screen.getByLabelText("Source name"));
+    await user.type(screen.getByLabelText("Source name"), "New ERP");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("New ERP")).toBeInTheDocument();
+    const notice = screen.getByText("SaiFlow PostgreSQL").closest("tr")!;
+    expect(within(notice).queryByRole("button")).toBeNull();
+    expect(within(notice).queryByText(/db\.example\.com|erp|reader/)).toBeNull();
+    expect(screen.getAllByText("SaiFlow PostgreSQL")).toHaveLength(1);
+    expect(screen.queryByText("Invoice")).toBeNull();
+  });
+  it("does not mistake the system notice for a successfully loaded catalog after a failure", async () => {
+    const api = service([PG]); let fail = true;
+    const list = api.list; api.list = signal => fail ? Promise.reject(new Error("connection details")) : list(signal);
+    render(<DataSourceManager api={api} showSystemNotice />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Operation failed");
+    expect(screen.getByText("SaiFlow PostgreSQL")).toBeInTheDocument();
+    expect(screen.queryByText("Connection successful")).toBeNull();
+    fail = false;
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("ERP")).toBeInTheDocument();
+    expect(screen.getAllByText("SaiFlow PostgreSQL")).toHaveLength(1);
+  });
   it("manages only relational sources even when the catalog includes templates", async () => {
     render(<DataSourceManager api={service()} />);
     const row = (await screen.findByText("ERP")).closest("tr")!;
@@ -66,6 +108,8 @@ describe("data source management (FR-DATA-001..003)", () => {
   it("queries and pages system PG without offering edit or delete", async () => {
     render(<DataSourceManager api={service([SYSTEM])} />);
     const row = (await screen.findByText("System PG")).closest("tr")!;
+    expect(screen.queryByText("SaiFlow PostgreSQL")).toBeNull();
+    expect(within(row).getByRole("button", { name: "Test connection" })).toBeInTheDocument();
     expect(within(row).queryByRole("button", { name: "Edit" })).toBeNull();
     expect(within(row).queryByRole("button", { name: "Delete" })).toBeNull();
     await user.click(within(row).getByRole("button", { name: "Query" }));
